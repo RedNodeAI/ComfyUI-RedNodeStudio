@@ -1074,7 +1074,19 @@ class RedNodeStudioWorkspace:
             t = tabs[name]
             if not t["on"] or not t["images"]:
                 return None
-            return load_image(t["images"][chosen_index(name)], target)
+            i = chosen_index(name)
+            # SAY WHICH PICTURE. The console reported that a reference was encoded and
+            # how many there were, but never which file, so "the output is not the
+            # person I chose" could not be told apart from "the model ignored the
+            # person I chose" without opening the gallery and counting slots. One is a
+            # wiring bug and the other is a model result, and they need completely
+            # different fixes. The index is printed with it because an off-by-one in a
+            # gallery selection looks exactly like the wrong image being sent.
+            print(f"[RedNode Workspace] {name}: using image {i + 1} of "
+                  f"{len(t['images'])} — {t['images'][i]}"
+                  + ("  (dice on)" if t.get("random") and len(t["images"]) > 1 else ""),
+                  flush=True)
+            return load_image(t["images"][i], target)
 
         subject = tab_image("subject")
         scene = tab_image("scene")
