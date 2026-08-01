@@ -1,0 +1,23 @@
+name: Publish to Comfy registry
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+
+jobs:
+  publish-node:
+    name: Publish Custom Node to registry
+    runs-on: ubuntu-latest
+    # only ever publish from my own repository, never from somebody's fork
+    if: ${{ github.repository_owner == 'RedNodeAI' }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Publish Custom Node
+        uses: Comfy-Org/publish-node-action@main
+        with:
+          # set REGISTRY_ACCESS_TOKEN in Settings, Secrets and variables, Actions
+          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}

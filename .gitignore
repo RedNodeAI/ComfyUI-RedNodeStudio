@@ -9,4 +9,3 @@ tests/local_root.txt
 # the test suite is development scaffolding, not something a user installs
 tests/
 docs/
-.github/
