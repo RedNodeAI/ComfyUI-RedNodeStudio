@@ -125,26 +125,66 @@ class RedNodeSwitch:
     # ComfyUI calls this before running the node: return the names of the inputs it
     # actually has to produce. Everything upstream of the others is skipped.
     def check_lazy_status(self, selected="1", labels="{}", **kwargs):
-        connected = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
-        want = f"input_{resolve_index(selected, labels, connected)}"
-        if want in kwargs and kwargs[want] is None:
-            return [want]
-        if want not in kwargs and connected:
-            # the chosen slot is not wired: fall back to the first that is, so a
-            # half-built workflow still runs instead of erroring at the end
-            return [f"input_{connected[0]}"]
+        # NEVER ASK FOR THE SAME INPUT TWICE.
+        #
+        # ComfyUI resolves a lazy node by calling this, executing whatever names come
+        # back, then calling it again. That loop only ends when the node stops asking.
+        # An input whose upstream is BYPASSED or MUTED resolves to None and stays None
+        # however many times it is evaluated, so returning its name again on the next
+        # pass asks for something that can never arrive, and the executor keeps trying:
+        # the queue appears to run over and over, doing nothing, while memory climbs.
+        #
+        # Reported 2026-08-01: a workflow with the Krea 2 samplers bypassed and a switch
+        # selecting a branch fed through them. Nothing in the log named this node, which
+        # is what made it hard to see.
+        #
+        # So each candidate is asked for at most once. Once every wired branch has been
+        # asked and none produced a value, resolution stops and pick() reports it in
+        # terms of the real cause rather than handing None downstream.
+        asked = self.__dict__.setdefault("_rn_asked", set())
+        wired = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
+
+        want = f"input_{resolve_index(selected, labels, wired)}"
+        # the chosen branch first, then any other wired branch as a fallback
+        order = [want] + [f"input_{i}" for i in wired if f"input_{i}" != want]
+
+        for name in order:
+            if name not in kwargs:
+                continue
+            if kwargs[name] is not None:        # already have a value: done
+                asked.clear()
+                return []
+            if name not in asked:
+                asked.add(name)
+                return [name]
+
+        asked.clear()                           # nothing left to try
         return []
 
     def pick(self, selected="1", labels="{}", **kwargs):
-        connected = [i for i in range(1, MAX_INPUTS + 1) if kwargs.get(f"input_{i}") is not None]
-        idx = resolve_index(selected, labels, connected)
+        self.__dict__.pop("_rn_asked", None)     # the next run asks afresh
+        live = [i for i in range(1, MAX_INPUTS + 1) if kwargs.get(f"input_{i}") is not None]
+        wired = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
+        idx = resolve_index(selected, labels, live)
         value = kwargs.get(f"input_{idx}")
         if value is None:
-            if not connected:
+            if not wired:
                 raise ValueError(
                     "RedNode Switch: nothing is connected to it. Wire your branches into "
                     "input_1, input_2 … and pick one on the panel.")
-            idx = connected[0]
+            if not live:
+                # Wired, but every branch came back empty. Passing None on would fail
+                # somewhere else entirely, in whichever node first tried to use it, with
+                # a message about the wrong type that names neither this node nor the
+                # real cause. Say it here, and say what actually does it.
+                names = ", ".join(_labels(labels).get(i, f"input_{i}") for i in wired)
+                raise ValueError(
+                    f"RedNode Switch: every branch wired into it came back empty "
+                    f"({names}). The usual cause is that the branch is BYPASSED or "
+                    f"MUTED further upstream, so nothing can ever reach this node. "
+                    f"Re-enable the group feeding the branch you picked, or point "
+                    f"'{selected}' at one that is live.")
+            idx = live[0]
             value = kwargs[f"input_{idx}"]
             name = _labels(labels).get(idx, f"input_{idx}")
             print(f"[RedNode Switch] '{selected}' is not connected — passing {name} instead", flush=True)
