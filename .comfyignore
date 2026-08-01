@@ -1,0 +1,10 @@
+# Kept out of the published registry archive. Same syntax as .gitignore.
+#
+# Everything here is development machinery: useful in the repository, dead weight
+# in the zip that users download. The docs and the example workflows stay in, since
+# those are the things people actually need.
+
+tests/
+.github/
+__pycache__/
+*.pyc

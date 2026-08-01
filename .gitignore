@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+
+user_data/
+
+# your machine's ComfyUI path, so tests find it without shipping it
+tests/local_root.txt
+
+# the test suite is development scaffolding, not something a user installs
+tests/
+docs/
+.github/
