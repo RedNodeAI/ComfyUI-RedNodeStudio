@@ -166,6 +166,32 @@ document.head.appendChild(style);
 
 const cfgWidget = (node) => (node.widgets || []).find((w) => w?.name === "config");
 
+/**
+ * Take the config widget out of sight AND out of the DOM.
+ *
+ * `config` is a MULTILINE string, which ComfyUI renders as a real textarea floating over
+ * the canvas. Setting type/hidden/computeSize removes it from litegraph's layout but does
+ * nothing to that element, so on a clean install the raw JSON sat on the node in plain
+ * view. Reported from a first-time-user test, which is exactly what that test is for.
+ *
+ * Run again after a frame: the element does not exist yet when onNodeCreated fires.
+ */
+function hideConfig(node) {
+  const w = cfgWidget(node);
+  if (!w) return;
+  w.type = "hidden";
+  w.hidden = true;
+  w.computeSize = () => [0, -4];
+  const kill = () => {
+    for (const el of [w.element, w.inputEl]) {
+      if (el && el.style) el.style.display = "none";
+    }
+  };
+  kill();
+  requestAnimationFrame(kill);
+}
+
+
 // ---- socket tuck: the same 🔌 as RedNode Studio Workspace -----------------------
 // Tucked, every UNWIRED socket parks as a bare dot on the node's bottom edge (inputs
 // left, outputs right); wired slots keep their rows. A second click tucks those too.
@@ -1944,12 +1970,7 @@ for (const which of [SEND, RECEIVE]) {
       nodeType.prototype.onNodeCreated = function () {
         created?.apply(this, arguments);
         const node = this;
-        const w = cfgWidget(node);
-        if (w) {                       // the panel owns it
-          w.type = "hidden";
-          w.hidden = true;
-          w.computeSize = () => [0, -4];
-        }
+        hideConfig(node);
         node._rnCh = readCfg(node);
         node._rnChSized = false;                 // first sync may heal the height
         // A fresh Send starts with two blank rows rather than an empty list, because
@@ -1979,6 +2000,7 @@ for (const which of [SEND, RECEIVE]) {
       const configured = nodeType.prototype.onConfigure;
       nodeType.prototype.onConfigure = function () {
         configured?.apply(this, arguments);
+        hideConfig(this);             // a LOADED workflow rebuilds the widget, so re-hide
         this._rnCh = readCfg(this);
         this._rnChSized = false;
         setTimeout(() => {
