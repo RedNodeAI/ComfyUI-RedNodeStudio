@@ -920,7 +920,8 @@
           "widget_ue_connectable": {},
           "input_ue_unconnectable": {},
           "version": "7.8"
-        }
+        },
+        "cnr_id": "comfyui-logic"
       },
       "widgets_values": [
         ""
@@ -1935,7 +1936,8 @@
           "widget_ue_connectable": {},
           "version": "7.8",
           "input_ue_unconnectable": {}
-        }
+        },
+        "cnr_id": "rgthree-comfy"
       },
       "color": "#fff0",
       "bgcolor": "#fff0",
@@ -3145,7 +3147,8 @@
           "widget_ue_connectable": {},
           "input_ue_unconnectable": {},
           "version": "7.8"
-        }
+        },
+        "cnr_id": "comfyui-logic"
       },
       "widgets_values": [
         ""
@@ -7685,14 +7688,14 @@
               }
             ],
             "properties": {
-              "cnr_id": "Kostik2702/ComfyUI-KreaPhoton",
               "ver": "1.0.0",
               "Node name for S&R": "KreaPhotonSamplerAdvanced",
               "ue_properties": {
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "aux_id": "Kostik2702/ComfyUI-KreaPhoton"
             },
             "widgets_values": [
               711268393730744,
@@ -7856,14 +7859,14 @@
               }
             ],
             "properties": {
-              "cnr_id": "Kostik2702/ComfyUI-KreaPhoton",
               "ver": "1.0.0",
               "Node name for S&R": "KreaPhotonSampler",
               "ue_properties": {
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "aux_id": "Kostik2702/ComfyUI-KreaPhoton"
             },
             "widgets_values": [
               260485106385973,
@@ -9119,7 +9122,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "normal"
@@ -9175,7 +9179,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "sgm_uniform"
@@ -9227,7 +9232,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "heunpp2"
@@ -9348,7 +9354,7 @@
               }
             ],
             "properties": {
-              "cnr_id": "yolain/ComfyUI-Easy-Sam3",
+              "cnr_id": "comfyui-easy-sam3",
               "ver": "1.0.0",
               "Node name for S&R": "easy sam3ModelLoader",
               "ue_properties": {
@@ -9414,7 +9420,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "euler_ancestral"
@@ -9470,7 +9477,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "sgm_uniform"
@@ -9798,7 +9806,8 @@
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
                 "version": "7.8"
-              }
+              },
+              "cnr_id": "comfyui-image-saver"
             },
             "widgets_values": [
               "euler_ancestral"
@@ -10442,7 +10451,7 @@
               }
             ],
             "properties": {
-              "cnr_id": "yolain/ComfyUI-Easy-Sam3",
+              "cnr_id": "comfyui-easy-sam3",
               "ver": "1.0.0",
               "Node name for S&R": "easy sam3ImageSegmentation",
               "ue_properties": {
@@ -13352,8 +13361,7 @@
                 },
                 "version": "7.5.2",
                 "input_ue_unconnectable": {}
-              },
-              "aux_id": "ainvfx/ComfyUI-SeedVR2_VideoUpscaler"
+              }
             },
             "widgets_values": [
               "ema_vae_fp16.safetensors",
@@ -13544,8 +13552,7 @@
                 },
                 "version": "7.5.2",
                 "input_ue_unconnectable": {}
-              },
-              "aux_id": "ainvfx/ComfyUI-SeedVR2_VideoUpscaler"
+              }
             },
             "widgets_values": [
               "seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors",
@@ -13902,8 +13909,7 @@
                 },
                 "version": "7.5.2",
                 "input_ue_unconnectable": {}
-              },
-              "aux_id": "ainvfx/ComfyUI-SeedVR2_VideoUpscaler"
+              }
             },
             "widgets_values": [
               3389862154,
@@ -18587,7 +18593,7 @@
               }
             ],
             "properties": {
-              "cnr_id": "RES4LYF",
+              "cnr_id": "res4lyf",
               "ver": "119679d8d8d26e6db52757e705488abb6399d7d4",
               "Node name for S&R": "ClownsharKSampler_Beta",
               "ue_properties": {
