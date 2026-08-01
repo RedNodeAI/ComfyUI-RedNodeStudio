@@ -128,9 +128,22 @@ app.registerExtension({
       const now = Date.now();
       if (this._rnCC && (!this._lastScan || now - this._lastScan > 400)) {
         this._lastScan = now;
-        this._rnCC.refreshTargets();
-        this._rnCC.refreshWidgets();
-        this._rnCC.refreshValues();
+        // These walk the whole graph and read widgets belonging to OTHER packs, whose
+        // shapes are not ours to rely on. This runs inside litegraph's render loop, so
+        // one throw from one unexpected node stops the canvas drawing and stops it
+        // answering the mouse, with nothing on screen to say why. _lastScan is stamped
+        // before the attempt, so a node that keeps throwing costs one try per 400ms
+        // rather than one per frame.
+        try {
+          this._rnCC.refreshTargets();
+          this._rnCC.refreshWidgets();
+          this._rnCC.refreshValues();
+        } catch (e) {
+          if (!this._rnCCWarned) {                // once per node, not once per scan
+            this._rnCCWarned = true;
+            console.warn("[RedNode] control panel rescan failed:", e);
+          }
+        }
       }
       return onDraw?.apply(this, arguments);
     };

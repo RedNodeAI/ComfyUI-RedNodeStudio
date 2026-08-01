@@ -163,7 +163,26 @@ function paint(node) {
 function setChrome(node, shown) {
   if (node._rnNoteChrome === shown) return;
   node._rnNoteChrome = shown;
-  node.title_mode = shown ? 0 : 2;              // LiteGraph NORMAL_TITLE / NO_TITLE
+  // NEVER let this throw. setChrome runs from onDrawForeground, which runs inside
+  // litegraph's render loop, so an exception here kills the frame: the canvas stops
+  // drawing and stops answering the mouse, and the whole graph looks frozen. On some
+  // frontends `title_mode` is a getter with no setter, and assigning to it throws
+  // exactly that way. Reported from a clean-install test as "I can't move at all".
+  // A note that keeps its title bar is a cosmetic loss; a dead canvas is not.
+  const mode = shown ? 0 : 2;                   // LiteGraph NORMAL_TITLE / NO_TITLE
+  try {
+    node.title_mode = mode;
+  } catch (e) {
+    // Newer frontends expose title_mode as a getter with no setter, so the plain
+    // assignment above throws. An own data property on the instance shadows the
+    // prototype getter, which gets the title bar hidden anyway.
+    try {
+      Object.defineProperty(node, "title_mode",
+        { value: mode, writable: true, configurable: true });
+    } catch (e2) {
+      /* refused outright: the sign still draws, it just keeps its title bar */
+    }
+  }
   areaOf(node)?.classList.toggle("rn-note-idle", !shown && !isPlain(node));
 }
 
@@ -206,12 +225,23 @@ app.registerExtension({
       start(this);
     };
 
-    // nothing is drawn here; this is only where the selection is noticed
+    // nothing is drawn here; this is only where the selection is noticed.
+    // The whole body is guarded because this runs inside litegraph's render loop, and
+    // one exception there stops the canvas drawing AND stops it answering the mouse.
+    // A note that looks wrong is a bug report; a graph that cannot be panned looks like
+    // ComfyUI itself is broken, and nothing on screen says which node caused it.
     const onDrawFg = nodeType.prototype.onDrawForeground;
     nodeType.prototype.onDrawForeground = function (ctx) {
-      onDrawFg?.apply(this, arguments);
-      if (this.flags?.collapsed) return;
-      setChrome(this, isPlain(this) || isSelected(this) || alwaysShows(this));
+      try {
+        onDrawFg?.apply(this, arguments);
+        if (this.flags?.collapsed) return;
+        setChrome(this, isPlain(this) || isSelected(this) || alwaysShows(this));
+      } catch (e) {
+        if (!this._rnNoteWarned) {                 // once per node, not once per frame
+          this._rnNoteWarned = true;
+          console.warn("[RedNode] note chrome skipped on this frontend:", e);
+        }
+      }
     };
 
     const onMenu = nodeType.prototype.getExtraMenuOptions;
