@@ -412,27 +412,42 @@ class _scoped_attention:
 
 
 def _krea2_forward(self, x, timesteps, context, attention_mask=None, *_drift, transformer_options=None, **kwargs):
-    # No identity extras on this cond -> delegate to the STORED STOCK forward, argument
-    # layout untouched. Stock behavior (incl. any future native ref_latents handling) is
-    # then stock by construction, not by us keeping a faithful copy.
-    if not kwargs.get("ref_latents", None):
-        orig = SingleStreamDiT._rednode_orig_forward
-        if transformer_options is None:
-            return orig(self, x, timesteps, context, attention_mask, *_drift, **kwargs)
-        return orig(self, x, timesteps, context, attention_mask, *_drift,
-                    transformer_options=transformer_options, **kwargs)
     # ComfyUI signature-drift guard: older cores call (..., attention_mask, transformer_options);
     # newer cores insert ref_latents positionally: (..., attention_mask, ref_latents,
     # transformer_options). Accept both so stock Krea 2 generation never breaks on update.
+    #
+    # THIS MUST RUN BEFORE THE DELEGATION CHECK BELOW. It used to run after it, and that
+    # check only looked in kwargs — so on a core that passes ref_latents POSITIONALLY
+    # (ComfyUI 0.29.2, 2026-07-31) it saw no references, decided there was no identity
+    # work to do, and handed straight off to the stock forward. Everything this function
+    # exists for was skipped on every single run: the reference attention bias, ref_boost,
+    # the edit mask, the fidelity dials, isolate_refs, t0 modulation.
+    #
+    # Nothing raised. Stock in-context referencing still ran, so faces came out roughly
+    # right and plainly not the same person, and no dial or preset made any difference
+    # because none of this code was reached. Found 2026-08-02 via a Krea2T-Enhancer
+    # TypeError ("takes from 4 to 6 positional arguments but 7 were given") that exposed
+    # the new call shape.
     native_ref = None
     drift = list(_drift)
     if drift and isinstance(drift[-1], dict) and transformer_options is None:
         transformer_options = drift.pop()
     if drift:
         native_ref = drift.pop(0)
+    ref_latents = kwargs.get("ref_latents", None) or native_ref or []
+
+    # No identity extras on this cond -> delegate to the STORED STOCK forward, argument
+    # layout untouched (*_drift, never the popped copy). Stock behavior, including any
+    # native ref_latents handling, is then stock by construction rather than by us
+    # keeping a faithful copy of it.
+    if not ref_latents:
+        orig = SingleStreamDiT._rednode_orig_forward
+        if transformer_options is None:
+            return orig(self, x, timesteps, context, attention_mask, *_drift, **kwargs)
+        return orig(self, x, timesteps, context, attention_mask, *_drift,
+                    transformer_options=transformer_options, **kwargs)
     if transformer_options is None:
         transformer_options = {}
-    ref_latents = kwargs.get("ref_latents", None) or native_ref or []
     # edit_mask compositing re-imposes the FIRST ref as the pixel-faithful source; grab it
     # before the timestep window can drop the refs (locality is independent of whether the
     # refs attend this step).
