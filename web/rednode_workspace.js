@@ -8845,6 +8845,12 @@ function build(node) {
         if (d.error) throw new Error(d.error);
         cfgW.value = JSON.stringify(d.config || {});
         node._rnCfg = readCfg(node);
+        // Rebuild against the new object. Every control captured the config it was
+        // built with, so without this they keep writing into the one the preset just
+        // replaced: the edit lands on an orphan, writeCfg serialises the live config,
+        // and the change is silently lost. The Paint prompt showed it first, staying
+        // empty however much was typed into it.
+        render(node);
         node.graph?.change?.();
       } catch (e) {
         console.error("[RedNode Workspace] could not load preset:", e);
