@@ -40,16 +40,19 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 
 ## Install
 
+Search for **RedNode Studio** in ComfyUI Manager, or clone it:
+
 ```
-git clone https://github.com/RedNodeAI/ComfyUI-Krea2Moodboard ComfyUI/custom_nodes/ComfyUI-Krea2Moodboard
+git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Restart ComfyUI. Everything registers under the `krea2` categories in the node menu.
+Restart ComfyUI. Everything registers under the `krea2` and `RedNode` categories in the node menu.
 
 ## Quick start
 
-Load `workflows/krea2_rednode_identity.json` and read it from left to right. If you would rather
-build it yourself, the short version is:
+Open the template browser and load **Rednode Ultima**, or open
+`example_workflows/Rednode_Ultima_V1.0.2 Release.json` directly. It is the whole rig wired up, and
+it reads left to right. If you would rather build it yourself, the short version is:
 
 1. Add **RedNode Studio (Krea 2)**. It replaces your positive `CLIPTextEncode` and outputs a
    matched positive and negative pair.
@@ -156,14 +159,11 @@ Unfinished, and marked so on the node.
 
 ## Example workflows
 
-In `workflows/`. The two starting points need nothing but ComfyUI core and this pack.
+In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `krea2_rednode_identity.json`, identity edit on the studio node with the max identity preset
-- `krea2_rednode_style_transfer.json`, vibe transfer with the style only preset, no LoRA needed
-- `krea2_moodboard_t2i.json`, basic vibe transfer text-to-image on the older nodes
-- `krea2_identity_edit_fusion.json`, identity edit and moodboard fusion on the older nodes
-- `Krea_Workflow_Public.json`, my full daily-driver pipeline. This one does pull in other packs,
-  listed inside the file, and it is meant to be read rather than run cold.
+- `Rednode_Ultima_V1.0.2 Release.json`, my daily-driver pipeline with the whole rig wired up:
+  workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
+  other packs, and ComfyUI Manager offers them when you open it.
 
 Baked-in settings worth knowing: ModelSamplingAuraFlow shift 1.15 (ComfyUI's stock Krea 2 default,
 the node is there as a handle), Euler with the simple scheduler, turbo at 8 steps and CFG 1. With
