@@ -77,6 +77,30 @@ def _loaded_for(mm, keep):
     return out
 
 
+def describe_loaded(mm):
+    """['Krea2 6.1 GB', 'Qwen3VL 3.2 GB'] — what ComfyUI is holding, for the console.
+
+    Printed when a `keep` wire matches nothing, because that is the one case where the
+    node does something the user did not want and has no way to see why.
+    """
+    out = []
+    try:
+        loaded = list(mm.current_loaded_models)
+    except Exception:
+        return out
+    for lm in loaded:
+        m = getattr(lm, "model", None)
+        if m is None:                       # weakref: comfy is already dropping it
+            continue
+        name = type(getattr(m, "model", m)).__name__
+        try:
+            gb = int(lm.model_memory()) / (1024.0 ** 3)
+            out.append(f"{name} {gb:.1f} GB")
+        except Exception:
+            out.append(name)
+    return out
+
+
 def unmanaged(mm, keep):
     """The wires in `keep` that ComfyUI is not managing, so nothing here can touch them."""
     wanted = [k for k in (keep if isinstance(keep, (list, tuple)) else [keep])
@@ -274,6 +298,16 @@ class RedNodeFreeVRAM:
                         # and saying nothing would read as "your keep wire did nothing"
                         kept += (f", {loose} not managed by ComfyUI "
                                  "(nothing here loads or frees those)")
+                    if not n:
+                        # the failure that is otherwise invisible: a keep was wired, it
+                        # matched nothing, so everything is about to go including it
+                        held = describe_loaded(mm)
+                        print("[RedNode Free VRAM] the keep wire matched nothing that is "
+                              "loaded, so nothing is protected. Resident right now: "
+                              + (", ".join(held) if held else "nothing")
+                              + ". Wire keep from the SAME loader the sampler uses; two "
+                                "loader nodes reading one file are two different models.",
+                              flush=True)
                 except Exception:
                     pass
             try:
