@@ -348,7 +348,8 @@
           "widget_ue_connectable": {},
           "version": "7.8",
           "input_ue_unconnectable": {}
-        }
+        },
+        "cnr_id": "rgthree-comfy"
       },
       "color": "#fff0",
       "bgcolor": "#fff0",
@@ -12703,7 +12704,7 @@
           },
           {
             "id": 7595,
-            "type": "CLIPLoaderGGUF",
+            "type": "CLIPLoader",
             "pos": [
               -5816.079773006401,
               2346.175747705861
@@ -12746,9 +12747,9 @@
               }
             ],
             "properties": {
-              "cnr_id": "comfyui-gguf",
+              "cnr_id": "comfy-core",
               "ver": "1.1.10",
-              "Node name for S&R": "CLIPLoaderGGUF",
+              "Node name for S&R": "CLIPLoader",
               "ue_properties": {
                 "widget_ue_connectable": {
                   "clip_name": true,
@@ -21529,7 +21530,7 @@
           },
           {
             "id": 8781,
-            "type": "CLIPLoaderGGUF",
+            "type": "CLIPLoader",
             "pos": [
               -5187.636865714072,
               3211.2214507864064
@@ -21572,9 +21573,9 @@
               }
             ],
             "properties": {
-              "cnr_id": "comfyui-gguf",
+              "cnr_id": "comfy-core",
               "ver": "1.1.10",
-              "Node name for S&R": "CLIPLoaderGGUF",
+              "Node name for S&R": "CLIPLoader",
               "ue_properties": {
                 "widget_ue_connectable": {
                   "clip_name": true,
