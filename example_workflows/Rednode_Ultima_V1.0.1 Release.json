@@ -1,7 +1,7 @@
 {
   "id": "d6f9396f-5693-42d2-9db9-d3cdd95f8a1b",
   "revision": 0,
-  "last_node_id": 8917,
+  "last_node_id": 8918,
   "last_link_id": 75215,
   "nodes": [
     {
@@ -3718,7 +3718,7 @@
         193.5444026631355
       ],
       "flags": {},
-      "order": 45,
+      "order": 44,
       "mode": 0,
       "inputs": [
         {
@@ -3753,38 +3753,6 @@
       "bgcolor": "#000"
     },
     {
-      "id": 8337,
-      "type": "RedNodeStageView",
-      "pos": [
-        -8649.194911338907,
-        1602.309311621476
-      ],
-      "size": [
-        1066.0130054019683,
-        420
-      ],
-      "flags": {
-        "pinned": true
-      },
-      "order": 46,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "rednode-studio",
-        "ver": "1.0.0",
-        "Node name for S&R": "RedNodeStageView",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
-        }
-      },
-      "widgets_values": [
-        ""
-      ]
-    },
-    {
       "id": 8318,
       "type": "Krea2BBOXPromptEffect",
       "pos": [
@@ -3799,7 +3767,7 @@
         "collapsed": false,
         "pinned": true
       },
-      "order": 47,
+      "order": 45,
       "mode": 0,
       "inputs": [
         {
@@ -3898,7 +3866,7 @@
             "",
             ""
           ],
-          "saved_at": 1785686548296
+          "saved_at": 1785686765869
         },
         "ue_properties": {
           "widget_ue_connectable": {
@@ -3934,7 +3902,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 48,
+      "order": 46,
       "mode": 0,
       "inputs": [
         {
@@ -4033,7 +4001,7 @@
             "",
             ""
           ],
-          "saved_at": 1785686548296
+          "saved_at": 1785686765870
         },
         "ue_properties": {
           "widget_ue_connectable": {
@@ -4116,7 +4084,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 49,
+      "order": 47,
       "mode": 0,
       "inputs": [
         {
@@ -4409,7 +4377,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 50,
+      "order": 48,
       "mode": 0,
       "inputs": [
         {
@@ -4603,7 +4571,7 @@
         "collapsed": true,
         "pinned": true
       },
-      "order": 51,
+      "order": 49,
       "mode": 0,
       "inputs": [
         {
@@ -4671,7 +4639,7 @@
       "flags": {
         "collapsed": true
       },
-      "order": 52,
+      "order": 50,
       "mode": 0,
       "inputs": [
         {
@@ -4716,7 +4684,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 53,
+      "order": 51,
       "mode": 0,
       "inputs": [
         {
@@ -4758,7 +4726,7 @@
         542.245806014274
       ],
       "flags": {},
-      "order": 44,
+      "order": 52,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -5161,6 +5129,35 @@
       ],
       "color": "#222",
       "bgcolor": "#000"
+    },
+    {
+      "id": 8918,
+      "type": "RedNodeStageView",
+      "pos": [
+        -8649.194911338907,
+        1602.309311621476
+      ],
+      "size": [
+        1066.0130054019683,
+        420
+      ],
+      "flags": {},
+      "order": 53,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeStageView"
+      },
+      "widgets_values": [
+        ""
+      ]
     }
   ],
   "links": [
@@ -5945,7 +5942,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -6291,7 +6288,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -6429,80 +6426,6 @@
               512,
               1
             ]
-          },
-          {
-            "id": 8542,
-            "type": "Any Switch (rgthree)",
-            "pos": [
-              -1843.6356965687937,
-              -31.325337380282143
-            ],
-            "size": [
-              177.53376592015593,
-              109.24861449528885
-            ],
-            "flags": {
-              "collapsed": true
-            },
-            "order": 6,
-            "mode": 0,
-            "inputs": [
-              {
-                "dir": 3,
-                "name": "any_01",
-                "type": "*",
-                "link": 74800
-              },
-              {
-                "dir": 3,
-                "name": "any_02",
-                "type": "*",
-                "link": 74583
-              },
-              {
-                "dir": 3,
-                "name": "any_03",
-                "type": "*",
-                "link": null
-              },
-              {
-                "dir": 3,
-                "name": "any_04",
-                "type": "*",
-                "link": null
-              },
-              {
-                "name": "any_05",
-                "type": "*",
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "dir": 4,
-                "label": "*",
-                "name": "*",
-                "shape": 3,
-                "type": "*",
-                "links": [
-                  74801
-                ]
-              }
-            ],
-            "title": "Choice Any Latent",
-            "properties": {
-              "cnr_id": "rgthree-comfy",
-              "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "version": "7.5.1",
-                "input_ue_unconnectable": {}
-              }
-            },
-            "widgets_values": [],
-            "color": "#323",
-            "bgcolor": "#535",
-            "shape": 1
           },
           {
             "id": 7029,
@@ -7135,80 +7058,6 @@
             "bgcolor": "#533"
           },
           {
-            "id": 8565,
-            "type": "Any Switch (rgthree)",
-            "pos": [
-              -1814.208861779055,
-              221.868340249692
-            ],
-            "size": [
-              177.53376592015593,
-              109.24861449528885
-            ],
-            "flags": {
-              "collapsed": true
-            },
-            "order": 8,
-            "mode": 0,
-            "inputs": [
-              {
-                "dir": 3,
-                "name": "any_01",
-                "type": "*",
-                "link": 75124
-              },
-              {
-                "dir": 3,
-                "name": "any_02",
-                "type": "*",
-                "link": 74584
-              },
-              {
-                "dir": 3,
-                "name": "any_03",
-                "type": "*",
-                "link": null
-              },
-              {
-                "dir": 3,
-                "name": "any_04",
-                "type": "*",
-                "link": null
-              },
-              {
-                "name": "any_05",
-                "type": "*",
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "dir": 4,
-                "label": "*",
-                "name": "*",
-                "shape": 3,
-                "type": "*",
-                "links": [
-                  74802
-                ]
-              }
-            ],
-            "title": "Choice Any Latent",
-            "properties": {
-              "cnr_id": "rgthree-comfy",
-              "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "version": "7.5.1",
-                "input_ue_unconnectable": {}
-              }
-            },
-            "widgets_values": [],
-            "color": "#323",
-            "bgcolor": "#535",
-            "shape": 1
-          },
-          {
             "id": 8879,
             "type": "ClownsharKSampler_Beta",
             "pos": [
@@ -7410,73 +7259,6 @@
             ]
           },
           {
-            "id": 8710,
-            "type": "RedNodeSwitch",
-            "pos": [
-              -1573.676058597483,
-              -2.810666438118708
-            ],
-            "size": [
-              400,
-              252
-            ],
-            "flags": {},
-            "order": 9,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "input_1",
-                "name": "input_1",
-                "shape": 7,
-                "type": "*",
-                "link": 74801
-              },
-              {
-                "localized_name": "input_2",
-                "name": "input_2",
-                "shape": 7,
-                "type": "*",
-                "link": 74802
-              },
-              {
-                "localized_name": "selected",
-                "name": "selected",
-                "type": "STRING",
-                "widget": {
-                  "name": "selected"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "label": "selected",
-                "localized_name": "selected",
-                "name": "selected",
-                "type": "*",
-                "links": [
-                  74816
-                ]
-              }
-            ],
-            "title": "Sampler Choice Switch",
-            "properties": {
-              "cnr_id": "rednode-studio",
-              "ver": "1.0.0",
-              "Node name for S&R": "RedNodeSwitch",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              }
-            },
-            "widgets_values": [
-              "1 · Classic KSampler",
-              "{\"labels\":{\"1\":\"Classic KSampler\",\"2\":\"ClownsharK Sampler\"}}",
-              "{\"labels\":{\"1\":\"Classic KSampler\",\"2\":\"ClownsharK Sampler\"}}"
-            ]
-          },
-          {
             "id": 8712,
             "type": "RedNodeSwitch",
             "pos": [
@@ -7600,18 +7382,59 @@
             ]
           },
           {
+            "id": 8531,
+            "type": "81c7f5c7-7368-405e-823a-eb07adeff3b2",
+            "pos": [
+              -3000.3748706036026,
+              -259.93999394447945
+            ],
+            "size": [
+              425.67449032772083,
+              130
+            ],
+            "flags": {
+              "collapsed": false
+            },
+            "order": 14,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "per_layer_weights",
+                "type": "STRING",
+                "widget": {
+                  "name": "per_layer_weights"
+                },
+                "link": 74951
+              }
+            ],
+            "outputs": [],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.27.0",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              },
+              "previewExposures": []
+            },
+            "widgets_values": [
+              "1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.5, 5.0, 1.1, 4.0, 1.0"
+            ]
+          },
+          {
             "id": 8521,
             "type": "RedNodeSubgraphReceive",
             "pos": [
-              -3593.558973740921,
-              180.83971822402577
+              -2614.162863113511,
+              265.91214997840706
             ],
             "size": [
               1092.7974000666331,
               872
             ],
             "flags": {
-              "collapsed": false
+              "collapsed": true
             },
             "order": 5,
             "mode": 0,
@@ -7900,11 +7723,228 @@
             ]
           },
           {
+            "id": 8565,
+            "type": "Any Switch (rgthree)",
+            "pos": [
+              -1814.208861779055,
+              221.868340249692
+            ],
+            "size": [
+              177.53376592015593,
+              109.24861449528885
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 8,
+            "mode": 0,
+            "inputs": [
+              {
+                "dir": 3,
+                "name": "any_01",
+                "type": "*",
+                "link": 75124
+              },
+              {
+                "dir": 3,
+                "name": "any_02",
+                "type": "*",
+                "link": 74584
+              },
+              {
+                "dir": 3,
+                "name": "any_03",
+                "type": "*",
+                "link": null
+              },
+              {
+                "dir": 3,
+                "name": "any_04",
+                "type": "*",
+                "link": null
+              },
+              {
+                "dir": 3,
+                "name": "any_05",
+                "type": "*",
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "dir": 4,
+                "label": "*",
+                "name": "*",
+                "shape": 3,
+                "type": "*",
+                "links": [
+                  74802
+                ]
+              }
+            ],
+            "title": "Choice Any Latent",
+            "properties": {
+              "cnr_id": "rgthree-comfy",
+              "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.5.1",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [],
+            "color": "#323",
+            "bgcolor": "#535",
+            "shape": 1
+          },
+          {
+            "id": 8542,
+            "type": "Any Switch (rgthree)",
+            "pos": [
+              -1843.6356965687937,
+              -31.325337380282143
+            ],
+            "size": [
+              177.53376592015593,
+              109.24861449528885
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 6,
+            "mode": 0,
+            "inputs": [
+              {
+                "dir": 3,
+                "name": "any_01",
+                "type": "*",
+                "link": 74800
+              },
+              {
+                "dir": 3,
+                "name": "any_02",
+                "type": "*",
+                "link": 74583
+              },
+              {
+                "dir": 3,
+                "name": "any_03",
+                "type": "*",
+                "link": null
+              },
+              {
+                "dir": 3,
+                "name": "any_04",
+                "type": "*",
+                "link": null
+              },
+              {
+                "dir": 3,
+                "name": "any_05",
+                "type": "*",
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "dir": 4,
+                "label": "*",
+                "name": "*",
+                "shape": 3,
+                "type": "*",
+                "links": [
+                  74801
+                ]
+              }
+            ],
+            "title": "Choice Any Latent",
+            "properties": {
+              "cnr_id": "rgthree-comfy",
+              "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.5.1",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [],
+            "color": "#323",
+            "bgcolor": "#535",
+            "shape": 1
+          },
+          {
+            "id": 8710,
+            "type": "RedNodeSwitch",
+            "pos": [
+              -1573.676058597483,
+              -2.810666438118708
+            ],
+            "size": [
+              400,
+              252
+            ],
+            "flags": {},
+            "order": 9,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "input_1",
+                "name": "input_1",
+                "shape": 7,
+                "type": "*",
+                "link": 74801
+              },
+              {
+                "localized_name": "input_2",
+                "name": "input_2",
+                "shape": 7,
+                "type": "*",
+                "link": 74802
+              },
+              {
+                "localized_name": "selected",
+                "name": "selected",
+                "type": "STRING",
+                "widget": {
+                  "name": "selected"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "selected",
+                "localized_name": "selected",
+                "name": "selected",
+                "type": "*",
+                "links": [
+                  74816
+                ]
+              }
+            ],
+            "title": "Sampler Choice Switch",
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "1.0.0",
+              "Node name for S&R": "RedNodeSwitch",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "1 · Classic KSampler",
+              "{\"labels\":{\"1\":\"Classic KSampler\",\"2\":\"ClownsharK Sampler\"}}",
+              "{\"labels\":{\"1\":\"Classic KSampler\",\"2\":\"ClownsharK Sampler\"}}"
+            ]
+          },
+          {
             "id": 8711,
             "type": "36f5c84c-5ec4-4269-be40-c789b21d410b",
             "pos": [
-              -2415.533691272106,
-              -162.60634327664704
+              -2431.4846115859436,
+              -165.7965682296241
             ],
             "size": [
               229.82114839292035,
@@ -7942,47 +7982,6 @@
             },
             "color": "#432",
             "bgcolor": "#653"
-          },
-          {
-            "id": 8531,
-            "type": "81c7f5c7-7368-405e-823a-eb07adeff3b2",
-            "pos": [
-              -3000.3748706036026,
-              -259.93999394447945
-            ],
-            "size": [
-              425.67449032772083,
-              130
-            ],
-            "flags": {
-              "collapsed": false
-            },
-            "order": 14,
-            "mode": 0,
-            "inputs": [
-              {
-                "name": "per_layer_weights",
-                "type": "STRING",
-                "widget": {
-                  "name": "per_layer_weights"
-                },
-                "link": 74951
-              }
-            ],
-            "outputs": [],
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.27.0",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              },
-              "previewExposures": []
-            },
-            "widgets_values": [
-              "1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.5, 5.0, 1.1, 4.0, 1.0"
-            ]
           }
         ],
         "groups": [
@@ -8002,8 +8001,8 @@
             "id": 291,
             "title": "Classic KSampler",
             "bounding": [
-              -2437.859606660262,
-              -245.5721486969094,
+              -2470.8250600566453,
+              -253.01597771322994,
               308.4987164825643,
               229.86989100629307
             ],
@@ -8284,7 +8283,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -9305,448 +9304,6 @@
             "widgets_values": []
           },
           {
-            "id": 7603,
-            "type": "VAELoader",
-            "pos": [
-              336.32823903664064,
-              418.2259888201932
-            ],
-            "size": [
-              330,
-              106.25
-            ],
-            "flags": {},
-            "order": 6,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "vae_name",
-                "name": "vae_name",
-                "type": "COMBO",
-                "widget": {
-                  "name": "vae_name"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "VAE",
-                "name": "VAE",
-                "type": "VAE",
-                "slot_index": 0,
-                "links": [
-                  73032
-                ]
-              }
-            ],
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.23.0",
-              "Node name for S&R": "VAELoader",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "version": "7.6.2",
-                "input_ue_unconnectable": {}
-              }
-            },
-            "widgets_values": [
-              "UltraFlux.safetensors"
-            ]
-          },
-          {
-            "id": 7550,
-            "type": "easy sam3ImageSegmentation",
-            "pos": [
-              -107.40647127841689,
-              94.29104208307412
-            ],
-            "size": [
-              400,
-              284
-            ],
-            "flags": {},
-            "order": 15,
-            "mode": 0,
-            "inputs": [
-              {
-                "label": "SAM3 Model",
-                "localized_name": "sam3_model",
-                "name": "sam3_model",
-                "type": "EASY_SAM3_MODEL",
-                "link": 72957
-              },
-              {
-                "localized_name": "images",
-                "name": "images",
-                "type": "IMAGE",
-                "link": 72946
-              },
-              {
-                "label": "coordinates_positive",
-                "localized_name": "coordinates_positive",
-                "name": "coordinates_positive",
-                "shape": 7,
-                "type": "STRING",
-                "link": null
-              },
-              {
-                "label": "coordinates_negative",
-                "localized_name": "coordinates_negative",
-                "name": "coordinates_negative",
-                "shape": 7,
-                "type": "STRING",
-                "link": null
-              },
-              {
-                "label": "bboxes",
-                "localized_name": "bboxes",
-                "name": "bboxes",
-                "shape": 7,
-                "type": "BBOX",
-                "link": null
-              },
-              {
-                "label": "mask",
-                "localized_name": "mask",
-                "name": "mask",
-                "shape": 7,
-                "type": "MASK",
-                "link": null
-              },
-              {
-                "localized_name": "prompt",
-                "name": "prompt",
-                "type": "STRING",
-                "widget": {
-                  "name": "prompt"
-                },
-                "link": null
-              },
-              {
-                "localized_name": "threshold",
-                "name": "threshold",
-                "type": "FLOAT",
-                "widget": {
-                  "name": "threshold"
-                },
-                "link": null
-              },
-              {
-                "localized_name": "keep_model_loaded",
-                "name": "keep_model_loaded",
-                "type": "BOOLEAN",
-                "widget": {
-                  "name": "keep_model_loaded"
-                },
-                "link": null
-              },
-              {
-                "localized_name": "add_background",
-                "name": "add_background",
-                "type": "COMBO",
-                "widget": {
-                  "name": "add_background"
-                },
-                "link": null
-              },
-              {
-                "localized_name": "detection_limit",
-                "name": "detection_limit",
-                "type": "INT",
-                "widget": {
-                  "name": "detection_limit"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "masks",
-                "name": "masks",
-                "type": "MASK",
-                "links": [
-                  72960,
-                  75157
-                ]
-              },
-              {
-                "localized_name": "images",
-                "name": "images",
-                "type": "IMAGE",
-                "links": [
-                  72959,
-                  73027,
-                  73829,
-                  74054,
-                  74883,
-                  75158
-                ]
-              },
-              {
-                "localized_name": "obj_masks",
-                "name": "obj_masks",
-                "type": "MASK",
-                "links": null
-              },
-              {
-                "localized_name": "boxes",
-                "name": "boxes",
-                "type": "BBOX",
-                "links": null
-              },
-              {
-                "localized_name": "scores",
-                "name": "scores",
-                "type": "FLOAT",
-                "links": null
-              }
-            ],
-            "properties": {
-              "cnr_id": "comfyui-easy-sam3",
-              "ver": "1.0.0",
-              "Node name for S&R": "easy sam3ImageSegmentation",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              }
-            },
-            "widgets_values": [
-              "face",
-              0.5,
-              true,
-              "none",
-              -1
-            ]
-          },
-          {
-            "id": 8893,
-            "type": "PrimitiveInt",
-            "pos": [
-              453.98579347623007,
-              129.23740773653776
-            ],
-            "size": [
-              270,
-              82
-            ],
-            "flags": {},
-            "order": 7,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "value",
-                "name": "value",
-                "type": "INT",
-                "widget": {
-                  "name": "value"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "INT",
-                "name": "INT",
-                "type": "INT",
-                "links": [
-                  75163,
-                  75164
-                ]
-              }
-            ],
-            "title": "Mask Size Face Detailer",
-            "properties": {
-              "cnr_id": "comfy-core",
-              "ver": "0.29.2",
-              "Node name for S&R": "PrimitiveInt",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              }
-            },
-            "widgets_values": [
-              1024,
-              "fixed"
-            ]
-          },
-          {
-            "id": 8890,
-            "type": "RedNodeRefineCrop",
-            "pos": [
-              959.9416797477484,
-              238.0009687481545
-            ],
-            "size": [
-              270,
-              146
-            ],
-            "flags": {},
-            "order": 29,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "image",
-                "name": "image",
-                "type": "IMAGE",
-                "link": 75162
-              },
-              {
-                "localized_name": "mask",
-                "name": "mask",
-                "type": "MASK",
-                "link": 75157
-              },
-              {
-                "localized_name": "vae",
-                "name": "vae",
-                "type": "VAE",
-                "link": 75159
-              },
-              {
-                "localized_name": "context_margin",
-                "name": "context_margin",
-                "type": "FLOAT",
-                "widget": {
-                  "name": "context_margin"
-                },
-                "link": null
-              },
-              {
-                "localized_name": "target_px",
-                "name": "target_px",
-                "type": "INT",
-                "widget": {
-                  "name": "target_px"
-                },
-                "link": 75164
-              },
-              {
-                "localized_name": "feather",
-                "name": "feather",
-                "type": "INT",
-                "widget": {
-                  "name": "feather"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "latent",
-                "name": "latent",
-                "type": "LATENT",
-                "links": [
-                  75160
-                ]
-              },
-              {
-                "localized_name": "crop",
-                "name": "crop",
-                "type": "RN_CROP",
-                "links": []
-              }
-            ],
-            "properties": {
-              "cnr_id": "rednode-studio",
-              "ver": "1.0.0",
-              "Node name for S&R": "RedNodeRefineCrop",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              }
-            },
-            "widgets_values": [
-              0.25,
-              1536,
-              8
-            ]
-          },
-          {
-            "id": 8742,
-            "type": "RedNodeStageTap",
-            "pos": [
-              2876.09486874296,
-              84.38419515307437
-            ],
-            "size": [
-              270,
-              122
-            ],
-            "flags": {
-              "collapsed": false
-            },
-            "order": 26,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "image",
-                "name": "image",
-                "shape": 7,
-                "type": "IMAGE",
-                "link": 75169
-              },
-              {
-                "localized_name": "latent",
-                "name": "latent",
-                "shape": 7,
-                "type": "LATENT",
-                "link": null
-              },
-              {
-                "localized_name": "vae",
-                "name": "vae",
-                "shape": 7,
-                "type": "VAE",
-                "link": 74953
-              },
-              {
-                "localized_name": "label",
-                "name": "label",
-                "type": "STRING",
-                "widget": {
-                  "name": "label"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "image",
-                "name": "image",
-                "type": "IMAGE",
-                "links": [
-                  74954,
-                  74955
-                ]
-              },
-              {
-                "localized_name": "latent",
-                "name": "latent",
-                "type": "LATENT",
-                "links": null
-              }
-            ],
-            "properties": {
-              "cnr_id": "rednode-studio",
-              "ver": "2.0.0",
-              "Node name for S&R": "RedNodeStageTap",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "version": "7.8",
-                "input_ue_unconnectable": {}
-              }
-            },
-            "widgets_values": [
-              "Face Detailer"
-            ],
-            "color": "#322",
-            "bgcolor": "#533"
-          },
-          {
             "id": 8895,
             "type": "RedNodeRefinePaste",
             "pos": [
@@ -10254,86 +9811,6 @@
             ]
           },
           {
-            "id": 8788,
-            "type": "RedNodeStageTap",
-            "pos": [
-              2586.046282329433,
-              -344.84971348539784
-            ],
-            "size": [
-              270,
-              122
-            ],
-            "flags": {
-              "collapsed": false
-            },
-            "order": 27,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "image",
-                "name": "image",
-                "shape": 7,
-                "type": "IMAGE",
-                "link": 74956
-              },
-              {
-                "localized_name": "latent",
-                "name": "latent",
-                "shape": 7,
-                "type": "LATENT",
-                "link": null
-              },
-              {
-                "localized_name": "vae",
-                "name": "vae",
-                "shape": 7,
-                "type": "VAE",
-                "link": 74957
-              },
-              {
-                "localized_name": "label",
-                "name": "label",
-                "type": "STRING",
-                "widget": {
-                  "name": "label"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "localized_name": "image",
-                "name": "image",
-                "type": "IMAGE",
-                "links": [
-                  75196
-                ]
-              },
-              {
-                "localized_name": "latent",
-                "name": "latent",
-                "type": "LATENT",
-                "links": null
-              }
-            ],
-            "properties": {
-              "cnr_id": "rednode-studio",
-              "ver": "2.0.0",
-              "Node name for S&R": "RedNodeStageTap",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "version": "7.8",
-                "input_ue_unconnectable": {}
-              }
-            },
-            "widgets_values": [
-              "Final Pass Refiner"
-            ],
-            "color": "#322",
-            "bgcolor": "#533"
-          },
-          {
             "id": 7556,
             "type": "easy sam3ModelLoader",
             "pos": [
@@ -10411,288 +9888,6 @@
               "image",
               "cuda",
               "fp32"
-            ]
-          },
-          {
-            "id": 8700,
-            "type": "RedNodeSubgraphReceive",
-            "pos": [
-              -161.41011381340508,
-              666.9632532525798
-            ],
-            "size": [
-              1042.0952662005861,
-              832
-            ],
-            "flags": {
-              "collapsed": false
-            },
-            "order": 11,
-            "mode": 0,
-            "inputs": [
-              {
-                "localized_name": "channel",
-                "name": "channel",
-                "type": "STRING",
-                "widget": {
-                  "name": "channel"
-                },
-                "link": null
-              }
-            ],
-            "outputs": [
-              {
-                "label": "steps",
-                "localized_name": "value_1",
-                "name": "value_1",
-                "type": "INT",
-                "links": null
-              },
-              {
-                "label": "cfg",
-                "localized_name": "value_2",
-                "name": "value_2",
-                "type": "FLOAT",
-                "links": [
-                  75156
-                ]
-              },
-              {
-                "label": "sampler_name",
-                "localized_name": "value_3",
-                "name": "value_3",
-                "type": "COMBO",
-                "links": null
-              },
-              {
-                "label": "scheduler",
-                "localized_name": "value_4",
-                "name": "value_4",
-                "type": "COMBO",
-                "links": null
-              },
-              {
-                "label": "detailer_steps",
-                "localized_name": "value_5",
-                "name": "value_5",
-                "type": "INT",
-                "links": [
-                  75155
-                ]
-              },
-              {
-                "label": "start_at_step",
-                "localized_name": "value_6",
-                "name": "value_6",
-                "type": "INT",
-                "links": null
-              },
-              {
-                "label": "Model Here",
-                "localized_name": "value_7",
-                "name": "value_7",
-                "type": "MODEL",
-                "links": null
-              },
-              {
-                "label": "CLIP",
-                "localized_name": "value_8",
-                "name": "value_8",
-                "type": "CLIP",
-                "links": null
-              },
-              {
-                "label": "VAE",
-                "localized_name": "value_9",
-                "name": "value_9",
-                "type": "VAE",
-                "links": [
-                  74764,
-                  75159
-                ]
-              },
-              {
-                "label": "Seed",
-                "localized_name": "value_10",
-                "name": "value_10",
-                "type": "INT",
-                "links": null
-              },
-              {
-                "label": "RedNode Studio Workspace",
-                "localized_name": "value_11",
-                "name": "value_11",
-                "type": "KREA2_WORKSPACE",
-                "links": null
-              },
-              {
-                "label": "subject_image",
-                "localized_name": "value_12",
-                "name": "value_12",
-                "type": "IMAGE",
-                "links": null
-              },
-              {
-                "label": "scene_image",
-                "localized_name": "value_13",
-                "name": "value_13",
-                "type": "IMAGE",
-                "links": null
-              },
-              {
-                "label": "moodboard_style",
-                "localized_name": "value_14",
-                "name": "value_14",
-                "type": "IMAGE",
-                "links": null
-              },
-              {
-                "label": "extra_subjects",
-                "localized_name": "value_15",
-                "name": "value_15",
-                "type": "KREA2_SOURCES",
-                "links": null
-              },
-              {
-                "label": "subject_boost_mask",
-                "localized_name": "value_16",
-                "name": "value_16",
-                "type": "MASK",
-                "links": null
-              },
-              {
-                "label": "edit_mask",
-                "localized_name": "value_17",
-                "name": "value_17",
-                "type": "MASK",
-                "links": null
-              },
-              {
-                "label": "settings",
-                "localized_name": "value_18",
-                "name": "value_18",
-                "type": "KREA2_SETTINGS",
-                "links": null
-              },
-              {
-                "label": "output_latent",
-                "localized_name": "value_19",
-                "name": "value_19",
-                "type": "LATENT",
-                "links": null
-              },
-              {
-                "label": "style_strength",
-                "localized_name": "value_20",
-                "name": "value_20",
-                "type": "FLOAT",
-                "links": null
-              },
-              {
-                "label": "subject_prompt",
-                "localized_name": "value_21",
-                "name": "value_21",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "scene_prompt",
-                "localized_name": "value_22",
-                "name": "value_22",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "moodboard_prompt",
-                "localized_name": "value_23",
-                "name": "value_23",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "i2i_image",
-                "localized_name": "value_24",
-                "name": "value_24",
-                "type": "IMAGE",
-                "links": null
-              },
-              {
-                "label": "i2i_prompt",
-                "localized_name": "value_25",
-                "name": "value_25",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "denoise",
-                "localized_name": "value_26",
-                "name": "value_26",
-                "type": "FLOAT",
-                "links": null
-              },
-              {
-                "label": "model",
-                "localized_name": "value_27",
-                "name": "value_27",
-                "type": "MODEL",
-                "links": [
-                  74853
-                ]
-              },
-              {
-                "label": "lora_keywords",
-                "localized_name": "value_28",
-                "name": "value_28",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "positive",
-                "localized_name": "value_29",
-                "name": "value_29",
-                "type": "CONDITIONING",
-                "links": [
-                  74760
-                ]
-              },
-              {
-                "label": "negative",
-                "localized_name": "value_30",
-                "name": "value_30",
-                "type": "CONDITIONING",
-                "links": [
-                  74761
-                ]
-              },
-              {
-                "label": "paint_prompt",
-                "localized_name": "value_31",
-                "name": "value_31",
-                "type": "STRING",
-                "links": null
-              },
-              {
-                "label": "Workspace clip paint",
-                "localized_name": "value_32",
-                "name": "value_32",
-                "type": "CLIP",
-                "links": null
-              }
-            ],
-            "properties": {
-              "cnr_id": "rednode-studio",
-              "ver": "1.0.0",
-              "Node name for S&R": "RedNodeSubgraphReceive",
-              "ue_properties": {
-                "widget_ue_connectable": {},
-                "input_ue_unconnectable": {},
-                "version": "7.8"
-              }
-            },
-            "widgets_values": [
-              "RedNode Studio Output",
-              "{\"channel\":\"RedNode Studio Output\",\"publish\":false,\"slots\":[],\"channels\":[\"Send Models\",\"Studio Workspace\",\"Sampler Configs\"],\"muted\":{},\"order\":[\"Sampler Configs/RedNode Sampler Config (auto turbo) steps\",\"Sampler Configs/RedNode Sampler Config (auto turbo) cfg\",\"Sampler Configs/RedNode Sampler Config (auto turbo) sampler_name\",\"Sampler Configs/RedNode Sampler Config (auto turbo) scheduler\",\"Sampler Configs/RedNode Sampler Config (auto turbo) detailer_steps\",\"Sampler Configs/RedNode Sampler Config (auto turbo) start_at_step\",\"Send Models/Model Here\",\"Send Models/Model Here CLIP\",\"Send Models/Model Here VAE\",\"Send Models/Seed\",\"Studio Workspace/RedNode Studio Workspace\",\"Studio Workspace/RedNode Studio Workspace subject_image\",\"Studio Workspace/RedNode Studio Workspace scene_image\",\"Studio Workspace/RedNode Studio Workspace moodboard_style\",\"Studio Workspace/RedNode Studio Workspace extra_subjects\",\"Studio Workspace/RedNode Studio Workspace subject_boost_mask\",\"Studio Workspace/RedNode Studio Workspace edit_mask\",\"Studio Workspace/RedNode Studio Workspace settings\",\"Studio Workspace/RedNode Studio Workspace output_latent\",\"Studio Workspace/RedNode Studio Workspace style_strength\",\"Studio Workspace/RedNode Studio Workspace subject_prompt\",\"Studio Workspace/RedNode Studio Workspace scene_prompt\",\"Studio Workspace/RedNode Studio Workspace moodboard_prompt\",\"Studio Workspace/RedNode Studio Workspace i2i_image\",\"Studio Workspace/RedNode Studio Workspace i2i_prompt\",\"Studio Workspace/RedNode Studio Workspace denoise\",\"Studio Workspace/RedNode Studio Workspace model\",\"Studio Workspace/RedNode Studio Workspace lora_keywords\",\"RedNode Studio Output/RedNode Studio positive\",\"RedNode Studio Output/RedNode Studio negative\",\"Studio Workspace/RedNode Studio Workspace paint_prompt\",\"Studio Workspace/Workspace clip paint\"],\"style\":{},\"hidden\":{},\"showHidden\":false,\"autoStyle\":{},\"titles\":{}}",
-              ""
             ]
           },
           {
@@ -11143,11 +10338,555 @@
             ]
           },
           {
+            "id": 8352,
+            "type": "RedNodeSwitch",
+            "pos": [
+              2160.8959339513544,
+              73.72103350111863
+            ],
+            "size": [
+              400,
+              252
+            ],
+            "flags": {},
+            "order": 22,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "input_1",
+                "name": "input_1",
+                "shape": 7,
+                "type": "*",
+                "link": 75172
+              },
+              {
+                "localized_name": "input_2",
+                "name": "input_2",
+                "shape": 7,
+                "type": "*",
+                "link": 75154
+              },
+              {
+                "localized_name": "selected",
+                "name": "selected",
+                "type": "STRING",
+                "widget": {
+                  "name": "selected"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "IMAGE",
+                "localized_name": "selected",
+                "name": "selected",
+                "type": "IMAGE",
+                "links": [
+                  75169
+                ]
+              }
+            ],
+            "title": "Sampler Face Detailer Choice",
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "1.0.0",
+              "Node name for S&R": "RedNodeSwitch",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "2 · Krea 2",
+              "{\"labels\":{\"1\":\"Z Turbo (HIGH VRAM)\",\"2\":\"Krea 2\"}}",
+              "{\"labels\":{\"1\":\"Z Turbo (HIGH VRAM)\",\"2\":\"Krea 2\"}}"
+            ]
+          },
+          {
+            "id": 8700,
+            "type": "RedNodeSubgraphReceive",
+            "pos": [
+              689.3237358034236,
+              664.1939436413018
+            ],
+            "size": [
+              1042.0952662005861,
+              832
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 11,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "channel",
+                "name": "channel",
+                "type": "STRING",
+                "widget": {
+                  "name": "channel"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "steps",
+                "localized_name": "value_1",
+                "name": "value_1",
+                "type": "INT",
+                "links": null
+              },
+              {
+                "label": "cfg",
+                "localized_name": "value_2",
+                "name": "value_2",
+                "type": "FLOAT",
+                "links": [
+                  75156
+                ]
+              },
+              {
+                "label": "sampler_name",
+                "localized_name": "value_3",
+                "name": "value_3",
+                "type": "COMBO",
+                "links": null
+              },
+              {
+                "label": "scheduler",
+                "localized_name": "value_4",
+                "name": "value_4",
+                "type": "COMBO",
+                "links": null
+              },
+              {
+                "label": "detailer_steps",
+                "localized_name": "value_5",
+                "name": "value_5",
+                "type": "INT",
+                "links": [
+                  75155
+                ]
+              },
+              {
+                "label": "start_at_step",
+                "localized_name": "value_6",
+                "name": "value_6",
+                "type": "INT",
+                "links": null
+              },
+              {
+                "label": "Model Here",
+                "localized_name": "value_7",
+                "name": "value_7",
+                "type": "MODEL",
+                "links": null
+              },
+              {
+                "label": "CLIP",
+                "localized_name": "value_8",
+                "name": "value_8",
+                "type": "CLIP",
+                "links": null
+              },
+              {
+                "label": "VAE",
+                "localized_name": "value_9",
+                "name": "value_9",
+                "type": "VAE",
+                "links": [
+                  74764,
+                  75159
+                ]
+              },
+              {
+                "label": "Seed",
+                "localized_name": "value_10",
+                "name": "value_10",
+                "type": "INT",
+                "links": null
+              },
+              {
+                "label": "RedNode Studio Workspace",
+                "localized_name": "value_11",
+                "name": "value_11",
+                "type": "KREA2_WORKSPACE",
+                "links": null
+              },
+              {
+                "label": "subject_image",
+                "localized_name": "value_12",
+                "name": "value_12",
+                "type": "IMAGE",
+                "links": null
+              },
+              {
+                "label": "scene_image",
+                "localized_name": "value_13",
+                "name": "value_13",
+                "type": "IMAGE",
+                "links": null
+              },
+              {
+                "label": "moodboard_style",
+                "localized_name": "value_14",
+                "name": "value_14",
+                "type": "IMAGE",
+                "links": null
+              },
+              {
+                "label": "extra_subjects",
+                "localized_name": "value_15",
+                "name": "value_15",
+                "type": "KREA2_SOURCES",
+                "links": null
+              },
+              {
+                "label": "subject_boost_mask",
+                "localized_name": "value_16",
+                "name": "value_16",
+                "type": "MASK",
+                "links": null
+              },
+              {
+                "label": "edit_mask",
+                "localized_name": "value_17",
+                "name": "value_17",
+                "type": "MASK",
+                "links": null
+              },
+              {
+                "label": "settings",
+                "localized_name": "value_18",
+                "name": "value_18",
+                "type": "KREA2_SETTINGS",
+                "links": null
+              },
+              {
+                "label": "output_latent",
+                "localized_name": "value_19",
+                "name": "value_19",
+                "type": "LATENT",
+                "links": null
+              },
+              {
+                "label": "style_strength",
+                "localized_name": "value_20",
+                "name": "value_20",
+                "type": "FLOAT",
+                "links": null
+              },
+              {
+                "label": "subject_prompt",
+                "localized_name": "value_21",
+                "name": "value_21",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "scene_prompt",
+                "localized_name": "value_22",
+                "name": "value_22",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "moodboard_prompt",
+                "localized_name": "value_23",
+                "name": "value_23",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "i2i_image",
+                "localized_name": "value_24",
+                "name": "value_24",
+                "type": "IMAGE",
+                "links": null
+              },
+              {
+                "label": "i2i_prompt",
+                "localized_name": "value_25",
+                "name": "value_25",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "denoise",
+                "localized_name": "value_26",
+                "name": "value_26",
+                "type": "FLOAT",
+                "links": null
+              },
+              {
+                "label": "model",
+                "localized_name": "value_27",
+                "name": "value_27",
+                "type": "MODEL",
+                "links": [
+                  74853
+                ]
+              },
+              {
+                "label": "lora_keywords",
+                "localized_name": "value_28",
+                "name": "value_28",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "positive",
+                "localized_name": "value_29",
+                "name": "value_29",
+                "type": "CONDITIONING",
+                "links": [
+                  74760
+                ]
+              },
+              {
+                "label": "negative",
+                "localized_name": "value_30",
+                "name": "value_30",
+                "type": "CONDITIONING",
+                "links": [
+                  74761
+                ]
+              },
+              {
+                "label": "paint_prompt",
+                "localized_name": "value_31",
+                "name": "value_31",
+                "type": "STRING",
+                "links": null
+              },
+              {
+                "label": "Workspace clip paint",
+                "localized_name": "value_32",
+                "name": "value_32",
+                "type": "CLIP",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "1.0.0",
+              "Node name for S&R": "RedNodeSubgraphReceive",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "RedNode Studio Output",
+              "{\"channel\":\"RedNode Studio Output\",\"publish\":false,\"slots\":[],\"channels\":[\"Send Models\",\"Studio Workspace\",\"Sampler Configs\"],\"muted\":{},\"order\":[\"Sampler Configs/RedNode Sampler Config (auto turbo) steps\",\"Sampler Configs/RedNode Sampler Config (auto turbo) cfg\",\"Sampler Configs/RedNode Sampler Config (auto turbo) sampler_name\",\"Sampler Configs/RedNode Sampler Config (auto turbo) scheduler\",\"Sampler Configs/RedNode Sampler Config (auto turbo) detailer_steps\",\"Sampler Configs/RedNode Sampler Config (auto turbo) start_at_step\",\"Send Models/Model Here\",\"Send Models/Model Here CLIP\",\"Send Models/Model Here VAE\",\"Send Models/Seed\",\"Studio Workspace/RedNode Studio Workspace\",\"Studio Workspace/RedNode Studio Workspace subject_image\",\"Studio Workspace/RedNode Studio Workspace scene_image\",\"Studio Workspace/RedNode Studio Workspace moodboard_style\",\"Studio Workspace/RedNode Studio Workspace extra_subjects\",\"Studio Workspace/RedNode Studio Workspace subject_boost_mask\",\"Studio Workspace/RedNode Studio Workspace edit_mask\",\"Studio Workspace/RedNode Studio Workspace settings\",\"Studio Workspace/RedNode Studio Workspace output_latent\",\"Studio Workspace/RedNode Studio Workspace style_strength\",\"Studio Workspace/RedNode Studio Workspace subject_prompt\",\"Studio Workspace/RedNode Studio Workspace scene_prompt\",\"Studio Workspace/RedNode Studio Workspace moodboard_prompt\",\"Studio Workspace/RedNode Studio Workspace i2i_image\",\"Studio Workspace/RedNode Studio Workspace i2i_prompt\",\"Studio Workspace/RedNode Studio Workspace denoise\",\"Studio Workspace/RedNode Studio Workspace model\",\"Studio Workspace/RedNode Studio Workspace lora_keywords\",\"RedNode Studio Output/RedNode Studio positive\",\"RedNode Studio Output/RedNode Studio negative\",\"Studio Workspace/RedNode Studio Workspace paint_prompt\",\"Studio Workspace/Workspace clip paint\"],\"style\":{},\"hidden\":{},\"showHidden\":false,\"autoStyle\":{},\"titles\":{}}",
+              ""
+            ]
+          },
+          {
+            "id": 8890,
+            "type": "RedNodeRefineCrop",
+            "pos": [
+              1013.3243940957574,
+              222.52772991498722
+            ],
+            "size": [
+              270,
+              146
+            ],
+            "flags": {},
+            "order": 29,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "link": 75162
+              },
+              {
+                "localized_name": "mask",
+                "name": "mask",
+                "type": "MASK",
+                "link": 75157
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "type": "VAE",
+                "link": 75159
+              },
+              {
+                "localized_name": "context_margin",
+                "name": "context_margin",
+                "type": "FLOAT",
+                "widget": {
+                  "name": "context_margin"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "target_px",
+                "name": "target_px",
+                "type": "INT",
+                "widget": {
+                  "name": "target_px"
+                },
+                "link": 75164
+              },
+              {
+                "localized_name": "feather",
+                "name": "feather",
+                "type": "INT",
+                "widget": {
+                  "name": "feather"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "type": "LATENT",
+                "links": [
+                  75160
+                ]
+              },
+              {
+                "localized_name": "crop",
+                "name": "crop",
+                "type": "RN_CROP",
+                "links": []
+              }
+            ],
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "1.0.0",
+              "Node name for S&R": "RedNodeRefineCrop",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              0.25,
+              1536,
+              8
+            ]
+          },
+          {
+            "id": 8893,
+            "type": "PrimitiveInt",
+            "pos": [
+              481.8376998732435,
+              23.245749353371227
+            ],
+            "size": [
+              270,
+              82
+            ],
+            "flags": {},
+            "order": 7,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "value",
+                "name": "value",
+                "type": "INT",
+                "widget": {
+                  "name": "value"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "INT",
+                "name": "INT",
+                "type": "INT",
+                "links": [
+                  75163,
+                  75164
+                ]
+              }
+            ],
+            "title": "Mask Size Face Detailer",
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.29.2",
+              "Node name for S&R": "PrimitiveInt",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              1024,
+              "fixed"
+            ]
+          },
+          {
+            "id": 7603,
+            "type": "VAELoader",
+            "pos": [
+              435.3569845683141,
+              222.4895749536112
+            ],
+            "size": [
+              330,
+              106.25
+            ],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "vae_name",
+                "name": "vae_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "vae_name"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "slot_index": 0,
+                "links": [
+                  73032
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.23.0",
+              "Node name for S&R": "VAELoader",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.6.2",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "UltraFlux.safetensors"
+            ]
+          },
+          {
             "id": 8914,
             "type": "RedNodeFreeVRAM",
             "pos": [
-              1214.6015894408295,
-              -28.219882121796218
+              1178.007349213956,
+              -46.942505784764386
             ],
             "size": [
               319.421514653297,
@@ -11247,60 +10986,157 @@
             "bgcolor": "#335"
           },
           {
-            "id": 8352,
-            "type": "RedNodeSwitch",
+            "id": 7550,
+            "type": "easy sam3ImageSegmentation",
             "pos": [
-              2160.8959339513544,
-              73.72103350111863
+              -81.87560382951213,
+              94.29104208307412
             ],
             "size": [
               400,
-              252
+              284
             ],
             "flags": {},
-            "order": 22,
+            "order": 15,
             "mode": 0,
             "inputs": [
               {
-                "localized_name": "input_1",
-                "name": "input_1",
-                "shape": 7,
-                "type": "*",
-                "link": 75172
+                "label": "SAM3 Model",
+                "localized_name": "sam3_model",
+                "name": "sam3_model",
+                "type": "EASY_SAM3_MODEL",
+                "link": 72957
               },
               {
-                "localized_name": "input_2",
-                "name": "input_2",
-                "shape": 7,
-                "type": "*",
-                "link": 75154
+                "localized_name": "images",
+                "name": "images",
+                "type": "IMAGE",
+                "link": 72946
               },
               {
-                "localized_name": "selected",
-                "name": "selected",
+                "label": "coordinates_positive",
+                "localized_name": "coordinates_positive",
+                "name": "coordinates_positive",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              },
+              {
+                "label": "coordinates_negative",
+                "localized_name": "coordinates_negative",
+                "name": "coordinates_negative",
+                "shape": 7,
+                "type": "STRING",
+                "link": null
+              },
+              {
+                "label": "bboxes",
+                "localized_name": "bboxes",
+                "name": "bboxes",
+                "shape": 7,
+                "type": "BBOX",
+                "link": null
+              },
+              {
+                "label": "mask",
+                "localized_name": "mask",
+                "name": "mask",
+                "shape": 7,
+                "type": "MASK",
+                "link": null
+              },
+              {
+                "localized_name": "prompt",
+                "name": "prompt",
                 "type": "STRING",
                 "widget": {
-                  "name": "selected"
+                  "name": "prompt"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "threshold",
+                "name": "threshold",
+                "type": "FLOAT",
+                "widget": {
+                  "name": "threshold"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "keep_model_loaded",
+                "name": "keep_model_loaded",
+                "type": "BOOLEAN",
+                "widget": {
+                  "name": "keep_model_loaded"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "add_background",
+                "name": "add_background",
+                "type": "COMBO",
+                "widget": {
+                  "name": "add_background"
+                },
+                "link": null
+              },
+              {
+                "localized_name": "detection_limit",
+                "name": "detection_limit",
+                "type": "INT",
+                "widget": {
+                  "name": "detection_limit"
                 },
                 "link": null
               }
             ],
             "outputs": [
               {
-                "label": "IMAGE",
-                "localized_name": "selected",
-                "name": "selected",
+                "localized_name": "masks",
+                "name": "masks",
+                "type": "MASK",
+                "links": [
+                  72960,
+                  75157
+                ]
+              },
+              {
+                "localized_name": "images",
+                "name": "images",
                 "type": "IMAGE",
                 "links": [
-                  75169
+                  72959,
+                  73027,
+                  73829,
+                  74054,
+                  74883,
+                  75158
                 ]
+              },
+              {
+                "localized_name": "obj_masks",
+                "name": "obj_masks",
+                "type": "MASK",
+                "links": null
+              },
+              {
+                "localized_name": "boxes",
+                "name": "boxes",
+                "type": "BBOX",
+                "links": null
+              },
+              {
+                "localized_name": "scores",
+                "name": "scores",
+                "type": "FLOAT",
+                "links": null
               }
             ],
-            "title": "Sampler Face Detailer Choice",
             "properties": {
-              "cnr_id": "rednode-studio",
+              "cnr_id": "comfyui-easy-sam3",
               "ver": "1.0.0",
-              "Node name for S&R": "RedNodeSwitch",
+              "Node name for S&R": "easy sam3ImageSegmentation",
               "ue_properties": {
                 "widget_ue_connectable": {},
                 "input_ue_unconnectable": {},
@@ -11308,10 +11144,173 @@
               }
             },
             "widgets_values": [
-              "2 · Krea 2",
-              "{\"labels\":{\"1\":\"Z Turbo (HIGH VRAM)\",\"2\":\"Krea 2\"}}",
-              "{\"labels\":{\"1\":\"Z Turbo (HIGH VRAM)\",\"2\":\"Krea 2\"}}"
+              "face",
+              0.5,
+              true,
+              "none",
+              -1
             ]
+          },
+          {
+            "id": 8742,
+            "type": "RedNodeStageTap",
+            "pos": [
+              2903.89794945551,
+              67.90824519110784
+            ],
+            "size": [
+              270,
+              122
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 26,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 75169
+              },
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "shape": 7,
+                "type": "LATENT",
+                "link": null
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "shape": 7,
+                "type": "VAE",
+                "link": 74953
+              },
+              {
+                "localized_name": "label",
+                "name": "label",
+                "type": "STRING",
+                "widget": {
+                  "name": "label"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "links": [
+                  74954,
+                  74955
+                ]
+              },
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "type": "LATENT",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "2.0.0",
+              "Node name for S&R": "RedNodeStageTap",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "Face Detailer"
+            ],
+            "color": "#322",
+            "bgcolor": "#533"
+          },
+          {
+            "id": 8788,
+            "type": "RedNodeStageTap",
+            "pos": [
+              2883.6421951864977,
+              -332.4927792966791
+            ],
+            "size": [
+              270,
+              122
+            ],
+            "flags": {
+              "collapsed": true
+            },
+            "order": 27,
+            "mode": 0,
+            "inputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "shape": 7,
+                "type": "IMAGE",
+                "link": 74956
+              },
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "shape": 7,
+                "type": "LATENT",
+                "link": null
+              },
+              {
+                "localized_name": "vae",
+                "name": "vae",
+                "shape": 7,
+                "type": "VAE",
+                "link": 74957
+              },
+              {
+                "localized_name": "label",
+                "name": "label",
+                "type": "STRING",
+                "widget": {
+                  "name": "label"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "localized_name": "image",
+                "name": "image",
+                "type": "IMAGE",
+                "links": [
+                  75196
+                ]
+              },
+              {
+                "localized_name": "latent",
+                "name": "latent",
+                "type": "LATENT",
+                "links": null
+              }
+            ],
+            "properties": {
+              "cnr_id": "rednode-studio",
+              "ver": "2.0.0",
+              "Node name for S&R": "RedNodeStageTap",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "Final Pass Refiner"
+            ],
+            "color": "#322",
+            "bgcolor": "#533"
           }
         ],
         "groups": [
@@ -11788,7 +11787,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -12834,7 +12833,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -14071,7 +14070,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -15241,7 +15240,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -15856,7 +15855,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -16435,7 +16434,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -16846,7 +16845,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -17288,7 +17287,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -18178,7 +18177,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -19767,7 +19766,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -20709,7 +20708,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -22355,7 +22354,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -22723,7 +22722,7 @@
         "version": 1,
         "state": {
           "lastGroupId": 316,
-          "lastNodeId": 8917,
+          "lastNodeId": 8918,
           "lastLinkId": 75215,
           "lastRerouteId": 60
         },
@@ -23536,10 +23535,10 @@
     },
     "k2cf_state_id": "k2cf_1785137767986_t54iwsdnyv",
     "ds": {
-      "scale": 0.8390545288824074,
+      "scale": 0.5730855330116844,
       "offset": [
-        10477.554422499685,
-        -236.35816376345443
+        12688.182484388126,
+        153.06573574749928
       ]
     }
   },
