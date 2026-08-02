@@ -19,7 +19,9 @@ Search **RedNode Studio** in ComfyUI Manager, or clone it:
 git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Then open **Rednode Ultima** in the template browser. That is the whole rig wired up.
+Then open **[Rednode Ultima](example_workflows/Rednode_Ultima_V1.0.2%20Release.json)** in ComfyUI's
+template browser. It is the complete rig, and ComfyUI Manager offers its additional node
+dependencies when you load it.
 
 ## What it looks like
 
@@ -250,8 +252,12 @@ The Workspace has a VRAM tier button in its footer that clamps the expensive dia
 **RedNode Free VRAM** is the other half of that. Put it in the chain before a second big model
 loads, and the first one is unloaded at that exact point rather than when the driver runs out of
 room. On a card that cannot hold two models at once, that is the difference between a pass running
-normally and a pass running an order of magnitude slower while it spills into system memory. The
-example workflow ships with two of them, switchable.
+normally and a pass running an order of magnitude slower while it spills into system memory.
+
+The example workflow ships with three, all switchable from the panel. Two sit in the Low VRAM
+Options group, before the face detailer and before the upscale, and are on by default. The third
+is on the Z Turbo detailer branch and is off, because that branch only needs it when the detailer
+runs a different model from the main pass.
 
 ## Settings and stored data
 
