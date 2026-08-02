@@ -28,7 +28,9 @@ from .paint_render import (REGION_SHAPES as SHAPES, _bbox, _fit, _fit_region, _o
 
 PAINT_TYPE = "RN_PAINT"
 
-SCOPES = ("whole frame", "painted region")
+# "auto" first, so it is the default for a freshly added node. Existing workflows
+# keep whatever they saved.
+SCOPES = ("auto", "whole frame", "painted region")
 
 
 class RedNodePaintOut:
@@ -38,25 +40,31 @@ class RedNodePaintOut:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "scope": (list(SCOPES), {"default": "whole frame", "tooltip":
-                          "Whole frame hands out the full picture and a full-size mask, "
-                          "which is what most hosted models expect. Painted region "
-                          "hands out just the painted area plus context, the way "
-                          "RedNode Paint Render works, which puts more pixels on the "
-                          "part being redone."}),
+                "scope": (list(SCOPES), {"default": "auto", "tooltip":
+                          "Auto follows the Paint tab: its Painted mode hands out the "
+                          "region, Whole frame hands out the picture, so the switch you "
+                          "set while painting is the one that runs. Whole frame hands "
+                          "out the full picture and a full-size mask, which is what "
+                          "most hosted models expect, and forces that even while "
+                          "painting a region. Painted region hands out just the painted "
+                          "area plus context, the way RedNode Paint Render works, which "
+                          "puts more pixels on the part being redone."}),
                 "context": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 2.0,
                             "step": 0.05, "tooltip":
                             "Painted region only: how much extra room around the paint "
                             "to include, as a fraction of its size. Some context is "
                             "what lets a renderer match the lighting instead of leaving "
                             "a seam."}),
-                "region_size": ("INT", {"default": 1024, "min": 512, "max": 4096,
+                "region_size": ("INT", {"default": 0, "min": 0, "max": 4096,
                                 "step": 64, "tooltip":
                                 "Painted region only: the PIXEL BUDGET the region is "
                                 "handed out at, as the side of a square. 1024 means "
                                 "about a megapixel however the region is shaped, so a "
                                 "long thin mask gets the same detail as a compact one "
-                                "instead of being rationed by its longest side."}),
+                                "instead of being rationed by its longest side. 0 "
+                                "follows the Paint tab's size dial, which is what the "
+                                "whole-frame path already does; anything else forces "
+                                "that budget."}),
                 # APPENDED, after region_size, so nothing already wired moves.
                 "region_shape": (list(SHAPES), {"default": "auto", "tooltip":
                                  "Painted region only: the shape the region is grown "
@@ -230,7 +238,18 @@ class RedNodePaintOut:
         elif pc.get("invert"):
             mask = 1.0 - mask
 
-        if scope == "painted region":
+        # "auto" follows the Paint tab, the same way region_shape already does. The tab's
+        # Painted mode is mask_only, and it is the switch you are looking at while you
+        # paint, so it should decide the handoff. The two explicit values stay as a
+        # forced override for a renderer that can only take one shape.
+        want_scope = str(scope or "auto")
+        if want_scope == "auto":
+            want_scope = ("painted region" if pc.get("mask_only", True) and mask is not None
+                          else "whole frame")
+            print(f"[RedNode Paint Out] scope auto -> {want_scope} (from the Paint tab)",
+                  flush=True)
+
+        if want_scope == "painted region":
             box = _bbox(mask, pad=float(context))
             if box is None:
                 box = (0, full_h, 0, full_w)
@@ -251,7 +270,11 @@ class RedNodePaintOut:
             y0, y1, x0, x1 = box
             crop = base[:, y0:y1, x0:x1, :]
             tier = str(_workspace_cfg(prompt).get("vram_tier") or "high")
-            out_img = _fit_region(crop, min(int(region_size), whole_frame_limit(tier)),
+            # 0 follows the tab's size dial, which is what the whole-frame path below
+            # already does. Two paths on one node reading the same decision from two
+            # places is how a dial stops meaning what it says.
+            budget = int(region_size or 0) or int(pc.get("mask_size", 1024))
+            out_img = _fit_region(crop, min(budget, whole_frame_limit(tier)),
                                   cap=whole_frame_limit(tier))
             out_mask = F.interpolate(
                 mask[:, y0:y1, x0:x1].unsqueeze(1),
