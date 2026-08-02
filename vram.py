@@ -1,4 +1,9 @@
-"""Freeing the previous renderer's model when the Paint tab switches to another one.
+"""Freeing VRAM: on a Paint tab renderer switch (HTTP, below) and at a chosen point in a
+run (RedNode Free VRAM, at the end of this file).
+
+--- the renderer switch ---
+
+Freeing the previous renderer's model when the Paint tab switches to another one.
 
 The Paint tab's renderer dropdown lists every RedNode Paint Render and every RedNode
 Paint In in the graph, so a workflow can hold as many renderer setups as you like and
@@ -21,8 +26,11 @@ Deliberately NOT on a timer and NOT on every Generate:
 Called from the browser BEFORE the prompt is posted, because that is the only moment
 nothing is executing and the ordering is guaranteed. A node could not do this reliably:
 execution order between sibling branches is not defined, so a node meant to run before
-the loader could just as easily run after it.
+the loader could just as easily run after it. RedNode Free VRAM sidesteps that by sitting
+IN the wire rather than beside it.
 """
+
+from .switch import ANY
 
 
 def queue_busy():
@@ -35,21 +43,47 @@ def queue_busy():
         return False            # cannot tell, so do not block the user on a guess
 
 
-def free_models():
-    """Unload every model ComfyUI is holding. Returns (how many, bytes they were using).
+def _loaded_for(mm, model):
+    """The LoadedModel entries backing a MODEL wire, [] if it is not resident.
 
-    Nothing here is destructive: a model is a file on disk and reloads on demand. The
-    cost of being wrong is one reload, which is exactly what a renderer switch pays
-    anyway.
+    Matched on clone_base_uuid, not identity: a MODEL that has been through a LoRA or a
+    sampling patch is a CLONE of the resident ModelPatcher, so `is` would miss it and we
+    would free the very thing the user asked to keep. Same test comfy's own
+    unload_model_and_clones uses.
+    """
+    if model is None:
+        return []
+    base = getattr(model, "clone_base_uuid", None)
+    out = []
+    try:
+        loaded = list(mm.current_loaded_models)
+    except Exception:
+        return []
+    for lm in loaded:
+        m = getattr(lm, "model", None)
+        if m is None:
+            continue
+        if m is model or (base is not None and getattr(m, "clone_base_uuid", None) == base):
+            out.append(lm)
+    return out
+
+
+def free_models(keep=None, empty=True):
+    """Unload the models ComfyUI is holding. Returns (how many, bytes they were using).
+
+    `keep` is an optional MODEL to leave resident. Nothing here is destructive: a model
+    is a file on disk and reloads on demand. The cost of being wrong is one reload, which
+    is exactly what a renderer switch pays anyway.
     """
     try:
         import comfy.model_management as mm
     except Exception as e:
         raise RuntimeError(f"ComfyUI's model management is unavailable ({e})")
 
+    keep_loaded = _loaded_for(mm, keep)
     held = []
     try:
-        held = list(mm.current_loaded_models)
+        held = [m for m in mm.current_loaded_models if m not in keep_loaded]
     except Exception:
         pass
     freed = 0
@@ -59,8 +93,26 @@ def free_models():
         except Exception:
             pass
 
+    if keep_loaded:
+        for dev in mm.get_all_torch_devices():
+            try:
+                mm.free_memory(1e30, dev, keep_loaded=keep_loaded)
+            except Exception:
+                pass
+        if empty:
+            _empty_cache()
+        return len(held), freed
+
     mm.unload_all_models()
+    if empty:
+        _empty_cache()
+    return len(held), freed
+
+
+def _empty_cache():
+    """Hand the freed blocks back to the driver. Unloading alone only drops references."""
     try:
+        import comfy.model_management as mm
         mm.soft_empty_cache(force=True)
     except Exception:
         pass
@@ -72,7 +124,6 @@ def free_models():
             torch.cuda.empty_cache()
     except Exception:
         pass
-    return len(held), freed
 
 
 def vram_state():
@@ -123,3 +174,86 @@ try:
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)
     print(f"[RedNode Krea2] VRAM HTTP route not registered: {e}", flush=True)
+
+
+class RedNodeFreeVRAM:
+    """Free VRAM at a chosen point in the run, so two big models never overlap.
+
+    The passthrough is the whole design. A node with an output nobody uses may run at any
+    time or not at all, so a bare "free memory" node cannot promise it happens BETWEEN two
+    stages. Threading the image (or latent, or anything) through it puts it in the data
+    path, where the order is defined.
+
+    Freeing early beats letting ComfyUI evict late. It evicts at the moment of the next
+    load, by which point VRAM is fragmented and the allocation can still fail; doing it
+    here, while nothing is mid-allocation, is the reliable version.
+
+    There is no reload half: the next sampler that needs a model loads it. The only cost
+    is that load.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "value": (ANY, {"tooltip": "anything — it comes out untouched. Wiring it "
+                                "through is what fixes WHEN the memory is freed."}),
+                "unload_models": ("BOOLEAN", {"default": True, "tooltip":
+                                  "unload every model ComfyUI is holding. They reload on "
+                                  "demand, so the cost is load time, not the run."}),
+                "empty_cache": ("BOOLEAN", {"default": True, "tooltip":
+                                "hand the freed blocks back to the driver. Leave on: "
+                                "unloading alone often leaves VRAM looking just as full."}),
+                "always_run": ("BOOLEAN", {"default": False, "tooltip":
+                               "free even when nothing upstream changed. Costs you the "
+                               "cache: everything downstream recomputes every queue."}),
+            },
+            "optional": {
+                "keep": ("MODEL", {"tooltip": "one model to leave resident — wire the one "
+                         "you are about to use again. LoRA-patched clones count as the "
+                         "same model."}),
+            },
+        }
+
+    RETURN_TYPES = (ANY,)
+    RETURN_NAMES = ("value",)
+    FUNCTION = "run"
+    CATEGORY = "RedNode/Control"
+    DESCRIPTION = ("Unloads models at this exact point in the chain, for running a second "
+                   "big model (a detailer, an upscaler) on a card that cannot hold both. "
+                   "Whatever is wired in comes straight out; the wire is what fixes the "
+                   "timing. Nothing needs reloading by hand.")
+
+    @classmethod
+    def IS_CHANGED(cls, always_run=False, **kwargs):
+        # NaN never equals itself, so ComfyUI treats the node as changed every time.
+        return float("nan") if always_run else False
+
+    def run(self, value=None, unload_models=True, empty_cache=True, always_run=False,
+            keep=None):
+        if unload_models:
+            kept = ""
+            if keep is not None:
+                try:
+                    import comfy.model_management as mm
+                    n = len(_loaded_for(mm, keep))
+                    kept = f", kept {n}" if n else ", nothing to keep (it was not loaded)"
+                except Exception:
+                    pass
+            try:
+                count, freed = free_models(keep=keep, empty=bool(empty_cache))
+            except Exception as e:
+                print(f"[RedNode Free VRAM] could not unload: {e}", flush=True)
+            else:
+                # asked-for vs actually-held: a `keep` wire whose model was not resident
+                # keeps nothing, and the log should not claim otherwise
+                print(f"[RedNode Free VRAM] freed {count} model(s), about "
+                      f"{freed // (1024 * 1024)} MB{kept}", flush=True)
+        elif empty_cache:
+            _empty_cache()
+            print("[RedNode Free VRAM] emptied the allocator cache", flush=True)
+        return (value,)
+
+
+NODE_CLASS_MAPPINGS = {"RedNodeFreeVRAM": RedNodeFreeVRAM}
+NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeFreeVRAM": "RedNode Free VRAM"}

@@ -643,7 +643,7 @@ from .paint_render import RedNodePaintRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
 from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
-from . import vram as _rednode_vram  # noqa: F401,E402  (renderer-switch unload route)
+from .vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
 from . import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
 from .group_rules import RedNodeGroupRules  # noqa: E402  (also registers its routes)
 from .subgraph_bridge import (RedNodeSubgraphSend,  # noqa: E402
@@ -675,6 +675,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeRouterControl": RedNodeRouterControl,
     "RedNodePalette": RedNodePalette,
     "RedNodePass": RedNodePass,
+    "RedNodeFreeVRAM": RedNodeFreeVRAM,
     "RedNodeStudioWorkspace": RedNodeStudioWorkspace,
     "RedNodeImageReview": RedNodeImageReview,
     "RedNodeSamplerConfig": RedNodeSamplerConfig,
@@ -714,6 +715,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeRouterControl": "RedNode Router Control",
     "RedNodePalette": "RedNode Palette",
     "RedNodePass": "RedNode Pass (colour trigger)",
+    "RedNodeFreeVRAM": "RedNode Free VRAM",
     "RedNodeStudioWorkspace": "RedNode Studio Workspace",
     "RedNodeImageReview": "RedNode Image Review",
     "RedNodeSamplerConfig": "RedNode Sampler Config (auto turbo)",

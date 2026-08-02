@@ -126,6 +126,7 @@ See [docs/routing-and-control.md](docs/routing-and-control.md).
 | RedNode Router Control | Counts every Router and turns their unique colour combinations into one non-stacking switchboard. |
 | RedNode Switch | Pass one of several inputs through, chosen by name. |
 | RedNode Pass (colour trigger) | Passes anything through and flips Palette colours as it goes. |
+| RedNode Free VRAM | Unloads models at this exact point in the chain, so a second big model can run on a card that cannot hold both. |
 | RedNode Control Panel | Many other nodes' dropdowns and toggles on one node, no wires. |
 | RedNode Combo Control | The single-row version of the same idea. |
 | RedNode Group Control | Turn workflow groups on and off, with saved scenes. |
