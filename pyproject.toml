@@ -1,7 +1,7 @@
 [project]
 name = "rednode-studio"
 description = "A studio rig for ComfyUI: a tabbed workspace panel, painting with auto masks, wireless control panels, LoRA management, grading and prompt tooling, plus Krea 2 moodboard and identity editing."
-version = "1.0.0"
+version = "1.0.1"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
