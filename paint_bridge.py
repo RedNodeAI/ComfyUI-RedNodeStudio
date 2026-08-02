@@ -272,8 +272,10 @@ class RedNodePaintOut:
             tier = str(_workspace_cfg(prompt).get("vram_tier") or "high")
             # 0 follows the tab's size dial, which is what the whole-frame path below
             # already does. Two paths on one node reading the same decision from two
-            # places is how a dial stops meaning what it says.
-            budget = int(region_size or 0) or int(pc.get("mask_size", 1024))
+            # places is how a dial stops meaning what it says. Anything else keeps the
+            # tab's own floor: 0 is a sentinel, not a way past the 512 minimum.
+            budget = int(region_size or 0)
+            budget = int(pc.get("mask_size", 1024)) if budget <= 0 else max(512, budget)
             out_img = _fit_region(crop, min(budget, whole_frame_limit(tier)),
                                   cap=whole_frame_limit(tier))
             out_mask = F.interpolate(
