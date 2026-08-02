@@ -160,10 +160,17 @@ def free_models(keep=None, empty=True):
 
 
 def _empty_cache():
-    """Hand the freed blocks back to the driver. Unloading alone only drops references."""
+    """Hand the freed blocks back to the driver. Unloading alone only drops references.
+
+    Never force=True. Stock ComfyUI ignores the flag entirely (soft_empty_cache reads it
+    and does the same work either way), but ComfyUI-MultiGPU patches this function and
+    treats force as "also reset the PromptExecutor cache", which throws away EVERY cached
+    node output. Loaders that are not ComfyUI models — SAM3, upscalers — then rebuild from
+    scratch on the next run. Freeing VRAM must not cost the graph its cache.
+    """
     try:
         import comfy.model_management as mm
-        mm.soft_empty_cache(force=True)
+        mm.soft_empty_cache()
     except Exception:
         pass
     try:
