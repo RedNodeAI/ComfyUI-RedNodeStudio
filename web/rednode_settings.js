@@ -17,6 +17,7 @@ const ID = {
   lookThumbs: "RedNode.Post.LookThumbnails",
   reviewKeep: "RedNode.Review.HistoryLength",
   savedCap: "RedNode.Save.IndexSize",
+  switchAsks: "RedNode.Switch.ResolveRounds",
 };
 
 // Workspace display preferences. They live HERE, per install, and never inside the
@@ -303,6 +304,21 @@ app.registerExtension({
       defaultValue: 500,
     },
     {
+      id: ID.switchAsks,
+      name: "Switch: rounds before a branch is called unreachable",
+      category: ["RedNode", "Control", "Switch resolve rounds"],
+      tooltip: "A Switch asks ComfyUI to produce the branch you picked, and asks again "
+             + "until the value arrives. A branch whose group is bypassed never arrives, "
+             + "so there has to be a point where it stops: without one the queue spins "
+             + "and memory climbs. This is that point, counted per branch. An ordinary "
+             + "chain settles in two or three rounds and a switch feeding another switch "
+             + "in a few more, so the default is far above anything normal. Raise it only "
+             + "if the console says a branch was given up on that you know is live.",
+      type: "slider",
+      attrs: { min: 4, max: 512, step: 4 },
+      defaultValue: 64,
+    },
+    {
       id: "RedNode.Caches.Clear",
       name: "Clear the regenerable caches",
       category: ["RedNode", "Maintenance", "Clear caches"],
@@ -346,6 +362,7 @@ app.registerExtension({
           caption_cap: parseInt(setting(ID.captionCap, 800)) || 800,
           look_thumbs: !!setting(ID.lookThumbs, true),
           saved_cap: parseInt(setting(ID.savedCap, 200)) || 200,
+          switch_lazy_asks: parseInt(setting(ID.switchAsks, 64)) || 64,
         });
       } catch (e) {
         /* an older pack build without the route: the defaults still apply */

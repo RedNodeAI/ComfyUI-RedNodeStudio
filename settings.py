@@ -20,6 +20,7 @@ DEFAULTS = {
     "caption_cap": 800,        # how many captions to remember
     "look_thumbs": True,       # store a thumbnail with each Look preset
     "saved_cap": 500,          # how many saved images the index remembers
+    "switch_lazy_asks": 64,    # rounds a Switch branch gets before it is called dead
 }
 
 PREFS = dict(DEFAULTS)

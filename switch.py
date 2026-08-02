@@ -40,6 +40,21 @@ class AnyType(str):
 
 ANY = AnyType("*")
 MAX_INPUTS = 8
+LAZY_ASKS_DEFAULT = 64
+
+
+def _max_asks():
+    """Rounds a branch gets before it is treated as unreachable.
+
+    Settings > RedNode > Control. Read per call so a change takes effect without a
+    restart, and never allowed to fail: a broken preference must not stop a queue.
+    """
+    try:
+        from . import settings
+        return max(1, min(4096, int(settings.get("switch_lazy_asks",
+                                                 LAZY_ASKS_DEFAULT))))
+    except Exception:
+        return LAZY_ASKS_DEFAULT
 
 
 def _labels(labels_json):
@@ -125,12 +140,29 @@ class RedNodeSwitch:
     # ComfyUI calls this before running the node: return the names of the inputs it
     # actually has to produce. Everything upstream of the others is skipped.
     def check_lazy_status(self, selected="1", labels="{}", **kwargs):
-        # Never ask for the same input twice. ComfyUI re-calls this until the node
-        # stops asking, and a BYPASSED upstream resolves to None forever, so repeating
-        # the name spins the queue and climbs memory. Each candidate gets one ask;
-        # when none produce a value, pick() reports why.
-        asked = self.__dict__.setdefault("_rn_asked", set())
+        # Keep asking for the chosen branch, but not forever.
+        #
+        # ComfyUI re-calls this until the node stops asking. A BYPASSED upstream stays
+        # None however often it is evaluated, so asking without end spins the queue and
+        # climbs memory. But one ask is not enough either: a branch fed through another
+        # lazy node (a switch into a switch) needs several rounds before its value
+        # appears, and giving up after one reports a live branch as dead.
+        #
+        # So: a per-branch cap, generous by default and settable in Settings >
+        # RedNode > Control. Real chains settle in a few rounds, a dead branch runs
+        # out, and either way it terminates.
+        cap = _max_asks()
         wired = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
+
+        # State is keyed to the wired shape and cleared by pick(). Without the key a
+        # run that never reached pick() (an error, a cancel) would leave counts behind
+        # and the next run would give up early, which makes the node non-deterministic.
+        key = tuple(wired)
+        state = self.__dict__.get("_rn_lazy")
+        if not isinstance(state, dict) or state.get("key") != key:
+            state = {"key": key, "asks": {}}
+            self.__dict__["_rn_lazy"] = state
+        asks = state["asks"]
 
         want = f"input_{resolve_index(selected, labels, wired)}"
         # the chosen branch first, then any other wired branch as a fallback
@@ -140,17 +172,25 @@ class RedNodeSwitch:
             if name not in kwargs:
                 continue
             if kwargs[name] is not None:        # already have a value: done
-                asked.clear()
+                self.__dict__.pop("_rn_lazy", None)
                 return []
-            if name not in asked:
-                asked.add(name)
+            if asks.get(name, 0) < cap:
+                asks[name] = asks.get(name, 0) + 1
                 return [name]
+            if not asks.get(name + "!said"):
+                # Say which branch was abandoned and why, so a real ceiling looks
+                # like a ceiling rather than a branch that mysteriously went missing.
+                asks[name + "!said"] = True
+                label = _labels(labels).get(int(name.split("_")[1]), name)
+                print(f"[RedNode Switch] gave up on '{label}' after {cap} rounds. If "
+                      f"that branch is live, raise Settings > RedNode > Control > "
+                      f"Switch resolve rounds.", flush=True)
 
-        asked.clear()                           # nothing left to try
+        self.__dict__.pop("_rn_lazy", None)     # nothing left to try
         return []
 
     def pick(self, selected="1", labels="{}", **kwargs):
-        self.__dict__.pop("_rn_asked", None)     # the next run asks afresh
+        self.__dict__.pop("_rn_lazy", None)      # the next run asks afresh
         live = [i for i in range(1, MAX_INPUTS + 1) if kwargs.get(f"input_{i}") is not None]
         wired = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
         idx = resolve_index(selected, labels, live)
