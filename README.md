@@ -2,7 +2,7 @@
 
 A studio rig for ComfyUI: a tabbed workspace panel, painting with auto masks, wireless control
 panels, LoRA management, a grading chain and prompt tooling, plus moodboard vibe transfer and
-identity-preserving editing for the open **Krea 2** model. 47 nodes, no third-party node
+identity-preserving editing for the open **Krea 2** model. 48 nodes, no third-party node
 dependencies.
 
 Companion to the [Forge Neo version](https://github.com/RedNodeAI/forge-neo-krea2-toolkit), same
@@ -60,16 +60,14 @@ build it yourself, the short version is:
 
 Once that runs, add **RedNode Studio Workspace** and wire its `workspace` output into the studio's
 `workspace` input. The workspace takes over as the front end: image galleries, masks, dials,
-captioning, painting and grading, all in one panel. See [docs/studio.md](docs/studio.md).
+captioning, painting and grading, all in one panel.
 
 ## The nodes
 
-Full documentation lives in [docs/](docs/). Each node also carries its own description and
-tooltips inside ComfyUI.
+Every node carries its own description and tooltips inside ComfyUI, so hover anything you
+are unsure about.
 
 ### Studio and workspace
-
-See [docs/studio.md](docs/studio.md).
 
 | Node | What it does |
 |---|---|
@@ -78,11 +76,9 @@ See [docs/studio.md](docs/studio.md).
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
 
 RedNode Studio Preset Save and Preset Load still ship and still work, but the Workspace covers
-what they did. They are documented as legacy in [docs/studio.md](docs/studio.md#legacy-preset-save-and-preset-load).
+what they did. Treat them as legacy.
 
 ### Moodboard and identity
-
-See [docs/moodboard-and-identity.md](docs/moodboard-and-identity.md).
 
 | Node | What it does |
 |---|---|
@@ -95,16 +91,12 @@ See [docs/moodboard-and-identity.md](docs/moodboard-and-identity.md).
 
 ### Post processing
 
-See [docs/post-processing.md](docs/post-processing.md).
-
 | Node | What it does |
 |---|---|
 | RedNode Post Process | The Workspace Post tab's grading chain. Image in, graded image out. |
 | RedNode Post FX (standalone) | The same chain with its own panel, for any image, no workspace needed. |
 
 ### Images, painting and review
-
-See [docs/images.md](docs/images.md).
 
 | Node | What it does |
 |---|---|
@@ -116,8 +108,6 @@ See [docs/images.md](docs/images.md).
 | RedNode Stage Tap / Stage View | Photograph any point in the graph, then compare stages with a wipe. |
 
 ### Routing and control
-
-See [docs/routing-and-control.md](docs/routing-and-control.md).
 
 | Node | What it does |
 |---|---|
@@ -132,28 +122,17 @@ See [docs/routing-and-control.md](docs/routing-and-control.md).
 | RedNode Group Control | Turn workflow groups on and off, with saved scenes. |
 | RedNode Group Modes | Named modes that enable one set of groups and bypass the rest. |
 
-
-
 ### Prototypes
 
-
-
-Unfinished, and marked so on the node. See [docs/prototypes.md](docs/prototypes.md).
-
-
+Unfinished, and marked so on the node.
 
 | Node | What it does |
-
 |---|---|
-
 | RedNode Group Rules | Rules between groups, and a panel showing what a queue will run before it runs. |
-
 | RedNode Sender / Grabber | Named channels replacing a canvas of Get and Set nodes. One reader lists everything on a channel. They work anywhere, subgraph or not. |
 | RedNode Channel Convert | Converts between string, int, float and boolean. Placed automatically when a channel row asks for it. |
 
 ### LoRAs and sampling
-
-See [docs/loras-and-sampling.md](docs/loras-and-sampling.md).
 
 | Node | What it does |
 |---|---|
@@ -162,8 +141,6 @@ See [docs/loras-and-sampling.md](docs/loras-and-sampling.md).
 | RedNode Sampler Config (auto turbo) | Detects a turbo distill from the loader's filename and outputs matching settings. |
 
 ### Prompting
-
-See [docs/prompting.md](docs/prompting.md).
 
 | Node | What it does |
 |---|---|
