@@ -383,15 +383,30 @@ def _text_of(prompt, src, depth=0, seen=None):
         if parts:
             return sep.join(parts)
 
+    # A WIRED text field beats a TYPED one on the same node.
+    #
+    # A node holding both is nearly always keeping configuration in the widget and
+    # receiving the real words on the wire. Prompt-engineering nodes are the clearest
+    # case: the system instruction sits in a text box ("You are an image prompt
+    # engineer... Output ONLY a prompt...") while the user's prompt arrives as an
+    # input. Reading the widget first meant Copy prompt handed back that instruction
+    # template, and the walk stopped there so the real words were never reached.
+    # Reported 2026-08-02.
+    #
+    # Only text-NAMED wires get this priority. A wire on some other field is a weaker
+    # signal than a typed prompt, so it stays the last resort at the bottom.
+    for field in (f for f in TEXT_FIELDS if isinstance(inputs.get(f), list)):
+        found = _text_behind(prompt, src, field, depth + 1, seen)
+        if found:
+            return found
+    # Nothing wired, or the wire led nowhere: the widget IS the prompt. The ordinary
+    # prompt-box case, and it has to keep working.
     for field in TEXT_FIELDS:
         value = inputs.get(field)
         if isinstance(value, str) and value.strip():
             return value.strip()
-    # text-shaped names first, then anything else that is wired
-    ordered = ([f for f in TEXT_FIELDS if isinstance(inputs.get(f), list)]
-               + [f for f, v in inputs.items()
-                  if isinstance(v, list) and f not in TEXT_FIELDS])
-    for field in ordered:
+    for field in (f for f, v in inputs.items()
+                  if isinstance(v, list) and f not in TEXT_FIELDS):
         found = _text_behind(prompt, src, field, depth + 1, seen)
         if found:
             return found
