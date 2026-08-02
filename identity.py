@@ -420,19 +420,21 @@ def _krea2_forward(self, x, timesteps, context, attention_mask=None, *_drift, tr
     # silently skips the whole function: bias, boost, edit mask, dials, t0.
     native_ref = None
     drift = list(_drift)
+    to_positional = False                  # did transformer_options arrive in *_drift?
     if drift and isinstance(drift[-1], dict) and transformer_options is None:
         transformer_options = drift.pop()
+        to_positional = True
     if drift:
         native_ref = drift.pop(0)
     ref_latents = kwargs.get("ref_latents", None) or native_ref or []
 
-    # No identity extras on this cond -> delegate to the STORED STOCK forward, argument
-    # layout untouched (*_drift, never the popped copy). Stock behavior, including any
-    # native ref_latents handling, is then stock by construction rather than by us
-    # keeping a faithful copy of it.
+    # No identity extras on this cond -> delegate to the STORED STOCK forward with the
+    # argument layout it arrived in. *_drift is the ORIGINAL tuple and still carries
+    # transformer_options when it came positionally, so passing it as a keyword as well
+    # gives the same argument twice.
     if not ref_latents:
         orig = SingleStreamDiT._rednode_orig_forward
-        if transformer_options is None:
+        if transformer_options is None or to_positional:
             return orig(self, x, timesteps, context, attention_mask, *_drift, **kwargs)
         return orig(self, x, timesteps, context, attention_mask, *_drift,
                     transformer_options=transformer_options, **kwargs)
