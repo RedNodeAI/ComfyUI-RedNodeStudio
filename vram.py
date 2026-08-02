@@ -43,28 +43,54 @@ def queue_busy():
         return False            # cannot tell, so do not block the user on a guess
 
 
-def _loaded_for(mm, model):
-    """The LoadedModel entries backing a MODEL wire, [] if it is not resident.
+def _loaded_for(mm, keep):
+    """The LoadedModel entries backing the wires in `keep`, [] for anything not resident.
 
-    Matched on clone_base_uuid, not identity: a MODEL that has been through a LoRA or a
+    Matched on clone_base_uuid, not identity: a model that has been through a LoRA or a
     sampling patch is a CLONE of the resident ModelPatcher, so `is` would miss it and we
     would free the very thing the user asked to keep. Same test comfy's own
     unload_model_and_clones uses.
+
+    `keep` takes anything, because plenty of useful models are not ComfyUI MODELs (SAM3,
+    upscalers, a pack's own loader). Those are not in current_loaded_models at all, so
+    they match nothing here — which is correct: nothing in this file can free them either.
     """
-    if model is None:
+    wanted = [k for k in (keep if isinstance(keep, (list, tuple)) else [keep])
+              if k is not None]
+    if not wanted:
         return []
-    base = getattr(model, "clone_base_uuid", None)
-    out = []
     try:
         loaded = list(mm.current_loaded_models)
     except Exception:
         return []
+    out = []
     for lm in loaded:
         m = getattr(lm, "model", None)
         if m is None:
             continue
-        if m is model or (base is not None and getattr(m, "clone_base_uuid", None) == base):
-            out.append(lm)
+        for k in wanted:
+            base = getattr(k, "clone_base_uuid", None)
+            if m is k or (base is not None
+                          and getattr(m, "clone_base_uuid", None) == base):
+                out.append(lm)
+                break
+    return out
+
+
+def unmanaged(mm, keep):
+    """The wires in `keep` that ComfyUI is not managing, so nothing here can touch them."""
+    wanted = [k for k in (keep if isinstance(keep, (list, tuple)) else [keep])
+              if k is not None]
+    held = _loaded_for(mm, keep)
+    held_models = [getattr(lm, "model", None) for lm in held]
+    out = []
+    for k in wanted:
+        base = getattr(k, "clone_base_uuid", None)
+        if any(m is k or (base is not None
+                          and getattr(m, "clone_base_uuid", None) == base)
+               for m in held_models):
+            continue
+        out.append(k)
     return out
 
 
@@ -209,9 +235,12 @@ class RedNodeFreeVRAM:
                                "cache: everything downstream recomputes every queue."}),
             },
             "optional": {
-                "keep": ("MODEL", {"tooltip": "one model to leave resident — wire the one "
-                         "you are about to use again. LoRA-patched clones count as the "
-                         "same model."}),
+                "keep": (ANY, {"tooltip": "a model to leave resident — wire the one you are "
+                         "about to use again. LoRA-patched clones count as the same model. "
+                         "Models ComfyUI does not manage (SAM3, most upscalers) are never "
+                         "unloaded by this node in the first place."}),
+                "keep_2": (ANY, {"tooltip": "a second model to leave resident, for a "
+                           "checkpoint and its CLIP or VAE."}),
             },
         }
 
@@ -230,18 +259,25 @@ class RedNodeFreeVRAM:
         return float("nan") if always_run else False
 
     def run(self, value=None, unload_models=True, empty_cache=True, always_run=False,
-            keep=None):
+            keep=None, keep_2=None):
+        wants = [k for k in (keep, keep_2) if k is not None]
         if unload_models:
             kept = ""
-            if keep is not None:
+            if wants:
                 try:
                     import comfy.model_management as mm
-                    n = len(_loaded_for(mm, keep))
-                    kept = f", kept {n}" if n else ", nothing to keep (it was not loaded)"
+                    n = len(_loaded_for(mm, wants))
+                    loose = len(unmanaged(mm, wants))
+                    kept = f", kept {n}" if n else ""
+                    if loose:
+                        # not a warning: this is the normal answer for SAM3 and friends,
+                        # and saying nothing would read as "your keep wire did nothing"
+                        kept += (f", {loose} not managed by ComfyUI "
+                                 "(nothing here loads or frees those)")
                 except Exception:
                     pass
             try:
-                count, freed = free_models(keep=keep, empty=bool(empty_cache))
+                count, freed = free_models(keep=wants, empty=bool(empty_cache))
             except Exception as e:
                 print(f"[RedNode Free VRAM] could not unload: {e}", flush=True)
             else:
