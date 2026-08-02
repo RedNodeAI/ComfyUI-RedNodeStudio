@@ -383,18 +383,10 @@ def _text_of(prompt, src, depth=0, seen=None):
         if parts:
             return sep.join(parts)
 
-    # A WIRED text field beats a TYPED one on the same node.
-    #
-    # A node holding both is nearly always keeping configuration in the widget and
-    # receiving the real words on the wire. Prompt-engineering nodes are the clearest
-    # case: the system instruction sits in a text box ("You are an image prompt
-    # engineer... Output ONLY a prompt...") while the user's prompt arrives as an
-    # input. Reading the widget first meant Copy prompt handed back that instruction
-    # template, and the walk stopped there so the real words were never reached.
-    # Reported 2026-08-02.
-    #
-    # Only text-NAMED wires get this priority. A wire on some other field is a weaker
-    # signal than a typed prompt, so it stays the last resort at the bottom.
+    # A wired text field beats a typed one: a node with both keeps configuration in
+    # the widget (an LLM system instruction) and takes the real words on the wire.
+    # Only text-NAMED wires; any other wire is weaker than a typed prompt, so it is
+    # the last resort below.
     for field in (f for f in TEXT_FIELDS if isinstance(inputs.get(f), list)):
         found = _text_behind(prompt, src, field, depth + 1, seen)
         if found:
@@ -624,7 +616,9 @@ def render_text(meta, ctx, image_name):
     lines.append("")
 
     block("Positive prompt", meta.get("positive"))
-    block("Negative prompt", meta.get("negative") or meta.get("negative_note"))
+    # Only real words. An empty negative says "empty" on its own; prose here read as
+    # though the explanation had been typed in as the negative.
+    block("Negative prompt", meta.get("negative"))
 
     sampler = meta.get("sampler") or {}
     if sampler:
@@ -884,14 +878,17 @@ def review_prompt_for_run(prompt_id, index=0, prompt_server=None, combine_id="")
         value = selected["prompt"] if selected else ""
         return {"found": bool(value), "prompt": value}
 
+    # The saved companion first: it is what ran. Walking the graph is inference, and
+    # it also reports a graph edited since, not the prompt that made the picture.
+    value = _positive_from_companion(find_saved(pid, index))
+    if value:
+        return {"found": True, "prompt": value}
+
+    # No companion (older image, or saved elsewhere): read the graph.
     if graph is not None:
         value = collect_meta(graph, {}).get("positive")
         if isinstance(value, str) and value.strip():
             return {"found": True, "prompt": value.strip()}
-
-    value = _positive_from_companion(find_saved(pid, index))
-    if value:
-        return {"found": True, "prompt": value}
 
     if candidates:
         highest = max(item["rank"] for item in candidates)

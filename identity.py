@@ -412,22 +412,12 @@ class _scoped_attention:
 
 
 def _krea2_forward(self, x, timesteps, context, attention_mask=None, *_drift, transformer_options=None, **kwargs):
-    # ComfyUI signature-drift guard: older cores call (..., attention_mask, transformer_options);
-    # newer cores insert ref_latents positionally: (..., attention_mask, ref_latents,
-    # transformer_options). Accept both so stock Krea 2 generation never breaks on update.
+    # Signature-drift guard. Older cores call (..., attention_mask, transformer_options);
+    # 0.29.2+ inserts ref_latents positionally between them. Accept both.
     #
-    # THIS MUST RUN BEFORE THE DELEGATION CHECK BELOW. It used to run after it, and that
-    # check only looked in kwargs — so on a core that passes ref_latents POSITIONALLY
-    # (ComfyUI 0.29.2, 2026-07-31) it saw no references, decided there was no identity
-    # work to do, and handed straight off to the stock forward. Everything this function
-    # exists for was skipped on every single run: the reference attention bias, ref_boost,
-    # the edit mask, the fidelity dials, isolate_refs, t0 modulation.
-    #
-    # Nothing raised. Stock in-context referencing still ran, so faces came out roughly
-    # right and plainly not the same person, and no dial or preset made any difference
-    # because none of this code was reached. Found 2026-08-02 via a Krea2T-Enhancer
-    # TypeError ("takes from 4 to 6 positional arguments but 7 were given") that exposed
-    # the new call shape.
+    # Must run BEFORE the delegation check below, which decides whether there is any
+    # identity work to do. Deciding from kwargs alone misses positional ref_latents and
+    # silently skips the whole function: bias, boost, edit mask, dials, t0.
     native_ref = None
     drift = list(_drift)
     if drift and isinstance(drift[-1], dict) and transformer_options is None:

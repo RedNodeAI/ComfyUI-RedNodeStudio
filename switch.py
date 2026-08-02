@@ -125,22 +125,10 @@ class RedNodeSwitch:
     # ComfyUI calls this before running the node: return the names of the inputs it
     # actually has to produce. Everything upstream of the others is skipped.
     def check_lazy_status(self, selected="1", labels="{}", **kwargs):
-        # NEVER ASK FOR THE SAME INPUT TWICE.
-        #
-        # ComfyUI resolves a lazy node by calling this, executing whatever names come
-        # back, then calling it again. That loop only ends when the node stops asking.
-        # An input whose upstream is BYPASSED or MUTED resolves to None and stays None
-        # however many times it is evaluated, so returning its name again on the next
-        # pass asks for something that can never arrive, and the executor keeps trying:
-        # the queue appears to run over and over, doing nothing, while memory climbs.
-        #
-        # Reported 2026-08-01: a workflow with the Krea 2 samplers bypassed and a switch
-        # selecting a branch fed through them. Nothing in the log named this node, which
-        # is what made it hard to see.
-        #
-        # So each candidate is asked for at most once. Once every wired branch has been
-        # asked and none produced a value, resolution stops and pick() reports it in
-        # terms of the real cause rather than handing None downstream.
+        # Never ask for the same input twice. ComfyUI re-calls this until the node
+        # stops asking, and a BYPASSED upstream resolves to None forever, so repeating
+        # the name spins the queue and climbs memory. Each candidate gets one ask;
+        # when none produce a value, pick() reports why.
         asked = self.__dict__.setdefault("_rn_asked", set())
         wired = [i for i in range(1, MAX_INPUTS + 1) if f"input_{i}" in kwargs]
 
