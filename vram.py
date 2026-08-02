@@ -264,6 +264,12 @@ class RedNodeFreeVRAM:
                 "always_run": ("BOOLEAN", {"default": False, "tooltip":
                                "free even when nothing upstream changed. Costs you the "
                                "cache: everything downstream recomputes every queue."}),
+                # last on purpose: widgets_values is positional, and this node is already
+                # in saved workflows. Appending keeps those loading correctly.
+                "enabled": ("BOOLEAN", {"default": True, "tooltip":
+                            "off means pass straight through and free nothing. Here so a "
+                            "Control Panel or Combo Control can switch it, which bypassing "
+                            "the node cannot do."}),
             },
             "optional": {
                 "keep": (ANY, {"tooltip": "a model to leave resident — wire the one you are "
@@ -290,7 +296,9 @@ class RedNodeFreeVRAM:
         return float("nan") if always_run else False
 
     def run(self, value=None, unload_models=True, empty_cache=True, always_run=False,
-            keep=None, keep_2=None):
+            enabled=True, keep=None, keep_2=None):
+        if not enabled:
+            return (value,)
         wants = [k for k in (keep, keep_2) if k is not None]
         if unload_models:
             kept = ""
