@@ -276,8 +276,18 @@ class RedNodePaintOut:
             # tab's own floor: 0 is a sentinel, not a way past the 512 minimum.
             budget = int(region_size or 0)
             budget = int(pc.get("mask_size", 1024)) if budget <= 0 else max(512, budget)
-            out_img = _fit_region(crop, min(budget, whole_frame_limit(tier)),
-                                  cap=whole_frame_limit(tier))
+            # the tab's "Never shrink" toggle, exactly as the internal renderer reads
+            # it: without the floor this path quietly shrank regions the user had
+            # asked to keep, so the setting did nothing for external renderer chains
+            floor = bool(pc.get("region_floor"))
+            budget = min(budget, whole_frame_limit(tier))
+            out_img = _fit_region(crop, budget, cap=whole_frame_limit(tier),
+                                  floor=floor)
+            if floor and out_img.shape[2] >= x1 - x0 and out_img.shape[1] >= y1 - y0 \
+                    and (x1 - x0) * (y1 - y0) > budget * budget:
+                print(f"[RedNode Paint Out] Never shrink is on, so this region "
+                      f"renders at its own size rather than coming down to the "
+                      f"{budget} px budget", flush=True)
             out_mask = F.interpolate(
                 mask[:, y0:y1, x0:x1].unsqueeze(1),
                 size=(out_img.shape[1], out_img.shape[2]),
