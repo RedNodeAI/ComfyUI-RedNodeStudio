@@ -18,7 +18,7 @@ Search **RedNode Studio** in ComfyUI Manager, or clone it:
 git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Then open **[Rednode Ultima](example_workflows/Rednode_Ultima_V1.0.2%20Release.json)** in ComfyUI's
+Then open **[Rednode Ultima](example_workflows/Rednode_Ultima_V1.0.36%20Release.json)** in ComfyUI's
 template browser. It is the complete rig, and ComfyUI Manager offers its additional node
 dependencies when you load it.
 
@@ -76,7 +76,7 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 ## Quick start
 
 Open the template browser and load **Rednode Ultima**, or open
-`example_workflows/Rednode_Ultima_V1.0.2 Release.json` directly. It is the whole rig wired up, and
+`example_workflows/Rednode_Ultima_V1.0.36 Release.json` directly. It is the whole rig wired up, and
 it reads left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you
 open it.
 
@@ -219,7 +219,7 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `Rednode_Ultima_V1.0.2 Release.json`, my daily-driver pipeline with the whole rig wired up:
+- `Rednode_Ultima_V1.0.36 Release.json`, my daily-driver pipeline with the whole rig wired up:
   workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
   other packs, and ComfyUI Manager offers them when you open it.
 
