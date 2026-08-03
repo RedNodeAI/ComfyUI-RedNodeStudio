@@ -78,9 +78,17 @@ const hist = (node) => {
   return node.properties.rn_review;
 };
 
-const fileUrl = (f) =>
-  api.apiURL(`/view?filename=${encodeURIComponent(f.filename)}&type=${f.type || "temp"}` +
-             `&subfolder=${encodeURIComponent(f.subfolder || "")}`);
+const fileArgs = (f) =>
+  `filename=${encodeURIComponent(f.filename)}&type=${f.type || "temp"}` +
+  `&subfolder=${encodeURIComponent(f.subfolder || "")}`;
+
+const fileUrl = (f) => api.apiURL(`/view?${fileArgs(f)}`);
+
+// The strip's version, resized SERVER side. A browser decodes an image at its natural
+// size however small it is drawn, so pointing twenty 60px squares at 3480x2382 originals
+// costs twenty full bitmaps in memory. /view's own preview= only re-encodes and never
+// resizes, which saves nothing here, so this goes through our own route instead.
+const thumbUrl = (f) => api.apiURL(`/rednode/review_thumb?${fileArgs(f)}&px=320`);
 
 // When each queued run started. ComfyUI's executed event carries no duration, but
 // execution_start carries the prompt id, which is all that is needed to time it.
@@ -545,8 +553,15 @@ function render(node) {
     // pictures nobody has scrolled to yet.
     img.loading = "lazy";
     img.decoding = "async";
-    img.src = fileUrl(entry.files[0]);
+    img.src = thumbUrl(entry.files[0]);
     img.onerror = () => {
+      // The resize route before the recovery path: an older install, a missing Pillow
+      // webp encoder or any 500 should cost sharpness and memory, never the picture.
+      if (!img.dataset.rnFullTried) {
+        img.dataset.rnFullTried = "1";
+        img.src = fileUrl(entry.files[0]);
+        return;
+      }
       // Recover here too, not just on the big picture. Only the viewed entry ever
       // triggered the main image's error, so every OTHER slot in the strip stayed
       // "gone" even when RedNode Save still had the real file on disk.
