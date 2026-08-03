@@ -627,12 +627,20 @@ const OVERLAY_COLORS = {
 // setWsPref writes, and rendering from the slider's own change handler would rebuild
 // the slider mid-drag. The structural ones re-render, which their panel buttons
 // already do anyway, so a double render is merely redundant rather than wrong.
+// Every live mask overlay on one node, in place: the Paint pane publishes
+// _rnShowAll, but each Masks-tab painter keeps its own showAll on its slot, and a
+// repaint that only called the former left open Masks canvases on the old colour.
+function repaintOverlays(n) {
+  n._rnShowAll?.();
+  for (const s of Object.values(n._rnMaskSlots || {})) s.showAll?.();
+}
+
 onWsPrefChange((key) => {
   const structural = key === "PaintLayout" || key === "HiddenTabs";
   for (const n of allNodes()) {
     if (n.type !== NODE_NAME) continue;
     if (structural) render(n);
-    else n._rnShowAll?.();
+    else repaintOverlays(n);
   }
 });
 
@@ -2503,6 +2511,9 @@ function maskPainter(node, host, def) {
     c.drawImage(mask, 0, 0);
     c.restore();
   };
+  // published so a preference change repaints an open painter in place, the way the
+  // Paint pane's _rnShowAll already does; the full-screen room shares this closure
+  S.showAll = showAll;
 
   // The saved mask is the base coat, inverted on the way in exactly as the Paint tab
   // does it: the FILE says painted-means-transparent, the canvas says painted-means-
@@ -3989,11 +4000,12 @@ function workspacePrefs(node, body) {
   sect.appendChild(lay);
 
   // Mask overlay look: mode, opacity, colour. Changing one repaints every live
-  // Paint pane IN PLACE through _rnShowAll: no render, because nothing structural
-  // changed and a rebuild here is exactly the class of churn item 5 removed.
+  // Paint pane AND Masks painter IN PLACE through repaintOverlays: no render,
+  // because nothing structural changed and a rebuild here is exactly the class of
+  // churn item 5 removed.
   const repaintPanes = () => {
     for (const n of allNodes()) {
-      if (n.type === NODE_NAME) n._rnShowAll?.();
+      if (n.type === NODE_NAME) repaintOverlays(n);
     }
   };
   const ov = document.createElement("div");
