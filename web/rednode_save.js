@@ -1059,7 +1059,10 @@ function render(node) {
       th.decoding = "async";
       const q = new URLSearchParams({ filename: entry.name, type: "output",
                                       subfolder: entry.subfolder || "" });
-      th.src = api.apiURL(`/view?${q}&rand=${entry.when || 0}`);
+      // Resized SERVER side. A browser decodes an image at its natural size however
+      // small it is drawn, so a grid of cards pointed at full originals holds a bitmap
+      // each, and this grid runs to hundreds. The big picture above still uses /view.
+      th.src = api.apiURL(`/rednode/thumb?${q}&px=320&rand=${entry.when || 0}`);
       th.title = `${entry.path}
 
 Click to bring it up above, or to pick it once something is selected. `
@@ -1081,7 +1084,17 @@ Click to bring it up above, or to pick it once something is selected. `
         cursor = idx;
         render(node);
       };
-      th.onerror = () => { th.style.display = "none"; };
+      th.onerror = () => {
+        // the resize route first: an older install, a Pillow without webp or any 500
+        // should cost sharpness and memory, never the picture. Only hide once the
+        // original has failed too.
+        if (!th.dataset.rnFullTried) {
+          th.dataset.rnFullTried = "1";
+          th.src = api.apiURL(`/view?${q}&rand=${entry.when || 0}`);
+          return;
+        }
+        th.style.display = "none";
+      };
       row.appendChild(th);
     }
 

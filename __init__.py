@@ -645,6 +645,7 @@ from .save_node import RedNodeSave  # noqa: E402
 from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
 from .vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
 from . import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
+from . import thumbs as _rednode_thumbs  # noqa: F401,E402  (grid thumbnail route)
 from .group_rules import RedNodeGroupRules  # noqa: E402  (also registers its routes)
 from .subgraph_bridge import (RedNodeSubgraphSend,  # noqa: E402
                               RedNodeSubgraphReceive, RedNodeChannelConvert)

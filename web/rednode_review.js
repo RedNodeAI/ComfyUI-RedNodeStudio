@@ -88,7 +88,7 @@ const fileUrl = (f) => api.apiURL(`/view?${fileArgs(f)}`);
 // size however small it is drawn, so pointing twenty 60px squares at 3480x2382 originals
 // costs twenty full bitmaps in memory. /view's own preview= only re-encodes and never
 // resizes, which saves nothing here, so this goes through our own route instead.
-const thumbUrl = (f) => api.apiURL(`/rednode/review_thumb?${fileArgs(f)}&px=320`);
+const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=320`);
 
 // When each queued run started. ComfyUI's executed event carries no duration, but
 // execution_start carries the prompt id, which is all that is needed to time it.

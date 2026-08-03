@@ -909,6 +909,16 @@ const viewUrl = (entry) => {
                     `&type=${p.type}&subfolder=${encodeURIComponent(p.subfolder)}` +
                     `&rand=${node_rand(entry)}`);
 };
+// The gallery cells' version, resized SERVER side. A browser decodes an image at its
+// natural size however small it is drawn, so a row of thumbnails pointed at full
+// originals holds a bitmap each. Panes and the paint canvas keep using viewUrl: those
+// are looked at, and the mask work needs the real pixels.
+const thumbUrl = (entry, px = 320) => {
+  const p = parseName(entry);
+  return api.apiURL(`/rednode/thumb?filename=${encodeURIComponent(p.filename)}` +
+                    `&type=${p.type}&subfolder=${encodeURIComponent(p.subfolder)}` +
+                    `&px=${px}&rand=${node_rand(entry)}`);
+};
 // cache-buster keyed per entry, bumped when a mask is repainted over it
 const _rands = new Map();
 const node_rand = (entry) => _rands.get(entry) || 0;
@@ -1850,8 +1860,14 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       cell.appendChild(rb);
     }
     const img = document.createElement("img");
-    img.src = viewUrl(entry);
-    img.onerror = () => cell.classList.add("missing");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = thumbUrl(entry);
+    img.onerror = () => {                  // resize route unavailable: fall back, then fail
+      if (img.dataset.rnFullTried) { cell.classList.add("missing"); return; }
+      img.dataset.rnFullTried = "1";
+      img.src = viewUrl(entry);
+    };
     img.title = entry;
     cell.appendChild(img);
     if (multi && selected) {
