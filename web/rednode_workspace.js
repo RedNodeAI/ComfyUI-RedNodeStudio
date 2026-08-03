@@ -7253,6 +7253,15 @@ function paintBody(node, body) {
   rlab.style.cssText = "flex:none;width:96px";
   rlab.textContent = "Use as reference";
   refRow.appendChild(rlab);
+  // WHERE THE RENDER RUNS decides whether these are offered. The toggles feed Paint
+  // Render's own reference conditioning, so they are live there; on an external chain
+  // they change nothing and a dead button teaches the wrong lesson. The one exception
+  // by exact name: a chain called "Krea2 Workspace", whose sampler takes the main
+  // studio conditioning and carries the references itself.
+  const refT = paintTargets().find((x) => String(x.node.id) === String(P.renderer ?? ""));
+  const refName = String(refT ? rendererName(refT) : P.renderer_name || "")
+    .trim().toLowerCase();
+  const refsLive = (refT ? refT.kind === "render" : true) || refName === "krea2 workspace";
   for (const [key, label, tip] of [
     ["use_subject", "Subject",
      "Paint with the Subject tab's image as the identity reference, so a repainted "
@@ -7267,13 +7276,22 @@ function paintBody(node, body) {
     b.className = "rn-ws-btn rn-ws-compact" + (P[key] ? " on" : "");
     b.style.cssText = "width:auto;padding:0 10px";
     b.textContent = label;
-    b.title = tip + " Needs a paint prompt and the render node's clip input wired. "
-            + "Slower than painting with the prompt alone.";
-    b.onclick = () => { P[key] = !P[key]; writeCfg(node); render(node); };
+    if (refsLive) {
+      b.title = tip + " Needs a paint prompt and the render node's clip input wired. "
+              + "Slower than painting with the prompt alone.";
+      b.onclick = () => { P[key] = !P[key]; writeCfg(node); render(node); };
+    } else {
+      b.disabled = true;
+      b.title = "References cannot ride this chain: its sampler takes plain text "
+              + "conditioning, so these toggles would change nothing. Pick the "
+              + "Krea2 Workspace chain, or the internal Paint Render, and they "
+              + "come back.";
+    }
     refRow.appendChild(b);
   }
   routeBox.appendChild(refRow);
-  if ((P.use_subject || P.use_scene || P.use_moodboard) && !(P.prompt || "").trim()) {
+  if (refsLive
+      && (P.use_subject || P.use_scene || P.use_moodboard) && !(P.prompt || "").trim()) {
     const warn = document.createElement("div");
     warn.className = "rn-ws-note";
     warn.textContent = "References only apply when there is a paint prompt to attach "
