@@ -21,3 +21,37 @@ jobs:
         with:
           # set REGISTRY_ACCESS_TOKEN in Settings, Secrets and variables, Actions
           personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+
+  # The GitHub release with the patch notes, because the registry has no changelog
+  # field anywhere in its publishing path: the notes live in CHANGELOG.md and the
+  # section matching the pyproject version becomes the release body. Same trigger as
+  # the registry publish, so one push ships both.
+  github-release:
+    name: GitHub release with the patch notes
+    runs-on: ubuntu-latest
+    needs: publish-node
+    if: ${{ github.repository_owner == 'RedNodeAI' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Read the version and its notes
+        id: ver
+        run: |
+          V=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          python3 - "$V" <<'EOF'
+          import re, sys
+          v = sys.argv[1]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"\*\*{re.escape(v)}\*\*[^\n]*\n(.*?)(?=\n\*\*[0-9]|\Z)", text, re.S)
+          notes = (m.group(1).strip() + "\n") if m else "See CHANGELOG.md.\n"
+          open("release_notes.md", "w", encoding="utf-8").write(notes)
+          EOF
+      - name: Create or update the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          body_path: release_notes.md
