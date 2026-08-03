@@ -4,6 +4,17 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.0.36** - 2026-08-04
+
+Speed and polish, plus the first documentation pass.
+
+- Thumbnails are served resized instead of full size, in the Review strip, the Save grid and the Workspace galleries. Large galleries and big pictures load far lighter
+- Save browser: clicking a card no longer flashes blank or jumps the view
+- README: nine screenshots, so the panel can be seen before installing
+- The example workflow ships as Rednode_Ultima_V1.0.36 Release
+- Use as reference: the renderer choice is repaired before the buttons read it, so they cannot briefly look enabled after a renderer is deleted and recreated
+- Patch notes now ride every release automatically, which is why this list exists
+
 **1.0.35** - 2026-08-03
 
 Bug fix patch for the Masks redesign and the Paint tab.

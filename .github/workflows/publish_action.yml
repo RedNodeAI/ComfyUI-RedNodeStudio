@@ -46,8 +46,14 @@ jobs:
           v = sys.argv[1]
           text = open("CHANGELOG.md", encoding="utf-8").read()
           m = re.search(rf"\*\*{re.escape(v)}\*\*[^\n]*\n(.*?)(?=\n\*\*[0-9]|\Z)", text, re.S)
-          notes = (m.group(1).strip() + "\n") if m else "See CHANGELOG.md.\n"
-          open("release_notes.md", "w", encoding="utf-8").write(notes)
+          # Fail rather than fall back. A stub body is worse than no release at all: it
+          # publishes, it looks finished, and nobody goes back to fix it. 1.0.36 shipped
+          # saying "See CHANGELOG.md." because the version was bumped and pushed before
+          # the notes were written. tests/check_docs.py now catches it before the push.
+          if not m or not m.group(1).strip():
+              sys.exit(f"CHANGELOG.md has no notes under **{v}**. "
+                       "Write that section before bumping the version.")
+          open("release_notes.md", "w", encoding="utf-8").write(m.group(1).strip() + "\n")
           EOF
       - name: Create or update the release
         uses: softprops/action-gh-release@v2
