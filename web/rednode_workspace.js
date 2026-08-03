@@ -7408,6 +7408,23 @@ function paintBody(node, body) {
       rrow.appendChild(sel);
     }
     routeBox.appendChild(rrow);
+    // A CHAIN NAMED "Krea2 Workspace" is the studio-conditioning rig: its sampler
+    // takes the MAIN studio's positive and negative, so the boxes above have nothing
+    // to say there. The name is an exact agreement so the trade is visible at the
+    // moment of choosing, rather than discovered from a render that ignored the box.
+    const rt = found.find((x) => String(x.node.id) === String(P.renderer ?? ""));
+    const rname = String(rt ? rendererName(rt) : P.renderer_name || "").trim();
+    if (rname.toLowerCase() === "krea2 workspace") {
+      const wrow = document.createElement("div");
+      wrow.className = "rn-ws-row";
+      const warn = document.createElement("span");
+      warn.className = "hint";
+      warn.style.color = "#d4b25f";
+      warn.textContent = "This chain renders with the MAIN prompt and its references. "
+                       + "The Positive and Negative boxes above are ignored.";
+      wrow.appendChild(warn);
+      routeBox.appendChild(wrow);
+    }
   }
 
   const gen = document.createElement("button");
