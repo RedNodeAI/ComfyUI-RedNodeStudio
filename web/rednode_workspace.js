@@ -709,6 +709,13 @@ export function readCfg(node) {
                    : name === "moodboard" ? "style"
                    : name === "i2i" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode);
+    if (name === "boost_mask" || name === "edit_mask") {
+      // the mask painter's own fields: the flattened mask FILE, and an OWN uploaded
+      // source pinned by path so it survives a reload. "" means follow the gallery
+      // tabs, which is what every workspace saved before this field loads as.
+      if (typeof t.mask !== "string") t.mask = "";
+      if (typeof t.src !== "string") t.src = "";
+    }
     if (name === "i2i") {
       t.prompt_only = !!t.prompt_only;
       if (typeof t.denoise !== "number") t.denoise = 0.7;
@@ -2339,8 +2346,13 @@ function maskPainter(node, host, def) {
     const sel = tab.images[Array.isArray(tab.sel) ? tab.sel[0] : tab.sel];
     if (sel) choices.push([sel, `${meta.label}: ${String(sel).split("/").pop()}`]);
   }
+  // an OWN upload rides in cfg (t.src), not just the runtime slot: this list is
+  // rebuilt from gallery selections on every render, so an unpinned upload fell out
+  // of it and the render the upload itself fired snapped back to a gallery image
+  if (t.src) choices.push([t.src, `Own: ${String(t.src).split("/").pop()}`]);
   const chosen = S.source && choices.some(([v]) => v === S.source) ? S.source
-    : (choices.find(([, l]) => l.toLowerCase()
+    : t.src
+    || (choices.find(([, l]) => l.toLowerCase()
         .startsWith(def.base.toLowerCase()))?.[0] || choices[0]?.[0] || "");
   S.source = chosen;
 
@@ -2369,9 +2381,17 @@ function maskPainter(node, host, def) {
   sel.title = "Which picture to draw this mask on. Any gallery tab's current "
             + "selection, or one of your own through Open image.";
   sel.onchange = () => {
+    const live = node._rnCfg?.tabs?.[def.tab] || t;
     S.source = sel.value;
+    // picking a gallery entry unpins an own upload, or the pin would put the upload
+    // back on top after a reload however often a gallery image was chosen since
+    if (sel.value !== live.src) live.src = "";
     S.strokes = [];                      // strokes belong to the picture they were on
     S.redoStack = [];
+    S.baseSrc = "";
+    live.mask = "";      // and so does the SAVED mask: left in place, the rebuild
+                         // drew the old picture's mask over the new one as a base coat
+    writeCfg(node);
     render(node);
   };
   const openB = document.createElement("button");
@@ -2389,7 +2409,9 @@ function maskPainter(node, host, def) {
       if (!file) return;
       try {
         // the same normalise-then-upload road every other picture takes, so a mask
-        // source is a managed file like any other and survives a reload
+        // source is a managed file like any other. The PATH is pinned in cfg (t.src)
+        // because the runtime slot does not survive a reload, and the dropdown is
+        // rebuilt from gallery selections, which this file is never among.
         const { blob, name } = await normalisedUpload(file);
         const fd = new FormData();
         fd.append("image", blob, name);
@@ -2398,9 +2420,14 @@ function maskPainter(node, host, def) {
         const res = await api.fetchApi("/upload/image", { method: "POST", body: fd });
         const d = await res.json();
         if (!d.name) throw new Error("the upload returned no name");
+        const live = node._rnCfg?.tabs?.[def.tab] || t;
         S.source = d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
+        live.src = S.source;
+        live.mask = "";                    // a new picture, so the old mask goes too
         S.strokes = [];
         S.redoStack = [];
+        S.baseSrc = "";
+        writeCfg(node);
         render(node);
       } catch (e) {
         console.error("[RedNode Workspace] could not take that picture:", e);
@@ -2542,6 +2569,16 @@ function maskPainter(node, host, def) {
   // UNDO / REDO, grouped by gesture the same way the Paint tab groups a drag: one
   // stroke() call per pointer sample, one undo step per DRAG, or the button takes
   // back one dot of a line at a time.
+  //
+  // Both SAVE. Strokes and the saved mask FILE are one state: an undo without a save
+  // left the file a step ahead of the canvas, and the queue rendered the mask from
+  // before the undo. The buttons are kept as refs and flipped in place instead of
+  // calling render(node), which tore the painter down under the save it had queued.
+  let undoB = null, redoB = null;
+  const syncUndoRedo = () => {
+    if (undoB) undoB.disabled = !S.strokes.length;
+    if (redoB) redoB.disabled = !S.redoStack.length;
+  };
   const undo = () => {
     const st = S.strokes;
     if (!st.length) return;
@@ -2551,12 +2588,16 @@ function maskPainter(node, host, def) {
     while (st.length && id !== undefined && st[st.length - 1][6] === id);
     S.redoStack.push(grp);
     rebuild();
+    syncUndoRedo();
+    save();
   };
   const redo = () => {
     const grp = S.redoStack.pop();
     if (!grp) return;
     S.strokes.push(...grp);
     rebuild();
+    syncUndoRedo();
+    save();
   };
   S.undo = undo;
   S.redo = redo;
@@ -2579,17 +2620,35 @@ function maskPainter(node, host, def) {
   };
   img.src = viewUrl(S.source);
 
-  // the mask FILE is only ever loaded as the base when no strokes are waiting: it
-  // already contains them, and drawing both would double every stroke
-  if (t.mask && !S.strokes.length) {
+  // The base coat is OWNED, not inferred: S.baseSrc names the file the canvas was
+  // seeded from (a resumed mask, or an auto-mask), set when one lands and cleared by
+  // Clear, a source change and an upload. It used to be inferred as "t.mask and no
+  // strokes waiting", which broke the moment strokes were painted OVER an auto-mask:
+  // the next rebuild skipped the base, and the save after that flattened strokes
+  // only, silently destroying the auto-mask underneath. A fresh slot resuming a
+  // saved mask still seeds from t.mask, and only stroke-free, because that file
+  // already contains the strokes and drawing both would double every one.
+  if (!S.baseSrc && t.mask && !S.strokes.length) S.baseSrc = t.mask;
+  if (S.baseSrc) {
     baseImg = new Image();
     baseImg.onload = () => { if (ready) rebuild(); };
-    baseImg.onerror = () => { baseImg = null; };
-    baseImg.src = viewUrl(t.mask);
+    // a base that cannot load is no base: keeping the name would leave an empty
+    // canvas claiming a coat nothing can draw
+    baseImg.onerror = () => { baseImg = null; S.baseSrc = ""; };
+    baseImg.src = viewUrl(S.baseSrc);
   }
 
-  const save = async () => {
+  const persist = async () => {
     if (!ready) return;
+    if (!S.strokes.length && !S.baseSrc) {
+      // an empty canvas: the backend treats ANY mask filename as a real mask, so
+      // the filename is dropped rather than uploading a file that covers nothing
+      const live = node._rnCfg?.tabs?.[def.tab] || t;
+      live.mask = "";
+      writeCfg(node);
+      if (S.note) S.note.textContent = "Nothing painted yet";
+      return;
+    }
     try {
       const name = await uploadMask(node, maskCanvas(mask, 0));
       const live = node._rnCfg?.tabs?.[def.tab] || t;
@@ -2601,6 +2660,10 @@ function maskPainter(node, host, def) {
       if (S.note) S.note.textContent = "Could not save";
     }
   };
+  // ONE save at a time, in order: rapid undo clicks each queue one, and two uploads
+  // racing could land out of order, leaving the file a state behind the canvas. The
+  // chain lives on the slot so a save queued by a previous build still lands first.
+  const save = () => (S.saveChain = (S.saveChain || Promise.resolve()).then(persist));
 
   const at = (e) => {
     const r = layer.getBoundingClientRect();
@@ -2633,6 +2696,7 @@ function maskPainter(node, host, def) {
       if (S.note) S.note.textContent = "Unsaved";
     };
     stroke(px, py, px, py);
+    syncUndoRedo();               // undo is live now, and the cleared redo is not
     layer.setPointerCapture?.(e.pointerId);
     const move = (ev) => {
       if (!drawing) return;
@@ -2721,20 +2785,22 @@ function maskPainter(node, host, def) {
   syncShape();
   tools.appendChild(shapeSeg);
 
-  const undoB = document.createElement("button");
+  // no render(node) on these: undo/redo save, and a rebuild here tore the painter
+  // down before the save landed, so the queue rendered the pre-undo mask
+  undoB = document.createElement("button");
   undoB.className = "rn-ws-btn rn-ws-compact";
   undoB.style.cssText = "width:auto;padding:0 10px";
   undoB.textContent = "↶";
   undoB.title = "undo the last stroke";
   undoB.disabled = !S.strokes.length;
-  undoB.onclick = () => { S.undo?.(); render(node); };
-  const redoB = document.createElement("button");
+  undoB.onclick = () => S.undo?.();
+  redoB = document.createElement("button");
   redoB.className = "rn-ws-btn rn-ws-compact";
   redoB.style.cssText = "width:auto;padding:0 10px";
   redoB.textContent = "↷";
   redoB.title = "redo";
   redoB.disabled = !S.redoStack.length;
-  redoB.onclick = () => { S.redo?.(); render(node); };
+  redoB.onclick = () => S.redo?.();
   tools.append(undoB, redoB);
 
   // the SAME auto masker the Paint tab drives, against this slot's picture
@@ -2766,6 +2832,7 @@ function maskPainter(node, host, def) {
         const liveSlot = node._rnMaskSlots[def.tab] || S;
         liveSlot.strokes = [];
         liveSlot.redoStack = [];        // a new base coat makes any pending redo moot
+        liveSlot.baseSrc = d.mask;      // and the rebuild loads the coat from HERE
         writeCfg(node);
       } catch (e) {
         console.error("[RedNode Workspace] auto mask failed:", e);
@@ -2789,6 +2856,7 @@ function maskPainter(node, host, def) {
     live.mask = "";
     S.strokes = [];
     S.redoStack = [];
+    S.baseSrc = "";
     writeCfg(node);
     render(node);
   };
@@ -2817,11 +2885,13 @@ function maskPainter(node, host, def) {
     live.mask = d.mask;
     S.strokes = [];
     S.redoStack = [];               // a new base coat makes any pending redo moot
+    S.baseSrc = d.mask;             // a later rebuild loads the coat from here
     writeCfg(node);
+    syncUndoRedo();
     // reseed the canvas from the file the segmenter just made, in place
     baseImg = new Image();
     baseImg.onload = () => rebuild();
-    baseImg.onerror = () => { baseImg = null; };
+    baseImg.onerror = () => { baseImg = null; S.baseSrc = ""; };
     baseImg.src = viewUrl(d.mask);
   };
   S.clear = () => {
@@ -2829,9 +2899,11 @@ function maskPainter(node, host, def) {
     live.mask = "";
     S.strokes = [];
     S.redoStack = [];
+    S.baseSrc = "";
     baseImg = null;
     writeCfg(node);
     rebuild();
+    syncUndoRedo();
   };
 }
 
