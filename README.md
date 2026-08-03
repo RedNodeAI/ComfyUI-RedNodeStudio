@@ -4,7 +4,7 @@ A complete visual workspace and workflow-control rig for ComfyUI: reference mana
 painting, wireless controls, LoRA stacking, prompt tools, stage comparison, image review and
 post-processing in one pack.
 
-![The RedNode Studio Workspace panel](images/01-hero-workspace.webp)
+![Painting a region in the panel, with the result beside it](images/paint.webp)
 
 **48 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
@@ -24,42 +24,54 @@ dependencies when you load it.
 
 ## What it looks like
 
-![Comparing two stages of a run with a wipe](images/02-stage-wipe.webp)
+The panel above is the Paint tab: mask a region, set the denoise, queue. It composites back by
+itself, and it runs on whichever sampler you point it at. Auto-mask the subject or the background
+if you would rather not paint by hand.
 
-**Compare any two points in the graph with a wipe.** Tap a stage anywhere, then drag to see what
-changed. No second window, no exporting to compare.
+![A full pipeline, grouped by stage](images/graph.webp)
 
-![A full pipeline, grouped by stage](images/03-graph.webp)
+**A whole pipeline stays readable.** Stages live in subgraphs and groups, so the canvas stays this
+small however much is in it. Groups switch on and off from one panel, and branches you did not pick
+never execute.
 
-**A whole pipeline stays readable.** Groups switch on and off from one panel, and branches you did
-not pick never execute.
+![One panel driving nodes with no wires, including into a subgraph](images/wireless.webp)
 
-![Painting a region and the result beside it](images/04-paint.webp)
+**Wireless controls.** Drive other nodes' dropdowns, sliders and toggles from one panel, including
+nodes inside subgraphs. The wires that are not there are the point.
 
-**Paint in the panel.** Mask a region, render only that region, composite it back. Hand it to any
-sampler you like.
+![The save browser, filing drafts and keepers](images/save-browser.webp)
 
-![The LoRA stack, grouped, with a random strength range](images/05-lora-stack.webp)
+**Saving that files itself.** Name and folder built from date, preset, seed, model or size, drafts
+split from keepers, and a browser to cull a session without leaving the graph.
 
-**LoRA management in one node.** Per-slot strength, random ranges, trigger words and saved presets.
+![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
 
-![One panel driving nodes with no wires, including into a subgraph](images/06-wireless.webp)
+**References and dials in one panel.** Galleries per role, subject, scene, moodboard and more, with
+the fidelity and identity dials under them and captioning built in.
 
-**Wireless controls.** Drive other nodes' dropdowns and toggles from one panel. The wires that
-would be there are the point.
+![The LoRA stack, grouped, with a random strength range](images/lora-stack.webp)
 
-![Prompt keywords and the library they expand from](images/07-prompt.webp)
+**LoRA management in one node.** Grouped slots, per-slot strength, random ranges, trigger words and
+saved stacks.
+
+![Prompt keywords and the library they expand from](images/prompt.webp)
 
 **Prompt tooling.** Highlighting, `@keyword` macros from a shared library, and a seeded wildcard
 engine.
 
-![The grading chain and the image it produced](images/08-post-fx.webp)
+![The grading chain and the image it produced](images/post-fx.webp)
 
-**Grade without leaving the graph.** The full chain on any image, with or without the workspace.
+**Grade without leaving the graph.** Thirteen effects in the chain, on any image, with or without
+the workspace.
 
-![Previous runs, still there](images/09-review.webp)
+![Previous runs, still there](images/review.webp)
 
 **A preview that remembers.** Browse previous runs instead of losing them to the next queue.
+
+![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
+
+**Compare any two points in the graph with a wipe.** Tap a stage anywhere, then drag to see what
+changed between them.
 
 ## Install
 
