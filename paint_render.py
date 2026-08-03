@@ -588,14 +588,19 @@ class RedNodePaintRender:
             # only when the TAB asked: with no Workspace in the graph there is no dial
             # and no intent, so a wired image renders at the size it arrived at
             want = int(pc["mask_size"]) if "mask_size" in pc else 0
-            # NEVER DOWNSCALE. A dial set below the picture's own size means the picture
-            # is already past what was asked for, and handing back a softer version of
-            # it is not something anyone asks for by moving a slider called size.
-            target = max(max(crop_h, crop_w), want)
+            # THE DIAL IS THE WORKING SIZE, BOTH DIRECTIONS (2026-08-03). Whole frame
+            # means the whole picture through the sampler at the size the tab asks for:
+            # a 3K frame with the dial at 1024 renders at 1024. A never-downscale rule
+            # stood here before, and it made the dial read as dead on any big frame,
+            # when the point of the mode is that the FRAME goes through, at YOUR size.
+            target = want if want else max(crop_h, crop_w)
             capped = pc.get("fit_whole", True) and target > cap
             if capped:
                 target = max(cap, 64)
-            work = _fit(crop, target) if target != max(crop_h, crop_w) else _round8(crop)
+            # scaled is INTENT, the dial or the cap: _round8 may still nudge an odd
+            # frame a few pixels, and a nudge must keep compositing into the original
+            scaled = target != max(crop_h, crop_w)
+            work = _fit(crop, target) if scaled else _round8(crop)
             if capped:
                 print(f"[RedNode Paint] whole frame wanted {want} px but the {tier} VRAM "
                       f"tier caps it at {cap}, so it renders at {work.shape[2]} x "
@@ -669,14 +674,14 @@ class RedNodePaintRender:
         while painted.ndim > 4:                               # video VAEs hand back 5D
             painted = painted[0]
 
-        # A WHOLE-FRAME PASS THAT SCALED UP KEEPS ITS SIZE. Scaling the render back down
-        # to the source would spend the whole sample on pixels that are then thrown
-        # away, which is what made an upscale here pointless and why this mode used to
-        # refuse to resize at all. The picture and the mask come UP to the render
-        # instead, so the pass hands on the larger frame and the paint still limits what
-        # changed. A painted REGION is unaffected: it cannot change the frame's size, so
-        # it comes back down and composites where it came from.
-        if whole and (painted.shape[1] > crop_h or painted.shape[2] > crop_w):
+        # A WHOLE-FRAME PASS THAT RESIZED KEEPS THE RENDER'S SIZE, up or down. Scaling
+        # the render back to the source would spend the whole sample on pixels that are
+        # then thrown away going up, and quietly un-shrink a frame the dial brought
+        # down going the other way. The picture and the mask come TO the render size
+        # instead, so the pass hands on the frame at the dial and the paint still
+        # limits what changed. A painted REGION is unaffected: it cannot change the
+        # frame's size, so it comes back down and composites where it came from.
+        if whole and scaled:
             big_h, big_w = painted.shape[1], painted.shape[2]
             up = F.interpolate(base.permute(0, 3, 1, 2), size=(big_h, big_w),
                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)

@@ -310,7 +310,10 @@ class RedNodePaintOut:
             want = (min(int(pc["mask_size"]), whole_frame_limit(tier))
                     if "mask_size" in pc else 0)
             target = max(full_h, full_w)
-            if want > target:                        # never downscale somebody's picture
+            # both directions (2026-08-03), matching the internal renderer: the dial is
+            # the working size, and a 3K frame with the dial at 1024 is handed out at
+            # 1024 rather than the dial reading as dead on every big picture
+            if want and want != target:
                 base = _fit(base, want)
                 mask = F.interpolate(mask.unsqueeze(1),
                                      size=(base.shape[1], base.shape[2]),

@@ -6718,11 +6718,10 @@ function paintBody(node, body) {
              + "so a long region gets the same detail as a compact one rather than "
              + "being rationed by its longest side, and a region already bigger than "
              + "the budget renders at its own size instead of being shrunk. On Whole "
-             + "frame it is the resolution the frame is scaled TO, and the bigger "
-             + "picture is what comes back, so this is where an upscale pass comes "
-             + "from. A value below the picture's own size is ignored, never applied. "
-             + "The VRAM tier is the real ceiling, and on a picture bigger than the "
-             + "budget it is the only thing that shrinks the region: "
+             + "frame it is the resolution the frame is scaled TO, in both directions, "
+             + "and the frame comes back at that size: above the picture it is an "
+             + "upscale pass, below it the whole picture goes through at your working "
+             + "size. The VRAM tier is the ceiling either way: "
              + `${WHOLE_FRAME_CAPS.low} on low, ${WHOLE_FRAME_CAPS.medium} on `
              + `medium, ${WHOLE_FRAME_CAPS.high} on high.`;
   const mVal = document.createElement("span");
