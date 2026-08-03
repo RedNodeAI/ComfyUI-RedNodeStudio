@@ -7246,6 +7246,13 @@ function paintBody(node, body) {
   // Reference painting. Off by default: the plain encode is what makes Generate feel
   // instant, and encoding references costs real time.
 
+  // Heal a renderer choice left pointing at a deleted id BEFORE anything reads it.
+  // This ran further down, next to the Rendered by row it repairs, until the
+  // reference row below started deciding from P.renderer too: healing after that
+  // decision let the buttons sit enabled for one render when a renderer was
+  // deleted and recreated.
+  if (paintTargets().length && healRenderer(cfg)) writeCfg(node);
+
   const refRow = document.createElement("div");
   refRow.className = "rn-ws-row";
   const rlab = document.createElement("span");
@@ -7350,9 +7357,7 @@ function paintBody(node, body) {
 
   const found = paintTargets();
   if (found.length) {
-    // Do this before drawing the row, so what it shows and what Generate drives are the
-    // same node. Heals a choice left pointing at a deleted id.
-    if (healRenderer(cfg)) writeCfg(node);
+    // healed above, before the reference row read the choice
     const rrow = document.createElement("div");
     rrow.className = "rn-ws-row";
     const rl = document.createElement("span");

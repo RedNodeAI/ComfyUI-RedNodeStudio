@@ -169,9 +169,9 @@ def grow_to_aspect(box, full_h, full_w, target):
 def _round8(t_nhwc):
     """The same picture at its own size, nudged to a multiple of 8 for the sampler.
 
-    Whole-frame painting must not be resized. Its whole point is that the frame is
-    already the size you want, so scaling it to a mask size would downscale the
-    picture and hand it back softer than it went in.
+    The no-dial path. When nothing asked for a size the frame keeps its own, and the
+    only change allowed is the /8 nudge the sampler needs. A dial that DID ask goes
+    through _fit instead, in either direction, since the 2026-08-03 sizing change.
     """
     h, w = t_nhwc.shape[1], t_nhwc.shape[2]
     nh, nw = max(64, (h // 8) * 8), max(64, (w // 8) * 8)
