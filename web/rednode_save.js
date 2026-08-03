@@ -111,7 +111,10 @@ css.textContent = `
   font-size:11px;font-weight:600;background:#12240f;border:1px solid #4a7a4a;
   color:#8fd08f}
 .rn-sv-keptmark.draft{background:#241f12;border-color:#6b5a2a;color:#d4b25f}
-.rn-sv-big{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px}
+/* min-height reserves the slot: without it the row collapses to nothing while an image
+   loads and everything below jumps up, then back down when it arrives */
+.rn-sv-big{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;
+  min-height:300px;justify-content:center}
 .rn-sv-big img{max-width:100%;max-height:300px;border-radius:6px;border:1px solid #2a2e35;
   object-fit:contain}
 .rn-sv-item.picked .rn-sv-thumb{outline:2px solid #b8283c;outline-offset:-2px}
@@ -1001,8 +1004,25 @@ function render(node) {
     const bimg = document.createElement("img");
     const bq = new URLSearchParams({ filename: at.name, type: "output",
                                      subfolder: at.subfolder || "" });
-    bimg.src = api.apiURL(`/view?${bq}&rand=${at.when || 0}`);
-    bimg.onerror = () => { big.style.display = "none"; };
+    // THE THUMBNAIL FIRST, THEN THE REAL ONE BEHIND IT.
+    //
+    // A click re-renders the panel, so this element is new every time and starts empty.
+    // Pointed straight at a 4K original it stays empty for as long as the decode takes,
+    // which reads as the picture vanishing and the panel jumping. The grid has already
+    // fetched the 320px version of this exact file, so it paints from cache on the same
+    // frame, and the full picture swaps in when it is ready. Nothing ever shows blank.
+    const thumbSrc = api.apiURL(`/rednode/thumb?${bq}&px=320&rand=${at.when || 0}`);
+    const fullSrc = api.apiURL(`/view?${bq}&rand=${at.when || 0}`);
+    bimg.src = thumbSrc;
+    const full = new Image();
+    full.decoding = "async";
+    // swapping to an already-decoded image is instant, so there is no second flash
+    full.onload = () => { bimg.src = fullSrc; };
+    full.src = fullSrc;
+    bimg.onerror = () => {
+      if (bimg.src !== fullSrc) { bimg.src = fullSrc; return; }  // no resize route
+      big.style.display = "none";
+    };
     big.appendChild(bimg);
     // the state on the picture itself, because during a cull your eyes are here and
     // not on the little tag under a card forty rows down
