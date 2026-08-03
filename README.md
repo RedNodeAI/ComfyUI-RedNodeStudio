@@ -4,8 +4,7 @@ A complete visual workspace and workflow-control rig for ComfyUI: reference mana
 painting, wireless controls, LoRA stacking, prompt tools, stage comparison, image review and
 post-processing in one pack.
 
-<!-- SHOT 1  hero: the Workspace panel, loaded, mask visible, dials off defaults -->
-<!-- docs/images/01-hero-workspace.png -->
+![The RedNode Studio Workspace panel](images/01-hero-workspace.webp)
 
 **48 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
@@ -25,48 +24,40 @@ dependencies when you load it.
 
 ## What it looks like
 
-<!-- SHOT 2  Stage View wipe, dragged to about 40 percent, big visible difference -->
-<!-- docs/images/02-stage-wipe.png -->
+![Comparing two stages of a run with a wipe](images/02-stage-wipe.webp)
 
 **Compare any two points in the graph with a wipe.** Tap a stage anywhere, then drag to see what
 changed. No second window, no exporting to compare.
 
-<!-- SHOT 3  full graph zoomed out, groups coloured and titled by stage -->
-<!-- docs/images/03-graph.png -->
+![A full pipeline, grouped by stage](images/03-graph.webp)
 
 **A whole pipeline stays readable.** Groups switch on and off from one panel, and branches you did
 not pick never execute.
 
-<!-- SHOT 4  Paint tab mid-paint, mask unmistakable -->
-<!-- docs/images/04-paint.png -->
+![Painting a region and the result beside it](images/04-paint.webp)
 
 **Paint in the panel.** Mask a region, render only that region, composite it back. Hand it to any
 sampler you like.
 
-<!-- SHOT 5  LoRA Stack, 4 slots, one random range obvious -->
-<!-- docs/images/05-lora-stack.png -->
+![The LoRA stack, grouped, with a random strength range](images/05-lora-stack.webp)
 
 **LoRA management in one node.** Per-slot strength, random ranges, trigger words and saved presets.
 
-<!-- SHOT 6  Control Panel plus the three nodes it drives, empty wiring space visible -->
-<!-- docs/images/06-wireless.png -->
+![One panel driving nodes with no wires, including into a subgraph](images/06-wireless.webp)
 
 **Wireless controls.** Drive other nodes' dropdowns and toggles from one panel. The wires that
 would be there are the point.
 
-<!-- SHOT 7  Prompt Box with the @keyword popup open -->
-<!-- docs/images/07-prompt.png -->
+![Prompt keywords and the library they expand from](images/07-prompt.webp)
 
 **Prompt tooling.** Highlighting, `@keyword` macros from a shared library, and a seeded wildcard
 engine.
 
-<!-- SHOT 8  Post FX with a deliberate cinematic grade -->
-<!-- docs/images/08-post-fx.png -->
+![The grading chain and the image it produced](images/08-post-fx.webp)
 
 **Grade without leaving the graph.** The full chain on any image, with or without the workspace.
 
-<!-- SHOT 9  Image Review strip, 6 runs, same subject -->
-<!-- docs/images/09-review.png -->
+![Previous runs, still there](images/09-review.webp)
 
 **A preview that remembers.** Browse previous runs instead of losing them to the next queue.
 
