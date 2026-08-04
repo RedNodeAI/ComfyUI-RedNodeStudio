@@ -1,7 +1,7 @@
 [project]
 name = "rednode-studio"
 description = "A studio rig for ComfyUI: a tabbed workspace panel, painting with auto masks, wireless control panels, LoRA management, grading and prompt tooling, plus Krea 2 moodboard and identity editing."
-version = "1.0.36"
+version = "1.0.37"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -14,7 +14,9 @@ Documentation = "https://github.com/RedNodeAI/ComfyUI-RedNodeStudio#readme"
 [tool.comfy]
 PublisherId = "rednodeai"
 DisplayName = "RedNode Studio"
-Icon = ""
+# Square, 400x400, served from this repo's main branch. The registry takes a URL, not a
+# path, so the file has to be committed and pushed before the listing can fetch it.
+Icon = "https://raw.githubusercontent.com/RedNodeAI/ComfyUI-RedNodeStudio/main/icon.png"
 # Krea 2 first shipped in ComfyUI v0.26.0 (commit 2a61015, 2026-06-23), which is what
 # the ten Krea 2 nodes need. On anything older the other 29 nodes still load and work
 # with any model, and the pack says so on startup rather than failing to import.

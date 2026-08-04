@@ -4,6 +4,10 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.0.37** - 2026-08-04
+
+- The registry listing carries the RedNode logo instead of the placeholder gradient
+
 **1.0.36** - 2026-08-04
 
 Speed and polish, plus the first documentation pass.
