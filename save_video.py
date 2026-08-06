@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 
 import numpy as np
@@ -78,12 +79,53 @@ def frames_to_uint8(images):
     return out
 
 
+# gif and animated webp have no audio track at all. Wiring sound to them is a
+# reasonable mistake, so it is said out loud rather than silently dropped.
+SILENT_CONTAINERS = ("gif", "webp")
+
+
+def write_wav(audio, path):
+    """ComfyUI's AUDIO dict to a 16 bit wav, using the standard library only.
+
+    The dict is {"waveform": tensor [batch, channels, samples], "sample_rate": int}.
+    The first item of the batch is the one that belongs to these frames; a batch of
+    several is several takes, and guessing which to mux would be worse than taking
+    the first and saying so.
+
+    16 bit PCM because it is what every encoder accepts without negotiation, and the
+    lossy codec downstream is where the quality is decided anyway.
+    """
+    import wave
+    wf = audio.get("waveform")
+    rate = int(audio.get("sample_rate") or 44100)
+    if wf is None:
+        return None, 0
+    arr = wf.detach().cpu().numpy() if torch.is_tensor(wf) else np.asarray(wf)
+    if arr.ndim == 3:
+        arr = arr[0]                       # [channels, samples]
+    if arr.ndim == 1:
+        arr = arr[None, :]
+    channels = int(arr.shape[0])
+    if channels < 1 or arr.shape[1] < 1:
+        return None, 0
+    # interleave, which is what wav wants, and clip rather than wrap: a sample that
+    # overflows int16 by wrapping is a loud click, and clipping is merely loud
+    inter = np.clip(arr.T, -1.0, 1.0)
+    pcm = (inter * 32767.0).astype("<i2")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.tobytes())
+    return path, arr.shape[1] / float(rate)
+
+
 def _even(n):
     """h264 refuses odd dimensions, and silently is not an option."""
     return n - (n % 2)
 
 
-def encode_ffmpeg(frames, path, fps, container, quality, exe):
+def encode_ffmpeg(frames, path, fps, container, quality, exe, wav=None):
     """Pipe raw frames into ffmpeg. Returns None on success, or a reason string.
 
     Raw RGB over a pipe rather than writing a temp image sequence: a hundred PNGs to
@@ -100,10 +142,18 @@ def encode_ffmpeg(frames, path, fps, container, quality, exe):
     codec = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", str(crf),
              "-preset", "medium"] if container == "mp4" else \
             ["-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p", "-crf", str(crf), "-b:v", "0"]
+    # aac in mp4 and opus in webm: what each container's players expect without a
+    # second thought. -shortest so a long take does not leave the picture frozen on
+    # its last frame while the sound plays on.
+    audio_in = ["-i", wav] if wav else []
+    audio_out = ([] if not wav else
+                 ["-c:a", "aac", "-b:a", "192k", "-shortest"] if container == "mp4"
+                 else ["-c:a", "libopus", "-b:a", "160k", "-shortest"])
     cmd = [exe, "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24",
            "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
-           *codec, "-movflags", "+faststart" if container == "mp4" else "+faststart",
+           *audio_in,
+           *codec, *audio_out, "-movflags", "+faststart",
            path]
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
@@ -151,6 +201,20 @@ class RedNodeSaveVideo:
                 "fps": ("FLOAT", {"forceInput": True, "tooltip":
                         "wire the frame rate from whatever made the frames, and it "
                         "wins over the panel's own setting so the two cannot disagree"}),
+                # NOT called "prompt": the hidden PROMPT input already owns that
+                # name, and two things called prompt in one node is how somebody
+                # wires the wrong one and never finds out.
+                "positive": ("STRING", {"forceInput": True, "tooltip":
+                             "the prompt to write into the text record. The record "
+                             "already digs one out of the queued graph, but a video "
+                             "workflow's nodes are not always shapes it recognises, "
+                             "so wiring it here is the certain way."}),
+                "negative": ("STRING", {"forceInput": True, "tooltip":
+                             "the negative to write into the text record, when wired."}),
+                "audio": ("AUDIO", {"tooltip":
+                          "sound for the clip, muxed into mp4 and webm. gif and "
+                          "animated webp have no audio track, so wiring this to one "
+                          "of those says so rather than dropping it quietly."}),
                 "seed": ("INT", {"forceInput": True,
                          "tooltip": "for the seed token and the record. Without it the "
                                     "first seed in the queued graph is used."}),
@@ -170,10 +234,11 @@ class RedNodeSaveVideo:
                    "numbering tokens, the same drafts and keepers split, and the same "
                    "readable text record beside the file. mp4, webm, gif or animated "
                    "webp. Wire fps from whatever produced the frames and it wins over "
-                   "the panel, so the two can never disagree.")
+                   "the panel, so the two can never disagree, and wire the positive "
+                   "and negative to be certain of what the text record says.")
 
-    def save(self, images, config="{}", fps=None, seed=None, prompt=None,
-             extra_pnginfo=None):
+    def save(self, images, config="{}", fps=None, positive=None, negative=None,
+             audio=None, seed=None, prompt=None, extra_pnginfo=None):
         cfg = parse_config(config)
         raw = {}
         try:
@@ -210,6 +275,21 @@ class RedNodeSaveVideo:
         ctx = {"when": when, "preset": preset, "seed": seed, "keep": cfg["keep"],
                "width": w, "height": h}
         meta = collect_meta(prompt, ctx)
+        # A WIRE WINS over what was dug out of the graph. The search is a good guess
+        # and a wire is a statement, and the person who wired it is the one who knows
+        # which of five text boxes in a video workflow is the prompt.
+        if positive is not None and str(positive).strip():
+            meta["positive"] = str(positive)
+        if negative is not None and str(negative).strip():
+            meta["negative"] = str(negative)
+        # @keyword macros expand here exactly as they do everywhere else, so a record
+        # says what was rendered rather than the shorthand that produced it
+        try:
+            from . import prompt_library
+            meta["positive"] = prompt_library.expand_keywords(meta["positive"])
+            meta["negative"] = prompt_library.expand_keywords(meta["negative"])
+        except Exception:
+            pass
         ctx["model"] = meta.get("model")
 
         folder, stem = build_path(cfg, ctx)
@@ -220,6 +300,25 @@ class RedNodeSaveVideo:
         path = final_path(out_dir, folder, stem, cfg, ctx,
                           ext=CONTAINER_EXT[container])
 
+        # the wav is a temp file because ffmpeg reads audio from a path, not a pipe:
+        # only one stream can come down stdin, and the frames are already using it
+        wav = None
+        secs = 0.0
+        if audio is not None:
+            if container in SILENT_CONTAINERS:
+                print(f"[RedNode Save Video] audio is wired but {container} has no "
+                      f"audio track, so the clip is silent. Choose mp4 or webm to "
+                      f"keep the sound.", flush=True)
+            else:
+                try:
+                    tmp_wav = os.path.join(tempfile.gettempdir(),
+                                           f"rn_video_{os.getpid()}_{int(when)}.wav")
+                    wav, secs = write_wav(audio, tmp_wav)
+                except Exception as e:
+                    print(f"[RedNode Save Video] could not prepare the audio ({e}); "
+                          f"writing the clip silent", flush=True)
+                    wav = None
+
         why = None
         if container in ("gif", "webp"):
             try:
@@ -228,7 +327,7 @@ class RedNodeSaveVideo:
                 why = str(e)
         else:
             exe = _ffmpeg_exe()
-            why = (encode_ffmpeg(frames, path, rate, container, quality, exe)
+            why = (encode_ffmpeg(frames, path, rate, container, quality, exe, wav)
                    if exe else "no ffmpeg found")
             if why:
                 # NEVER lose the render over a codec. Animated webp needs nothing but
@@ -236,12 +335,20 @@ class RedNodeSaveVideo:
                 print(f"[RedNode Save Video] {container} encoding failed ({why}); "
                       f"writing an animated webp instead", flush=True)
                 path = os.path.splitext(path)[0] + ".webp"
+                if wav:
+                    print("[RedNode Save Video] the fallback webp cannot carry the "
+                          "audio, so the clip is silent", flush=True)
                 try:
                     encode_pillow(frames, path, rate, "webp", quality, loop)
                     why = None
                 except Exception as e:
                     why = f"{why}; webp fallback also failed: {e}"
 
+        if wav:
+            try:
+                os.remove(wav)
+            except OSError:
+                pass
         if why:
             print(f"[RedNode Save Video] could not write a video ({why}). The frames "
                   f"are still on the wire, so a RedNode Save node will file them as "
@@ -255,6 +362,8 @@ class RedNodeSaveVideo:
             text = render_text(meta, ctx, os.path.basename(path))
             text += (f"\nframes: {len(frames)}\nfps: {rate:g}\n"
                      f"duration: {len(frames) / rate:.2f}s\ncontainer: {container}\n")
+            if wav:
+                text += f"audio: yes, {secs:.2f}s\n"
             with open(base + ".txt", "w", encoding="utf-8") as f:
                 f.write(text)
 
