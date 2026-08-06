@@ -215,9 +215,15 @@ def build_path(cfg, ctx):
     return folder, stem
 
 
-def final_path(base_dir, folder, stem, cfg, ctx):
-    """Where this image actually goes, numbering applied, never overwriting."""
-    ext = FORMATS.get(cfg.get("format", "png"), ".png")
+def final_path(base_dir, folder, stem, cfg, ctx, ext=None):
+    """Where this image actually goes, numbering applied, never overwriting.
+
+    `ext` is for callers whose extension is not an image format, RedNode Save Video
+    being the one. It has to be known HERE rather than swapped on afterwards: the
+    counter scans the folder for files that already match, so a caller that renamed
+    the extension later would restart at 1 every run and overwrite the last video.
+    """
+    ext = ext or FORMATS.get(cfg.get("format", "png"), ".png")
     directory = os.path.join(base_dir, *[p for p in folder.split("/") if p])
     os.makedirs(directory, exist_ok=True)
     mode = cfg["numbering"]

@@ -617,6 +617,8 @@ from .rednode import (Krea2RedNode, Krea2RedNodeSettings,  # noqa: E402  (needs 
 from .prompt_tools import RedNodePromptCombine, RedNodePromptSwap  # noqa: E402
 from .text_combine import RedNodeTextCombine  # noqa: E402
 from .prompt_box import RedNodePromptBox  # noqa: E402
+from .prompt_frame import RedNodePromptFrame  # noqa: E402
+from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .selector import RedNodeSelector  # noqa: E402
 from .combo_control import RedNodeComboControl  # noqa: E402
 from .control_panel import RedNodeControlPanel  # noqa: E402
@@ -642,6 +644,7 @@ from .stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
 from .paint_render import RedNodePaintRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
+from .save_video import RedNodeSaveVideo  # noqa: E402
 from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
 from .vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
 from . import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
@@ -658,6 +661,8 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeTextCombine": RedNodeTextCombine,
     "RedNodePromptSwap": RedNodePromptSwap,
     "RedNodePromptBox": RedNodePromptBox,
+    "RedNodePromptFrame": RedNodePromptFrame,
+    "RedNodeDescribeToBoxes": RedNodeDescribeToBoxes,
     "RedNodeSelector": RedNodeSelector,
     "RedNodeComboControl": RedNodeComboControl,
     "RedNodeControlPanel": RedNodeControlPanel,
@@ -685,6 +690,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodePaintOut": RedNodePaintOut,
     "RedNodePaintIn": RedNodePaintIn,
     "RedNodeSave": RedNodeSave,
+    "RedNodeSaveVideo": RedNodeSaveVideo,
     "RedNodeGroupRules": RedNodeGroupRules,
     "RedNodeSubgraphSend": RedNodeSubgraphSend,
     "RedNodeSubgraphReceive": RedNodeSubgraphReceive,
@@ -698,6 +704,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeTextCombine": "RedNode Text Combine",
     "RedNodePromptSwap": "RedNode Prompt Converter",
     "RedNodePromptBox": "RedNode Prompt Box",
+    "RedNodePromptFrame": "RedNode Prompt Frame",
+    "RedNodeDescribeToBoxes": "RedNode Describe To Boxes",
     "RedNodeSelector": "RedNode Selector",
     "RedNodeComboControl": "RedNode Combo Control",
     "RedNodeControlPanel": "RedNode Control Panel",
@@ -725,6 +733,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePaintOut": "RedNode Paint Out (to any renderer)",
     "RedNodePaintIn": "RedNode Paint In (composite back)",
     "RedNodeSave": "RedNode Save",
+    "RedNodeSaveVideo": "RedNode Save Video",
     "RedNodeGroupRules": "RedNode Group Rules",
     # SENDER and GRABBER, not "Channel Out" and "Channel In". The old pair read
     # backwards at a glance: the one named "Out" is the one you wire values INTO,

@@ -171,6 +171,7 @@ what they did. Treat them as legacy.
 | Node | What it does |
 |---|---|
 | RedNode Save | Files images by date, preset and seed, and splits drafts from keepers. |
+| RedNode Save Video | Files a batch of frames as mp4, webm, gif or animated webp, into the same tree, tokens and drafts or keepers split RedNode Save uses. |
 | RedNode Paint Render | Renders only the region you painted, then composites it back. |
 | RedNode Paint Out / Paint In | Hand the painted region to any other renderer, then composite the result back. |
 | RedNode Refine Crop / Refine Paste | Cut a masked region out for refinement by any sampler, then put it back. |
