@@ -50,6 +50,9 @@ VIDEO_DEFAULTS.update({
     "quality": 85,
     "loop": True,            # gif and webp only
     "pingpong": False,       # play forward then back, for a seamless short loop
+    # what happens when the sound is shorter than the picture, which ping pong
+    # guarantees: "once" plays it and goes quiet, "loop" repeats it to the end
+    "audio_fill": "once",
 })
 
 
@@ -125,7 +128,8 @@ def _even(n):
     return n - (n % 2)
 
 
-def encode_ffmpeg(frames, path, fps, container, quality, exe, wav=None):
+def encode_ffmpeg(frames, path, fps, container, quality, exe, wav=None,
+                  audio_fill="once"):
     """Pipe raw frames into ffmpeg. Returns None on success, or a reason string.
 
     Raw RGB over a pipe rather than writing a temp image sequence: a hundred PNGs to
@@ -143,24 +147,55 @@ def encode_ffmpeg(frames, path, fps, container, quality, exe, wav=None):
              "-preset", "medium"] if container == "mp4" else \
             ["-c:v", "libvpx-vp9", "-pix_fmt", "yuv420p", "-crf", str(crf), "-b:v", "0"]
     # aac in mp4 and opus in webm: what each container's players expect without a
-    # second thought. -shortest so a long take does not leave the picture frozen on
-    # its last frame while the sound plays on.
-    audio_in = ["-i", wav] if wav else []
+    # second thought.
+    #
+    # The length of the clip is the FRAMES, and every other stream is cut to fit it.
+    # -shortest was doing that job and doing it badly in both directions. Audio shorter
+    # than the picture ended the whole encode the moment the sound ran out, so ffmpeg
+    # closed stdin while frames were still going in and the encode died with a broken
+    # pipe. Audio longer overshot the frame count by a second or so, because -shortest
+    # cuts at a packet boundary rather than a time. So: apad runs silence off the end
+    # of the audio forever, which means there is always audio to take, and -t cuts the
+    # output at exactly the duration the frames say. Nothing is left to negotiate.
+    #
+    # ping pong is why audio_fill exists. It plays the frames forward then back, so a
+    # clip with sound is suddenly twice as long as its sound, and the trip home is
+    # silent. Looping the audio fills it. Which of those is wanted is not something
+    # this can guess, so it is a setting on the panel and it defaults to leaving the
+    # sound alone.
+    # -t is built HERE, in the same expression as the audio input, and not separately.
+    # Both of the things that make the audio outlast the picture, apad and a looped
+    # input, are unbounded by design: -stream_loop -1 with no -t is an encode that
+    # never ends and a file that grows until the disk does not. Keeping the limit
+    # beside the thing it limits is what stops those two from ever drifting apart.
+    secs = len(frames) / max(0.1, float(fps))
+    limit = ["-t", f"{secs:.6f}"] if wav else []
+    audio_in = ((["-stream_loop", "-1"] if audio_fill == "loop" else [])
+                + ["-i", wav]) if wav else []
     audio_out = ([] if not wav else
-                 ["-c:a", "aac", "-b:a", "192k", "-shortest"] if container == "mp4"
-                 else ["-c:a", "libopus", "-b:a", "160k", "-shortest"])
+                 ["-c:a", "aac", "-b:a", "192k", "-af", "apad"] if container == "mp4"
+                 else ["-c:a", "libopus", "-b:a", "160k", "-af", "apad"])
     cmd = [exe, "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24",
            "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
            *audio_in,
-           *codec, *audio_out, "-movflags", "+faststart",
+           *codec, *audio_out, *limit, "-movflags", "+faststart",
            path]
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                                 stderr=subprocess.PIPE)
-        for f in frames:
-            proc.stdin.write(f[:h, :w, :3].tobytes())
-        proc.stdin.close()
+        try:
+            for f in frames:
+                proc.stdin.write(f[:h, :w, :3].tobytes())
+        except (BrokenPipeError, OSError):
+            # ffmpeg has already gone. Whatever it objected to is in ITS stderr, and
+            # reporting "broken pipe" instead is how a one line fix stayed hidden for
+            # a day: that is the symptom of ffmpeg quitting, never the reason.
+            pass
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
         err = proc.stderr.read().decode("utf-8", "replace").strip()
         if proc.wait() != 0:
             return err or f"ffmpeg exited {proc.returncode}"
@@ -255,6 +290,7 @@ class RedNodeSaveVideo:
         quality = int(raw.get("quality", cfg.get("quality", 85)) or 85)
         loop = raw.get("loop", True) is not False
         pingpong = raw.get("pingpong") is True
+        audio_fill = "loop" if str(raw.get("audio_fill") or "once") == "loop" else "once"
 
         frames = frames_to_uint8(images)
         if not frames:
@@ -327,7 +363,8 @@ class RedNodeSaveVideo:
                 why = str(e)
         else:
             exe = _ffmpeg_exe()
-            why = (encode_ffmpeg(frames, path, rate, container, quality, exe, wav)
+            why = (encode_ffmpeg(frames, path, rate, container, quality, exe, wav,
+                                 audio_fill)
                    if exe else "no ffmpeg found")
             if why:
                 # NEVER lose the render over a codec. Animated webp needs nothing but

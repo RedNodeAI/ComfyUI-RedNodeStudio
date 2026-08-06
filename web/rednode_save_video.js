@@ -28,13 +28,18 @@ const NUMBERING = [
   ["none", "none", "no suffix; a clash gets one anyway rather than overwriting"],
 ];
 const FPS_PRESETS = [8, 12, 16, 24, 30];
+// what to do when the sound runs out before the picture does
+const AUDIO_FILL = [
+  ["once", "Play once", "the sound plays through and the rest of the clip is silent"],
+  ["loop", "Repeat", "the sound repeats until the frames run out"],
+];
 
 const DEFAULTS = {
   root: "", subfolder: "%date%/%preset%", name: "%date%_%time%",
   numbering: "counter", pad: 4, split_drafts: true, keep: false,
   write_text: true, write_json: false, embed_png: true, prompts_folder: "",
   format: "png", quality: 85, compress: 4,
-  container: "mp4", fps: 16.0, loop: true, pingpong: false,
+  container: "mp4", fps: 16.0, loop: true, pingpong: false, audio_fill: "once",
 };
 
 const SAMPLES = {
@@ -234,6 +239,32 @@ function render(node) {
       + "seamless. Click to play forward only.",
       "the clip plays forward only. Click to play forward then back, which makes a "
       + "short loop seamless.");
+
+  // Only when sound is actually wired, because this row answers a question nobody
+  // has otherwise. Ping pong is when it stops being theoretical: it doubles the
+  // picture and leaves the trip home silent.
+  if (node.inputs?.some((i) => i?.name === "audio" && i.link != null)) {
+    const aRow = row(vid, "Short sound");
+    const aSeg = document.createElement("div");
+    aSeg.className = "rn-svv-seg";
+    for (const [id, label, tip] of AUDIO_FILL) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.title = tip;
+      if ((cfg.audio_fill || "once") === id) b.classList.add("on");
+      b.onclick = () => set("audio_fill", id);
+      aSeg.appendChild(b);
+    }
+    aRow.appendChild(aSeg);
+    if (cfg.pingpong && (cfg.audio_fill || "once") === "once") {
+      const n = document.createElement("div");
+      n.className = "rn-svv-note";
+      n.textContent = "Ping pong makes the clip twice as long as the frames, so the "
+                    + "sound plays through the way out and the way back is silent. "
+                    + "Repeat fills it.";
+      vid.appendChild(n);
+    }
+  }
 
   // ---- the filing box: the same vocabulary RedNode Save uses ----------------
   const file = box();
