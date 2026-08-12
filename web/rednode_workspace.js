@@ -3804,8 +3804,10 @@ async function loraPresetAction(node, body) {
   render(node);
 }
 
-function loraPresetRow(node, body) {
-  const cfg = node._rnCfg;
+function loraPresetRow(node, body, key = "loras") {
+  // One shared store on disk, whichever stack this row serves: a stack saved from
+  // the main tab, the paint tab or the LoRA Stack node appears in all three lists.
+  const L = node._rnCfg[key];
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const lab = document.createElement("span");
@@ -3834,8 +3836,8 @@ function loraPresetRow(node, body) {
         `/rednode/lora_presets?name=${encodeURIComponent(name)}`);
       const d = await r.json();
       if (d.error) throw new Error(d.error);
-      cfg.loras.slots = d.slots || [];
-      cfg.loras.ui = { ...(cfg.loras.ui || {}), loaded_from: name };
+      L.slots = d.slots || [];
+      L.ui = { ...(L.ui || {}), loaded_from: name };
       writeCfg(node);
       render(node);
     } catch (e) {
@@ -3852,12 +3854,12 @@ function loraPresetRow(node, body) {
   save.title = "Save the slots below under a name. It appears in this list and on the "
              + "LoRA Stack node too, since they share one store.";
   save.onclick = async () => {
-    const name = prompt("Name this stack", cfg.loras.ui?.loaded_from || "");
+    const name = prompt("Name this stack", L.ui?.loaded_from || "");
     if (!name) return;
     try {
       await loraPresetAction(node, { action: "save", name,
-                                     slots: cfg.loras.slots || [] });
-      cfg.loras.ui = { ...(cfg.loras.ui || {}), loaded_from: name };
+                                     slots: L.slots || [] });
+      L.ui = { ...(L.ui || {}), loaded_from: name };
       writeCfg(node);
       render(node);
     } catch (e) {
@@ -3893,7 +3895,7 @@ function loraPresetRow(node, body) {
   row.append(lab, sel, save, del);
   body.appendChild(row);
 
-  const from = cfg.loras.ui?.loaded_from;
+  const from = L.ui?.loaded_from;
   if (from) {
     const note = document.createElement("div");
     note.className = "rn-ws-note";
@@ -4023,6 +4025,9 @@ function paintLorasBody(node, body) {
   });
   seedRow.append(slab, seed);
   body.appendChild(seedRow);
+  // the same saved stacks the main tab and the LoRA Stack node use: save a "face
+  // detailer" once, load it into whichever stack wants it
+  loraPresetRow(node, body, "paint_loras");
 
   node._rnStackRead = () => ({ ui: cfg.paint_loras.ui, slots: cfg.paint_loras.slots });
   node._rnStackWrite = (n, v) => {
