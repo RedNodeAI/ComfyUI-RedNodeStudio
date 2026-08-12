@@ -672,6 +672,48 @@ class RedNodePaintRender:
                   "sampling and no VAE round trip", flush=True)
             return _out(work)
 
+        # THE RIG FILLS WHAT IS NOT WIRED, and it fills it RAW, which is what makes
+        # the paint LoRA routing real on this node: "main" applies the main tab's
+        # stack so an unwired graph matches the model output exactly, "paint" applies
+        # the paint stack. A WIRED model is used exactly as wired, because it usually
+        # already carries the main stack (the model output) and stacking on top of it
+        # is the double-apply this file already warns about; wire paint_model, or
+        # leave the input empty and let the routing decide.
+        if model is None or clip is None or vae is None:
+            try:
+                from .workspace import load_active_rig, parse_config as _pcfg
+                _full = _pcfg(json.dumps(_workspace_cfg(prompt)))
+                _, _rm, _rc, _rv = load_active_rig(_full)
+                filled_model = model is None and _rm is not None
+                if filled_model:
+                    model = _rm
+                if clip is None and _rc is not None:
+                    clip = _rc
+                if vae is None and _rv is not None:
+                    vae = _rv
+                if filled_model:
+                    _use_paint = _full["paint"].get("lora_mode") == "paint"
+                    lc = (_full.get("paint_loras") if _use_paint
+                          else _full.get("loras")) or {}
+                    slots = lc.get("slots") or []
+                    if slots and lc.get("on", True):
+                        from . import lora_stack as _lora
+                        model, _c2, _w, _applied = _lora.apply_stack(
+                            model, clip, _lora.CUSTOM_SENTINEL,
+                            json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
+                            int(lc.get("seed", 0) or 0), unique_id,
+                            tag="Paint rig LoRAs")
+                        clip = _c2 if _c2 is not None else clip
+                        print("[RedNode Paint] rig model, %s stack applied: %s"
+                              % ("paint" if _use_paint else "main", _applied),
+                              flush=True)
+                    else:
+                        print("[RedNode Paint] rig model, no %s stack to apply"
+                              % ("paint" if _use_paint else "main"), flush=True)
+            except Exception as exc:
+                print("[RedNode Paint] no Models-tab rig to fill from: %s" % exc,
+                      flush=True)
+
         model, clip = self._apply_loras(model, clip, pc, prompt)
         pos, neg = self._conditioning(clip, positive, negative, pc,
                                       positive_override, negative_override,

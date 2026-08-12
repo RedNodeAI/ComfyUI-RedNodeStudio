@@ -4109,9 +4109,10 @@ function paintLorasBody(node, body) {
   const hint = document.createElement("div");
   hint.className = "rn-ws-note";
   hint.textContent = cfg.paint.lora_mode === "paint"
-    ? "These LoRAs run instead of the main tab's when the paint pass renders. Wire "
-      + "the paint_model output into Paint Render's model input once. Krea 2 LoRAs "
-      + "only for now: an external chain loads its own model and cannot hear this."
+    ? "These LoRAs run instead of the main tab's when the paint pass renders. "
+      + "Leave Paint Render's model input unwired and the rig arrives with this "
+      + "stack by itself, or wire the paint_model output. Krea 2 only for now: an "
+      + "external chain loads its own model and cannot hear this."
     : "Pick Paint LoRAs above to use this stack.";
   body.appendChild(hint);
 
