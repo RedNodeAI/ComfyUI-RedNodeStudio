@@ -116,6 +116,43 @@ function highlight(text) {
   return out + "\n";
 }
 
+/**
+ * The Prompt Box editing surface as a reusable piece: the transparent textarea over a
+ * highlight backdrop, wildcards and @keywords coloured live, re-coloured when the
+ * keyword library changes. Built for the Workspace's Prompts tab, which the user asked
+ * to LOOK like this box because "we designed that for a reason". Returns
+ * { wrap, area, destroy }; the caller owns the value and the layout around it.
+ */
+export function makeHighlightEditor(initial = "", placeholder = "") {
+  injectStyle();
+  const wrap = document.createElement("div");
+  wrap.className = "rn-pb-wrap";
+  const back = document.createElement("div");
+  back.className = "rn-pb-back";
+  const area = document.createElement("textarea");
+  area.className = "rn-pb-area";
+  area.spellcheck = false;
+  area.placeholder = placeholder || "prompt...  __wildcard__  @keyword";
+  area.value = initial;
+  wrap.appendChild(back);
+  wrap.appendChild(area);
+  const syncScroll = () => { back.scrollTop = area.scrollTop; back.scrollLeft = area.scrollLeft; };
+  const render = () => { back.innerHTML = highlight(area.value); syncScroll(); };
+  area.addEventListener("input", render);
+  area.addEventListener("scroll", syncScroll);
+  let ro = null;
+  if (window.ResizeObserver) {
+    ro = new ResizeObserver(() => render());
+    ro.observe(wrap);
+  }
+  BOXES.add(render);                 // the keyword library re-colours this box too
+  render();
+  return {
+    wrap, area,
+    destroy: () => { BOXES.delete(render); ro?.disconnect(); },
+  };
+}
+
 function reorder(node) {
   const w = node._rnBoxWidget;
   if (!w) return;

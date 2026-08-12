@@ -857,6 +857,20 @@ def parse_config(config_json):
     # "none" existed for one unreleased day and folds into "main".
     plm = str(pin.get("lora_mode") or "main").lower()
     paint_cfg["lora_mode"] = plm if plm in ("main", "paint") else "main"
+    # THE PROMPTS TAB FEEDS THE PAINT, when the paint box is silent. Text typed in the
+    # Paint tab always wins, the user's standing rule: what you write is first
+    # priority. An empty box takes the row linked to the ACTIVE rig, so the Prompt Box
+    # editor on the Prompts tab authors paint prompts by simply leaving the paint box
+    # alone. Paint Out re-resolves against its own pinned rig; prompt_from says which
+    # source won so it can tell.
+    paint_cfg["prompt_from"] = "box" if paint_cfg["prompt"].strip() else ""
+    if not paint_cfg["prompt"].strip():
+        _row = prompt_row_for(models_cfg, prompts_cfg)
+        if _row is not None:
+            paint_cfg["prompt"] = _row["text"]
+            paint_cfg["prompt_from"] = "prompts_tab"
+            if not paint_cfg["negative"].strip():
+                paint_cfg["negative"] = _row["negative"]
     tier = str(data.get("vram_tier") or "high").lower()
     tier = tier if tier in VRAM_TIERS else "high"
     studio_preset = str(data.get("studio_preset") or "").strip()
@@ -939,6 +953,24 @@ def parse_config(config_json):
 # already exercises, and they follow core across versions.
 # ---------------------------------------------------------------------------
 _RIG_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
+
+
+def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
+    """The Prompts-tab row serving a rig; empty name means the active rig.
+
+    The first row linked to that rig WITH TEXT wins, so an empty draft row does not
+    blank a working prompt. None when nothing matches, which callers must treat as
+    "no opinion", never as an empty prompt.
+    """
+    rigs = models_cfg.get("rigs") or []
+    want = str(rig_name or "").strip()
+    if (not want or want == "(active rig)") and rigs:
+        want = rigs[max(0, min(int(models_cfg.get("active", 0)),
+                               len(rigs) - 1))]["name"]
+    for row in prompts_cfg.get("rows") or []:
+        if row["rig"] == want and row["text"].strip():
+            return row
+    return None
 
 
 def load_active_rig(cfg, name=""):

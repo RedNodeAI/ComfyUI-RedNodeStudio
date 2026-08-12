@@ -394,9 +394,19 @@ class RedNodePaintOut:
         # into a sampler fails loudly downstream, which is the honest failure.
         rig_model = rig_clip = rig_vae = None
         try:
-            from .workspace import load_active_rig, parse_config as _pc_full
-            _, rig_model, rig_clip, rig_vae = load_active_rig(
-                _pc_full(json.dumps(_workspace_cfg(prompt))), name=rig)
+            from .workspace import load_active_rig, prompt_row_for, \
+                parse_config as _pc_full
+            full = _pc_full(json.dumps(_workspace_cfg(prompt)))
+            _, rig_model, rig_clip, rig_vae = load_active_rig(full, name=rig)
+            # A pinned rig brings ITS Prompts-tab row: the parse already substituted
+            # the ACTIVE rig's row when the paint box was silent, and this node may be
+            # carrying a different model. Typed paint-box text still beats everything.
+            if full["paint"].get("prompt_from") != "box":
+                row = prompt_row_for(full["models"], full["prompts"], rig)
+                if row is not None:
+                    words = row["text"]
+                    if not str(pc.get("negative") or "").strip():
+                        against = row["negative"]
         except Exception as exc:
             print("[RedNode Paint Out] no Models-tab rig: %s" % exc, flush=True)
         return (out_img, out_mask, denoise, words,

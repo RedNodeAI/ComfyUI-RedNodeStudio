@@ -1,5 +1,6 @@
 import * as _appmod from "../../scripts/app.js";
 import { makePicker } from "./rednode_picker.js";
+import { makeHighlightEditor } from "./rednode_promptbox.js";
 const { app } = _appmod;
 // ComfyApp is exported by every real frontend, but read it defensively: the mask-editor
 // round-trip degrades to the wired-mask fallback rather than breaking the whole panel
@@ -8110,6 +8111,8 @@ function modelsBody(node, body) {
 function promptsBody(node, body) {
   const cfg = node._rnCfg;
   const R = cfg.prompts.rows;
+  for (const ed of node._rnPromptEds || []) ed.destroy();
+  node._rnPromptEds = [];
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -8162,17 +8165,26 @@ function promptsBody(node, body) {
     head.append(name, rigPick, kind, del);
     box.appendChild(head);
 
-    const text = document.createElement("textarea");
-    text.rows = 3;
-    text.value = row.text;
-    text.placeholder = row.kind === "krea2"
-      ? "prompt...  __wildcard__  @keyword" : "prompt...";
-    text.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
-                       + "border:1px solid #2a2e34;border-radius:5px;color:"
-                       + (row.kind === "krea2" ? "#9fe38b" : "#e2e5ea")
-                       + ";font-size:13px;padding:6px 8px;resize:vertical";
-    text.addEventListener("change", () => { row.text = text.value; writeCfg(node); });
-    box.appendChild(text);
+    if (row.kind === "krea2") {
+      // the real Prompt Box surface: live __wildcard__ and @keyword highlighting,
+      // re-coloured when the keyword library changes. Same editor, new home.
+      const ed = makeHighlightEditor(row.text);
+      ed.wrap.style.cssText += ";position:relative;min-height:72px;height:96px;"
+                             + "resize:vertical;overflow:auto";
+      ed.area.addEventListener("change", () => { row.text = ed.area.value; writeCfg(node); });
+      (node._rnPromptEds ||= []).push(ed);       // destroyed on the next render pass
+      box.appendChild(ed.wrap);
+    } else {
+      const text = document.createElement("textarea");
+      text.rows = 3;
+      text.value = row.text;
+      text.placeholder = "Prompt...";
+      text.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
+                         + "border:1px solid #2a2e34;border-radius:5px;color:#e2e5ea;"
+                         + "font-size:13px;padding:6px 8px;resize:vertical";
+      text.addEventListener("change", () => { row.text = text.value; writeCfg(node); });
+      box.appendChild(text);
+    }
 
     const neg = document.createElement("textarea");
     neg.rows = 2;
