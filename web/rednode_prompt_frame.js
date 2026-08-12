@@ -164,6 +164,38 @@ function fillSelect(sel, values, current) {
   if (current != null) sel.value = current;
 }
 
+// ---- box heights ------------------------------------------------------------------
+// Dragging a box taller is a decision about this node, so it has to survive with the
+// node. node.properties serialises with the workflow and costs no widget slot, which is
+// where the Prompt Box already keeps its fold state and, since widgets_values is
+// positional, the only place a panel can store anything without moving what is saved
+// after it. A runtime node._rn field would come back undefined on the next open, which
+// is exactly the reset being complained about.
+const SIZES = "rn_pf_sizes";
+
+function keepSize(node, key, box) {
+  const saved = node.properties?.[SIZES]?.[key];
+  if (typeof saved === "number" && saved > 0) box.style.height = saved + "px";
+  if (!window.ResizeObserver) return;
+
+  // A textarea in this panel is full width and wraps rather than growing, so the only
+  // thing that changes its height is somebody dragging the corner. The first callback
+  // is the initial layout, not a drag, and writing on it would dirty every workflow
+  // merely for opening it.
+  let first = true, last = 0;
+  const ro = new ResizeObserver(() => {
+    const h = Math.round(box.offsetHeight);
+    if (!h) return;                       // mid-rebuild or hidden, not a size anyone chose
+    if (first) { first = false; last = h; return; }
+    if (h === last) return;
+    last = h;
+    node.properties = node.properties || {};
+    (node.properties[SIZES] ||= {})[key] = h;
+  });
+  ro.observe(box);
+  (node._rnPfSizeObs ||= []).push(ro);    // held so it is not garbage collected
+}
+
 function buildPanel(node) {
   if (!node.addDOMWidget || node._rnPfPanel) return;
 
@@ -398,6 +430,13 @@ function buildPanel(node) {
       });
     } catch (e) { /* API not up */ }
   })();
+
+  // every box you can drag, restored to the height you left it at
+  for (const [key, box] of [["style_extra", styleExtra], ["subject", subject],
+                            ["surroundings", surroundings], ["light_and_colour", lac],
+                            ["preview", out]]) {
+    keepSize(node, key, box);
+  }
 
   const widget = node.addDOMWidget("prompt_frame_ui", "prompt_frame_ui", wrap, {
     getValue: () => "", setValue: () => {},
