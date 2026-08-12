@@ -1983,18 +1983,37 @@ class RedNodeStudioWorkspace:
         positive = negative = rig_image = None
         _prow = prompt_row_for(cfg["models"], cfg["prompts"])
         _mode = cfg["models"]["sampler_mode"]
+        # THE MODEL DECIDES THE ENCODE, the same rule the reference toggles follow:
+        # a krea2 CLIP type gets the Studio identity system, refs and all; any other
+        # rig gets core's plain text encode, because feeding an XL clip into the
+        # Krea 2 encoder is a hard error about a model nobody chose.
+        _rigs_now = cfg["models"]["rigs"]
+        _rig_is_krea2 = (not _rigs_now
+                         or _rigs_now[cfg["models"]["active"]].get("clip_type")
+                         == "krea2")
         if clip is not None and (_mode == "internal"
                                  or (_prow or {}).get("text", "").strip()):
             try:
-                from .rednode import Krea2RedNode
-                positive, negative = Krea2RedNode().encode(
-                    lora_clip if lora_clip is not None else clip,
-                    (_prow or {}).get("text", ""),
-                    studio_preset or CUSTOM_SENTINEL,
-                    style_strength if style_strength is not None else 0.5,
-                    negative_prompt=(_prow or {}).get("negative", ""),
-                    vae=vae if vae is not None else rig_vae,
-                    workspace=workspace)
+                _enc_clip = lora_clip if lora_clip is not None else clip
+                if _rig_is_krea2:
+                    from .rednode import Krea2RedNode
+                    positive, negative = Krea2RedNode().encode(
+                        _enc_clip,
+                        (_prow or {}).get("text", ""),
+                        studio_preset or CUSTOM_SENTINEL,
+                        style_strength if style_strength is not None else 0.5,
+                        negative_prompt=(_prow or {}).get("negative", ""),
+                        vae=vae if vae is not None else rig_vae,
+                        workspace=workspace)
+                else:
+                    import nodes as _core_enc
+                    positive = _core_enc.CLIPTextEncode().encode(
+                        _enc_clip, (_prow or {}).get("text", ""))[0]
+                    negative = _core_enc.CLIPTextEncode().encode(
+                        _enc_clip, (_prow or {}).get("negative", ""))[0]
+                    print("[RedNode Workspace] plain text encode for %r: not a "
+                          "Krea 2 rig, so the Studio identity system sits out"
+                          % (rig_name or "this rig"), flush=True)
             except Exception as exc:
                 print("[RedNode Workspace] built-in encode failed: %s" % exc,
                       flush=True)

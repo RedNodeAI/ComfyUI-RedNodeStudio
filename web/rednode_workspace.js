@@ -8249,7 +8249,9 @@ function modelsBody(node, page) {
       o.selected = t === rig.clip_type;
       sel.appendChild(o);
     }
-    sel.title = "How the CLIP file is interpreted. krea2 for the Krea 2 encoder.";
+    sel.title = "How the CLIP file is interpreted. krea2 for the Krea 2 encoder. "
+              + "This also decides how the built-in render encodes prompts: krea2 "
+              + "runs the Studio identity system, anything else encodes plain text.";
     sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); };
     row.append(lab, sel);
     body.appendChild(row);
