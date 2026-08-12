@@ -1833,12 +1833,17 @@ class RedNodeStudioWorkspace:
         paint_mode = cfg["paint"].get("lora_mode", "main")
         pls = cfg["paint_loras"]
         paint_model = model
+        # the clip matching the branch: the paint prompt must encode with the same
+        # LoRA text-encoder half the paint model carries, or trigger words and TE
+        # weights silently sit out of the conditioning
+        paint_clip = lora_clip
         if paint_mode == "paint":
             if raw_model is not None and pls["slots"]:
-                paint_model, _pc, _pw, _pa = _lora.apply_stack(
+                paint_model, _paint_clip, _pw, _pa = _lora.apply_stack(
                     raw_model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": pls["ui"], "slots": pls["slots"]}),
                     pls["seed"], unique_id, tag="Workspace Paint LoRAs")
+                paint_clip = _paint_clip if _paint_clip is not None else clip
             elif raw_model is not None:
                 # asked for the paint stack with nothing in it: the honest reading is
                 # "no LoRAs on the paint pass", and saying so beats guessing "main"
@@ -1943,7 +1948,8 @@ class RedNodeStudioWorkspace:
             try:
                 from .rednode import Krea2RedNode
                 positive, negative = Krea2RedNode().encode(
-                    clip, (_prow or {}).get("text", ""),
+                    lora_clip if lora_clip is not None else clip,
+                    (_prow or {}).get("text", ""),
                     studio_preset or CUSTOM_SENTINEL,
                     style_strength if style_strength is not None else 0.5,
                     negative_prompt=(_prow or {}).get("negative", ""),
@@ -2006,13 +2012,20 @@ class RedNodeStudioWorkspace:
                 _pseed = cfg["models"]["seed"]
                 if cfg["models"]["seed_random"]:
                     _pseed = _random.getrandbits(48)
+                _n_stack = len([x for x in
+                                (pls["slots"] if paint_mode == "paint"
+                                 else cfg["loras"]["slots"])
+                                if isinstance(x, dict) and x.get("type") != "title"])
+                print("[RedNode Workspace] built-in paint pass: %s stack, %d LoRA "
+                      "slot(s) on the model going in" % (paint_mode, _n_stack),
+                      flush=True)
                 _pr = RedNodePaintRender().render(
                     model=paint_model if paint_model is not None else model,
                     positive=positive, negative=negative,
                     vae=vae if vae is not None else rig_vae,
                     seed=_pseed, steps=rig_steps, cfg=rig_cfg,
                     sampler_name=rig_sampler, scheduler=rig_scheduler,
-                    run_token=_prt, clip=clip,
+                    run_token=_prt, clip=paint_clip,
                     prompt=prompt, unique_id=unique_id)
                 if isinstance(_pr, dict) and isinstance(_pr.get("ui"), dict):
                     # a PRIVATE key on purpose: core draws a ui "images" list as a
