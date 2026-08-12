@@ -785,6 +785,11 @@ export function readCfg(node) {
   if (!Array.isArray(d.loras.slots)) d.loras.slots = [];
   if (typeof d.loras.ui !== "object" || !d.loras.ui) d.loras.ui = {};
   if (typeof d.loras.seed !== "number") d.loras.seed = 0;
+  // the paint pass's own stack: same shape, no "on" (paint.lora_mode is the switch)
+  d.paint_loras = d.paint_loras && typeof d.paint_loras === "object" ? d.paint_loras : {};
+  if (!Array.isArray(d.paint_loras.slots)) d.paint_loras.slots = [];
+  if (typeof d.paint_loras.ui !== "object" || !d.paint_loras.ui) d.paint_loras.ui = {};
+  if (typeof d.paint_loras.seed !== "number") d.paint_loras.seed = 0;
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
   d.paint.on = !!d.paint.on;
   if (typeof d.paint.source !== "string") d.paint.source = "";
@@ -818,6 +823,7 @@ export function readCfg(node) {
   // value that changes nothing: the chain only starts at two
   d.paint.passes = Math.max(1, Math.min(PASS_MAX,
     typeof d.paint.passes === "number" ? Math.round(d.paint.passes) : 1));
+  if (!["main", "paint", "none"].includes(d.paint.lora_mode)) d.paint.lora_mode = "main";
   if (typeof d.paint.brush !== "number") d.paint.brush = 48;
   if (typeof d.paint.feather !== "number") d.paint.feather = 4;
   // clamped to the same range workspace.py clamps to, or a config holding an old 256
@@ -3954,6 +3960,85 @@ function lorasBody(node, body) {
   buildLoraPanel(node, host);
 }
 
+// The paint pass's OWN stack, hosted on the Paint column's LoRAs sub-tab. A separate
+// stack, never a mirror of the main one: a paint pass is usually a low-denoise detail
+// pass, which wants a detail LoRA and none of the style LoRAs that fight a subject
+// reference. The shared panel edits whichever stack the accessors point at, and the
+// accessors are read at event time, so re-pointing them here is safe: only one host is
+// ever on screen, and the main LoRAs tab re-points them back when it builds.
+function paintLorasBody(node, body) {
+  const cfg = node._rnCfg;
+  const PL = cfg.paint_loras;
+
+  // The routing: which model the paint branch carries. This is the switch, so there is
+  // no separate ON: "main" is exactly what every workflow did before this existed.
+  const modes = [
+    ["main", "Main LoRAs", "The paint pass uses the same model as the rest of the "
+                           + "workflow, main stack applied. The default, and what every "
+                           + "workflow did before this tab existed."],
+    ["paint", "Paint LoRAs", "This tab's stack, applied to the wired-in model. A branch, "
+                             + "not a chain: the main stack is not inherited."],
+    ["none", "No LoRAs", "The wired-in model bare. For a paint pass that wants the "
+                         + "checkpoint's own hands and faces."],
+  ];
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const seg = document.createElement("div");
+  seg.className = "rn-ws-seg";
+  for (const [value, label, tip] of modes) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.title = tip;
+    b.className = "rn-ws-segb" + (cfg.paint.lora_mode === value ? " on" : "");
+    b.onclick = () => { cfg.paint.lora_mode = value; writeCfg(node); render(node); };
+    seg.appendChild(b);
+  }
+  row.appendChild(seg);
+  body.appendChild(row);
+
+  const hint = document.createElement("div");
+  hint.className = "rn-ws-note";
+  hint.textContent = cfg.paint.lora_mode === "paint"
+    ? "Wire the paint_model output into Paint Render's model input, or this stack "
+      + "changes nothing. Trigger words are not added to the paint prompt."
+    : "This stack only runs on the Paint LoRAs routing above.";
+  body.appendChild(hint);
+
+  const seedRow = document.createElement("div");
+  seedRow.className = "rn-ws-row";
+  const slab = document.createElement("span");
+  slab.className = "rn-ws-note";
+  slab.textContent = "Seed";
+  const seed = document.createElement("input");
+  seed.type = "number";
+  seed.min = 0;
+  seed.value = PL.seed;
+  seed.style.cssText = "width:130px;background:#15171b;border:1px solid #33373d;"
+                     + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
+  seed.title = "Drives any slot set to a random strength range, separately from the "
+             + "main stack's seed.";
+  seed.addEventListener("change", () => {
+    PL.seed = Math.max(0, parseInt(seed.value, 10) || 0);
+    writeCfg(node);
+  });
+  seedRow.append(slab, seed);
+  body.appendChild(seedRow);
+
+  node._rnStackRead = () => ({ ui: cfg.paint_loras.ui, slots: cfg.paint_loras.slots });
+  node._rnStackWrite = (n, v) => {
+    cfg.paint_loras.ui = v.ui || {};
+    cfg.paint_loras.slots = v.slots || [];
+    writeCfg(n);
+  };
+  node._rnSlots = cfg.paint_loras.slots;
+  node._rnUI = cfg.paint_loras.ui;
+
+  const host = document.createElement("div");
+  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:80px";
+  body.appendChild(host);
+  buildLoraPanel(node, host);
+}
+
 // A row at the top of Advanced for things that ACT rather than configure.
 function advancedTools(node, body) {
   const row = document.createElement("div");
@@ -5269,7 +5354,44 @@ function paintBody(node, body) {
   const pside = document.createElement("div");
   pside.style.cssText = "display:flex;flex-direction:column;gap:6px";
   if (Math.abs(tScale - 1) >= 0.001) pside.style.zoom = String(tScale);
+
+  // THE COLUMN'S OWN TAB STRIP. Full screen painting means living on this tab, and
+  // every trip to the top strip to nudge a LoRA is a trip away from the canvas. The
+  // strip swaps only the column: the canvases stay put, which is the point. The rest
+  // of paintBody keeps building into pside exactly as before; when LoRAs is the active
+  // sub-tab the finished column is simply not shown. Cheap, and it keeps every handler
+  // in the column alive either way.
+  const sideTab = node.properties?.rn_paint_side === "loras" ? "loras" : "paint";
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-seg";
+  strip.style.cssText = "margin-bottom:2px;align-self:stretch";
+  for (const [value, label, tip] of [
+    ["paint", "Paint", "The painting controls."],
+    ["loras", "LoRAs", "The paint pass's own LoRA stack, separate from the main LoRAs "
+                       + "tab, and the routing that decides which model the paint pass "
+                       + "renders with."],
+  ]) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.title = tip;
+    b.style.flex = "1";
+    b.className = "rn-ws-segb" + (sideTab === value ? " on" : "");
+    b.onclick = () => {
+      (node.properties ||= {}).rn_paint_side = value === "paint" ? undefined : value;
+      render(node);
+    };
+    strip.appendChild(b);
+  }
+  psideBox.appendChild(strip);
   psideBox.appendChild(pside);
+  if (sideTab === "loras") {
+    pside.style.display = "none";
+    const ploras = document.createElement("div");
+    ploras.style.cssText = "display:flex;flex-direction:column;gap:6px";
+    if (Math.abs(tScale - 1) >= 0.001) ploras.style.zoom = String(tScale);
+    psideBox.appendChild(ploras);
+    paintLorasBody(node, ploras);
+  }
   cols.append(pmain, psideBox);
   body.appendChild(cols);
   if (fs) pmain.appendChild(topbarBox);    // re-appending MOVES it: the bar sits

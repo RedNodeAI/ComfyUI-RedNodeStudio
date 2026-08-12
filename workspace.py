@@ -655,6 +655,20 @@ def parse_config(config_json):
         "ui": lin.get("ui") if isinstance(lin.get("ui"), dict) else {},
         "seed": max(0, lseed),
     }
+    # The paint pass's OWN stack, separate from the tab above and never chained after
+    # it: a paint pass is usually a low-denoise detail pass, which wants a detail LoRA
+    # and none of the style LoRAs that fight a subject reference. Same shape as loras_cfg
+    # so the same panel edits both. No "on" flag: paint.lora_mode below is the switch.
+    pln = data.get("paint_loras") if isinstance(data.get("paint_loras"), dict) else {}
+    try:
+        plseed = int(pln.get("seed", 0))
+    except (TypeError, ValueError):
+        plseed = 0
+    paint_loras_cfg = {
+        "slots": pln.get("slots") if isinstance(pln.get("slots"), list) else [],
+        "ui": pln.get("ui") if isinstance(pln.get("ui"), dict) else {},
+        "seed": max(0, plseed),
+    }
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask
     # and the source ride the SAME sockets the edit mask and Img2Img already use
     # (edit_mask, output_latent, denoise), so the sampler chain needs no changes.
@@ -780,6 +794,13 @@ def parse_config(config_json):
     # now renders once.
     if isinstance(pin.get("passes"), (int, float)) and not isinstance(pin.get("passes"), bool):
         paint_cfg["passes"] = max(1, min(PAINT_PASS_MAX, int(pin["passes"])))
+    # Which model the paint branch carries: the main stack's ("main", the default and
+    # exactly what every workflow did before this existed), the paint stack applied to
+    # the raw wired model ("paint"), or the raw model bare ("none"). A branch, never a
+    # chain: chained, the paint pass would inherit the very style LoRAs it is trying
+    # to get away from.
+    plm = str(pin.get("lora_mode") or "main").lower()
+    paint_cfg["lora_mode"] = plm if plm in ("main", "paint", "none") else "main"
     tier = str(data.get("vram_tier") or "high").lower()
     tier = tier if tier in VRAM_TIERS else "high"
     studio_preset = str(data.get("studio_preset") or "").strip()
@@ -850,7 +871,7 @@ def parse_config(config_json):
             "studio_preset": studio_preset, "auto": auto, "latent": latent_cfg,
             "vram_tier": tier, "paint": paint_cfg,
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
-            "loras": loras_cfg}
+            "loras": loras_cfg, "paint_loras": paint_loras_cfg}
 
 
 def resize_dims(w, h, target):
@@ -1018,13 +1039,15 @@ class RedNodeStudioWorkspace:
     RETURN_TYPES = (WORKSPACE_TYPE, "IMAGE", "IMAGE", "IMAGE", "KREA2_SOURCES",
                     "MASK", "MASK", SETTINGS_TYPE, "LATENT", "FLOAT", "STRING",
                     "STRING", "STRING", "STRING", "IMAGE", "STRING", "FLOAT",
-                    postprocess.POST_TYPE, "MODEL", "STRING", "CLIP", "STRING")
+                    postprocess.POST_TYPE, "MODEL", "STRING", "CLIP", "STRING",
+                    "MODEL")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
                     "subject_prompt", "scene_prompt", "moodboard_prompt",
                     "i2i_image", "i2i_prompt", "denoise", "post_process",
-                    "model", "lora_keywords", "clip", "paint_prompt")
+                    "model", "lora_keywords", "clip", "paint_prompt",
+                    "paint_model")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1449,6 +1472,7 @@ class RedNodeStudioWorkspace:
         # node does it (same code), so the workspace can carry the whole rig
         lora_words = ""
         lora_clip = clip
+        raw_model = model            # the wired input, kept: the paint branch starts here
         lc = cfg["loras"]
         n_lora = sum(1 for x in lc["slots"] if x.get("type") != "title")
         if model is not None and lc["on"] and lc["slots"]:
@@ -1475,6 +1499,30 @@ class RedNodeStudioWorkspace:
         elif model is not None and lc["slots"] and not lc["on"]:
             print("[RedNode Workspace] the LoRAs tab is off; the model passes through "
                   "unchanged", flush=True)
+
+        # The paint branch: ONE INPUT, TWO BRANCHES, never a chain. apply_stack ends in
+        # load_lora_for_models, which clones before patching, so applying the paint
+        # stack to raw_model leaves the main stack's model untouched and vice versa.
+        # "main" hands back the main-stacked model, so a workflow that wires paint_model
+        # without ever opening the paint LoRA tab behaves exactly as the model output.
+        paint_mode = cfg["paint"].get("lora_mode", "main")
+        pls = cfg["paint_loras"]
+        paint_model = model
+        if paint_mode == "none" and raw_model is not None:
+            paint_model = raw_model
+        elif paint_mode == "paint":
+            if raw_model is not None and pls["slots"]:
+                paint_model, _pc, _pw, _pa = _lora.apply_stack(
+                    raw_model, clip, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": pls["ui"], "slots": pls["slots"]}),
+                    pls["seed"], unique_id, tag="Workspace Paint LoRAs")
+            elif raw_model is not None:
+                # asked for the paint stack with nothing in it: the honest reading is
+                # "no LoRAs on the paint pass", and saying so beats guessing "main"
+                paint_model = raw_model
+                print("[RedNode Workspace] paint LoRA routing is set to the paint stack "
+                      "but the stack is empty, so the paint branch carries the bare "
+                      "model.", flush=True)
 
         # the Post tab: a grading chain configured here, applied at the end of the
         # graph by RedNode Post Process (post processing happens after the sampler,
@@ -1564,7 +1612,11 @@ class RedNodeStudioWorkspace:
                 # LoRA keywords, sent through a studio node, and the result wired back
                 # into the render node's override inputs. Without this the paint prompt
                 # could only ever be encoded inside the render node.
-                str(cfg["paint"].get("prompt") or ""))
+                str(cfg["paint"].get("prompt") or ""),
+                # APPENDED: the paint branch's model. Wire it into Paint Render to give
+                # the paint pass its own LoRAs; on the default routing it is the same
+                # model the model output carries, so old graphs lose nothing.
+                paint_model)
 
 
 # ---------------------------------------------------------------------------
