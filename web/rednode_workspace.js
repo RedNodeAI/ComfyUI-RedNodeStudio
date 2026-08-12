@@ -7751,7 +7751,9 @@ function paintBody(node, body) {
     routeBox.appendChild(loraRow);
   }
 
-  const found = paintTargets();
+  // the rigs count as choices: a one-node graph has no renderer NODES at all,
+  // and gating this row on them alone made the whole Model choice vanish there
+  const found = allPaintChoices(cfg);
   if (found.length) {
     // healed above, before the reference row read the choice
     const rrow = document.createElement("div");
