@@ -23,6 +23,17 @@ class RedNodeImageReview(nodes.PreviewImage):
                    "browsable strip, and right-click Copy / Rerun (same seed) / Rerun with "
                    "new seeds.")
 
+    def save_images(self, images=None, **kw):
+        # The workspace's image output is legitimately None when the embedded
+        # sampler is off (external mode) or the queue was a paint run: nothing
+        # rendered internally, so there is nothing to preview. A quiet empty pane
+        # beats the TypeError core's save path throws on None.
+        if images is None:
+            print("[RedNode Image Review] no image on this run; nothing to preview",
+                  flush=True)
+            return {"ui": {"images": []}}
+        return super().save_images(images=images, **kw)
+
 
 NODE_CLASS_MAPPINGS = {"RedNodeImageReview": RedNodeImageReview}
 NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeImageReview": "RedNode Image Review"}

@@ -9978,6 +9978,19 @@ app.registerExtension({
     if (nodeData?.name !== NODE_NAME) return;
     injectStyle();
 
+    // The built-in paint pass returns its previews as this node's ui, which is how
+    // the result pane hears about them, but ComfyUI ALSO draws ui images under the
+    // node, and under a full panel that is a second, giant copy of the picture.
+    // Swallow the drawing; the pane already listens to the executed event itself.
+    const onExecutedWS = nodeType.prototype.onExecuted;
+    nodeType.prototype.onExecuted = function (output) {
+      const stripped = output && typeof output === "object"
+        ? { ...output, images: undefined } : output;
+      onExecutedWS?.call(this, stripped);
+      this.imgs = null;
+      this.images = undefined;
+    };
+
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       onCreated?.apply(this, arguments);
