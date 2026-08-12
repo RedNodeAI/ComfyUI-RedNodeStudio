@@ -113,7 +113,13 @@ export function makePicker(input, items, onPick, opts = {}) {
   };
 
   const build = () => {
-    const q = String(input.value || "").trim().toLowerCase();
+    // WHAT IS SET IS NOT A SEARCH. The field shows the current value, so on open the box
+    // is already full of it, and using that text as the filter showed a one-entry list
+    // of the thing you already had: the click that said "show me the channels" showed
+    // everything except the channels. Only text TYPED since the open filters; `before`
+    // is what the field held when it opened.
+    const typedQ = String(input.value || "").trim();
+    const q = typedQ === before.trim() ? "" : typedQ.toLowerCase();
     const cur = String(opts.current?.() ?? "");
     const raw = (items() || []).map((x) =>
       typeof x === "string" ? { value: x, hint: "" } : x);
@@ -122,8 +128,9 @@ export function makePicker(input, items, onPick, opts = {}) {
                              || String(x.hint || "").toLowerCase().includes(q));
 
     // Naming a channel is how one comes into existence, so a name that matches nothing
-    // is an offer rather than a dead end.
-    const typed = String(input.value || "").trim();
+    // is an offer rather than a dead end. Only for text typed this open: the value the
+    // field was already holding exists by definition.
+    const typed = q ? typedQ : "";
     if (opts.allowNew && typed && !raw.some((x) => x.value === typed)) {
       out = [{ value: typed, hint: "new channel", make: true }, ...out];
     }
@@ -195,6 +202,10 @@ export function makePicker(input, items, onPick, opts = {}) {
     place();
     sel = 0;
     build();
+    // The field opens holding its current value, and typing must SEARCH, not append to
+    // it: nobody hunting for a channel wants "Final_Imagesx". Selected, the first
+    // keystroke replaces the lot, and a click elsewhere still keeps it.
+    if (before) input.select();
     document.addEventListener("pointerdown", outside, true);
     window.addEventListener("resize", place);
   };
