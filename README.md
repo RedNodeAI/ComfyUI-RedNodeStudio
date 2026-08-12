@@ -6,7 +6,7 @@ post-processing in one pack.
 
 ![Painting a region in the panel, with the result beside it](images/paint.webp)
 
-**48 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**52 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -135,6 +135,37 @@ To use it you need:
 Companion to the [Forge Neo version](https://github.com/RedNodeAI/forge-neo-krea2-toolkit), same
 algorithms and same knobs.
 
+## The prompt frame
+
+Word order sets the framing. Open a prompt with the person and you get a close shot. Put the room
+first and the camera pulls back, same words. That is most of what "wide" and "close" actually mean
+to the model, and it is the first thing to go once a prompt is long enough to be useful.
+
+RedNode Prompt Frame splits the writing into Subject and Surroundings and puts a framing dial
+between them. Portrait, Half body, Balanced, Full scene, Roomscale. The two tight steps lead with
+the subject and open it with "A close view of" or "A three-quarter view of". Balanced and wider lead
+with the surroundings and set the subject inside them, then add a scale cue at the two widest steps,
+"seen full length" and "small in the distance". Your wording is never rewritten. Only the order and
+the joining words change.
+
+At Full scene and Roomscale a subject with nowhere to stand can drop out of the picture entirely.
+Two dropdowns build a placement, "beside the doorway", or type your own and it overrides both.
+
+Style blocks, twenty lighting setups and a brightness ramp slot in around that text at fixed
+positions. The second output is a notice line, and it does real work: it says when the style already
+lights its own scene and the lighting dropdown will fight it, when a wide framing has no placement,
+when the prompt has run past the 90 to 150 word working range, and when Portrait framing carries
+surroundings long enough to pull the camera back on their own. Wildcards and @keywords resolve in
+the finished text, seeded, the same as the Prompt Box.
+
+The panel builds its preview by asking the node, so what it shows on the canvas is what renders.
+
+RedNode Describe To Boxes fills those boxes from a picture. It sends the image to a local Ollama
+vision model, asks for five labelled sections, and hands back Subject, Surroundings and Light and
+colour on separate outputs, with the raw reply on a fourth in case the split came back malformed.
+Ollama is the only engine verified so far. The vision model is released from VRAM as soon as the
+reply lands, so it does not sit on top of your checkpoint for the rest of the queue.
+
 ## The nodes
 
 Every node carries its own description and tooltips inside ComfyUI, so hover anything you
@@ -192,6 +223,8 @@ what they did. Treat them as legacy.
 | Node | What it does |
 |---|---|
 | RedNode Prompt Box | Prompt editor with highlighting, @keyword macros and a seeded wildcard engine. |
+| RedNode Prompt Frame | Subject and Surroundings in their own boxes, emitted in the order that sets the framing. Five steps from Portrait to Roomscale, plus placement, style, lighting and a warnings output. |
+| RedNode Describe To Boxes | Reads a picture into Subject, Surroundings and Light and colour, ready to wire into the Frame. Runs on a local Ollama vision model. |
 | RedNode Prompt Combine | Prompt pieces joined in the order you drag them, typed, wired, or pulled wholesale from a channel. |
 | RedNode Text Combine | The plain string joiner: same rows, no prompt flag. |
 | RedNode Prompt Converter | Word-boundary gender and style swaps for captions. |
