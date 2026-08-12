@@ -1014,8 +1014,15 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
     if (not want or want == "(active rig)") and rigs:
         want = rigs[max(0, min(int(models_cfg.get("active", 0)),
                                len(rigs) - 1))]["name"]
-    for row in prompts_cfg.get("rows") or []:
+    rows = prompts_cfg.get("rows") or []
+    for row in rows:
         if row["rig"] == want and row["text"].strip():
+            return row
+    # An UNLINKED row serves any rig: with one rig on the tab, demanding the link
+    # be typed before anything renders is a tax, and an unlinked row with text is
+    # the obvious intent. An exact link still wins, so multi-rig stays exact.
+    for row in rows:
+        if not row["rig"].strip() and row["text"].strip():
             return row
     return None
 
@@ -1073,6 +1080,35 @@ def load_active_rig(cfg, name=""):
           % (rig["name"] or rig["checkpoint"] or rig["unet"], ", ".join(kinds)),
           flush=True)
     return rig["name"], model, clip, vae
+
+
+def load_paint_rig(cfg, name=""):
+    """The rig THROUGH the paint LoRA routing: what a paint node should render with.
+
+    "It should just be doing it automatically" (the user, 2026-08-12): the raw rig
+    goes through whichever stack the Paint LoRAs routing names, the paint stack when
+    it says paint, the main tab's stack otherwise, so every socket that hands a
+    model to a paint chain hands the SAME stacked model the routing promises.
+    """
+    nm, model, clip, vae = load_active_rig(cfg, name)
+    if model is None:
+        return nm, model, clip, vae
+    use_paint = cfg["paint"].get("lora_mode") == "paint"
+    lc = (cfg.get("paint_loras") if use_paint else cfg.get("loras")) or {}
+    slots = lc.get("slots") or []
+    if slots and lc.get("on", True):
+        model, c2, _w, applied = _lora.apply_stack(
+            model, clip, _lora.CUSTOM_SENTINEL,
+            json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
+            int(lc.get("seed", 0) or 0), None, tag="Paint rig LoRAs")
+        clip = c2 if c2 is not None else clip
+        print("[RedNode Workspace] paint rig %r, %s stack applied: %s"
+              % (nm or "(unnamed)", "paint" if use_paint else "main", applied),
+              flush=True)
+    else:
+        print("[RedNode Workspace] paint rig %r, no %s stack to apply"
+              % (nm or "(unnamed)", "paint" if use_paint else "main"), flush=True)
+    return nm, model, clip, vae
 
 
 def resize_dims(w, h, target):

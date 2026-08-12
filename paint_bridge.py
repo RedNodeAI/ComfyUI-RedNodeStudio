@@ -394,10 +394,12 @@ class RedNodePaintOut:
         # into a sampler fails loudly downstream, which is the honest failure.
         rig_model = rig_clip = rig_vae = None
         try:
-            from .workspace import load_active_rig, prompt_row_for, \
+            from .workspace import load_paint_rig, prompt_row_for, \
                 parse_config as _pc_full
             full = _pc_full(json.dumps(_workspace_cfg(prompt)))
-            _, rig_model, rig_clip, rig_vae = load_active_rig(full, name=rig)
+            # THROUGH the routed stack, never raw: a chain taking its model
+            # from here gets the LoRAs the routing promises, automatically.
+            _, rig_model, rig_clip, rig_vae = load_paint_rig(full, name=rig)
             # A pinned rig brings ITS Prompts-tab row: the parse already substituted
             # the ACTIVE rig's row when the paint box was silent, and this node may be
             # carrying a different model. Typed paint-box text still beats everything.
