@@ -716,12 +716,18 @@ def parse_config(config_json):
     for p in (prin.get("rows") if isinstance(prin.get("rows"), list) else []):
         if not isinstance(p, dict):
             continue
+        fr = p.get("frame") if isinstance(p.get("frame"), dict) else {}
         prompt_rows.append({
             "name": str(p.get("name") or ""),
             "rig": str(p.get("rig") or ""),
             "kind": "plain" if p.get("kind") == "plain" else "krea2",
             "text": str(p.get("text") or ""),
             "negative": str(p.get("negative") or ""),
+            # the Frame editor's fields, kept as the panel wrote them. row["text"]
+            # holds the ASSEMBLED prompt (the tab streams it in from the preview
+            # route), so nothing downstream needs to re-run the assembly.
+            "frame": {str(k): v for k, v in fr.items()
+                      if isinstance(v, (str, int, float, bool))},
         })
     prompts_cfg = {"rows": prompt_rows}
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask
@@ -1243,6 +1249,14 @@ class RedNodeStudioWorkspace:
                model=None, latent=None):
         latent_in = latent
         cfg = parse_config(config)
+        # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
+        # prompt's CLIP gen and everything after read `clip`, so a fill that arrived
+        # just before the LoRA block left them seeing None. A wired input always wins.
+        rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg)
+        if model is None and rig_model is not None:
+            model = rig_model
+        if clip is None and rig_clip is not None:
+            clip = rig_clip
         target = cfg["resize"]
         tabs = cfg["tabs"]
 
@@ -1621,16 +1635,6 @@ class RedNodeStudioWorkspace:
                 else:
                     prompts[tab_name] = autoprompt.strip_style_terms(
                         prompts[tab_name], mood_text)
-
-        # THE MODELS TAB FILLS WHAT IS NOT WIRED. A wired input always wins, which is
-        # how every other part of the panel behaves, so an existing graph keeps its
-        # loaders and a new one needs none. The rig loads once and is cached on its
-        # filenames; the LoRA tabs below then ride it exactly as they ride a wire.
-        rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg)
-        if model is None and rig_model is not None:
-            model = rig_model
-        if clip is None and rig_clip is not None:
-            clip = rig_clip
 
         # the LoRAs tab: the stack rides the model through, exactly as the LoRA Stack
         # node does it (same code), so the workspace can carry the whole rig

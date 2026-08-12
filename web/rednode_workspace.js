@@ -1,6 +1,7 @@
 import * as _appmod from "../../scripts/app.js";
 import { makePicker } from "./rednode_picker.js";
 import { makeHighlightEditor } from "./rednode_promptbox.js";
+import { buildFrameEditor } from "./rednode_prompt_frame.js";
 const { app } = _appmod;
 // ComfyApp is exported by every real frontend, but read it defensively: the mask-editor
 // round-trip degrades to the wired-mask fallback rather than breaking the whole panel
@@ -8108,11 +8109,48 @@ function modelsBody(node, body) {
 // ---------------------------------------------------------------- Prompts tab
 // Named prompts, each linked to a rig by name. Krea 2 prompts belong in the RedNode
 // Prompt Box style; anything else gets a plain box, which is the switch on each row.
+// The Prompt Frame's own field lists, read off the node definition so the tab and
+// the node can never disagree about a dropdown. One fetch per session.
+let FRAME_DEF = null;
+async function fetchFrameDef() {
+  if (FRAME_DEF) return FRAME_DEF;
+  try {
+    const r = await api.fetchApi("/object_info/RedNodePromptFrame");
+    const d = await r.json();
+    const req = d?.RedNodePromptFrame?.input?.required || {};
+    const opt = d?.RedNodePromptFrame?.input?.optional || {};
+    const all = { ...req, ...opt };
+    const listOf = (n) => (Array.isArray(all[n]?.[0]) ? all[n][0] : []);
+    const defOf = (n) => all[n]?.[1]?.default;
+    FRAME_DEF = {
+      opts: {
+        style: listOf("style"), framing: listOf("framing"),
+        framing_push: listOf("framing_push"),
+        placement_where: listOf("placement_where"),
+        placement_what: listOf("placement_what"), lighting: listOf("lighting"),
+        brightness_min: all.brightness?.[1]?.min ?? -3,
+        brightness_max: all.brightness?.[1]?.max ?? 3,
+        push_tooltip: all.framing_push?.[1]?.tooltip || "",
+      },
+      defaults: {
+        style: defOf("style") ?? "None", style_extra: "",
+        subject: "", surroundings: "",
+        framing: defOf("framing") ?? "Balanced",
+        framing_push: defOf("framing_push") ?? "Off",
+        placement_where: defOf("placement_where") ?? "None",
+        placement_what: defOf("placement_what") ?? "None",
+        placement: "", lighting: defOf("lighting") ?? "None",
+        brightness: defOf("brightness") ?? 0, light_and_colour: "",
+      },
+    };
+  } catch (e) { /* server not up; the tab shows a note instead */ }
+  return FRAME_DEF;
+}
+
 function promptsBody(node, body) {
   const cfg = node._rnCfg;
   const R = cfg.prompts.rows;
-  for (const ed of node._rnPromptEds || []) ed.destroy();
-  node._rnPromptEds = [];
+
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -8166,14 +8204,35 @@ function promptsBody(node, body) {
     box.appendChild(head);
 
     if (row.kind === "krea2") {
-      // the real Prompt Box surface: live __wildcard__ and @keyword highlighting,
-      // re-coloured when the keyword library changes. Same editor, new home.
-      const ed = makeHighlightEditor(row.text);
-      ed.wrap.style.cssText += ";position:relative;min-height:72px;height:96px;"
-                             + "resize:vertical;overflow:auto";
-      ed.area.addEventListener("change", () => { row.text = ed.area.value; writeCfg(node); });
-      (node._rnPromptEds ||= []).push(ed);       // destroyed on the next render pass
-      box.appendChild(ed.wrap);
+      // THE PROMPT FRAME ITSELF, one for one: the same buildFrameEditor the node's
+      // panel calls, values living in row.frame, the assembled prompt streaming into
+      // row.text through the same server preview the node uses. What the user asked
+      // for three times, drawn by the code that already existed.
+      if (!FRAME_DEF) {
+        const wait = document.createElement("div");
+        wait.className = "rn-ws-note";
+        wait.textContent = "Loading the Prompt Frame fields...";
+        box.appendChild(wait);
+        fetchFrameDef().then(() => render(node));
+      } else {
+        row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
+        const host = document.createElement("div");
+        const F = {
+          opts: FRAME_DEF.opts,
+          get: (n) => (row.frame[n] !== undefined ? row.frame[n]
+                                                  : FRAME_DEF.defaults[n]),
+          set: (n, v) => { row.frame[n] = v; },
+          dirty: () => writeCfg(node),
+          onPreview: (assembled) => {
+            // the row's text IS the assembled prompt, so everything downstream
+            // (the paint fallback, prompt_row_for) reads it with no new plumbing
+            if (row.text !== assembled) { row.text = assembled; writeCfg(node); }
+          },
+        };
+        const ed = buildFrameEditor(host, F);
+        ed.previewNow();
+        box.appendChild(host);
+      }
     } else {
       const text = document.createElement("textarea");
       text.rows = 3;

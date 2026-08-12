@@ -196,20 +196,14 @@ function keepSize(node, key, box) {
   (node._rnPfSizeObs ||= []).push(ro);    // held so it is not garbage collected
 }
 
-function buildPanel(node) {
-  if (!node.addDOMWidget || node._rnPfPanel) return;
-
-  const W = {};
-  for (const name of FIELDS) W[name] = node.widgets?.find((w) => w.name === name);
-  // widgets arrive over a couple of frames on a fresh graph
-  if (FIELDS.some((n) => !W[n])) { requestAnimationFrame(() => buildPanel(node)); return; }
-
-  for (const name of FIELDS) {
-    const w = W[name];
-    w.type = "hidden"; w.hidden = true; w.computeSize = () => [0, -4];
-  }
-
-  const wrap = el("div", "rn-pf");
+// THE WHOLE FRAME EDITOR, host-agnostic: the node's panel and the Workspace's
+// Prompts tab both call this, so there is exactly one implementation of the thing
+// the user keeps asking for by name. F is the value store: get/set by field name,
+// opts for the dropdown lists, dirty() when something changed, onPreview(prompt,
+// notice) when the server has assembled the live prompt.
+export function buildFrameEditor(wrap, F) {
+  injectStyle();
+  wrap.classList.add("rn-pf");
 
   // ---- head: presets ------------------------------------------------------------
   const head = el("div", "rn-pf-head");
@@ -218,21 +212,19 @@ function buildPanel(node) {
   presetSel.style.maxWidth = "180px";
   fillSelect(presetSel, ["Load an example..."], "Load an example...");
   const presetBtn = el("button", "rn-pf-btn", "Load");
-  const fold = el("button", "rn-pf-btn", "▾ tools");
   head.appendChild(presetSel);
   head.appendChild(presetBtn);
-  head.appendChild(fold);
   wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------
   const styleSel = document.createElement("select");
-  fillSelect(styleSel, W.style.options?.values || [], W.style.value);
+  fillSelect(styleSel, F.opts.style || [], F.get("style"));
   wrap.appendChild(labelledRow("Style", styleSel));
 
   const styleExtra = document.createElement("textarea");
   styleExtra.rows = 2;
   styleExtra.placeholder = "your own style wording (optional)";
-  styleExtra.value = W.style_extra.value || "";
+  styleExtra.value = F.get("style_extra") || "";
   wrap.appendChild(styleExtra);
 
   // ---- subject / surroundings -----------------------------------------------------
@@ -242,7 +234,7 @@ function buildPanel(node) {
   const subject = document.createElement("textarea");
   subject.rows = 3;
   subject.placeholder = "a woman in her thirties, red waterproof jacket, rucksack";
-  subject.value = W.subject.value || "";
+  subject.value = F.get("subject") || "";
   wrap.appendChild(subjLbl); wrap.appendChild(subject);
 
   const surrLbl = el("div", "rn-pf-lbl");
@@ -251,18 +243,18 @@ function buildPanel(node) {
   const surroundings = document.createElement("textarea");
   surroundings.rows = 3;
   surroundings.placeholder = "a mountain ridge under heavy cloud, wet black rock, a thin path";
-  surroundings.value = W.surroundings.value || "";
+  surroundings.value = F.get("surroundings") || "";
   wrap.appendChild(surrLbl); wrap.appendChild(surroundings);
 
   // ---- framing slider --------------------------------------------------------------
-  const framings = W.framing.options?.values || [];
+  const framings = F.opts.framing || [];
   const frameWrap = el("div", "rn-pf-slider");
   const frameRange = document.createElement("input");
   frameRange.type = "range";
   frameRange.min = "0"; frameRange.max = String(Math.max(0, framings.length - 1));
   frameRange.step = "1";
-  frameRange.value = String(Math.max(0, framings.indexOf(W.framing.value)));
-  const frameVal = el("div", "rn-pf-val", W.framing.value);
+  frameRange.value = String(Math.max(0, framings.indexOf(F.get("framing"))));
+  const frameVal = el("div", "rn-pf-val", F.get("framing"));
   frameWrap.appendChild(frameRange); frameWrap.appendChild(frameVal);
   const frameLbl = el("div", "rn-pf-lbl");
   frameLbl.appendChild(el("b", null, "Framing"));
@@ -273,8 +265,8 @@ function buildPanel(node) {
   const pushRow = el("div", "rn-pf-row");
   pushRow.appendChild(el("label", null, "Push"));
   const pushSel = document.createElement("select");
-  fillSelect(pushSel, W.framing_push.options?.values || [], W.framing_push.value);
-  pushSel.title = W.framing_push.tooltip || "";
+  fillSelect(pushSel, F.opts.framing_push || [], F.get("framing_push"));
+  pushSel.title = F.opts.push_tooltip || "";
   pushSel.className = "grow";
   pushRow.appendChild(pushSel);
   wrap.appendChild(pushRow);
@@ -284,8 +276,8 @@ function buildPanel(node) {
   placeRow.appendChild(el("label", null, "Placement"));
   const whereSel = document.createElement("select");
   const whatSel = document.createElement("select");
-  fillSelect(whereSel, W.placement_where.options?.values || [], W.placement_where.value);
-  fillSelect(whatSel, W.placement_what.options?.values || [], W.placement_what.value);
+  fillSelect(whereSel, F.opts.placement_where || [], F.get("placement_where"));
+  fillSelect(whatSel, F.opts.placement_what || [], F.get("placement_what"));
   const pgrow = el("div", "grow");
   pgrow.style.display = "flex"; pgrow.style.gap = "6px";
   whereSel.style.flex = "1"; whatSel.style.flex = "1.4";
@@ -296,21 +288,21 @@ function buildPanel(node) {
   const placement = document.createElement("input");
   placement.type = "text";
   placement.placeholder = "or type it: standing at the water's edge";
-  placement.value = W.placement.value || "";
+  placement.value = F.get("placement") || "";
   wrap.appendChild(labelledRow("", placement));
 
   // ---- lighting + brightness ----------------------------------------------------------
   const lightSel = document.createElement("select");
-  fillSelect(lightSel, W.lighting.options?.values || [], W.lighting.value);
+  fillSelect(lightSel, F.opts.lighting || [], F.get("lighting"));
   wrap.appendChild(labelledRow("Lighting", lightSel));
 
   const brightWrap = el("div", "rn-pf-slider");
   const brightRange = document.createElement("input");
   brightRange.type = "range";
-  brightRange.min = String(W.brightness.options?.min ?? -3);
-  brightRange.max = String(W.brightness.options?.max ?? 3);
+  brightRange.min = String(F.opts.brightness_min ?? -3);
+  brightRange.max = String(F.opts.brightness_max ?? 3);
   brightRange.step = "1";
-  brightRange.value = String(W.brightness.value ?? 0);
+  brightRange.value = String(F.get("brightness") ?? 0);
   const brightVal = el("div", "rn-pf-val", "");
   brightWrap.appendChild(brightRange); brightWrap.appendChild(brightVal);
   wrap.appendChild(labelledRow("Brightness", brightWrap));
@@ -318,7 +310,7 @@ function buildPanel(node) {
   const lac = document.createElement("textarea");
   lac.rows = 2;
   lac.placeholder = "palette and mood: muted slate and rust, quiet and still";
-  lac.value = W.light_and_colour.value || "";
+  lac.value = F.get("light_and_colour") || "";
   wrap.appendChild(lac);
 
   // ---- notice + preview ----------------------------------------------------------------
@@ -331,66 +323,45 @@ function buildPanel(node) {
   const brightLabel = (v) => (v === 0 ? "neutral" : (v > 0 ? "+" : "") + v);
 
   function pushToWidgets() {
-    W.style.value = styleSel.value;
-    W.style_extra.value = styleExtra.value;
-    W.subject.value = subject.value;
-    W.surroundings.value = surroundings.value;
-    W.framing.value = framings[Number(frameRange.value)] ?? W.framing.value;
-    W.framing_push.value = pushSel.value;
-    W.placement_where.value = whereSel.value;
-    W.placement_what.value = whatSel.value;
-    W.placement.value = placement.value;
-    W.lighting.value = lightSel.value;
-    W.brightness.value = Number(brightRange.value);
-    W.light_and_colour.value = lac.value;
-    frameVal.textContent = W.framing.value;
-    brightVal.textContent = brightLabel(W.brightness.value);
-  }
-
-  function pullFromWidgets() {
-    styleSel.value = W.style.value;
-    styleExtra.value = W.style_extra.value || "";
-    subject.value = W.subject.value || "";
-    surroundings.value = W.surroundings.value || "";
-    const fi = framings.indexOf(W.framing.value);
-    if (fi >= 0) frameRange.value = String(fi);
-    pushSel.value = W.framing_push.value;
-    whereSel.value = W.placement_where.value;
-    whatSel.value = W.placement_what.value;
-    placement.value = W.placement.value || "";
-    lightSel.value = W.lighting.value;
-    brightRange.value = String(W.brightness.value ?? 0);
-    lac.value = W.light_and_colour.value || "";
-    frameVal.textContent = W.framing.value;
+    F.set("style", styleSel.value);
+    F.set("style_extra", styleExtra.value);
+    F.set("subject", subject.value);
+    F.set("surroundings", surroundings.value);
+    F.set("framing", framings[Number(frameRange.value)] ?? F.get("framing"));
+    F.set("framing_push", pushSel.value);
+    F.set("placement_where", whereSel.value);
+    F.set("placement_what", whatSel.value);
+    F.set("placement", placement.value);
+    F.set("lighting", lightSel.value);
+    F.set("brightness", Number(brightRange.value));
+    F.set("light_and_colour", lac.value);
+    frameVal.textContent = F.get("framing");
     brightVal.textContent = brightLabel(Number(brightRange.value));
   }
 
-  // font size and colour follow the node's own widgets, which stay visible
-  const LOOK = {};
-  for (const n of LOOK_FIELDS) LOOK[n] = node.widgets?.find((w) => w.name === n);
-  const textish = [styleExtra, subject, surroundings, placement, lac];
-  function applyLook() {
-    const px = Number(LOOK.font_size?.value) || 13;
-    const col = COLORS[LOOK.text_color?.value] || "";
-    for (const t of textish) {
-      t.style.fontSize = px + "px";
-      t.style.color = col || "";
-    }
-    out.style.fontSize = Math.max(10, px - 1) + "px";
+  function pullFromWidgets() {
+    styleSel.value = F.get("style");
+    styleExtra.value = F.get("style_extra") || "";
+    subject.value = F.get("subject") || "";
+    surroundings.value = F.get("surroundings") || "";
+    const fi = framings.indexOf(F.get("framing"));
+    if (fi >= 0) frameRange.value = String(fi);
+    pushSel.value = F.get("framing_push");
+    whereSel.value = F.get("placement_where");
+    whatSel.value = F.get("placement_what");
+    placement.value = F.get("placement") || "";
+    lightSel.value = F.get("lighting");
+    brightRange.value = String(F.get("brightness") ?? 0);
+    lac.value = F.get("light_and_colour") || "";
+    frameVal.textContent = F.get("framing");
+    brightVal.textContent = brightLabel(Number(brightRange.value));
   }
-  for (const n of LOOK_FIELDS) {
-    const w = LOOK[n];
-    if (!w) continue;
-    const prev = w.callback;
-    w.callback = function () { prev?.apply(this, arguments); applyLook(); };
-  }
-  applyLook();
 
   let timer = null;
   async function preview() {
     try {
       const body = {};
-      for (const name of FIELDS) body[name] = W[name].value;
+      for (const name of FIELDS) body[name] = F.get(name);
       const r = await fetch("/rednode/prompt_frame_preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -404,12 +375,13 @@ function buildPanel(node) {
         .replace(/(?<![A-Za-z0-9_])@[A-Za-z0-9_]+/g, (m) => `<span class="rn-pf-kw">${m}</span>`);
       if (j.notice) { note.textContent = j.notice; note.className = "rn-pf-note on"; }
       else { note.textContent = `${j.words} words`; note.className = "rn-pf-note ok"; }
+      F.onPreview?.(j.prompt || "", j.notice || "");
     } catch (e) { /* server not up */ }
   }
 
   function changed() {
     pushToWidgets();
-    node.graph?.setDirtyCanvas(true, false);
+    F.dirty?.();
     clearTimeout(timer);
     timer = setTimeout(preview, DEBOUNCE_MS);
   }
@@ -444,6 +416,68 @@ function buildPanel(node) {
       });
     } catch (e) { /* API not up */ }
   })();
+
+  return { head, refresh: pullFromWidgets, collect: pushToWidgets,
+           previewNow: preview, changed,
+           boxes: { styleExtra, subject, surroundings, placement, lac, out } };
+}
+
+function buildPanel(node) {
+  if (!node.addDOMWidget || node._rnPfPanel) return;
+
+  const W = {};
+  for (const name of FIELDS) W[name] = node.widgets?.find((w) => w.name === name);
+  // widgets arrive over a couple of frames on a fresh graph
+  if (FIELDS.some((n) => !W[n])) { requestAnimationFrame(() => buildPanel(node)); return; }
+
+  for (const name of FIELDS) {
+    const w = W[name];
+    w.type = "hidden"; w.hidden = true; w.computeSize = () => [0, -4];
+  }
+
+  const wrap = el("div", "rn-pf");
+  const F = {
+    opts: {
+      style: W.style.options?.values || [],
+      framing: W.framing.options?.values || [],
+      framing_push: W.framing_push.options?.values || [],
+      placement_where: W.placement_where.options?.values || [],
+      placement_what: W.placement_what.options?.values || [],
+      lighting: W.lighting.options?.values || [],
+      brightness_min: W.brightness.options?.min ?? -3,
+      brightness_max: W.brightness.options?.max ?? 3,
+      push_tooltip: W.framing_push.tooltip || "",
+    },
+    get: (n) => W[n].value,
+    set: (n, v) => { W[n].value = v; },
+    dirty: () => node.graph?.setDirtyCanvas(true, false),
+  };
+  const editor = buildFrameEditor(wrap, F);
+  const fold = el("button", "rn-pf-btn", "▾ tools");
+  editor.head.appendChild(fold);
+  const { styleExtra, subject, surroundings, placement, lac, out } = editor.boxes;
+  const pullFromWidgets = editor.refresh;
+
+  // font size and colour follow the node's own widgets, which stay visible
+  const LOOK = {};
+  for (const n of LOOK_FIELDS) LOOK[n] = node.widgets?.find((w) => w.name === n);
+  const textish = [styleExtra, subject, surroundings, placement, lac];
+  function applyLook() {
+    const px = Number(LOOK.font_size?.value) || 13;
+    const col = COLORS[LOOK.text_color?.value] || "";
+    for (const t of textish) {
+      t.style.fontSize = px + "px";
+      t.style.color = col || "";
+    }
+    out.style.fontSize = Math.max(10, px - 1) + "px";
+  }
+  for (const n of LOOK_FIELDS) {
+    const w = LOOK[n];
+    if (!w) continue;
+    const prev = w.callback;
+    w.callback = function () { prev?.apply(this, arguments); applyLook(); };
+  }
+  applyLook();
 
   // every box you can drag, restored to the height you left it at
   for (const [key, box] of [["style_extra", styleExtra], ["subject", subject],
@@ -514,8 +548,8 @@ function buildPanel(node) {
   node._rnPfApplyFold = applyFold;
   applyFold();                       // honour the state the workflow was saved with
 
-  pushToWidgets();
-  preview();
+  editor.collect();
+  editor.previewNow();
 
   const sz = node.computeSize();
   if (node.size[0] < 360) node.size[0] = 360;
