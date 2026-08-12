@@ -298,6 +298,7 @@ function render(node) {
   makePicker(sel, options, (v) => { d.channel = v; writeCfg(node); sync(node, true); }, {
     current: () => d.channel,
     emptyLabel: "none, use the rows below only",
+    recent: "channels",          // one list, shared with the Grabber's channel field
   });
   head.append(lab, sel);
   root.appendChild(head);

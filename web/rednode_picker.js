@@ -31,6 +31,7 @@ const CSS = `
 .rn-pick-drop .hint { float: right; margin-left: 14px; font-size: 10px; opacity: .45; }
 .rn-pick-drop .make { color: #86d3a1; }
 .rn-pick-drop .cur { color: #f0c58a; }
+.rn-pick-drop .rec .hint { color: #86d3a1; opacity: .7; }
 .rn-pick-drop .none { opacity: .5; cursor: default; }
 .rn-pick-drop .none:hover { background: none; }
 `;
@@ -40,6 +41,30 @@ if (!document.getElementById("rn-pick-css")) {
   style.id = "rn-pick-css";
   style.textContent = CSS;
   document.head.appendChild(style);
+}
+
+// RECENTLY USED. A list that only sorts alphabetically makes you hunt for the channel
+// you named forty seconds ago, and the one just created is the one most likely wanted
+// next. Recents ride in localStorage rather than the workflow: it is a record of what
+// this person has been doing, not of what the graph is, and a workflow handed to
+// somebody else should not arrive carrying it. Pickers that share a `recent` key share
+// the list, which is the point when two nodes choose from the same channels.
+const RECENT_MAX = 8;
+
+function readRecent(key) {
+  if (!key) return [];
+  try {
+    const v = JSON.parse(localStorage.getItem("rn-recent-" + key) || "[]");
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch (e) { return []; }               // private mode, or somebody else's data
+}
+
+function pushRecent(key, value) {
+  if (!key || !value) return;
+  try {
+    const next = [value, ...readRecent(key).filter((x) => x !== value)].slice(0, RECENT_MAX);
+    localStorage.setItem("rn-recent-" + key, JSON.stringify(next));
+  } catch (e) { /* storage full or blocked: recents are a convenience, not state */ }
 }
 
 /** Keep canvas gestures off a floating element: LiteGraph reads them globally. */
@@ -62,6 +87,9 @@ function stopEvents(el) {
  * opts.clearOnPick -> empty the field after a pick, for add-to-a-list fields where
  *                the picked value lands somewhere else and the field is only a door.
  * opts.emptyLabel -> text for a "none" entry at the top. Omit for no empty option.
+ * opts.recent  -> a key. Picks are remembered under it and float to the top of an
+ *                 unfiltered list, marked "recent". Two pickers sharing a key share
+ *                 the list.
  */
 export function makePicker(input, items, onPick, opts = {}) {
   let drop = null, list = [], sel = 0, before = "";
@@ -102,6 +130,17 @@ export function makePicker(input, items, onPick, opts = {}) {
     if (opts.emptyLabel && !q) {
       out = [...out, { value: "", label: opts.emptyLabel, empty: true }];
     }
+    // Recently used float up, newest first, and say so. Only while the list is
+    // unfiltered: once you are typing, the ranking you want is the one you asked for.
+    if (!q && opts.recent) {
+      const recent = readRecent(opts.recent).filter((r) => r !== cur);
+      for (const name of [...recent].reverse()) {
+        const i = out.findIndex((x) => x.value === name && !x.make && !x.empty);
+        if (i < 0) continue;
+        const [hit] = out.splice(i, 1);
+        out.unshift({ ...hit, hint: hit.hint || "recent", rec: true });
+      }
+    }
     // whatever is set leads the list, so the field always shows what it currently is
     if (!q && cur) {
       const i = out.findIndex((x) => x.value === cur);
@@ -121,6 +160,7 @@ export function makePicker(input, items, onPick, opts = {}) {
       const d = document.createElement("div");
       d.textContent = x.label ?? (x.value || "");
       if (x.make) d.classList.add("make");
+      if (x.rec) d.classList.add("rec");
       if (x.empty) d.classList.add("none");
       if (!x.make && !x.empty && x.value === cur) d.classList.add("cur");
       const hint = x.hint || (!x.make && !x.empty && x.value === cur ? "current" : "");
@@ -141,6 +181,7 @@ export function makePicker(input, items, onPick, opts = {}) {
     input.value = opts.clearOnPick ? "" : x.value;
     before = input.value;
     close(false);
+    if (x.value) pushRecent(opts.recent, x.value);   // creating one counts as using it
     onPick(x.value);
   };
 

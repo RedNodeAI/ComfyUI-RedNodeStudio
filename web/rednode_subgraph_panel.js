@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { makePicker } from "./rednode_picker.js";
 import { membersOf, memberView, deriveLabel, nextAutoName, socketOrder,
          shortLabel, autoGroups, uniqueChannelName,
          labelPublishers } from "./rednode_channels.js";
@@ -369,62 +370,50 @@ function knownChannels() {
 }
 
 /**
- * The channel field: a dropdown of what already exists, and still typeable for a new
- * one. A plain text box meant retyping the same name at both ends and getting it subtly
+ * The channel field: type to search what already exists, type anything else to make it.
+ * A plain text box meant retyping the same name at both ends and getting it subtly
  * wrong, which is the exact Get/Set failure this pair is supposed to remove.
  */
 function channelField(node, d, onChange) {
-  // A native select, NOT LiteGraph.ContextMenu. That one draws at canvas scale, so at
-  // any sensible zoom it comes out as an unreadable four-pixel menu floating off the
-  // side of the node. Anything inside a DOM panel has to be DOM.
+  // The picker the Combine channel field already uses, which is the LoRA picker, which
+  // is the point: a second search box that behaves differently is worse than no second
+  // search box. A native <select> is fine at five channels and unusable at fifty, and
+  // one workflow ends up with a channel per prompt fragment, per model, per stage. This
+  // was a select plus a "type a new name" entry that swapped in a hidden text box, so
+  // naming a channel was two decisions and finding one was scrolling. Typing does both.
+  //
+  // Still DOM, never LiteGraph.ContextMenu: that draws at canvas scale, so at any
+  // sensible zoom it is an unreadable few pixels floating off the side of the node.
   const wrap = document.createElement("span");
   wrap.style.cssText = "display:flex;gap:5px;flex:1;min-width:0";
-  const names = knownChannels();
-  const sel = document.createElement("select");
-  sel.style.cssText = "flex:1;min-width:0";
-  sel.title = "Channels that already exist in this workflow.";
-  const cur = d.channel.trim();
-  const opts = [...new Set([...(cur ? [cur] : []), ...names])];
-  if (!opts.length) {
-    const o = document.createElement("option");
-    o.value = "";
-    o.textContent = "no channels yet";
-    sel.appendChild(o);
-  }
-  for (const name of opts) {
-    const o = document.createElement("option");
-    o.value = name;
-    o.textContent = name;
-    o.selected = name === cur;
-    sel.appendChild(o);
-  }
-  const NEW = "… type a new name";
-  const other = document.createElement("option");
-  other.value = "__new__";
-  other.textContent = NEW;
-  sel.appendChild(other);
-
   const box = document.createElement("input");
   box.type = "text";
-  box.value = cur;
+  box.value = d.channel.trim();
   box.placeholder = "channel name";
-  box.style.cssText = "flex:1;min-width:0;display:none";
-  const commit = () => onChange(box.value);
-  box.onchange = commit;
-  box.onblur = commit;
+  box.style.cssText = "flex:1;min-width:0";
+  box.title = "Click and type to search this workflow's channels. A name matching "
+            + "nothing is offered as a new one. Recently used come first.";
 
-  sel.onchange = () => {
-    if (sel.value === "__new__") {
-      sel.style.display = "none";
-      box.style.display = "";
-      box.value = "";
-      box.focus();
-      return;
+  // Counted, because "scene_prompt, empty" and "scene_prompt, 3 values" are the
+  // difference between a typo at the other end and a channel not wired up yet. The
+  // list is rebuilt per keystroke, so a Send added meanwhile shows up without a reopen.
+  const items = () => {
+    const carried = new Map();
+    for (const m of allSends()) {
+      if (m.channel) carried.set(m.channel, (carried.get(m.channel) || 0) + 1);
     }
-    onChange(sel.value);
+    return knownChannels().map((name) => {
+      const n = carried.get(name) || 0;
+      return { value: name, hint: n ? `${n} value${n === 1 ? "" : "s"}` : "empty" };
+    });
   };
-  if (!opts.length) { sel.style.display = "none"; box.style.display = ""; }
-  wrap.append(sel, box);
+
+  makePicker(box, items, (v) => onChange(v), {
+    current: () => d.channel.trim(),
+    allowNew: true,
+    recent: "channels",          // one list, shared with the Combine channel field
+  });
+  wrap.append(box);
   return wrap;
 }
 
