@@ -821,6 +821,9 @@ export function readCfg(node) {
     if (typeof r.scheduler !== "string") r.scheduler = "simple";
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
   }
+  if (d.models.sampler_mode !== "internal") d.models.sampler_mode = "external";
+  if (typeof d.models.seed !== "number") d.models.seed = 0;
+  if (typeof d.models.seed_random !== "boolean") d.models.seed_random = true;
   d.models.active = Math.max(0, Math.min(
     typeof d.models.active === "number" ? Math.round(d.models.active) : 0,
     Math.max(0, d.models.rigs.length - 1)));
@@ -8171,6 +8174,55 @@ function modelsBody(node, body) {
          "Wires straight into a KSampler's scheduler.");
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for detailer passes, on its own output.");
+
+  // The embedded sampler: comfy core's KSampler run inside the node. External is
+  // the default; the five settings above still ride the outputs either way.
+  const smRow = document.createElement("div");
+  smRow.className = "rn-ws-row";
+  const smSeg = document.createElement("div");
+  smSeg.className = "rn-ws-seg";
+  for (const [value, label, tip] of [
+    ["external", "External sampler", "Wire your own KSampler: model, clip and the "
+                                     + "five settings above come out as sockets."],
+    ["internal", "Built-in sampler", "The node runs comfy core's KSampler and the "
+                                     + "VAE decode itself: positive, negative and "
+                                     + "the finished image come out as sockets."],
+  ]) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.title = tip;
+    b.className = "rn-ws-segb" + (M.sampler_mode === value ? " on" : "");
+    b.onclick = () => { M.sampler_mode = value; writeCfg(node); render(node); };
+    smSeg.appendChild(b);
+  }
+  smRow.appendChild(smSeg);
+  body.appendChild(smRow);
+  if (M.sampler_mode === "internal") {
+    const seedRow = document.createElement("div");
+    seedRow.className = "rn-ws-row";
+    const slab = document.createElement("span");
+    slab.className = "rn-ws-note";
+    slab.style.cssText = "flex:none;width:110px";
+    slab.textContent = "Seed";
+    const seed = document.createElement("input");
+    seed.type = "number";
+    seed.min = 0;
+    seed.value = M.seed;
+    seed.disabled = M.seed_random;
+    seed.style.cssText = "width:150px;background:#15171b;border:1px solid #33373d;"
+                       + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
+    seed.addEventListener("change", () => {
+      M.seed = Math.max(0, parseInt(seed.value, 10) || 0);
+      writeCfg(node);
+    });
+    const rnd = document.createElement("button");
+    rnd.className = "rn-ws-segb" + (M.seed_random ? " on" : "");
+    rnd.textContent = "Randomize";
+    rnd.title = "A fresh seed every queue. Off uses the number, for repeatable runs.";
+    rnd.onclick = () => { M.seed_random = !M.seed_random; writeCfg(node); render(node); };
+    seedRow.append(slab, seed, rnd);
+    body.appendChild(seedRow);
+  }
 }
 
 // ---------------------------------------------------------------- Prompts tab

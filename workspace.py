@@ -722,8 +722,20 @@ def parse_config(config_json):
         active = int(min_.get("active", 0))
     except (TypeError, ValueError):
         active = 0
+    try:
+        mseed = int(min_.get("seed", 0))
+    except (TypeError, ValueError):
+        mseed = 0
     models_cfg = {"rigs": rigs,
-                  "active": max(0, min(active, len(rigs) - 1)) if rigs else 0}
+                  "active": max(0, min(active, len(rigs) - 1)) if rigs else 0,
+                  # the embedded sampler: comfy core's own KSampler run inside the
+                  # build, so the graph is the workspace and an image. External is
+                  # the default and exactly what every workflow did before.
+                  "sampler_mode": ("internal" if min_.get("sampler_mode") == "internal"
+                                   else "external"),
+                  "seed": max(0, mseed),
+                  "seed_random": (True if min_.get("seed_random") is None
+                                  else bool(min_.get("seed_random")))}
     # The Prompts tab: named prompts, each linked to a rig by the rig's NAME, each
     # marked with which editor draws it (the Krea 2 styled box, or a plain one for
     # every other model). Authoring and storage; encoding stays downstream.
@@ -1218,7 +1230,8 @@ class RedNodeStudioWorkspace:
                     postprocess.POST_TYPE, "MODEL", "STRING", "CLIP", "STRING",
                     "MODEL", "VAE", "INT", "FLOAT",
                     comfy.samplers.KSampler.SAMPLERS,
-                    comfy.samplers.KSampler.SCHEDULERS, "INT")
+                    comfy.samplers.KSampler.SCHEDULERS, "INT",
+                    "CONDITIONING", "CONDITIONING", "IMAGE")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
@@ -1226,7 +1239,8 @@ class RedNodeStudioWorkspace:
                     "i2i_image", "i2i_prompt", "denoise", "post_process",
                     "model", "lora_keywords", "clip", "paint_prompt",
                     "paint_model", "vae",
-                    "steps", "cfg", "sampler_name", "scheduler", "detailer_steps")
+                    "steps", "cfg", "sampler_name", "scheduler", "detailer_steps",
+                    "positive", "negative", "image")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1240,6 +1254,9 @@ class RedNodeStudioWorkspace:
         # a live random tab has to re-roll on every queue — NaN never equals itself.
         # Deliberate cost: downstream recomputes each run, which a fresh image needs anyway.
         # An UNFIXED auto prompt re-rolls the same way: fresh LLM wording per queue.
+        if (cfg0["models"]["sampler_mode"] == "internal"
+                and cfg0["models"]["seed_random"]):
+            return float("nan")
         for name in IMAGE_TABS:
             t = cfg0["tabs"][name]
             if t["random"] and t["on"] and len(t["images"]) > 1:
@@ -1801,6 +1818,65 @@ class RedNodeStudioWorkspace:
             "rig": {"name": rig_name, "model": model, "clip": lora_clip,
                     "vae": rig_vae},
         }
+        # THE STUDIO, FOLDED IN. Krea2RedNode's encode consumes the workspace bundle,
+        # which is where the auto prompt captions already live, so the caption
+        # out-and-back wiring is not needed: encoding HERE is what injects them. The
+        # standalone Studio node stays for classic graphs; direct wires there still
+        # win because the bundle rules are unchanged. The prompt is the Prompts tab's
+        # row for the active rig, typed text first as always.
+        positive = negative = rig_image = None
+        _prow = prompt_row_for(cfg["models"], cfg["prompts"])
+        _mode = cfg["models"]["sampler_mode"]
+        if clip is not None and (_mode == "internal"
+                                 or (_prow or {}).get("text", "").strip()):
+            try:
+                from .rednode import Krea2RedNode
+                positive, negative = Krea2RedNode().encode(
+                    clip, (_prow or {}).get("text", ""),
+                    studio_preset or CUSTOM_SENTINEL,
+                    style_strength if style_strength is not None else 0.5,
+                    negative_prompt=(_prow or {}).get("negative", ""),
+                    vae=vae if vae is not None else rig_vae,
+                    workspace=workspace)
+            except Exception as exc:
+                print("[RedNode Workspace] built-in encode failed: %s" % exc,
+                      flush=True)
+        # THE EMBEDDED SAMPLER: comfy core's common_ksampler with this rig's five
+        # settings, then the VAE decode, so the whole render is one node and an
+        # image output. A latent from the tabs (i2i, edit) keeps its denoise; a
+        # fresh canvas samples at 1.0 from an empty Krea 2 latent (16 channel).
+        if _mode == "internal" and positive is not None and model is not None:
+            try:
+                import nodes as _core
+                _seed = cfg["models"]["seed"]
+                if cfg["models"]["seed_random"]:
+                    _seed = _random.getrandbits(48)
+                _lat = latent
+                _dn = denoise_out if latent is not None else 1.0
+                if _lat is None:
+                    _lc = cfg["latent"]
+                    _lat = {"samples": torch.zeros(
+                        [_lc["batch"], 16, _lc["h"] // 8, _lc["w"] // 8])}
+                print("[RedNode Workspace] built-in sampler: seed %d, %d steps, "
+                      "cfg %.1f, %s/%s, denoise %.2f" % (
+                          _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
+                          _dn), flush=True)
+                _out = _core.common_ksampler(
+                    model, _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
+                    positive, negative, _lat, denoise=_dn)[0]
+                _v = vae if vae is not None else rig_vae
+                if _v is None:
+                    print("[RedNode Workspace] built-in sampler rendered, but no "
+                          "VAE is wired or named on the rig, so there is no image "
+                          "to decode.", flush=True)
+                else:
+                    rig_image = _v.decode(_out["samples"])
+                    while rig_image.ndim > 4:
+                        rig_image = rig_image[0]
+            except Exception as exc:
+                print("[RedNode Workspace] built-in sampler failed: %s" % exc,
+                      flush=True)
+
         return (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
                 style_strength if style_strength is not None else 0.5,
                 studio_preset or "",
@@ -1822,7 +1898,10 @@ class RedNodeStudioWorkspace:
                 rig_vae,
                 # APPENDED: the active rig's sampler settings, so a stock KSampler
                 # wired to these five needs no Sampler Config and no channels.
-                rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer)
+                rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer,
+                # APPENDED: the folded-in Studio's conditioning, and the embedded
+                # sampler's picture. The whole classic chain, one node.
+                positive, negative, rig_image)
 
 
 # ---------------------------------------------------------------------------
