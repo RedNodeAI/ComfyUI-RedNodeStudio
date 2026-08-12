@@ -8230,7 +8230,9 @@ function modelsBody(node, page) {
   pickRow("Diffusion model", "unet", () => L.unets, "models",
           "A bare diffusion model; add CLIP and VAE below. Wins over the checkpoint's.");
   pickRow("CLIP", "clip", () => L.clips, "clips",
-          "The text encoder. Krea 2 wants qwen3vl with the type set to krea2.");
+          "The text encoder. Krea 2 wants qwen3vl with the type set to krea2. "
+          + "LEAVE ON NONE with a checkpoint chosen and the checkpoint's own baked "
+          + "CLIP is used.");
   {
     const row = document.createElement("div");
     row.className = "rn-ws-row";
@@ -8253,7 +8255,25 @@ function modelsBody(node, page) {
     body.appendChild(row);
   }
   pickRow("VAE", "vae", () => L.vaes, "vaes",
-          "The VAE. Comes out on the workspace's vae output and through Paint Out.");
+          "The VAE. Comes out on the workspace's vae output and through Paint Out. "
+          + "Leave on None with a checkpoint chosen and the checkpoint's own is used.");
+
+  // Say WHERE each piece will come from, so a checkpoint's baked CLIP and VAE stop
+  // being an invisible feature. This mirrors the loader's real precedence: the
+  // separate file wins, the checkpoint fills, otherwise there is nothing.
+  {
+    const src = document.createElement("div");
+    src.className = "rn-ws-note";
+    const from = (own, kind) => own ? "its own file"
+      : (rig.checkpoint ? "the checkpoint's baked " + kind
+                        : "nowhere, pick one");
+    src.textContent = "This rig resolves: model from "
+      + (rig.unet ? "the diffusion model file"
+         : rig.checkpoint ? "the checkpoint" : "nowhere, pick one")
+      + "; CLIP from " + from(rig.clip, "CLIP")
+      + "; VAE from " + from(rig.vae, "VAE") + ".";
+    body.appendChild(src);
+  }
 
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
