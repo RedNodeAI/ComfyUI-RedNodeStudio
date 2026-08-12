@@ -2009,6 +2009,21 @@ class RedNodeStudioWorkspace:
                     _seed = _random.getrandbits(48)
                 _lat = latent
                 _dn = denoise_out if latent is not None else 1.0
+                # THE IMG2IMG TAB, honoured: with no edit latent, an image on the
+                # Img2Img tab is the canvas, encoded here and sampled at the tab's
+                # denoise. Without this the embedded sampler started every run from
+                # an empty latent and the i2i image was ignored outright.
+                if _lat is None and i2i_img is not None:
+                    _v0 = vae if vae is not None else rig_vae
+                    if _v0 is not None:
+                        _lat = {"samples": _v0.encode(i2i_img[:, :, :, :3])}
+                        _dn = denoise_out
+                        print("[RedNode Workspace] built-in sampler: img2img from "
+                              "the Img2Img tab at denoise %.2f" % _dn, flush=True)
+                    else:
+                        print("[RedNode Workspace] the Img2Img tab has an image but "
+                              "no VAE is wired or on the rig, so it cannot be "
+                              "encoded; sampling a fresh canvas instead", flush=True)
                 if _lat is None:
                     _lc = cfg["latent"]
                     _lat = {"samples": torch.zeros(
