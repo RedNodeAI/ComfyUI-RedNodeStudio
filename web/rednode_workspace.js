@@ -785,38 +785,25 @@ export function readCfg(node) {
   if (!Array.isArray(d.loras.slots)) d.loras.slots = [];
   if (typeof d.loras.ui !== "object" || !d.loras.ui) d.loras.ui = {};
   if (typeof d.loras.seed !== "number") d.loras.seed = 0;
-  // The paint pass's own stacks, ONE PER RENDERER, keyed exactly as the cfg/steps
-  // profiles key: switch the model choice and the stack that shows and runs switches
-  // with it, which is the whole convenience. Read live through paintStack(), so there
-  // is no save/restore choreography for a swap to get wrong. A flat {slots,ui,seed}
-  // saved before this was per-renderer migrates onto the renderer it was built for.
+  // ONE paint stack, flat, the user's call after a per-model-choice version lasted a
+  // single local day: it put three LoRA controls on screen and explained itself in
+  // riddles. Swapping sets is what the Stack preset row is for, and tying stacks to
+  // the model choice returns WITH the Models tab, where it can actually render. A
+  // config saved during that day (a "stacks" object) collapses to the stack the
+  // active choice was using, or the first one with anything in it.
   d.paint_loras = d.paint_loras && typeof d.paint_loras === "object" ? d.paint_loras : {};
-  {
-    const flat = Array.isArray(d.paint_loras.slots) ? {
-      slots: d.paint_loras.slots,
-      ui: (typeof d.paint_loras.ui === "object" && d.paint_loras.ui) || {},
-      seed: typeof d.paint_loras.seed === "number" ? d.paint_loras.seed : 0,
-    } : null;
-    const raw = d.paint_loras.stacks;
-    const stacks = {};
-    if (raw && typeof raw === "object") {
-      for (const [k, v] of Object.entries(raw)) {
-        if (v && typeof v === "object") {
-          stacks[String(k)] = {
-            slots: Array.isArray(v.slots) ? v.slots : [],
-            ui: (typeof v.ui === "object" && v.ui) || {},
-            seed: typeof v.seed === "number" ? v.seed : 0,
-          };
-        }
-      }
-    }
-    if (flat && flat.slots.length) {
-      const key = String(d.paint.renderer_name || d.paint.renderer_kind
-                         || d.paint.renderer || "");
-      if (!stacks[key]) stacks[key] = flat;
-    }
-    d.paint_loras = { stacks };
+  if (d.paint_loras.stacks && typeof d.paint_loras.stacks === "object") {
+    const P0 = (d.paint && typeof d.paint === "object") ? d.paint : {};
+    const key = String(P0.renderer_name || P0.renderer_kind || P0.renderer || "");
+    const s = d.paint_loras.stacks[key]
+      || Object.values(d.paint_loras.stacks)
+          .find((v) => Array.isArray(v?.slots) && v.slots.length)
+      || {};
+    d.paint_loras = { slots: s.slots, ui: s.ui, seed: s.seed };
   }
+  if (!Array.isArray(d.paint_loras.slots)) d.paint_loras.slots = [];
+  if (typeof d.paint_loras.ui !== "object" || !d.paint_loras.ui) d.paint_loras.ui = {};
+  if (typeof d.paint_loras.seed !== "number") d.paint_loras.seed = 0;
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
   d.paint.on = !!d.paint.on;
   if (typeof d.paint.source !== "string") d.paint.source = "";
@@ -3995,40 +3982,28 @@ function lorasBody(node, body) {
   buildLoraPanel(node, host);
 }
 
-// The key a renderer's remembered things live under: the display name, which survives
-// the node being deleted and recreated, exactly as the cfg/steps profiles already key.
-const paintProfileKey = (P) =>
-  String(P.renderer_name || P.renderer_kind || P.renderer || "");
-
-/** The paint stack belonging to the CURRENT model choice, created on first touch. */
-function paintStack(cfg) {
-  const stacks = cfg.paint_loras.stacks;
-  const key = paintProfileKey(cfg.paint);
-  return (stacks[key] ||= { slots: [], ui: {}, seed: 0 });
-}
-
-// The paint pass's OWN stack, hosted on the Paint column's LoRAs sub-tab. A separate
-// stack, never a mirror of the main one: a paint pass is usually a low-denoise detail
-// pass, which wants a detail LoRA and none of the style LoRAs that fight a subject
-// reference. ONE STACK PER MODEL CHOICE: switching the renderer switches the stack
-// shown here, the same way it already switches CFG and Steps, so an XL chain keeps its
-// XL detailers and the internal renderer keeps its Krea set. The shared panel edits
-// whichever stack the accessors point at, and the accessors are read at event time, so
-// re-pointing them here is safe: only one host is ever on screen, and the main LoRAs
-// tab re-points them back when it builds.
+// The Paint LoRA tab: the paint pass's own stack, in the paint column. A separate
+// stack, never a mirror of the main tab's: a paint pass is usually a low-denoise
+// detail pass, which wants a detail LoRA and none of the style LoRAs that fight a
+// subject reference. ONE stack, and the Stack preset row is how sets get swapped;
+// tying stacks to the model choice was tried for a day and rolled back as confusing
+// before the Models tab exists to make it render. The shared panel edits whichever
+// stack the accessors point at, and the accessors are read at event time, so
+// re-pointing them here is safe: only one host is ever on screen, and the main
+// LoRAs tab re-points them back when it builds.
 function paintLorasBody(node, body) {
   const cfg = node._rnCfg;
-  const PL = paintStack(cfg);
+  const PL = cfg.paint_loras;
 
-  // The routing: which LoRAs the paint pass runs. Two options, deliberately: for a
-  // bare model, wire the raw model in. "main" is what every workflow always did.
+  // ONE choice, two settings, plain words: whose LoRAs does the paint pass render
+  // with. Paint overrides Main for the paint pass and nothing else.
   const modes = [
-    ["main", "Main LoRAs", "The paint pass uses the same model as the rest of the "
-                           + "workflow, main stack applied. The default, and what every "
-                           + "workflow did before this tab existed."],
-    ["paint", "Paint LoRAs", "This model choice's own stack below, applied to the "
-                             + "wired-in model. A branch, not a chain: the main stack "
-                             + "is not inherited."],
+    ["main", "Main LoRAs", "The paint pass renders with the main LoRAs tab's stack, "
+                           + "the same as the rest of the workflow. The stack below "
+                           + "does nothing. The default."],
+    ["paint", "Paint LoRAs", "The stack below replaces the main LoRAs for the paint "
+                             + "pass only. The rest of the workflow keeps the main "
+                             + "tab's."],
   ];
   const row = document.createElement("div");
   row.className = "rn-ws-row";
@@ -4048,30 +4023,11 @@ function paintLorasBody(node, body) {
   const hint = document.createElement("div");
   hint.className = "rn-ws-note";
   hint.textContent = cfg.paint.lora_mode === "paint"
-    ? "Wire the paint_model output into Paint Render's model input, or this stack "
-      + "changes nothing. Trigger words are not added to the paint prompt."
-    : "This stack only runs on the Paint LoRAs routing above.";
+    ? "These LoRAs run instead of the main tab's when the paint pass renders. Wire "
+      + "the paint_model output into Paint Render's model input once. Krea 2 LoRAs "
+      + "only for now: an external chain loads its own model and cannot hear this."
+    : "Pick Paint LoRAs above to use this stack.";
   body.appendChild(hint);
-
-  // Say WHOSE stack this is, because it changes with the model choice on the Paint tab.
-  const who = document.createElement("div");
-  who.className = "rn-ws-note";
-  const whoKey = paintProfileKey(cfg.paint);
-  who.textContent = "Stack for: " + (whoKey || "the built-in renderer")
-                  + ". It follows the model choice, with CFG and Steps.";
-  body.appendChild(who);
-  // A bridge chain loads its own model and runs its own LoRA nodes; nothing built here
-  // can reach it until the pack loads models itself. Said plainly rather than letting
-  // a stack sit here looking like it renders.
-  if (cfg.paint.renderer_kind === "bridge") {
-    const warn = document.createElement("div");
-    warn.className = "rn-ws-note";
-    warn.style.color = "#d4b25f";
-    warn.textContent = "This model choice is an external chain, which runs the LoRA "
-                     + "nodes inside its own graph. This stack is remembered for it "
-                     + "but cannot reach it yet.";
-    body.appendChild(warn);
-  }
 
   const seedRow = document.createElement("div");
   seedRow.className = "rn-ws-row";
@@ -4092,18 +4048,16 @@ function paintLorasBody(node, body) {
   });
   seedRow.append(slab, seed);
   body.appendChild(seedRow);
-  // the same saved stacks the main tab and the LoRA Stack node use: save a "face
-  // detailer" once, load it into whichever renderer's stack wants it
+  // the same saved stacks the main tab and the LoRA Stack node use: save a "Face
+  // detailer" once, load it here, on the main tab, or on the node
   loraPresetRow(node, body, PL);
 
-  // resolved through paintStack() at event time, so a renderer switch between builds
-  // can never leave these pointing at the stack the panel is no longer showing
   node._rnStackRead = () => {
-    const s = paintStack(node._rnCfg);
+    const s = node._rnCfg.paint_loras;
     return { ui: s.ui, slots: s.slots };
   };
   node._rnStackWrite = (n, v) => {
-    const s = paintStack(n._rnCfg);
+    const s = n._rnCfg.paint_loras;
     s.ui = v.ui || {};
     s.slots = v.slots || [];
     writeCfg(n);
@@ -5445,9 +5399,9 @@ function paintBody(node, body) {
   strip.style.cssText = "margin-bottom:2px;align-self:stretch";
   for (const [value, label, tip] of [
     ["paint", "Paint", "The painting controls."],
-    ["loras", "LoRAs", "The paint pass's own LoRA stack, separate from the main LoRAs "
-                       + "tab, and the routing that decides which model the paint pass "
-                       + "renders with."],
+    ["loras", "Paint LoRAs", "LoRAs for the paint pass only. Two settings inside: the "
+                             + "paint pass renders with the main LoRAs tab's stack, or "
+                             + "with the stack in here instead."],
   ]) {
     const b = document.createElement("button");
     b.textContent = label;
@@ -7611,54 +7565,38 @@ function paintBody(node, body) {
     routeBox.appendChild(warn);
   }
 
-  const loraRow = document.createElement("div");
-  loraRow.className = "rn-ws-row";
-  const llab = document.createElement("span");
-  llab.className = "hint";
-  llab.style.cssText = "flex:none;width:96px";
-  llab.textContent = "LoRAs";
-  loraRow.appendChild(llab);
-  // Three states, one switch, the same shape as the paint mode: where the LoRAs for
-  // this paint pass come from. A toggle could only ever say two of the three.
-  const lseg = document.createElement("div");
-  lseg.className = "rn-ws-seg";
+  // THE OLD "LoRA tab / Wired in" SWITCH, retired by the user 2026-08-12: the Paint
+  // LoRAs tab in the paint column is the one LoRA choice now, and this row said the
+  // same kind of thing in different words right underneath it. It still WORKS for a
+  // workflow saved with the non-default "tab" setting (Paint Render keeps honouring
+  // it, or that workflow would render differently after an update), so the row shows
+  // ONLY then, as the way to turn it off. Something switched on must look on. Flip it
+  // to Wired in once and it is gone for good.
   const lmode = P.loras_mode || (P.use_loras ? "tab" : "wired");
-  const lbtn = (label, val, title) => {
-    const b = document.createElement("button");
-    b.className = "rn-ws-segb" + (lmode === val ? " on" : "");
-    b.textContent = label;
-    b.title = title;
-    b.onclick = () => {
-      P.loras_mode = val;
-      P.use_loras = val === "tab";     // the old key stays true for older readers
+  if (lmode === "tab") {
+    const loraRow = document.createElement("div");
+    loraRow.className = "rn-ws-row";
+    const llab = document.createElement("span");
+    llab.className = "hint";
+    llab.style.cssText = "flex:none;width:96px";
+    llab.textContent = "LoRAs";
+    loraRow.appendChild(llab);
+    const off = document.createElement("button");
+    off.className = "rn-ws-segb on";
+    off.textContent = "Legacy: main stack re-applied. Click to retire";
+    off.title = "This workflow was saved with the old switch applying the main LoRAs "
+              + "tab inside the render node. That still runs, which doubles the LoRAs "
+              + "if the model wired in already carries them. Click to turn it off and "
+              + "use the Paint LoRAs tab in the paint column instead.";
+    off.onclick = () => {
+      P.loras_mode = "wired";
+      P.use_loras = false;
       writeCfg(node);
       render(node);
     };
-    lseg.appendChild(b);
-  };
-  lbtn("LoRA tab", "tab",
-       "The Workspace's LoRAs tab is applied to whatever model reaches the render "
-       + "node. Use this when painting on a DIFFERENT model that arrives raw. "
-       + "WARNING: if the model wired there already came through the LoRAs tab, they "
-       + "are applied twice.");
-  lbtn("Wired in", "wired",
-       "The model is used exactly as wired, whatever is on it. Right when you wired "
-       + "the Workspace's model output, which already carries the LoRAs tab, or an "
-       + "external LoRA loader's output. Wire the RAW model here to paint with no "
-       + "LoRAs at all.");
-  // No third state. Once LoRAs are baked into a model this node cannot take them
-  // off, so None could only ever be Wired in wearing another name, and a button that
-  // does nothing new is worse than a button that is not there. Painting without
-  // LoRAs is what Wired in already does when the raw model is what you wired.
-  loraRow.appendChild(lseg);
-  if (lmode === "tab") {
-    const warn = document.createElement("span");
-    warn.className = "hint";
-    warn.style.color = "#d4b25f";
-    warn.textContent = "Wire the RAW model here, not the LoRA output";
-    loraRow.appendChild(warn);
+    loraRow.appendChild(off);
+    routeBox.appendChild(loraRow);
   }
-  routeBox.appendChild(loraRow);
 
   const found = paintTargets();
   if (found.length) {

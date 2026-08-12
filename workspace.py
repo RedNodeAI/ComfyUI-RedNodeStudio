@@ -655,36 +655,34 @@ def parse_config(config_json):
         "ui": lin.get("ui") if isinstance(lin.get("ui"), dict) else {},
         "seed": max(0, lseed),
     }
-    # The paint pass's OWN stacks, ONE PER MODEL CHOICE, keyed the way the panel keys
-    # its cfg/steps profiles (the renderer's display name). Separate from the tab above
-    # and never chained after it: a paint pass is usually a low-denoise detail pass,
-    # which wants a detail LoRA and none of the style LoRAs that fight a subject
-    # reference. Each stack is the shape loras_cfg has, so one panel edits all of them.
-    # No "on" flag: paint.lora_mode below is the switch. A flat {slots,ui,seed} from
-    # the one day the stack was global reads as the stack for the current choice.
+    # The paint pass's OWN stack, ONE and flat, separate from the tab above and never
+    # chained after it: a paint pass is usually a low-denoise detail pass, which wants
+    # a detail LoRA and none of the style LoRAs that fight a subject reference. Same
+    # shape as loras_cfg so the same panel edits both; the Stack preset row is how
+    # sets get swapped. No "on" flag: paint.lora_mode below is the switch. A config
+    # saved during the one local day this was keyed per model choice (a "stacks"
+    # object) collapses to the active choice's stack, or the first non-empty one.
     pln = data.get("paint_loras") if isinstance(data.get("paint_loras"), dict) else {}
-
-    def _one_stack(v):
-        v = v if isinstance(v, dict) else {}
-        try:
-            sd = int(v.get("seed", 0))
-        except (TypeError, ValueError):
-            sd = 0
-        return {"slots": v.get("slots") if isinstance(v.get("slots"), list) else [],
-                "ui": v.get("ui") if isinstance(v.get("ui"), dict) else {},
-                "seed": max(0, sd)}
-
     stacks_in = pln.get("stacks") if isinstance(pln.get("stacks"), dict) else None
     if stacks_in is not None:
-        paint_loras_cfg = {"stacks": {str(k): _one_stack(v)
-                                      for k, v in stacks_in.items()}}
-    elif isinstance(pln.get("slots"), list) and pln.get("slots"):
         _pin0 = data.get("paint") if isinstance(data.get("paint"), dict) else {}
-        legacy_key = str(_pin0.get("renderer_name") or _pin0.get("renderer_kind")
-                         or _pin0.get("renderer") or "")
-        paint_loras_cfg = {"stacks": {legacy_key: _one_stack(pln)}}
-    else:
-        paint_loras_cfg = {"stacks": {}}
+        key = str(_pin0.get("renderer_name") or _pin0.get("renderer_kind")
+                  or _pin0.get("renderer") or "")
+        pick = stacks_in.get(key)
+        if not (isinstance(pick, dict) and pick.get("slots")):
+            pick = next((v for v in stacks_in.values()
+                         if isinstance(v, dict) and isinstance(v.get("slots"), list)
+                         and v.get("slots")), {})
+        pln = pick if isinstance(pick, dict) else {}
+    try:
+        plseed = int(pln.get("seed", 0))
+    except (TypeError, ValueError):
+        plseed = 0
+    paint_loras_cfg = {
+        "slots": pln.get("slots") if isinstance(pln.get("slots"), list) else [],
+        "ui": pln.get("ui") if isinstance(pln.get("ui"), dict) else {},
+        "seed": max(0, plseed),
+    }
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask
     # and the source ride the SAME sockets the edit mask and Img2Img already use
     # (edit_mask, output_latent, denoise), so the sampler chain needs no changes.
@@ -1522,14 +1520,8 @@ class RedNodeStudioWorkspace:
         # stack to raw_model leaves the main stack's model untouched and vice versa.
         # "main" hands back the main-stacked model, so a workflow that wires paint_model
         # without ever opening the paint LoRA tab behaves exactly as the model output.
-        # The stack applied is the CURRENT MODEL CHOICE'S, keyed the way the panel keys
-        # its cfg/steps profiles, so switching the choice switches the LoRAs with it.
         paint_mode = cfg["paint"].get("lora_mode", "main")
-        stack_key = str(cfg["paint"].get("renderer_name")
-                        or cfg["paint"].get("renderer_kind")
-                        or cfg["paint"].get("renderer") or "")
-        pls = cfg["paint_loras"]["stacks"].get(stack_key) \
-            or {"slots": [], "ui": {}, "seed": 0}
+        pls = cfg["paint_loras"]
         paint_model = model
         if paint_mode == "paint":
             if raw_model is not None and pls["slots"]:
@@ -1542,9 +1534,8 @@ class RedNodeStudioWorkspace:
                 # "no LoRAs on the paint pass", and saying so beats guessing "main"
                 paint_model = raw_model
                 print("[RedNode Workspace] paint LoRA routing is set to the paint "
-                      "stack, but the stack for %r is empty, so the paint branch "
-                      "carries the bare model." % (stack_key or "the built-in "
-                      "renderer"), flush=True)
+                      "stack, but the stack is empty, so the paint branch carries "
+                      "the bare model.", flush=True)
 
         # the Post tab: a grading chain configured here, applied at the end of the
         # graph by RedNode Post Process (post processing happens after the sampler,
