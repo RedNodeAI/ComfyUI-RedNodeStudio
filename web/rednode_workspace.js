@@ -1932,7 +1932,8 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
   add.className = "rn-ws-add";
   add.style.width = add.style.height = cellPx + "px";
   add.textContent = "+";
-  add.title = "Add images, or drop files anywhere on this grid.";
+  add.title = "Add images: click to browse, drop files anywhere on this grid, or hover "
+            + "it and press Ctrl+V to paste a copied image.";
   add.onclick = () => {
     const inp = document.createElement("input");
     inp.type = "file";
@@ -1950,12 +1951,25 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
     grid.classList.remove("drag");
     uploadFiles(node, tabName, [...(e.dataTransfer?.files || [])]);
   });
+  // Ctrl+V while the pointer is over this grid, the road the Paint canvas already
+  // takes: copy an image anywhere, hover the box it belongs in, paste. Registered on
+  // the grid, and the paste matcher walks UP from the pointer, so over a gallery this
+  // wins and everywhere else the Paint handler still gets its turn. A text clipboard
+  // is declined and reaches ComfyUI untouched, including pasting copied nodes. The
+  // WeakMap forgets replaced grids by itself, so a re-render leaks nothing.
+  panelPaste(grid, (e) => {
+    const file = clipboardImage(e);
+    if (!file) return false;
+    grid.classList.add("drag");            // the drop look, so the paste visibly lands
+    uploadFiles(node, tabName, [file]);    // ends in render(), which replaces the grid
+  });
   body.appendChild(grid);
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = !t.images.length
-    ? "No images yet. Use + or drop files here; the gallery remembers them."
+    ? "No images yet. Use +, drop files here, or hover and Ctrl+V a copied image; "
+      + "the gallery remembers them."
     : multi && !t.sel.length && !t.random
       ? `NOTHING in the batch: ${t.images.length} image(s) here, none selected, so this tab `
         + `outputs nothing. Click the ones to use.`
