@@ -48,6 +48,11 @@ const THUMB_STEP = 8;
 const MASK_MIN = 512;
 const MASK_MAX = 4096;
 
+// The pass count's ceiling, and it MUST match PAINT_PASS_MAX in workspace.py for the
+// same reason the two above must match: a box that offers a number the server clamps
+// away is a box that lies about what just ran.
+const PASS_MAX = 10;
+
 
 
 // Every dial lives on the tab it belongs to — one big Dials tab read as a wall of
@@ -301,6 +306,18 @@ css.textContent = `
 .rn-ws-denoise-labels span:nth-child(2){text-align:center}
 .rn-ws-denoise-labels span:nth-child(3){text-align:right}
 .rn-ws-denoise-labels span.active{color:#e8ecf1;font-weight:700}
+/* Passes rides the denoise row: it multiplies THAT number and means nothing away from
+   it. Lit red above 1, because a 4 left behind from yesterday is four times the wait
+   with no other sign that anything changed */
+.rn-ws-passes{display:flex;align-items:center;gap:5px;flex:none;background:#15171b;
+  border:1px solid #33373d;border-radius:5px;padding:3px 7px}
+.rn-ws-passes .k{font-size:11px;color:#9aa0a8;font-weight:600}
+.rn-ws-passes input{width:48px;height:24px;box-sizing:border-box;background:#0f1114;
+  border:1px solid #2a2e34;border-radius:4px;color:#e8ecf1;font-size:13px;
+  font-weight:700;text-align:center;font-variant-numeric:tabular-nums;padding:0 0 0 4px}
+.rn-ws-passes.on{border-color:#b8283c;background:#1d1418}
+.rn-ws-passes.on .k{color:#e8a3ad}
+.rn-ws-passes.on input{color:#fff;border-color:#b8283c}
 .rn-ws-mask-track{position:relative;display:flex;flex-direction:column;
   flex:1 1 auto;min-width:150px;gap:1px}
 .rn-ws-mask-track input[type=range]{width:100%;margin:0}
@@ -797,6 +814,10 @@ export function readCfg(node) {
     d.paint.renderer_profiles = clean;
   }
   if (typeof d.paint.denoise !== "number") d.paint.denoise = 0.6;
+  // one pass is what every workflow saved before this existed did, and it is the
+  // value that changes nothing: the chain only starts at two
+  d.paint.passes = Math.max(1, Math.min(PASS_MAX,
+    typeof d.paint.passes === "number" ? Math.round(d.paint.passes) : 1));
   if (typeof d.paint.brush !== "number") d.paint.brush = 48;
   if (typeof d.paint.feather !== "number") d.paint.feather = 4;
   // clamped to the same range workspace.py clamps to, or a config holding an old 256
@@ -6473,9 +6494,50 @@ function paintBody(node, body) {
   syncDpre();
   syncDenoiseZone();
   dRange.addEventListener("input", syncDpre);
+  // PASSES BELONGS ON THIS ROW, not in the settings box, because it multiplies THIS
+  // number and nothing else. Settling a shape means running the same low denoise over
+  // the last result three or four times, and by hand that is drag the result onto the
+  // canvas, Generate, drag, Generate: four waits and three pictures to ignore before
+  // the one worth keeping. The count runs that chain inside one Generate, with the
+  // same mask and the same crop, and hands back only the last picture.
+  const pWrap = document.createElement("div");
+  const pLab = document.createElement("span");
+  pLab.className = "k";
+  pLab.textContent = "Passes";
+  const pInp = document.createElement("input");
+  pInp.type = "number";
+  pInp.min = 1; pInp.max = PASS_MAX; pInp.step = 1;
+  pInp.value = String(P.passes ?? 1);
+  pInp.title = "How many times Generate runs this denoise over its own result before "
+             + "showing you anything. 1 is a single pass, the way it has always worked. "
+             + "4 at a denoise of 0.25 does what four presses at 0.25 do, holding a "
+             + "shape steady instead of letting it drift, with the mask and the crop "
+             + "unchanged between passes and a fresh seed for each. Only the last "
+             + "picture comes back. This drives RedNode Paint Render; a renderer of "
+             + "your own wired through Paint Out and Paint In still runs once.";
+  const syncPasses = () => {
+    const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(P.passes) || 1)));
+    pWrap.className = "rn-ws-passes" + (n > 1 ? " on" : "");
+    pLab.title = n > 1
+      ? `Every Generate runs ${n} passes at this denoise and shows you the last one.`
+      : "One pass per Generate.";
+  };
+  pInp.addEventListener("change", () => {
+    P.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
+    pInp.value = String(P.passes);
+    syncPasses();
+    writeCfg(node);
+  });
+  // A browser changes a FOCUSED number box on wheel, so clicking in here and then
+  // scrolling the panel would quietly turn 1 pass into 6 with nothing said. The wheel
+  // convention in this pack is for SLIDERS (rednode_wheel.js), and dropping the focus
+  // is what keeps this box out of that gesture entirely.
+  pInp.addEventListener("wheel", () => pInp.blur(), { passive: true });
+  syncPasses();
+  pWrap.append(pLab, pInp);
   dLab.classList?.add?.("ttl");
   dHead.append(dLab, dpre);
-  dTop.append(dTrack, dVal);
+  dTop.append(dTrack, dVal, pWrap);
   dRow.append(dHead, dTop);
   topbar.appendChild(dRow);
 

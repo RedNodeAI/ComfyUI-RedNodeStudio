@@ -276,6 +276,19 @@ class RedNodePaintRender:
                               "it in for its own runs; while it is empty this node sits "
                               "out of normal queues instead of rendering a crop nobody "
                               "asked for"}),
+                # APPENDED, after run_token, and it has to be. An old workflow stores
+                # its widget values as a positional list, so a widget inserted higher
+                # up shifts every value below it: the seed becomes the steps and the
+                # user's graph renders something they never set. The Paint tab wins
+                # over this when it has a count of its own, the same as steps and cfg.
+                "passes": ("INT", {"default": 1, "min": 1, "max": _ws.PAINT_PASS_MAX,
+                                   "tooltip":
+                                   "How many times to run the paint pass over its own "
+                                   "result before handing it back. This is the "
+                                   "low-denoise loop done for you: one Generate, one "
+                                   "picture at the end, instead of dragging the result "
+                                   "back onto the canvas and pressing Generate again. "
+                                   "The Paint tab's own count wins when it has one."}),
             },
             "optional": {
                 # normally NOT needed: the picture comes from the Paint tab, which is
@@ -313,7 +326,10 @@ class RedNodePaintRender:
                    "re-rendered. Wire model, positive, negative, vae, and the image "
                    "you want to paint on, then press Generate on the Paint tab. Leaving "
                    "the image unwired makes it follow the tab instead. The result "
-                   "appears on this node and in the tab's result pane.")
+                   "appears on this node and in the tab's result pane. Passes runs that "
+                   "same pass over its own result more than once, which is the "
+                   "low-denoise chain people run by hand to settle a shape; only the "
+                   "last picture comes back.")
 
     def check_lazy_status(self, run_token="", prompt=None, unique_id=None, **kwargs):
         """Ask for the inputs only on a real paint run.
@@ -508,8 +524,8 @@ class RedNodePaintRender:
 
     def render(self, model=None, positive=None, negative=None, vae=None,
                seed=0, steps=8, cfg=1.0,
-               sampler_name="euler", scheduler="simple", run_token="", image=None,
-               clip=None, positive_override=None, negative_override=None,
+               sampler_name="euler", scheduler="simple", run_token="", passes=1,
+               image=None, clip=None, positive_override=None, negative_override=None,
                prompt=None, unique_id=None):
         if not str(run_token or "").strip():
             # Quietly. This fires on every ordinary queue, and a line plus a black
@@ -660,16 +676,67 @@ class RedNodePaintRender:
         pos, neg = self._conditioning(clip, positive, negative, pc,
                                       positive_override, negative_override,
                                       prompt=prompt, vae=vae)
-        latent = {"samples": vae.encode(work[:, :, :, :3])}
+        rgb = work[:, :, :, :3]
+        latent = {"samples": vae.encode(rgb)}
         # The Paint tab owns these when it has them, the same way it already owns
         # denoise, so the dials you are looking at while painting are the ones that run.
         # Absent means a workflow saved before the tab had them: the widgets on this
         # node are what that user set, so they keep winning.
         steps = int(pc.get("steps", steps))
         cfg = float(pc.get("cfg", cfg))
-        out = nodes.common_ksampler(model, seed, steps, cfg, sampler_name, scheduler,
-                                    pos, neg, latent,
-                                    denoise=max(0.01, float(pc["denoise"])))[0]
+        denoise = max(0.01, float(pc["denoise"]))
+        passes = max(1, min(_ws.PAINT_PASS_MAX, int(pc.get("passes", passes))))
+
+        # THE LOW-DENOISE CHAIN, DONE HERE INSTEAD OF BY HAND. Settling a shape means
+        # running the same small denoise over the last result three or four times, and
+        # the manual version of that is drag the result onto the canvas, Generate, drag,
+        # Generate, watching four pictures go by to keep the fourth. This is the same
+        # loop with the same mask and the same crop, so only the finished picture comes
+        # back and the model is staged once for all of it.
+        #
+        # Each pass gets its OWN seed. Re-running identical noise over a picture at a
+        # low denoise re-imprints the same pattern instead of settling anything, and
+        # pressing Generate by hand rolls a seed every time, which is the behaviour
+        # being mechanised. Derived from the run's seed rather than rolled, so the whole
+        # chain still repeats from one number.
+        #
+        # BETWEEN passes the picture goes back through the mask: the paint carries
+        # forward, everything else is the original crop again. That is what dragging the
+        # result back does, and it matters more than the VAE round trip it costs. Left
+        # in latent space, four passes of whole-crop denoise drift the context the model
+        # is reading, and the feathered edge then blends into pixels that no longer
+        # match the picture around them. With no mask there is nothing to protect, so
+        # the latent feeds straight forward and no round trip is paid at all.
+        work_mask = None
+        if passes > 1 and mask is not None:
+            m = mask[:, y0:y1, x0:x1].unsqueeze(1)
+            work_mask = F.interpolate(m, size=(rgb.shape[1], rgb.shape[2]),
+                                      mode="bilinear", align_corners=False)
+            work_mask = work_mask.squeeze(1).unsqueeze(-1).to(rgb.dtype)
+        for i in range(passes):
+            if passes > 1:
+                print(f"[RedNode Paint] pass {i + 1} of {passes}, denoise {denoise:.2f}",
+                      flush=True)
+            out = nodes.common_ksampler(model, (seed + i) % (2 ** 64), steps, cfg,
+                                        sampler_name, scheduler, pos, neg, latent,
+                                        denoise=denoise)[0]
+            if i + 1 >= passes:
+                break
+            if work_mask is None:
+                latent = out
+                continue
+            mid = vae.decode(out["samples"])
+            while mid.ndim > 4:
+                mid = mid[0]
+            mid = mid[:, :, :, :3]
+            if mid.shape[1:3] != rgb.shape[1:3]:
+                # a VAE that rounds its own way must not shift the mask off the paint
+                mid = F.interpolate(mid.permute(0, 3, 1, 2),
+                                    size=(rgb.shape[1], rgb.shape[2]),
+                                    mode="bilinear", align_corners=False
+                                    ).permute(0, 2, 3, 1)
+            latent = {"samples": vae.encode(rgb * (1 - work_mask)
+                                            + mid * work_mask)}
         painted = vae.decode(out["samples"])
         while painted.ndim > 4:                               # video VAEs hand back 5D
             painted = painted[0]

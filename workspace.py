@@ -69,6 +69,12 @@ VRAM_TIERS = ("low", "medium", "high")
 # would be a cycle. paint_render re-exports it, so there is still one list.
 REGION_SHAPES = ("auto", "square", "landscape", "portrait")
 
+# How many times one Generate may run the same low denoise over its own result. Ten
+# because past that a chain has stopped settling a shape and started eating it, and
+# because a mistyped 40 is twenty minutes of sampling nobody asked for. Same reason
+# REGION_SHAPES lives here: paint_render imports this module, not the other way.
+PAINT_PASS_MAX = 10
+
 VRAM_CAPS = {
     "low": {
         "resize": 1024,
@@ -767,6 +773,13 @@ def parse_config(config_json):
         paint_cfg["cfg"] = max(0.0, min(30.0, float(pin["cfg"])))
     if isinstance(pin.get("steps"), (int, float)) and not isinstance(pin.get("steps"), bool):
         paint_cfg["steps"] = max(1, min(100, int(pin["steps"])))
+    # Passes: the same paint pass run over its own result, N times, inside one Generate.
+    # It is the loop people already do by hand at a low denoise to settle a shape,
+    # dragging the result back onto the canvas between presses. Absent, like cfg and
+    # steps, so an old workflow keeps the node's own widget rather than being told it
+    # now renders once.
+    if isinstance(pin.get("passes"), (int, float)) and not isinstance(pin.get("passes"), bool):
+        paint_cfg["passes"] = max(1, min(PAINT_PASS_MAX, int(pin["passes"])))
     tier = str(data.get("vram_tier") or "high").lower()
     tier = tier if tier in VRAM_TIERS else "high"
     studio_preset = str(data.get("studio_preset") or "").strip()
