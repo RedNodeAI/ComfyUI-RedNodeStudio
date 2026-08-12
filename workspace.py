@@ -34,6 +34,7 @@ import torch
 from PIL import Image, ImageOps
 
 import folder_paths
+import comfy.samplers
 
 from .rednode import SETTINGS_TYPE
 from . import autoprompt
@@ -694,6 +695,12 @@ def parse_config(config_json):
     for r in (min_.get("rigs") if isinstance(min_.get("rigs"), list) else []):
         if not isinstance(r, dict):
             continue
+        def _num(key, lo, hi, dv, cast=int):
+            try:
+                v = cast(r.get(key, dv))
+            except (TypeError, ValueError):
+                v = dv
+            return max(lo, min(hi, v))
         rigs.append({
             "name": str(r.get("name") or ""),
             "checkpoint": str(r.get("checkpoint") or ""),
@@ -701,6 +708,15 @@ def parse_config(config_json):
             "clip": str(r.get("clip") or ""),
             "clip_type": str(r.get("clip_type") or ""),
             "vae": str(r.get("vae") or ""),
+            # the rig's OWN sampler settings, the same five keys a Sampler Config
+            # profile carries, so "load the workspace and it works" includes the
+            # numbers a KSampler needs. Defaults are the turbo reality this pack
+            # lives in; a full model's rig just types its own.
+            "steps": _num("steps", 1, 200, 8),
+            "cfg": _num("cfg", 0.0, 30.0, 1.0, float),
+            "sampler": str(r.get("sampler") or "euler"),
+            "scheduler": str(r.get("scheduler") or "simple"),
+            "detailer_steps": _num("detailer_steps", 0, 200, 8),
         })
     try:
         active = int(min_.get("active", 0))
@@ -1200,14 +1216,17 @@ class RedNodeStudioWorkspace:
                     "MASK", "MASK", SETTINGS_TYPE, "LATENT", "FLOAT", "STRING",
                     "STRING", "STRING", "STRING", "IMAGE", "STRING", "FLOAT",
                     postprocess.POST_TYPE, "MODEL", "STRING", "CLIP", "STRING",
-                    "MODEL", "VAE")
+                    "MODEL", "VAE", "INT", "FLOAT",
+                    comfy.samplers.KSampler.SAMPLERS,
+                    comfy.samplers.KSampler.SCHEDULERS, "INT")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
                     "subject_prompt", "scene_prompt", "moodboard_prompt",
                     "i2i_image", "i2i_prompt", "denoise", "post_process",
                     "model", "lora_keywords", "clip", "paint_prompt",
-                    "paint_model", "vae")
+                    "paint_model", "vae",
+                    "steps", "cfg", "sampler_name", "scheduler", "detailer_steps")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1257,6 +1276,16 @@ class RedNodeStudioWorkspace:
             model = rig_model
         if clip is None and rig_clip is not None:
             clip = rig_clip
+        _rigs = cfg["models"]["rigs"]
+        _ar = (_rigs[cfg["models"]["active"]] if _rigs
+               else {"steps": 8, "cfg": 1.0, "sampler": "euler",
+                     "scheduler": "simple", "detailer_steps": 8})
+        rig_steps, rig_cfg = _ar["steps"], _ar["cfg"]
+        rig_detailer = _ar["detailer_steps"]
+        rig_sampler = (_ar["sampler"] if _ar["sampler"]
+                       in comfy.samplers.KSampler.SAMPLERS else "euler")
+        rig_scheduler = (_ar["scheduler"] if _ar["scheduler"]
+                         in comfy.samplers.KSampler.SCHEDULERS else "simple")
         target = cfg["resize"]
         tabs = cfg["tabs"]
 
@@ -1790,7 +1819,10 @@ class RedNodeStudioWorkspace:
                 paint_model,
                 # APPENDED: the Models tab's VAE, None until a rig names one. The tab
                 # loads it; this socket is how the rest of the graph takes it.
-                rig_vae)
+                rig_vae,
+                # APPENDED: the active rig's sampler settings, so a stock KSampler
+                # wired to these five needs no Sampler Config and no channels.
+                rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer)
 
 
 # ---------------------------------------------------------------------------

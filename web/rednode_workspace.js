@@ -815,6 +815,11 @@ export function readCfg(node) {
     for (const k of ["name", "checkpoint", "unet", "clip", "clip_type", "vae"]) {
       if (typeof r[k] !== "string") r[k] = "";
     }
+    if (typeof r.steps !== "number") r.steps = 8;
+    if (typeof r.cfg !== "number") r.cfg = 1.0;
+    if (typeof r.sampler !== "string") r.sampler = "euler";
+    if (typeof r.scheduler !== "string") r.scheduler = "simple";
+    if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
   }
   d.models.active = Math.max(0, Math.min(
     typeof d.models.active === "number" ? Math.round(d.models.active) : 0,
@@ -7978,6 +7983,8 @@ async function fetchModelLists() {
     clips: await pull("CLIPLoader", "clip_name"),
     clip_types: await pull("CLIPLoader", "type"),
     vaes: await pull("VAELoader", "vae_name"),
+    samplers: await pull("KSampler", "sampler_name"),
+    schedulers: await pull("KSampler", "scheduler"),
   };
   return MODEL_LISTS;
 }
@@ -8104,6 +8111,66 @@ function modelsBody(node, body) {
   }
   pickRow("VAE", "vae", () => L.vaes, "vaes",
           "The VAE. Comes out on the workspace's vae output and through Paint Out.");
+
+  // The rig's sampler settings, the numbers a KSampler needs, so loading the
+  // workspace really is the whole model setup: wire steps, cfg, sampler_name and
+  // scheduler from the workspace outputs and the channel run becomes optional.
+  const sh = document.createElement("div");
+  sh.className = "rn-ws-note";
+  sh.style.marginTop = "4px";
+  sh.textContent = "Sampler settings for this rig. They ride the workspace outputs "
+                 + "named steps, cfg, sampler_name, scheduler and detailer_steps.";
+  body.appendChild(sh);
+  const numRow = (label, key, step, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.style.cssText = "flex:none;width:110px";
+    lab.textContent = label;
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.step = String(step);
+    inp.value = rig[key];
+    inp.title = hint;
+    inp.style.cssText = "width:110px;background:#15171b;border:1px solid #33373d;"
+                      + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
+    inp.addEventListener("change", () => {
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)) { rig[key] = step === 1 ? Math.round(v) : v; writeCfg(node); }
+    });
+    row.append(lab, inp);
+    body.appendChild(row);
+  };
+  const selRow = (label, key, items, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.style.cssText = "flex:none;width:110px";
+    lab.textContent = label;
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    for (const v of items.length ? items : [rig[key]]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v;
+      o.selected = v === rig[key];
+      sel.appendChild(o);
+    }
+    sel.title = hint;
+    sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
+    row.append(lab, sel);
+    body.appendChild(row);
+  };
+  numRow("Steps", "steps", 1, "Sampling steps for this rig.");
+  numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
+  selRow("Sampler", "sampler", L.samplers || [],
+         "Comes out typed, so it wires straight into a KSampler's sampler_name.");
+  selRow("Scheduler", "scheduler", L.schedulers || [],
+         "Wires straight into a KSampler's scheduler.");
+  numRow("Detailer steps", "detailer_steps", 1,
+         "Steps for detailer passes, on its own output.");
 }
 
 // ---------------------------------------------------------------- Prompts tab
