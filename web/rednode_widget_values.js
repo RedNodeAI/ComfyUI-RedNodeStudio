@@ -88,18 +88,29 @@ const widgetOf = (node, name) => node.widgets?.find((w) => w.name === name);
 const fitsAt = (spec, vals, at, strict) => spec.every((f, i) =>
   strict ? f.is(vals[at + i]) : typeof vals[at + i] === typeof f.fix);
 
-/** Where in a saved array this node's own run of values starts, or -1. */
+/**
+ * Where in a saved array this node's own run of values starts, or -1.
+ *
+ * Matches only as far as the SHORTER of the two. A workflow saved before an input was
+ * added is short by however many were appended since, and the values it does carry are
+ * still perfectly good: demanding the full length would send it to the rescue path and
+ * scramble text to recover from a node that simply grew. This is also why new inputs go
+ * on the END of the definition, never in the middle, where they would move everything
+ * saved after them.
+ */
 function findRun(spec, vals) {
+  const n = Math.min(spec.length, vals.length);
+  if (!n) return -1;
+  const head = spec.slice(0, n);
   for (const strict of [true, false]) {
     const hits = [];
-    for (let at = 0; at + spec.length <= vals.length; at++) {
-      if (fitsAt(spec, vals, at, strict)) hits.push(at);
+    for (let at = 0; at + n <= vals.length; at++) {
+      if (fitsAt(head, vals, at, strict)) hits.push(at);
     }
     if (hits.length === 1) return hits[0];
     // More than one place fits: the extra values a broken save added went on the FRONT,
     // so the run that reaches the end of the array is the one that was really written.
-    if (hits.length > 1) return hits.includes(vals.length - spec.length)
-      ? vals.length - spec.length : hits[0];
+    if (hits.length > 1) return hits.includes(vals.length - n) ? vals.length - n : hits[0];
   }
   return -1;
 }
@@ -165,12 +176,14 @@ export function pinWidgetValues(nodeType, nodeData, after) {
   const configure = nodeType.prototype.configure;
   nodeType.prototype.configure = function (info) {
     const saved = Array.isArray(info?.widgets_values) ? info.widgets_values : null;
-    const at = saved && saved.length >= spec.length ? findRun(spec, saved) : -1;
+    const at = saved ? findRun(spec, saved) : -1;
     const result = configure?.apply(this, arguments);
     // Assign by name rather than trusting the positional pass that just ran: this node's
-    // widget list is reordered, and on some loads the panel is not in it yet.
+    // widget list is reordered, and on some loads the panel is not in it yet. Anything
+    // past the end of a short array keeps the default the node was created with.
     if (at >= 0) {
       spec.forEach((f, i) => {
+        if (at + i >= saved.length) return;
         const w = widgetOf(this, f.name);
         if (w && typeof saved[at + i] === typeof f.fix) w.value = saved[at + i];
       });

@@ -61,6 +61,50 @@ SCALE_CUE = {
     "Roomscale": "small in the distance",
 }
 
+# PUSHING THE FRAMING HARDER. Two levers, because the framing loses to two different
+# things and each needs its own answer.
+#
+# Position: the scale cue sits right after the subject, and everything about light and
+# colour comes after it, so on a full prompt the framing instruction ends up in the
+# middle with forty words behind it. The front and the end are where an autoregressive
+# encoder pays most attention, and the cue holds neither. "Restate" adds a short closing
+# sentence so it holds both.
+#
+# Vocabulary: "small in the distance" is scene description. "Extreme long shot" is a
+# framing LABEL, and captions are full of those, so it is read as an instruction about
+# the camera instead of a detail about the woman.
+#
+# Off by default. These change what an existing workflow emits, and a prompt that
+# quietly rewrites itself after an update is worse than one that needs a box ticked.
+PUSH_OFF = "Off"
+PUSH_RESTATE = "Restate at the end"
+PUSH_CAMERA = "Camera words"
+PUSH_BOTH = "Both"
+FRAMING_PUSH = [PUSH_OFF, PUSH_RESTATE, PUSH_CAMERA, PUSH_BOTH]
+
+# The label a caption would use for each step, and the closing restatement.
+CAMERA_CUE = {
+    "Portrait": "close-up portrait",
+    "Half body": "medium shot",
+    "Balanced": "medium wide shot",
+    "Full scene": "full body, wide shot",
+    "Roomscale": "extreme long shot, the figure small in frame",
+}
+CLOSING = {
+    "Portrait": "Close-up portrait, the face filling the frame.",
+    "Half body": "Medium shot, from the waist up.",
+    "Balanced": "Medium wide shot, the figure and the place both in view.",
+    "Full scene": "Wide shot, the whole figure small against the scene.",
+    "Roomscale": "Extreme long shot, the figure very small in a wide frame.",
+}
+
+# Words that mean a block of text is describing its own light. Used to spot the collision
+# between a style that lights itself and a Lighting choice, for style text arriving on the
+# wire as well as from the dropdown, where only the dropdown was ever checked. A word list
+# is a rough test, so it only ever produces a note, never a change to the prompt.
+LIGHT_WORDS = ("light", "lighting", "lit", "shadow", "highlight", "backlit", "ambient",
+               "sunlit", "glow", "exposure", "silhouette")
+
 CUSTOM = "Custom"
 
 # Teaching presets. Each one exists to answer a placement question people actually ask,
@@ -183,11 +227,15 @@ def expand(text, seed=0, resolve_wildcards=True):
     return text
 
 
-def assemble(style, subject, surroundings, framing, placement, light_and_colour):
+def assemble(style, subject, surroundings, framing, placement, light_and_colour,
+             push=PUSH_OFF):
     """Order the parts for the chosen framing. Pure text; no rewriting of user words."""
     style, light_and_colour = _sentence(style), _sentence(light_and_colour)
     subject, surroundings = _sentence(subject), _sentence(surroundings)
     placement = _sentence(placement)
+
+    camera = push in (PUSH_CAMERA, PUSH_BOTH)
+    restate = push in (PUSH_RESTATE, PUSH_BOTH)
 
     parts = []
     if style:
@@ -197,6 +245,10 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour)
         lead = LEAD_IN.get(framing, "")
         if subject:
             parts.append(_cap(lead + subject if lead else subject) + ".")
+            # the tight steps carry their framing in the lead-in, so the camera word goes
+            # beside the subject rather than replacing wording that is already doing the job
+            if camera and CAMERA_CUE.get(framing):
+                parts.append(_cap(CAMERA_CUE[framing]) + ".")
         if surroundings:
             parts.append(_cap(surroundings) + ".")
     else:
@@ -210,7 +262,9 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour)
             tail.append(join.rstrip())
         if subject:
             tail.append(subject)
-        cue = SCALE_CUE.get(framing)
+        # the camera label replaces the descriptive cue rather than joining it: two
+        # framing phrases in one clause read as two instructions, not a louder one
+        cue = (CAMERA_CUE.get(framing) if camera else None) or SCALE_CUE.get(framing)
         if cue and subject:
             tail.append("," + " " + cue)
         if tail:
@@ -219,6 +273,10 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour)
 
     if light_and_colour:
         parts.append(_cap(light_and_colour) + ".")
+    # LAST, after the light: the point is to hold the end of the prompt, and anything
+    # appended after this would take that position back off it.
+    if restate and (subject or surroundings) and CLOSING.get(framing):
+        parts.append(CLOSING[framing])
     return " ".join(parts)
 
 
@@ -332,6 +390,18 @@ class RedNodePromptFrame:
                                "it to adjust a preset, or on its own with style set to "
                                "None. Right-click to convert to an input if you would "
                                "rather wire it in."}),
+                # APPENDED, and it has to be. widgets_values is positional, so an input
+                # added higher up moves every value a saved workflow holds below it.
+                "framing_push": (FRAMING_PUSH, {
+                    "default": PUSH_OFF,
+                    "tooltip": "Push the framing harder when a long prompt is talking over "
+                               "it. Restate at the end repeats the shot as a closing "
+                               "sentence, so the framing holds the front and the end of the "
+                               "prompt instead of the middle. Camera words swap the "
+                               "descriptive cue for the label a caption would use "
+                               "(\"extreme long shot\" rather than \"small in the "
+                               "distance\"), which is read as an instruction about the "
+                               "camera. Off leaves the prompt exactly as it was."}),
             },
         }
 
@@ -345,14 +415,16 @@ class RedNodePromptFrame:
             brightness=0, seed=0, resolve_wildcards=True, font_size=13,
             text_color="default",
             style=STYLE_NONE, style_extra="",
-            surroundings_in="", style_in="", subject_in="", light_and_colour_in=""):
+            surroundings_in="", style_in="", subject_in="", light_and_colour_in="",
+            framing_push=PUSH_OFF):
         style_text = _join_in(block(style), style_extra, style_in)
         subject = _join_in(subject, subject_in)
         surroundings = _join_in(surroundings, surroundings_in)
         placed = build_placement(placement_where, placement_what, placement)
         lit = _join_in(lighting_text(lighting), exposure(brightness), light_and_colour,
                        light_and_colour_in)
-        prompt = assemble(style_text, subject, surroundings, framing, placed, lit)
+        prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
+                          framing_push)
         prompt = expand(prompt, seed, resolve_wildcards)
         words = len(prompt.split())
 
@@ -363,6 +435,16 @@ class RedNodePromptFrame:
         clash = light_conflict_note(style, surroundings)
         if clash:
             notes.append(clash)
+        # A style block wired in from a moodboard describes its own light as readily as
+        # one off the dropdown, and only the dropdown was ever checked, so the collision
+        # this is built to catch went unmentioned on exactly the prompts most likely to
+        # hit it. Only fires when the dropdown checks below cannot: no style chosen here,
+        # but style text arriving from somewhere else.
+        if style not in SELF_LIT_STYLES and lighting != LIST_NONE:
+            wired = _clean(_join_in(style_extra, style_in)).lower()
+            if any(w in wired for w in LIGHT_WORDS):
+                notes.append("The style text sets its own light, and the %s option will "
+                             "fight it. Use one or the other." % lighting)
         if style in SELF_LIT_STYLES and lighting != LIST_NONE:
             notes.append("%s already sets its own light, so the %s option will fight it. "
                          "Use one or the other." % (style, lighting))
@@ -425,7 +507,8 @@ try:
                 style=data.get("style", STYLE_NONE),
                 style_extra=data.get("style_extra", ""),
                 seed=data.get("seed", 0),
-                resolve_wildcards=data.get("resolve_wildcards", True))
+                resolve_wildcards=data.get("resolve_wildcards", True),
+                framing_push=data.get("framing_push", PUSH_OFF))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,

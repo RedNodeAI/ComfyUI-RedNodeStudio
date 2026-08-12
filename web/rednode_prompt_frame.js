@@ -37,7 +37,7 @@ const LOOK_FIELDS = ["font_size", "text_color"];
 const FIELDS = [
   "style", "style_extra", "subject", "surroundings", "framing",
   "placement_where", "placement_what", "placement",
-  "lighting", "brightness", "light_and_colour",
+  "lighting", "brightness", "light_and_colour", "framing_push",
 ];
 
 const STYLE = `
@@ -267,6 +267,16 @@ function buildPanel(node) {
   frameLbl.appendChild(el("span", null, "tight to wide"));
   wrap.appendChild(frameLbl); wrap.appendChild(frameWrap);
 
+  // Directly under the slider, because it does nothing except make that slider louder.
+  const pushRow = el("div", "rn-pf-row");
+  pushRow.appendChild(el("label", null, "Push"));
+  const pushSel = document.createElement("select");
+  fillSelect(pushSel, W.framing_push.options?.values || [], W.framing_push.value);
+  pushSel.title = W.framing_push.tooltip || "";
+  pushSel.className = "grow";
+  pushRow.appendChild(pushSel);
+  wrap.appendChild(pushRow);
+
   // ---- placement --------------------------------------------------------------------
   const placeRow = el("div", "rn-pf-row");
   placeRow.appendChild(el("label", null, "Placement"));
@@ -324,6 +334,7 @@ function buildPanel(node) {
     W.subject.value = subject.value;
     W.surroundings.value = surroundings.value;
     W.framing.value = framings[Number(frameRange.value)] ?? W.framing.value;
+    W.framing_push.value = pushSel.value;
     W.placement_where.value = whereSel.value;
     W.placement_what.value = whatSel.value;
     W.placement.value = placement.value;
@@ -341,6 +352,7 @@ function buildPanel(node) {
     surroundings.value = W.surroundings.value || "";
     const fi = framings.indexOf(W.framing.value);
     if (fi >= 0) frameRange.value = String(fi);
+    pushSel.value = W.framing_push.value;
     whereSel.value = W.placement_where.value;
     whatSel.value = W.placement_what.value;
     placement.value = W.placement.value || "";
@@ -400,7 +412,7 @@ function buildPanel(node) {
     timer = setTimeout(preview, DEBOUNCE_MS);
   }
 
-  for (const c of [styleSel, whereSel, whatSel, lightSel]) c.addEventListener("change", changed);
+  for (const c of [styleSel, whereSel, whatSel, lightSel, pushSel]) c.addEventListener("change", changed);
   for (const c of [styleExtra, subject, surroundings, placement, lac]) c.addEventListener("input", changed);
   for (const c of [frameRange, brightRange]) c.addEventListener("input", changed);
   // middle-click still pans the canvas
