@@ -23,6 +23,12 @@ class RedNodeImageReview(nodes.PreviewImage):
                    "browsable strip, and right-click Copy / Rerun (same seed) / Rerun with "
                    "new seeds.")
 
+    # A REAL passthrough output. Workflows wire Review into Save, and core's
+    # execution cache indexes the link's socket against these declarations: a link
+    # into a node that declares no outputs is an IndexError at cache time.
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("images",)
+
     def save_images(self, images=None, **kw):
         # The workspace's image output is legitimately None when the embedded
         # sampler is off (external mode) or the queue was a paint run: nothing
@@ -31,8 +37,10 @@ class RedNodeImageReview(nodes.PreviewImage):
         if images is None:
             print("[RedNode Image Review] no image on this run; nothing to preview",
                   flush=True)
-            return {"ui": {"images": []}}
-        return super().save_images(images=images, **kw)
+            return {"ui": {"images": []}, "result": (None,)}
+        out = super().save_images(images=images, **kw)
+        out["result"] = (images,)
+        return out
 
 
 NODE_CLASS_MAPPINGS = {"RedNodeImageReview": RedNodeImageReview}

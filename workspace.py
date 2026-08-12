@@ -2014,8 +2014,12 @@ class RedNodeStudioWorkspace:
                     sampler_name=rig_sampler, scheduler=rig_scheduler,
                     run_token=_prt, clip=clip,
                     prompt=prompt, unique_id=unique_id)
-                if isinstance(_pr, dict):
-                    ui_extra = _pr.get("ui")
+                if isinstance(_pr, dict) and isinstance(_pr.get("ui"), dict):
+                    # a PRIVATE key on purpose: core draws a ui "images" list as a
+                    # giant preview under the node, and under a full panel that is a
+                    # second copy of the picture. The result pane reads this key off
+                    # the executed event; core's preview system has never heard of it.
+                    ui_extra = {"rn_paint_images": _pr["ui"].get("images") or []}
                 print("[RedNode Workspace] built-in paint pass rendered with rig %r"
                       % (rig_name or "(none)"), flush=True)
             except Exception as exc:
