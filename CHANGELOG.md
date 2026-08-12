@@ -18,6 +18,12 @@ a node that treats word order as the setting it actually is.
 - Paint tab: a Passes box on the denoise row runs that same low denoise over its own result up to ten times inside one Generate, with a fresh seed each pass and the mask reapplied between them. The settling chain without the dragging, and only the last picture comes back
 - Prompt Box values stop moving when the workflow changes. The panel was taking a slot in the saved widget list, so the prompt loaded into the seed, "fixed" into the wildcard toggle and the font size into the colour. Values are written and read by name now, and a workflow saved while it was wrong repairs itself on load
 - Prompt Frame had the same fault and worse: its panel is built a frame late, so every load shifted Subject into Surroundings. Same fix
+- Prompt Frame: a Push option under the Framing slider, off by default, for when a long prompt talks over the framing. Restate at the end repeats the shot as a closing sentence so the framing holds the end of the prompt as well as the front; Camera words swaps "small in the distance" for the label a caption would use, like "extreme long shot"
+- Prompt Frame: the light conflict warning now also reads style text arriving on the wire, which is where a moodboard block lands and exactly where it never looked
+- Prompt Frame: a tools fold like the Prompt Box has, so the seed, wildcard, font and colour rows tuck away under the panel. The text boxes also come back at whatever height you dragged them to
+- Grabber: click the channel field and type to search, the same picker the LoRA rows use. Channels say how many values they carry, recently used ones come first, and a name that matches nothing is offered as a new channel
+- The channel picker no longer filters by the name it already shows, which made the list a single entry of the thing you already had
+- The example workflow ships as Rednode Ultima V1.1.0
 - The README covers the prompt frame, and the node count on it is right again
 
 **1.0.37** - 2026-08-04
