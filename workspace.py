@@ -581,6 +581,11 @@ def parse_config(config_json):
         }
         if name == "i2i":
             tabs[name]["prompt_only"] = bool(t.get("prompt_only"))
+            # the i2i canvas source: the gallery as always, or a wired image or
+            # latent, which is how one workspace chains into the next
+            tabs[name]["canvas"] = (t.get("canvas")
+                                    if t.get("canvas") in ("image", "latent")
+                                    else "gallery")
             try:
                 dn = float(t.get("denoise", 0.7))
             except (TypeError, ValueError):
@@ -1290,6 +1295,15 @@ class RedNodeStudioWorkspace:
                 "light_and_colour_in": ("STRING", {"forceInput": True, "tooltip":
                     "light and colour wording for the active prompt row, joined "
                     "after its own"}),
+                # APPENDED: the chain input. Wire another workspace's image output
+                # here, set the Img2Img tab's canvas to Wired image, and this one
+                # renders over it at the tab's denoise. Pixels fit every model, so
+                # a Krea 2 workspace can feed an XL one this way; the latent input
+                # does the same for same-model chains with no VAE round trip.
+                "image_in": ("IMAGE", {"tooltip":
+                    "an image to use as the Img2Img canvas when the tab's canvas "
+                    "is set to Wired image. Chain another workspace's image output "
+                    "in here."}),
             },
         }
 
@@ -1300,7 +1314,7 @@ class RedNodeStudioWorkspace:
                     "MODEL", "VAE", "INT", "FLOAT",
                     comfy.samplers.KSampler.SAMPLERS,
                     comfy.samplers.KSampler.SCHEDULERS, "INT",
-                    "CONDITIONING", "CONDITIONING", "IMAGE")
+                    "CONDITIONING", "CONDITIONING", "IMAGE", "LATENT")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
@@ -1309,7 +1323,7 @@ class RedNodeStudioWorkspace:
                     "model", "lora_keywords", "clip", "paint_prompt",
                     "paint_model", "vae",
                     "steps", "cfg", "sampler_name", "scheduler", "detailer_steps",
-                    "positive", "negative", "image")
+                    "positive", "negative", "image", "result_latent")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1354,7 +1368,7 @@ class RedNodeStudioWorkspace:
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
                mood_caption_in=None, clip=None, i2i_caption_in=None, vae=None,
                model=None, latent=None, style_in=None, subject_in=None,
-               surroundings_in=None, light_and_colour_in=None):
+               surroundings_in=None, light_and_colour_in=None, image_in=None):
         latent_in = latent
         cfg = parse_config(config)
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
@@ -1484,6 +1498,28 @@ class RedNodeStudioWorkspace:
         #   3. the Latent tab, which is the canvas a prompt-only pass generates onto
         # (the Paint tab sits outside all of this: it has its own render node.)
         it = tabs["i2i"]
+        # THE CHAIN CANVASES. "Wired image" substitutes the wired picture for the
+        # gallery pick and rides the whole existing encode path, scale, tiling and
+        # all. "Wired latent" takes the latent input as the canvas directly and
+        # applies the tab's denoise, which a bare wired latent never did. Both say
+        # so, and say when the wire is missing rather than silently falling back.
+        if it["on"] and not it["prompt_only"] and it["canvas"] == "image":
+            if image_in is not None:
+                i2i_img = image_in
+                print("[RedNode Workspace] i2i canvas: the wired image input "
+                      f"({image_in.shape[2]} x {image_in.shape[1]})", flush=True)
+            else:
+                print("[RedNode Workspace] the i2i canvas is set to Wired image but "
+                      "nothing is wired into image_in; using the gallery", flush=True)
+        if it["on"] and not it["prompt_only"] and it["canvas"] == "latent":
+            if latent_in is not None:
+                latent = latent_in
+                denoise_out = it["denoise"]
+                print("[RedNode Workspace] i2i canvas: the wired latent, denoise "
+                      "%.2f" % denoise_out, flush=True)
+            else:
+                print("[RedNode Workspace] the i2i canvas is set to Wired latent "
+                      "but nothing is wired into latent", flush=True)
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
         if latent is None and real_i2i:
             if vae is not None:
@@ -1999,7 +2035,7 @@ class RedNodeStudioWorkspace:
         # standalone Studio node stays for classic graphs; direct wires there still
         # win because the bundle rules are unchanged. The prompt is the Prompts tab's
         # row for the active rig, typed text first as always.
-        positive = negative = rig_image = None
+        positive = negative = rig_image = result_latent_out = None
         _prow = prompt_row_for(cfg["models"], cfg["prompts"])
         _mode = cfg["models"]["sampler_mode"]
         # THE MODEL DECIDES THE ENCODE, the same rule the reference toggles follow:
@@ -2077,6 +2113,7 @@ class RedNodeStudioWorkspace:
                 _out = _core.common_ksampler(
                     model, _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
                     positive, negative, _lat, denoise=_dn)[0]
+                result_latent_out = _out
                 _v = vae if vae is not None else rig_vae
                 if _v is None:
                     print("[RedNode Workspace] built-in sampler rendered, but no "
@@ -2152,7 +2189,10 @@ class RedNodeStudioWorkspace:
                 rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer,
                 # APPENDED: the folded-in Studio's conditioning, and the embedded
                 # sampler's picture. The whole classic chain, one node.
-                positive, negative, rig_image)
+                positive, negative, rig_image,
+                # APPENDED: the embedded sampler's latent before decode, for
+                # chaining a same-model workspace with no VAE round trip
+                result_latent_out)
         if ui_extra:
             return {"ui": ui_extra, "result": _result}
         return _result

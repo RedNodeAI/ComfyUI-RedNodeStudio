@@ -1985,6 +1985,36 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
     grid.appendChild(cell);
   });
 
+  if (tabName === "i2i") {
+    // the chain switch: whose picture is the canvas. Gallery is everything as it
+    // always was; the wired choices are how one workspace feeds the next.
+    if (!["gallery", "image", "latent"].includes(t.canvas)) t.canvas = "gallery";
+    const crow = document.createElement("div");
+    crow.className = "rn-ws-row";
+    const clab = document.createElement("span");
+    clab.className = "rn-ws-note";
+    clab.textContent = "Canvas";
+    const cseg = document.createElement("div");
+    cseg.className = "rn-ws-seg";
+    for (const [value, label, tip] of [
+      ["gallery", "Gallery", "The selected image below, as always."],
+      ["image", "Wired image", "The image_in input is the canvas: chain another "
+                               + "workspace's image output here. Pixels fit every "
+                               + "model, so the rigs can differ."],
+      ["latent", "Wired latent", "The latent input is the canvas at this tab's "
+                                 + "denoise: chain another workspace's result_latent "
+                                 + "here. Same model family only, no VAE round trip."],
+    ]) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.title = tip;
+      b.className = "rn-ws-segb" + (t.canvas === value ? " on" : "");
+      b.onclick = () => { t.canvas = value; writeCfg(node); render(node); };
+      cseg.appendChild(b);
+    }
+    crow.append(clab, cseg);
+    body.appendChild(crow);
+  }
   const add = document.createElement("button");
   add.className = "rn-ws-add";
   add.style.width = add.style.height = cellPx + "px";
