@@ -109,9 +109,9 @@ class RedNodePaintOut:
     # workflow, so a new socket on the end costs nothing and every existing wire stays
     # where it was, while moving one silently repoints somebody's graph.
     RETURN_TYPES = ("IMAGE", "MASK", "FLOAT", "STRING", PAINT_TYPE, "INT", "INT",
-                    "FLOAT", "INT", "STRING", "INT")
+                    "FLOAT", "INT", "STRING", "INT", "MODEL", "CLIP", "VAE")
     RETURN_NAMES = ("image", "mask", "denoise", "prompt", "paint", "width", "height",
-                    "cfg", "steps", "negative", "seed")
+                    "cfg", "steps", "negative", "seed", "model", "clip", "vae")
     FUNCTION = "handoff"
     CATEGORY = "RedNode/Image"
     DESCRIPTION = ("Hands the Paint tab's picture and mask out so any renderer can do "
@@ -378,10 +378,21 @@ class RedNodePaintOut:
         if not against.strip():
             against = str(main_negative or "")
         seed = int(pc.get("seed", 0))
+        # The Models tab's rig, loaded once in the workspace module and shared through
+        # its cache, so an external chain gets model, CLIP and VAE from HERE with no
+        # loader in its graph. None until the tab names files; wiring an empty socket
+        # into a sampler fails loudly downstream, which is the honest failure.
+        rig_model = rig_clip = rig_vae = None
+        try:
+            from .workspace import load_active_rig, parse_config as _pc_full
+            _, rig_model, rig_clip, rig_vae = load_active_rig(
+                _pc_full(json.dumps(_workspace_cfg(prompt))))
+        except Exception as exc:
+            print("[RedNode Paint Out] no Models-tab rig: %s" % exc, flush=True)
         return (out_img, out_mask, denoise, words,
                 {"base": base, "mask": mask, "box": box, "scope": scope},
                 int(out_img.shape[2]), int(out_img.shape[1]), cfg_scale, steps,
-                against, seed)
+                against, seed, rig_model, rig_clip, rig_vae)
 
 
 class RedNodePaintIn:

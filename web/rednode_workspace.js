@@ -804,6 +804,29 @@ export function readCfg(node) {
   if (!Array.isArray(d.paint_loras.slots)) d.paint_loras.slots = [];
   if (typeof d.paint_loras.ui !== "object" || !d.paint_loras.ui) d.paint_loras.ui = {};
   if (typeof d.paint_loras.seed !== "number") d.paint_loras.seed = 0;
+  // the Models tab: named rigs loaded inside the workspace. The active one fills
+  // whatever input is not wired; a wired input always wins.
+  d.models = d.models && typeof d.models === "object" ? d.models : {};
+  if (!Array.isArray(d.models.rigs)) d.models.rigs = [];
+  d.models.rigs = d.models.rigs.filter((r) => r && typeof r === "object");
+  for (const r of d.models.rigs) {
+    for (const k of ["name", "checkpoint", "unet", "clip", "clip_type", "vae"]) {
+      if (typeof r[k] !== "string") r[k] = "";
+    }
+  }
+  d.models.active = Math.max(0, Math.min(
+    typeof d.models.active === "number" ? Math.round(d.models.active) : 0,
+    Math.max(0, d.models.rigs.length - 1)));
+  // the Prompts tab: named prompts, each linked to a rig by the rig's name
+  d.prompts = d.prompts && typeof d.prompts === "object" ? d.prompts : {};
+  if (!Array.isArray(d.prompts.rows)) d.prompts.rows = [];
+  d.prompts.rows = d.prompts.rows.filter((x) => x && typeof x === "object");
+  for (const x of d.prompts.rows) {
+    for (const k of ["name", "rig", "text", "negative"]) {
+      if (typeof x[k] !== "string") x[k] = "";
+    }
+    x.kind = x.kind === "plain" ? "plain" : "krea2";
+  }
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
   d.paint.on = !!d.paint.on;
   if (typeof d.paint.source !== "string") d.paint.source = "";
@@ -7929,6 +7952,252 @@ function maskCanvas(layer, feather) {
 // The Latent tab: the workspace's own Empty Latent Image, feeding output_latent.
 
 
+// ---------------------------------------------------------------- Models tab
+// Load the rig INSIDE the workspace: checkpoint or diffusion model, CLIP, VAE, by
+// name, several rigs kept and switched by clicking. The active rig fills whatever
+// input is not wired (a wired input always wins), rides out on the model / clip /
+// vae outputs, and Paint Out hands it to external chains. The lists come from
+// ComfyUI's own /object_info for the stock loader nodes, so whatever core can load,
+// this can offer, with the shared picker's search and recents over the top.
+let MODEL_LISTS = null;
+async function fetchModelLists() {
+  if (MODEL_LISTS) return MODEL_LISTS;
+  const pull = async (nodeName, field) => {
+    try {
+      const r = await api.fetchApi("/object_info/" + nodeName);
+      const d = await r.json();
+      const v = d?.[nodeName]?.input?.required?.[field]?.[0];
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  };
+  MODEL_LISTS = {
+    checkpoints: await pull("CheckpointLoaderSimple", "ckpt_name"),
+    unets: await pull("UNETLoader", "unet_name"),
+    clips: await pull("CLIPLoader", "clip_name"),
+    clip_types: await pull("CLIPLoader", "type"),
+    vaes: await pull("VAELoader", "vae_name"),
+  };
+  return MODEL_LISTS;
+}
+
+function modelsBody(node, body) {
+  const cfg = node._rnCfg;
+  const M = cfg.models;
+  if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.textContent = M.rigs.length
+    ? "The active rig loads at queue time and fills the model, clip and vae "
+      + "outputs. Anything wired into the workspace still wins."
+    : "No rigs yet. Add one, name it, and pick its files; the workspace then loads "
+      + "it so the graph needs no loader nodes.";
+  body.appendChild(note);
+
+  const list = document.createElement("div");
+  list.style.cssText = "display:flex;flex-direction:column;gap:5px";
+  M.rigs.forEach((rig, i) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const use = document.createElement("button");
+    use.className = "rn-ws-segb" + (M.active === i ? " on" : "");
+    use.textContent = M.active === i ? "Active" : "Use";
+    use.title = "The active rig is the one that loads and renders.";
+    use.onclick = () => { M.active = i; writeCfg(node); render(node); };
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = rig.name;
+    name.placeholder = "Rig " + (i + 1);
+    name.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
+                       + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
+                       + "padding:4px 7px";
+    name.title = "Name this rig; the Prompts tab links prompts to it by this name.";
+    name.addEventListener("change", () => { rig.name = name.value; writeCfg(node); });
+    const files = document.createElement("span");
+    files.className = "hint";
+    files.textContent = [rig.checkpoint || rig.unet, rig.clip, rig.vae]
+      .filter(Boolean).length + " file(s)";
+    const del = document.createElement("button");
+    del.className = "rn-ws-btn";
+    del.style.width = "auto";
+    del.textContent = "\u2715";
+    del.title = "Remove this rig. Files on disk are untouched.";
+    del.onclick = () => {
+      M.rigs.splice(i, 1);
+      if (M.active >= M.rigs.length) M.active = Math.max(0, M.rigs.length - 1);
+      writeCfg(node); render(node);
+    };
+    row.append(use, name, files, del);
+    list.appendChild(row);
+  });
+  body.appendChild(list);
+
+  const add = document.createElement("button");
+  add.className = "rn-ws-btn";
+  add.style.width = "auto";
+  add.style.padding = "0 10px";
+  add.textContent = "\uFF0B Rig";
+  add.onclick = () => {
+    M.rigs.push({ name: "", checkpoint: "", unet: "", clip: "", clip_type: "", vae: "" });
+    M.active = M.rigs.length - 1;
+    writeCfg(node); render(node);
+  };
+  body.appendChild(add);
+
+  const rig = M.rigs[M.active];
+  if (!rig) return;
+
+  // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
+  // with recents shared per kind so the model you use daily is always on top
+  const L = MODEL_LISTS
+    || { checkpoints: [], unets: [], clips: [], clip_types: [], vaes: [] };
+  const pickRow = (label, key, items, recentKey, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.style.cssText = "flex:none;width:110px";
+    lab.textContent = label;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = rig[key];
+    input.placeholder = "None";
+    input.title = hint + " Click and type to search; recently used come first.";
+    input.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
+                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:12px;"
+                        + "padding:4px 7px";
+    makePicker(input, () => items(), (v) => {
+      rig[key] = v;
+      writeCfg(node); render(node);
+    }, { current: () => rig[key], emptyLabel: "none", recent: recentKey });
+    row.append(lab, input);
+    body.appendChild(row);
+  };
+  pickRow("Checkpoint", "checkpoint", () => L.checkpoints, "models",
+          "A full checkpoint: model, CLIP and VAE in one file.");
+  pickRow("Diffusion model", "unet", () => L.unets, "models",
+          "A bare diffusion model; add CLIP and VAE below. Wins over the checkpoint's.");
+  pickRow("CLIP", "clip", () => L.clips, "clips",
+          "The text encoder. Krea 2 wants qwen3vl with the type set to krea2.");
+  {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.style.cssText = "flex:none;width:110px";
+    lab.textContent = "CLIP type";
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    for (const t of ["", ...L.clip_types]) {
+      const o = document.createElement("option");
+      o.value = t;
+      o.textContent = t || "default";
+      o.selected = t === rig.clip_type;
+      sel.appendChild(o);
+    }
+    sel.title = "How the CLIP file is interpreted. krea2 for the Krea 2 encoder.";
+    sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); };
+    row.append(lab, sel);
+    body.appendChild(row);
+  }
+  pickRow("VAE", "vae", () => L.vaes, "vaes",
+          "The VAE. Comes out on the workspace's vae output and through Paint Out.");
+}
+
+// ---------------------------------------------------------------- Prompts tab
+// Named prompts, each linked to a rig by name. Krea 2 prompts belong in the RedNode
+// Prompt Box style; anything else gets a plain box, which is the switch on each row.
+function promptsBody(node, body) {
+  const cfg = node._rnCfg;
+  const R = cfg.prompts.rows;
+
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.textContent = R.length
+    ? "Prompts live with the model they were written for. Link each one to a rig "
+      + "from the Models tab."
+    : "No prompts yet. Add one, name it, and link it to a rig from the Models tab.";
+  body.appendChild(note);
+
+  R.forEach((row, i) => {
+    const box = document.createElement("div");
+    box.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:7px;"
+                      + "background:#1a1d22;border:1px solid #2a2e34;border-radius:6px";
+    const head = document.createElement("div");
+    head.className = "rn-ws-row";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.value = row.name;
+    name.placeholder = "Prompt " + (i + 1);
+    name.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
+                       + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
+                       + "padding:4px 7px";
+    name.addEventListener("change", () => { row.name = name.value; writeCfg(node); });
+    const rigPick = document.createElement("input");
+    rigPick.type = "text";
+    rigPick.value = row.rig;
+    rigPick.placeholder = "Link a rig";
+    rigPick.title = "Which Models-tab rig this prompt belongs to.";
+    rigPick.style.cssText = "width:150px;background:#15171b;border:1px solid #33373d;"
+                          + "border-radius:4px;color:#e8ecf1;font-size:12px;"
+                          + "padding:4px 7px";
+    makePicker(rigPick,
+               () => cfg.models.rigs.map((r, j) => r.name || "Rig " + (j + 1)),
+               (v) => { row.rig = v; writeCfg(node); },
+               { current: () => row.rig, emptyLabel: "none" });
+    const kind = document.createElement("button");
+    kind.className = "rn-ws-segb" + (row.kind === "krea2" ? " on" : "");
+    kind.textContent = row.kind === "krea2" ? "Krea 2 box" : "Plain box";
+    kind.title = "Krea 2 prompts use the RedNode Prompt Box conventions (wildcards, "
+               + "@keywords). Every other model gets the plain box.";
+    kind.onclick = () => {
+      row.kind = row.kind === "krea2" ? "plain" : "krea2";
+      writeCfg(node); render(node);
+    };
+    const del = document.createElement("button");
+    del.className = "rn-ws-btn";
+    del.style.width = "auto";
+    del.textContent = "\u2715";
+    del.onclick = () => { R.splice(i, 1); writeCfg(node); render(node); };
+    head.append(name, rigPick, kind, del);
+    box.appendChild(head);
+
+    const text = document.createElement("textarea");
+    text.rows = 3;
+    text.value = row.text;
+    text.placeholder = row.kind === "krea2"
+      ? "prompt...  __wildcard__  @keyword" : "prompt...";
+    text.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
+                       + "border:1px solid #2a2e34;border-radius:5px;color:"
+                       + (row.kind === "krea2" ? "#9fe38b" : "#e2e5ea")
+                       + ";font-size:13px;padding:6px 8px;resize:vertical";
+    text.addEventListener("change", () => { row.text = text.value; writeCfg(node); });
+    box.appendChild(text);
+
+    const neg = document.createElement("textarea");
+    neg.rows = 2;
+    neg.value = row.negative;
+    neg.placeholder = "Negative (optional)";
+    neg.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
+                      + "border:1px solid #2a2e34;border-radius:5px;color:#b08a8a;"
+                      + "font-size:12px;padding:6px 8px;resize:vertical";
+    neg.addEventListener("change", () => { row.negative = neg.value; writeCfg(node); });
+    box.appendChild(neg);
+    body.appendChild(box);
+  });
+
+  const add = document.createElement("button");
+  add.className = "rn-ws-btn";
+  add.style.width = "auto";
+  add.style.padding = "0 10px";
+  add.textContent = "\uFF0B Prompt";
+  add.onclick = () => {
+    R.push({ name: "", rig: "", kind: "krea2", text: "", negative: "" });
+    writeCfg(node); render(node);
+  };
+  body.appendChild(add);
+}
+
 function latentBody(node, body) {
   const cfg = node._rnCfg;
   const L = cfg.latent;
@@ -8615,6 +8884,9 @@ const tabLit = (cfg, id) =>
   : id === "paint" ? cfg.paint?.on
   : id === "post" ? POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
   : id === "latent" ? cfg.latent.on
+  : id === "models" ? !!cfg.models?.rigs?.some?.((r) =>
+      r.checkpoint || r.unet || r.clip || r.vae)
+  : id === "prompts" ? !!cfg.prompts?.rows?.some?.((x) => x.text.trim())
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
@@ -8745,6 +9017,8 @@ export function render(node) {
   const body = document.createElement("div");
   body.className = "rn-ws-body";
   if (cur === "people") peopleBody(node, body);
+  else if (cur === "models") modelsBody(node, body);
+  else if (cur === "prompts") promptsBody(node, body);
   else if (cur === "latent") latentBody(node, body);
   else if (cur === "masks") masksBody(node, body);
   else if (cur === "post") postBody(node, body);

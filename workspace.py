@@ -683,6 +683,47 @@ def parse_config(config_json):
         "ui": pln.get("ui") if isinstance(pln.get("ui"), dict) else {},
         "seed": max(0, plseed),
     }
+    # The Models tab: named rigs loaded INSIDE the workspace, so a custom workflow is
+    # two nodes dropped in the middle instead of a transfer harness of loaders and
+    # channel hops. Each rig is a checkpoint OR a diffusion model + CLIP + VAE, all by
+    # filename; the active one loads at build time (cached, so it re-reads nothing
+    # until a name changes) and fills whatever input is not wired. A wired input
+    # always wins, which is how the rest of the panel already behaves.
+    min_ = data.get("models") if isinstance(data.get("models"), dict) else {}
+    rigs = []
+    for r in (min_.get("rigs") if isinstance(min_.get("rigs"), list) else []):
+        if not isinstance(r, dict):
+            continue
+        rigs.append({
+            "name": str(r.get("name") or ""),
+            "checkpoint": str(r.get("checkpoint") or ""),
+            "unet": str(r.get("unet") or ""),
+            "clip": str(r.get("clip") or ""),
+            "clip_type": str(r.get("clip_type") or ""),
+            "vae": str(r.get("vae") or ""),
+        })
+    try:
+        active = int(min_.get("active", 0))
+    except (TypeError, ValueError):
+        active = 0
+    models_cfg = {"rigs": rigs,
+                  "active": max(0, min(active, len(rigs) - 1)) if rigs else 0}
+    # The Prompts tab: named prompts, each linked to a rig by the rig's NAME, each
+    # marked with which editor draws it (the Krea 2 styled box, or a plain one for
+    # every other model). Authoring and storage; encoding stays downstream.
+    prin = data.get("prompts") if isinstance(data.get("prompts"), dict) else {}
+    prompt_rows = []
+    for p in (prin.get("rows") if isinstance(prin.get("rows"), list) else []):
+        if not isinstance(p, dict):
+            continue
+        prompt_rows.append({
+            "name": str(p.get("name") or ""),
+            "rig": str(p.get("rig") or ""),
+            "kind": "plain" if p.get("kind") == "plain" else "krea2",
+            "text": str(p.get("text") or ""),
+            "negative": str(p.get("negative") or ""),
+        })
+    prompts_cfg = {"rows": prompt_rows}
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask
     # and the source ride the SAME sockets the edit mask and Img2Img already use
     # (edit_mask, output_latent, denoise), so the sampler chain needs no changes.
@@ -886,7 +927,59 @@ def parse_config(config_json):
             "studio_preset": studio_preset, "auto": auto, "latent": latent_cfg,
             "vram_tier": tier, "paint": paint_cfg,
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
-            "loras": loras_cfg, "paint_loras": paint_loras_cfg}
+            "loras": loras_cfg, "paint_loras": paint_loras_cfg,
+            "models": models_cfg, "prompts": prompts_cfg}
+
+
+# ---------------------------------------------------------------------------
+# The Models tab's loader. ONE rig cached at a time, keyed by the filenames, so a
+# queue that changes nothing re-reads nothing and switching rigs drops the old
+# references before the new files load. Loading goes through ComfyUI's own loader
+# nodes rather than reimplementing them: those are the code paths every workflow
+# already exercises, and they follow core across versions.
+# ---------------------------------------------------------------------------
+_RIG_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
+
+
+def load_active_rig(cfg):
+    """(name, model, clip, vae) for the active Models-tab rig; Nones when unset."""
+    m = cfg.get("models") or {}
+    rigs = m.get("rigs") or []
+    if not rigs:
+        return "", None, None, None
+    rig = rigs[max(0, min(int(m.get("active", 0)), len(rigs) - 1))]
+    key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"], rig["vae"])
+    if not any(key):
+        return rig["name"], None, None, None
+    if _RIG_CACHE["key"] == key:
+        return rig["name"], _RIG_CACHE["model"], _RIG_CACHE["clip"], _RIG_CACHE["vae"]
+    # drop the old rig BEFORE loading the new one, so both never sit in RAM at once
+    _RIG_CACHE.update({"key": None, "model": None, "clip": None, "vae": None})
+    model = clip = vae = None
+    try:
+        import nodes as _nodes
+        if rig["checkpoint"]:
+            model, clip, vae = _nodes.CheckpointLoaderSimple().load_checkpoint(
+                ckpt_name=rig["checkpoint"])[:3]
+        if rig["unet"]:
+            model = _nodes.UNETLoader().load_unet(
+                unet_name=rig["unet"], weight_dtype="default")[0]
+        if rig["clip"]:
+            clip = _nodes.CLIPLoader().load_clip(
+                clip_name=rig["clip"],
+                type=rig["clip_type"] or "stable_diffusion")[0]
+        if rig["vae"]:
+            vae = _nodes.VAELoader().load_vae(vae_name=rig["vae"])[0]
+    except Exception as exc:
+        print("[RedNode Workspace] the Models tab could not load %r: %s"
+              % (rig["name"] or key, exc), flush=True)
+        return rig["name"], None, None, None
+    _RIG_CACHE.update({"key": key, "model": model, "clip": clip, "vae": vae})
+    kinds = [k for k, v in (("model", model), ("clip", clip), ("vae", vae)) if v is not None]
+    print("[RedNode Workspace] Models tab loaded %s (%s)"
+          % (rig["name"] or rig["checkpoint"] or rig["unet"], ", ".join(kinds)),
+          flush=True)
+    return rig["name"], model, clip, vae
 
 
 def resize_dims(w, h, target):
@@ -1055,14 +1148,14 @@ class RedNodeStudioWorkspace:
                     "MASK", "MASK", SETTINGS_TYPE, "LATENT", "FLOAT", "STRING",
                     "STRING", "STRING", "STRING", "IMAGE", "STRING", "FLOAT",
                     postprocess.POST_TYPE, "MODEL", "STRING", "CLIP", "STRING",
-                    "MODEL")
+                    "MODEL", "VAE")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
                     "subject_prompt", "scene_prompt", "moodboard_prompt",
                     "i2i_image", "i2i_prompt", "denoise", "post_process",
                     "model", "lora_keywords", "clip", "paint_prompt",
-                    "paint_model")
+                    "paint_model", "vae")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1483,6 +1576,16 @@ class RedNodeStudioWorkspace:
                     prompts[tab_name] = autoprompt.strip_style_terms(
                         prompts[tab_name], mood_text)
 
+        # THE MODELS TAB FILLS WHAT IS NOT WIRED. A wired input always wins, which is
+        # how every other part of the panel behaves, so an existing graph keeps its
+        # loaders and a new one needs none. The rig loads once and is cached on its
+        # filenames; the LoRA tabs below then ride it exactly as they ride a wire.
+        rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg)
+        if model is None and rig_model is not None:
+            model = rig_model
+        if clip is None and rig_clip is not None:
+            clip = rig_clip
+
         # the LoRAs tab: the stack rides the model through, exactly as the LoRA Stack
         # node does it (same code), so the workspace can carry the whole rig
         lora_words = ""
@@ -1613,6 +1716,11 @@ class RedNodeStudioWorkspace:
             "i2i_image": i2i_img, "i2i_prompt": prompts["i2i"],
             "denoise": denoise_out, "post": post_cfg,
             "lora_keywords": lora_words, "clip": lora_clip,
+            # The Models tab's rig rides the bundle so Paint Out can hand model, CLIP
+            # and VAE to an external chain without a loader in sight. The model here
+            # is the LoRA-applied one, the same object the model output carries.
+            "rig": {"name": rig_name, "model": model, "clip": lora_clip,
+                    "vae": rig_vae},
         }
         return (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
                 style_strength if style_strength is not None else 0.5,
@@ -1629,7 +1737,10 @@ class RedNodeStudioWorkspace:
                 # APPENDED: the paint branch's model. Wire it into Paint Render to give
                 # the paint pass its own LoRAs; on the default routing it is the same
                 # model the model output carries, so old graphs lose nothing.
-                paint_model)
+                paint_model,
+                # APPENDED: the Models tab's VAE, None until a rig names one. The tab
+                # loads it; this socket is how the rest of the graph takes it.
+                rig_vae)
 
 
 # ---------------------------------------------------------------------------

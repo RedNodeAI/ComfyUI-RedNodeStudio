@@ -9,6 +9,8 @@
 // Which tabs exist, in the order they are shown.
 
 export const TAB_ORDER = [
+  { id: "models", label: "Models", group: "model" },
+  { id: "prompts", label: "Prompts", group: "model" },
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },
   { id: "loras", label: "LoRAs", group: "model" },
