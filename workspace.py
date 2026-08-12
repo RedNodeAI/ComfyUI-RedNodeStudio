@@ -1956,7 +1956,12 @@ class RedNodeStudioWorkspace:
         # settings, then the VAE decode, so the whole render is one node and an
         # image output. A latent from the tabs (i2i, edit) keeps its denoise; a
         # fresh canvas samples at 1.0 from an empty Krea 2 latent (16 channel).
-        if _mode == "internal" and positive is not None and model is not None:
+        # NEVER ON A PAINT RUN: a paint Generate queues this node with a run token,
+        # and rendering a whole fresh image underneath the paint pass is exactly
+        # the "ignores everything I painted" the user reported. A paint run paints.
+        _prt = str(cfg["paint"].get("run_token") or "")
+        if (_mode == "internal" and not _prt and positive is not None
+                and model is not None):
             try:
                 import nodes as _core
                 _seed = cfg["models"]["seed"]
@@ -1995,7 +2000,6 @@ class RedNodeStudioWorkspace:
         # the user was missing: refs, edit masks and all, exactly what the classic
         # Paint Render wiring carried, with no render node on the canvas.
         ui_extra = None
-        _prt = str(cfg["paint"].get("run_token") or "")
         if _prt:
             try:
                 from .paint_render import RedNodePaintRender
