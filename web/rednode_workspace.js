@@ -7605,15 +7605,19 @@ function paintBody(node, body) {
   rlab.style.cssText = "flex:none;width:96px";
   rlab.textContent = "Use as reference";
   refRow.appendChild(rlab);
-  // WHERE THE RENDER RUNS decides whether these are offered. The toggles feed Paint
-  // Render's own reference conditioning, so they are live there; on an external chain
-  // they change nothing and a dead button teaches the wrong lesson. The one exception
-  // by exact name: a chain called "Krea2 Workspace", whose sampler takes the main
-  // studio conditioning and carries the references itself.
+  // THE MODEL DECIDES whether these are offered, the user's rule since the Models
+  // tab exists: references are Krea 2 conditioning, so a rig whose CLIP type is
+  // krea2 can carry them and any other model cannot, wherever the render runs. A
+  // graph with no rigs configured keeps the old renderer-kind rule (internal Paint
+  // Render yes, external chain no, "Krea2 Workspace" by exact name yes), so nothing
+  // unmigrated changes.
   const refT = paintTargets().find((x) => String(x.node.id) === String(P.renderer ?? ""));
   const refName = String(refT ? rendererName(refT) : P.renderer_name || "")
     .trim().toLowerCase();
-  const refsLive = (refT ? refT.kind === "render" : true) || refName === "krea2 workspace";
+  const activeRig = (cfg.models?.rigs || [])[cfg.models?.active || 0];
+  const refsLive = activeRig
+    ? activeRig.clip_type === "krea2"
+    : ((refT ? refT.kind === "render" : true) || refName === "krea2 workspace");
   for (const [key, label, tip] of [
     ["use_subject", "Subject",
      "Paint with the Subject tab's image as the identity reference, so a repainted "
@@ -7634,10 +7638,14 @@ function paintBody(node, body) {
       b.onclick = () => { P[key] = !P[key]; writeCfg(node); render(node); };
     } else {
       b.disabled = true;
-      b.title = "References cannot ride this chain: its sampler takes plain text "
-              + "conditioning, so these toggles would change nothing. Pick the "
-              + "Krea2 Workspace chain, or the internal Paint Render, and they "
-              + "come back.";
+      b.title = activeRig
+        ? "References are Krea 2 conditioning, and the active rig is not a Krea 2 "
+          + "model (its CLIP type is not krea2). Switch the active rig on the "
+          + "Models tab and they come back."
+        : "References cannot ride this chain: its sampler takes plain text "
+          + "conditioning, so these toggles would change nothing. Pick the "
+          + "Krea2 Workspace chain, or the internal Paint Render, and they "
+          + "come back.";
     }
     refRow.appendChild(b);
   }
