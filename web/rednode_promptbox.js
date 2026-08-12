@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { pinWidgetValues } from "./rednode_widget_values.js";
 
 // RedNode Prompt Box — custom editor widget for the RedNodePromptBox node.
 // A transparent <textarea> sits over a colored backdrop <div>; the backdrop renders the
@@ -14,6 +15,11 @@ const COLORS = {
   default: "", white: "#e8e8e8", green: "#9fe38b", amber: "#ffcf6b",
   cyan: "#7fd7e6", pink: "#f0a0d0", red: "#ff8a8a", blue: "#8ab4ff",
 };
+
+// The panel is moved to the front of node.widgets so the hidden native rows cannot draw
+// over it, which costs the node a slot in the positional widgets_values array and loaded
+// every value one place to the right of where it was saved. rednode_widget_values.js has
+// the whole account of it; pinWidgetValues below is what keeps this node's values put.
 
 // __wildcard__  (letters/digits/_ . - / *, e.g. __hair/color__, __color*__)
 const WILDCARD_RE = /__[A-Za-z0-9_.\-\/*]+__/g;
@@ -123,7 +129,11 @@ function buildBox(node) {
 
   // native "text" widget = the value holder. HIDE it (do not remove).
   const promptWidget = node.widgets?.find((w) => w.name === "text");
-  if (!promptWidget) { requestAnimationFrame(() => buildBox(node)); return; }
+  if (!promptWidget) {
+    // bounded: without a stop this retries every frame for the life of the tab
+    if ((node._rnBoxTries = (node._rnBoxTries || 0) + 1) < 60) requestAnimationFrame(() => buildBox(node));
+    return;
+  }
   promptWidget.type = "hidden";
   promptWidget.hidden = true;
   promptWidget.computeSize = () => [0, -4];
@@ -148,9 +158,10 @@ function buildBox(node) {
     getValue: () => promptWidget.value,
     setValue: (v) => { promptWidget.value = v ?? ""; syncFromWidget(); },
     getMinHeight: () => 160,
-    serialize: false, // the hidden "text" widget owns serialization
+    serialize: false, // keeps the panel out of the API prompt
   });
   widget._rnBox = true;
+  widget.serialize = false;   // and out of widgets_values — the hidden "text" widget owns that
   widget.element = wrap;
   widget.options.getMinHeight = () => 160;
   widget.options.minNodeSize = [320, 240];
@@ -191,7 +202,8 @@ function buildBox(node) {
   const wcW = node.addWidget("combo", "＋ wildcard", "", (v) => {
     if (v) { insertAtCursor(`__${v}__`); wcW.value = ""; }
   }, { values: [""] });
-  wcW.serialize = false;
+  wcW.serialize = false;                 // workflow file
+  wcW.options.serialize = false;         // API prompt
   fetch("/rednode/wildcards").then((r) => r.json()).then((j) => {
     wcW.options.values = [""].concat(j.names || []);
     node.setDirtyCanvas(true, true);
@@ -202,6 +214,7 @@ function buildBox(node) {
     if (v) { insertAtCursor(`@${v}`); kwW.value = ""; }
   }, { values: [""] });
   kwW.serialize = false;
+  kwW.options.serialize = false;
   const refreshKw = () => { kwW.options.values = [""].concat([...KNOWN].sort()); };
   refreshKw();
   KWCOMBOS.add(refreshKw);
@@ -305,6 +318,11 @@ app.registerExtension({
       const h = Math.max(this.size?.[1] || 0, 280);
       this.setSize([w, h]);
     };
+
+    pinWidgetValues(nodeType, nodeData, (node) => {
+      node._rnPromptBox?.syncFromWidget();
+      node._rnPromptBox?.applyStyle();
+    });
 
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
