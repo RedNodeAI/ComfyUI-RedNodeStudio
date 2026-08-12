@@ -4883,6 +4883,17 @@ export function paintTargets() {
   ];
 }
 
+// The Models-tab rigs as paint choices: the built-in door. Picking one queues the
+// WORKSPACE itself, so the pass renders inside it, on the routed paint model with
+// the folded Studio's identity conditioning, and no render node has to exist.
+export function rigTargets(cfg) {
+  return (cfg?.models?.rigs || []).map((r, i) => {
+    const name = r.name || `Rig ${i + 1}`;
+    return { kind: "rig", rigName: name, node: { id: "rig:" + name, widgets: [] } };
+  });
+}
+export const allPaintChoices = (cfg) => [...paintTargets(), ...rigTargets(cfg)];
+
 // Nodes that only carry a picture from one place to another. A paint chain named after
 // one of these comes out as "VAE Decode", which answers nothing: this row is asked
 // WHICH ENGINE is going to paint, and a decode step is the same in every chain there is.
@@ -4987,6 +4998,7 @@ function rendererLabel(t) {
 // kind, which is the usual graph, so it is only spent on telling two identical labels
 // apart: two Paint Ins on the same engine, or two chains nobody has wired yet.
 export function rendererName(t) {
+  if (t?.kind === "rig") return "Built-in: " + t.rigName;
   let label = "";
   try {
     label = rendererLabel(t);
@@ -5003,7 +5015,7 @@ export function rendererName(t) {
 }
 
 function chosenTarget(cfg) {
-  const found = paintTargets();
+  const found = allPaintChoices(cfg);
   if (!found.length) return null;
   const P = cfg?.paint || {};
   const byId = found.find((t) => String(t.node.id) === String(P.renderer ?? ""));
@@ -5127,6 +5139,51 @@ async function paintGenerate(node) {
         + "Paint In with your own renderer in between. Generate drives whichever it "
         + "finds.");
     return;
+  }
+  if (picked.kind === "rig") {
+    // THE BUILT-IN DOOR: queue the workspace itself. The run token lives only in
+    // the QUEUED copy of the config, never the saved one, so an ordinary queue can
+    // never repaint by accident.
+    const { output } = await app.graphToPrompt();
+    const wsKey = promptKeyFor(output, node);
+    if (!wsKey) { alert("The workspace is not in the queued graph."); return; }
+    const pruned = pruneToNode(output, wsKey);
+    try {
+      const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
+      c.paint = c.paint || {};
+      c.paint.run_token = `paint-${Date.now()}`;
+      pruned[wsKey].inputs.config = JSON.stringify(c);
+    } catch (e) { alert("Could not stamp the paint run: " + e.message); return; }
+    advanceSeeds(pruned, Object.keys(pruned));
+    const requestedPromptId = globalThis.crypto?.randomUUID?.() || "";
+    let completion = requestedPromptId ? waitForPaintRun(requestedPromptId) : null;
+    beginPaintProgress(node, requestedPromptId);
+    try {
+      const body = { prompt: pruned, client_id: api.clientId ?? api.socket?.clientId };
+      if (requestedPromptId) body.prompt_id = requestedPromptId;
+      const res = await api.fetchApi("/prompt", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body) });
+      const d2 = await res.json().catch(() => ({}));
+      if (!res.ok || d2.error) {
+        throw new Error(d2.error?.message || d2.error
+                        || `queue refused Paint (${res.status})`);
+      }
+      const actualPromptId = String(d2.prompt_id || requestedPromptId);
+      bindPaintRunWaiter(requestedPromptId, actualPromptId);
+      bindPaintProgress(node, actualPromptId);
+      completion ||= waitForPaintRun(actualPromptId);
+      console.log("[RedNode Workspace] built-in paint pass queued on rig "
+                  + picked.rigName);
+      return { promptId: actualPromptId, completion };
+    } catch (e) {
+      if (requestedPromptId) finishPaintProgress(requestedPromptId, true);
+      else {
+        node._rnPaintProgress.active = false;
+        syncPaintProgress(node);
+      }
+      throw e;
+    }
   }
   // Roll BEFORE the prompt is built, so the seed that runs is the seed on screen. It
   // also keys Paint Out's IS_CHANGED: with a fixed seed and nothing else touched, a
@@ -7612,7 +7669,8 @@ function paintBody(node, body) {
   // graph with no rigs configured keeps the old renderer-kind rule (internal Paint
   // Render yes, external chain no, "Krea2 Workspace" by exact name yes), so nothing
   // unmigrated changes.
-  const refT = paintTargets().find((x) => String(x.node.id) === String(P.renderer ?? ""));
+  const refT = allPaintChoices(cfg)
+    .find((x) => String(x.node.id) === String(P.renderer ?? ""));
   const refName = String(refT ? rendererName(refT) : P.renderer_name || "")
     .trim().toLowerCase();
   const activeRig = (cfg.models?.rigs || [])[cfg.models?.active || 0];
@@ -7722,7 +7780,7 @@ function paintBody(node, body) {
       // panel to redraw for that, so the list kept offering an id that no longer
       // existed and the node it named was long gone.
       const fill = () => {
-        const live = paintTargets();
+        const live = allPaintChoices(cfg);
         const cur = String(P.renderer ?? "");
         sel.replaceChildren();
         for (const t of live) {

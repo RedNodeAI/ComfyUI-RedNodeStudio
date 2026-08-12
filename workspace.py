@@ -904,6 +904,10 @@ def parse_config(config_json):
     # "none" existed for one unreleased day and folds into "main".
     plm = str(pin.get("lora_mode") or "main").lower()
     paint_cfg["lora_mode"] = plm if plm in ("main", "paint") else "main"
+    # The built-in paint door's run stamp. It exists only in the QUEUED copy of the
+    # config (Generate stamps it there), never in the saved workflow, so an ordinary
+    # queue can never repaint by accident.
+    paint_cfg["run_token"] = str(pin.get("run_token") or "")
     # THE PROMPTS TAB FEEDS THE PAINT, when the paint box is silent. Text typed in the
     # Paint tab always wins, the user's standing rule: what you write is first
     # priority. An empty box takes the row linked to the ACTIVE rig, so the Prompt Box
@@ -1240,7 +1244,7 @@ class RedNodeStudioWorkspace:
                                        "dials). 'custom (live)' leaves it as it is. Presets "
                                        "store filenames, so they are per-machine."}),
             },
-            "hidden": {"unique_id": "UNIQUE_ID"},
+            "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"},
             "optional": {
                 # the loaded text encoder: CLIP gen captions with it, comfy-core style,
                 # so auto prompting costs no extra model at all
@@ -1328,7 +1332,8 @@ class RedNodeStudioWorkspace:
                     h.update(b"missing")
         return h.hexdigest()
 
-    def build(self, config="{}", preset=CUSTOM_SENTINEL, boost_mask_in=None, edit_mask_in=None,
+    def build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None,
+              boost_mask_in=None, edit_mask_in=None,
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
                mood_caption_in=None, clip=None, i2i_caption_in=None, vae=None,
                model=None, latent=None):
@@ -1983,7 +1988,37 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)
 
-        return (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
+        # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
+        # queued THIS node with a run token stamped into the config copy. The pass
+        # runs on the routed paint model (paint stack overriding main, as agreed)
+        # with the folded Studio's conditioning, which is the identity clip system
+        # the user was missing: refs, edit masks and all, exactly what the classic
+        # Paint Render wiring carried, with no render node on the canvas.
+        ui_extra = None
+        _prt = str(cfg["paint"].get("run_token") or "")
+        if _prt:
+            try:
+                from .paint_render import RedNodePaintRender
+                _pseed = cfg["models"]["seed"]
+                if cfg["models"]["seed_random"]:
+                    _pseed = _random.getrandbits(48)
+                _pr = RedNodePaintRender().render(
+                    model=paint_model if paint_model is not None else model,
+                    positive=positive, negative=negative,
+                    vae=vae if vae is not None else rig_vae,
+                    seed=_pseed, steps=rig_steps, cfg=rig_cfg,
+                    sampler_name=rig_sampler, scheduler=rig_scheduler,
+                    run_token=_prt, clip=clip,
+                    prompt=prompt, unique_id=unique_id)
+                if isinstance(_pr, dict):
+                    ui_extra = _pr.get("ui")
+                print("[RedNode Workspace] built-in paint pass rendered with rig %r"
+                      % (rig_name or "(none)"), flush=True)
+            except Exception as exc:
+                print("[RedNode Workspace] built-in paint pass failed: %s" % exc,
+                      flush=True)
+
+        _result = (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
                 style_strength if style_strength is not None else 0.5,
                 studio_preset or "",
                 prompts["subject"], prompts["scene"], prompts["moodboard"],
@@ -2008,6 +2043,9 @@ class RedNodeStudioWorkspace:
                 # APPENDED: the folded-in Studio's conditioning, and the embedded
                 # sampler's picture. The whole classic chain, one node.
                 positive, negative, rig_image)
+        if ui_extra:
+            return {"ui": ui_extra, "result": _result}
+        return _result
 
 
 # ---------------------------------------------------------------------------
