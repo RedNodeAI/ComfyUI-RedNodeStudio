@@ -6240,8 +6240,8 @@ function paintBody(node, body) {
       applyRV();
     });
     applyRV();
-    rimg.title = "Drag onto the Paint pane to paint on this image. Right-click for "
-               + "actions.";
+    rimg.title = "Drag onto the Paint pane to paint on this image, or into a folder "
+               + "in Explorer to drop a copy there. Right-click for actions.";
     // DRAG replaces the old click-adopts: a whole pane spending its click on one
     // action was a wasted surface, and dragging a picture onto the place you paint
     // is the gesture every editor already teaches
@@ -6249,6 +6249,19 @@ function paintBody(node, body) {
     rimg.addEventListener("dragstart", (ev) => {
       ev.dataTransfer.setData("application/x-rednode-result",
                               JSON.stringify(shown));
+      // The same drag, carried out of the browser: DownloadURL is Chromium's drag-out,
+      // and dropping on a Windows folder downloads the file there. Two payloads on one
+      // gesture, each read only by its own destination: the Paint pane takes the line
+      // above and Explorer takes this one. Firefox ignores it, and the internal drag
+      // still works there. The URL must be absolute: relative ones are dropped as text.
+      const base = window.location?.href;
+      if (base) {
+        const abs = new URL(resultUrl(shown), base).href;
+        const name = String(shown.filename || "rednode_result.png").split("/").pop();
+        const mime = /\.webp$/i.test(name) ? "image/webp"
+                   : /\.jpe?g$/i.test(name) ? "image/jpeg" : "image/png";
+        ev.dataTransfer.setData("DownloadURL", `${mime}:${name}:${abs}`);
+      }
       ev.dataTransfer.effectAllowed = "copy";
     });
     rimg.addEventListener("contextmenu", (ev) => openResultMenu(node, shown, ev));
