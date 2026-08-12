@@ -8520,6 +8520,7 @@ function promptsBody(node, body) {
         const F = {
           opts: FRAME_DEF.opts,
           get: typedOf,
+          resolveWildcards: false,   // the queue rolls them with the run seed
           set: (n, v) => { row.frame[n] = v; },
           folds: {
             get: (k) => node.properties?.rn_prompt_groups?.[i + ":" + k],

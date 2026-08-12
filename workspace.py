@@ -1323,8 +1323,9 @@ class RedNodeStudioWorkspace:
         # a live random tab has to re-roll on every queue — NaN never equals itself.
         # Deliberate cost: downstream recomputes each run, which a fresh image needs anyway.
         # An UNFIXED auto prompt re-rolls the same way: fresh LLM wording per queue.
-        if (cfg0["models"]["sampler_mode"] == "internal"
-                and cfg0["models"]["seed_random"]):
+        if cfg0["models"]["seed_random"] and (
+                cfg0["models"]["sampler_mode"] == "internal"
+                or any(r.get("text") for r in cfg0["prompts"]["rows"])):
             return float("nan")
         for name in IMAGE_TABS:
             t = cfg0["tabs"][name]
@@ -1370,6 +1371,11 @@ class RedNodeStudioWorkspace:
         # outright. One rule, everywhere: wired wins, the rig fills.
         if vae is None and rig_vae is not None:
             vae = rig_vae
+        # ONE SEED PER QUEUE, shared by the wildcard picks, the embedded sampler and
+        # the built-in paint pass, so a single number reproduces the whole render and
+        # Randomize re-rolls all of it together.
+        run_seed = (_random.getrandbits(48) if cfg["models"]["seed_random"]
+                    else cfg["models"]["seed"])
         _rigs = cfg["models"]["rigs"]
         _ar = (_rigs[cfg["models"]["active"]] if _rigs
                else {"steps": 8, "cfg": 1.0, "sampler": "euler",
@@ -1816,7 +1822,8 @@ class RedNodeStudioWorkspace:
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),
                         light_and_colour_in=", ".join(
-                            x for x in (_ins.get("light_and_colour", ""), _extra) if x))
+                            x for x in (_ins.get("light_and_colour", ""), _extra) if x),
+                        seed=run_seed)
                     print("[RedNode Workspace] auto prompt injected into %r"
                           % (_row["name"] or "a prompt row"), flush=True)
                 except Exception as exc:
@@ -1827,6 +1834,18 @@ class RedNodeStudioWorkspace:
                 _row["text"] = (_t + ", " + _flat) if _t else _flat
                 print("[RedNode Workspace] auto prompt injected into %r"
                       % (_row["name"] or "a prompt row"), flush=True)
+        # WILDCARDS RESOLVE AT QUEUE TIME, with the run seed. The tab stores the
+        # text unresolved (the preview shows the tokens), so a __wildcard__ or {a|b}
+        # re-rolls every queue instead of being baked at seed 0 the day it was typed.
+        # Resolving twice is safe: a resolved text has no tokens left to match.
+        try:
+            from .prompt_frame import expand as _pf_expand
+            for _row in cfg["prompts"]["rows"]:
+                if _row["text"]:
+                    _row["text"] = _pf_expand(_row["text"], run_seed, True)
+        except Exception as exc:
+            print("[RedNode Workspace] wildcard resolve failed: %s" % exc, flush=True)
+
         # a paint prompt that came FROM a row must see the injected version
         if cfg["paint"].get("prompt_from") == "prompts_tab":
             _row3 = prompt_row_for(cfg["models"], cfg["prompts"])
@@ -2029,9 +2048,7 @@ class RedNodeStudioWorkspace:
                 and model is not None):
             try:
                 import nodes as _core
-                _seed = cfg["models"]["seed"]
-                if cfg["models"]["seed_random"]:
-                    _seed = _random.getrandbits(48)
+                _seed = run_seed
                 _lat = latent
                 _dn = denoise_out if latent is not None else 1.0
                 # THE IMG2IMG TAB, honoured: with no edit latent, an image on the
@@ -2083,9 +2100,7 @@ class RedNodeStudioWorkspace:
         if _prt:
             try:
                 from .paint_render import RedNodePaintRender
-                _pseed = cfg["models"]["seed"]
-                if cfg["models"]["seed_random"]:
-                    _pseed = _random.getrandbits(48)
+                _pseed = run_seed
                 _n_stack = len([x for x in
                                 (pls["slots"] if paint_mode == "paint"
                                  else cfg["loras"]["slots"])

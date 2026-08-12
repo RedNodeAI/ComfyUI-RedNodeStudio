@@ -393,6 +393,9 @@ export function buildFrameEditor(wrap, F) {
       // a host may assemble richer values than its boxes show (the Prompts
       // tab joins its caption layer after the typed text here)
       for (const name of FIELDS) body[name] = (F.getPreview || F.get)(name);
+      // a host may keep wildcards unresolved (the Prompts tab does: the queue
+      // rolls them with the run seed, so the stored text must keep the tokens)
+      if (F.resolveWildcards === false) body.resolve_wildcards = false;
       const r = await fetch("/rednode/prompt_frame_preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
