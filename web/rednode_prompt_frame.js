@@ -222,7 +222,7 @@ export function buildFrameEditor(wrap, F) {
   head.appendChild(el("span", "ttl", "Prompt Frame"));
   const presetSel = document.createElement("select");
   presetSel.style.maxWidth = "180px";
-  fillSelect(presetSel, ["Load an example..."], "Load an example...");
+  fillSelect(presetSel, ["Load prompts..."], "Load prompts...");
   const presetBtn = el("button", "rn-pf-btn", "Load");
   head.appendChild(presetSel);
   head.appendChild(presetBtn);
@@ -425,28 +425,61 @@ export function buildFrameEditor(wrap, F) {
     if (e.button === 1) app.canvas?.processMouseDown?.(e);
   });
 
-  // presets
-  (async () => {
+  // THE PROMPT LIBRARY: the shipped examples plus the user's own saved prompts,
+  // one store on disk shared by the node and the Prompts tab. Save writes every
+  // frame field; Load applies every field a prompt carries, so a saved look comes
+  // back whole: style, lighting, framing, push, all of it.
+  let LIB = { presets: {}, user: [] };
+  const refreshLib = async () => {
     try {
       const r = await fetch("/rednode/prompt_frame_presets");
-      const j = await r.json();
-      const names = Object.keys(j.presets || {});
-      if (!names.length) return;
-      fillSelect(presetSel, ["Load an example..."].concat(names), "Load an example...");
-      presetBtn.addEventListener("click", () => {
-        const p = (j.presets || {})[presetSel.value];
-        if (!p) return;
-        subject.value = p.subject || "";
-        surroundings.value = p.surroundings || "";
-        placement.value = p.placement || "";
-        lac.value = p.light_and_colour || "";
-        const fi = framings.indexOf(p.framing);
-        if (fi >= 0) frameRange.value = String(fi);
-        changed();
-        if (p.note) { note.textContent = p.note; note.className = "rn-pf-note on"; }
-      });
+      LIB = await r.json();
+      const names = Object.keys(LIB.presets || {});
+      fillSelect(presetSel, ["Load prompts..."].concat(names),
+                 presetSel.value || "Load prompts...");
     } catch (e) { /* API not up */ }
-  })();
+  };
+  const saveBtn = el("button", "rn-pf-btn", "Save");
+  saveBtn.title = "Save every field of this frame as a named prompt, next to the "
+                + "examples. Yours can be overwritten and deleted; the examples "
+                + "cannot.";
+  head.appendChild(saveBtn);
+  saveBtn.addEventListener("click", async () => {
+    const cur = presetSel.value !== "Load prompts..." ? presetSel.value : "";
+    const name = window.prompt("Save this prompt as",
+                               (LIB.user || []).includes(cur) ? cur : "");
+    if (!name) return;
+    pushToWidgets();
+    const preset = {};
+    for (const k of ["subject", "surroundings", "placement", "light_and_colour",
+                     "framing", "style", "style_extra", "lighting", "brightness",
+                     "framing_push", "placement_where", "placement_what"]) {
+      preset[k] = F.get(k);
+    }
+    try {
+      const r = await fetch("/rednode/frame_prompt_save", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, preset }),
+      });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      await refreshLib();
+      presetSel.value = name;
+      note.textContent = "Saved \"" + name + "\".";
+      note.className = "rn-pf-note ok";
+    } catch (e) { alert("Could not save: " + e.message); }
+  });
+  presetBtn.addEventListener("click", () => {
+    const p = (LIB.presets || {})[presetSel.value];
+    if (!p) return;
+    for (const [k, v] of Object.entries(p)) {
+      if (k !== "note" && v !== undefined) F.set(k, v);
+    }
+    pullFromWidgets();
+    changed();
+    if (p.note) { note.textContent = p.note; note.className = "rn-pf-note on"; }
+  });
+  refreshLib();
 
   return { head, refresh: pullFromWidgets, collect: pushToWidgets,
            previewNow: preview, changed,

@@ -531,6 +531,14 @@ def _normalise_auto(auto_in, default_mode):
         # fixed (default): the same image reuses the cached prompt. Unfixed
         # re-runs the LLM every queue for fresh wording each run.
         "fixed": bool(auto_in.get("fixed", True)),
+        # Injection: this tab's caption lands in a named Prompts-tab row, into one
+        # Frame slot, automatically at queue time. Empty = the caption only rides
+        # its own output socket, exactly as before.
+        "inject_row": str(auto_in.get("inject_row") or ""),
+        "inject_slot": (str(auto_in.get("inject_slot"))
+                        if auto_in.get("inject_slot") in
+                        ("subject", "surroundings", "light_and_colour", "prompt")
+                        else "subject"),
     }
 
 
@@ -1686,6 +1694,63 @@ class RedNodeStudioWorkspace:
                 else:
                     prompts[tab_name] = autoprompt.strip_style_terms(
                         prompts[tab_name], mood_text)
+
+        # AUTO PROMPTS INTO THE PROMPT ROWS, automatically. A tab whose auto prompt
+        # names a row hands its finished caption (converter and all) to that row at
+        # queue time. A Krea 2 row re-assembles through RedNodePromptFrame.run with
+        # the caption on the matching *_in input, which joins it AFTER the typed
+        # text, the standing rule; a plain row appends it. No button, no wire.
+        injections = {}
+        for _tn in ("subject", "scene", "moodboard", "i2i"):
+            _a = tabs[_tn].get("auto") or {}
+            _cap = (prompts.get(_tn) or "").strip()
+            if _a.get("on") and _a.get("inject_row") and _cap:
+                injections.setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
+        for _row in cfg["prompts"]["rows"]:
+            _hit = injections.get(_row["name"])
+            if not _hit:
+                continue
+            _flat = ", ".join(c for k in ("subject", "surroundings",
+                                          "light_and_colour", "prompt")
+                              for c in _hit.get(k, []))
+            if _row["kind"] == "krea2" and _row.get("frame"):
+                _fr = _row["frame"]
+                try:
+                    from .prompt_frame import RedNodePromptFrame
+                    _ins = {k: ", ".join(v) for k, v in _hit.items() if k != "prompt"}
+                    _extra = ", ".join(_hit.get("prompt", []))
+                    _row["text"], _n2 = RedNodePromptFrame().run(
+                        subject=str(_fr.get("subject") or ""),
+                        surroundings=str(_fr.get("surroundings") or ""),
+                        framing=str(_fr.get("framing") or "Balanced"),
+                        placement=str(_fr.get("placement") or ""),
+                        light_and_colour=str(_fr.get("light_and_colour") or ""),
+                        placement_where=str(_fr.get("placement_where") or "None"),
+                        placement_what=str(_fr.get("placement_what") or "None"),
+                        lighting=str(_fr.get("lighting") or "None"),
+                        brightness=int(_fr.get("brightness") or 0),
+                        style=str(_fr.get("style") or "None"),
+                        style_extra=str(_fr.get("style_extra") or ""),
+                        framing_push=str(_fr.get("framing_push") or "Off"),
+                        subject_in=_ins.get("subject", ""),
+                        surroundings_in=_ins.get("surroundings", ""),
+                        light_and_colour_in=", ".join(
+                            x for x in (_ins.get("light_and_colour", ""), _extra) if x))
+                    print("[RedNode Workspace] auto prompt injected into %r"
+                          % (_row["name"] or "a prompt row"), flush=True)
+                except Exception as exc:
+                    print("[RedNode Workspace] could not inject into %r: %s"
+                          % (_row["name"], exc), flush=True)
+            elif _flat:
+                _t = _row["text"].strip().rstrip(",")
+                _row["text"] = (_t + ", " + _flat) if _t else _flat
+                print("[RedNode Workspace] auto prompt injected into %r"
+                      % (_row["name"] or "a prompt row"), flush=True)
+        # a paint prompt that came FROM a row must see the injected version
+        if cfg["paint"].get("prompt_from") == "prompts_tab":
+            _row3 = prompt_row_for(cfg["models"], cfg["prompts"])
+            if _row3 is not None:
+                cfg["paint"]["prompt"] = _row3["text"]
 
         # the LoRAs tab: the stack rides the model through, exactly as the LoRA Stack
         # node does it (same code), so the workspace can carry the whole rig

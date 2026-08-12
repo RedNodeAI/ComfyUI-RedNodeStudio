@@ -3117,6 +3117,58 @@ function openMaskPainterFullscreen(node, def) {
 }
 
 // The per-tab AUTO PROMPT box: engine toggles, mode, combine, and the last result.
+// The injection picker on a tab's Auto prompt section: name a Prompts-tab row and
+// the slot its caption lands in, and the caption arrives there automatically at
+// queue time, joined after the typed text. Empty means what it always meant: the
+// caption only rides this tab's own output socket.
+function injectRowUI(node, sect, tabName) {
+  const cfg = node._rnCfg;
+  const a = cfg.tabs[tabName]?.auto;
+  if (!a) return;
+  if (typeof a.inject_row !== "string") a.inject_row = "";
+  const defSlot = { subject: "subject", scene: "surroundings",
+                    moodboard: "light_and_colour", i2i: "subject" };
+  if (!["subject", "surroundings", "light_and_colour", "prompt"]
+      .includes(a.inject_slot)) {
+    a.inject_slot = defSlot[tabName] || "subject";
+  }
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = "Inject into";
+  const rowSel = document.createElement("select");
+  rowSel.className = "rn-ws-res";
+  const names = (cfg.prompts?.rows || []).map((r, i) => r.name || `Prompt ${i + 1}`);
+  for (const n of ["", ...names]) {
+    const o = document.createElement("option");
+    o.value = n;
+    o.textContent = n || "nothing (just the output)";
+    o.selected = n === a.inject_row;
+    rowSel.appendChild(o);
+  }
+  rowSel.title = "This tab's caption lands in the named prompt automatically when "
+               + "the queue runs, joined after whatever is typed there. Leave it "
+               + "empty and the caption only rides this tab's own output, as before.";
+  rowSel.onchange = () => { a.inject_row = rowSel.value; writeCfg(node); };
+  const slotSel = document.createElement("select");
+  slotSel.className = "rn-ws-res";
+  for (const [v, l] of [["subject", "As Subject"], ["surroundings", "As Surroundings"],
+                        ["light_and_colour", "As Light and colour"],
+                        ["prompt", "At the end"]]) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = l;
+    o.selected = v === a.inject_slot;
+    slotSel.appendChild(o);
+  }
+  slotSel.title = "Which Frame slot the caption joins on a Krea 2 prompt. On a "
+                + "plain prompt every choice appends to the text.";
+  slotSel.onchange = () => { a.inject_slot = slotSel.value; writeCfg(node); };
+  row.append(lab, rowSel, slotSel);
+  sect.appendChild(row);
+}
+
 function autoSection(node, body, tabName) {
   if (!["subject", "scene", "moodboard", "i2i", "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
@@ -3768,6 +3820,7 @@ ${last}` : isPaint
     }
     sect.appendChild(prev);
   }
+  if (!isPaint && open) injectRowUI(node, sect, tabName);
   body.appendChild(sect);
 }
 
@@ -7992,10 +8045,29 @@ async function fetchModelLists() {
   return MODEL_LISTS;
 }
 
-function modelsBody(node, body) {
+function modelsBody(node, page) {
   const cfg = node._rnCfg;
   const M = cfg.models;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+
+  // Boxes with a width cap, flowing left to right and wrapping when the node is
+  // narrow: a wide node stops stretching every row across the whole panel.
+  const mwrap = document.createElement("div");
+  mwrap.style.cssText = "display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start";
+  page.appendChild(mwrap);
+  const mkBox = (title) => {
+    const b = document.createElement("div");
+    b.style.cssText = "flex:1 1 340px;max-width:560px;min-width:300px;display:flex;"
+                    + "flex-direction:column;gap:6px;padding:8px;background:#1a1d22;"
+                    + "border:1px solid #2a2e34;border-radius:6px";
+    const t = document.createElement("div");
+    t.style.cssText = "font-size:12px;font-weight:700;letter-spacing:.04em;color:#c8ccd2";
+    t.textContent = title;
+    b.appendChild(t);
+    mwrap.appendChild(b);
+    return b;
+  };
+  let body = mkBox("Rigs");
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -8058,6 +8130,7 @@ function modelsBody(node, body) {
 
   const rig = M.rigs[M.active];
   if (!rig) return;
+  body = mkBox("Model");
 
   // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
   // with recents shared per kind so the model you use daily is always on top
@@ -8118,9 +8191,9 @@ function modelsBody(node, body) {
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
   // scheduler from the workspace outputs and the channel run becomes optional.
+  body = mkBox("Sampler");
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";
-  sh.style.marginTop = "4px";
   sh.textContent = "Sampler settings for this rig. They ride the workspace outputs "
                  + "named steps, cfg, sampler_name, scheduler and detailer_steps.";
   body.appendChild(sh);
@@ -8217,6 +8290,7 @@ function modelsBody(node, body) {
     });
     const rnd = document.createElement("button");
     rnd.className = "rn-ws-segb" + (M.seed_random ? " on" : "");
+    rnd.style.cssText = "flex:none;width:auto;padding:0 14px";
     rnd.textContent = "Randomize";
     rnd.title = "A fresh seed every queue. Off uses the number, for repeatable runs.";
     rnd.onclick = () => { M.seed_random = !M.seed_random; writeCfg(node); render(node); };
@@ -8349,24 +8423,12 @@ function promptsBody(node, body) {
         fetchFrameDef().then(() => render(node));
       } else {
         row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
-        row.auto = row.auto && typeof row.auto === "object" ? row.auto : {};
         const host = document.createElement("div");
-        // The caption layer joins AFTER the typed text, the standing rule, and only
-        // in what gets assembled: the boxes keep showing your words alone, so
-        // clearing the layer never eats them and re-describing never doubles.
         const typedOf = (n) => (row.frame[n] !== undefined ? row.frame[n]
                                                            : FRAME_DEF.defaults[n]);
-        const joined = (n) => {
-          const typed = typedOf(n);
-          const cap = row.auto[n];
-          if (!cap || typeof typed !== "string") return typed;
-          const t = String(typed).trim().replace(/,\s*$/, "");
-          return t ? t + ", " + cap : cap;
-        };
         const F = {
           opts: FRAME_DEF.opts,
           get: typedOf,
-          getPreview: joined,
           set: (n, v) => { row.frame[n] = v; },
           folds: {
             get: (k) => node.properties?.rn_prompt_groups?.[i + ":" + k],
@@ -8386,78 +8448,7 @@ function promptsBody(node, body) {
         ed.previewNow();
         box.appendChild(host);
 
-        // Describe into this frame: the split-instruction captioner, the wording
-        // that scored 100 percent on format across 30 captions, landing in the
-        // slots as a layer under the typed text.
-        const dRow = document.createElement("div");
-        dRow.className = "rn-ws-row";
-        const dSel = document.createElement("select");
-        dSel.className = "rn-ws-res";
-        for (const [v, l] of [["subject", "Subject image"], ["scene", "Scene image"],
-                              ["i2i", "Img2Img image"], ["paint", "Paint source"]]) {
-          const o = document.createElement("option");
-          o.value = v;
-          o.textContent = l;
-          dSel.appendChild(o);
-        }
-        const dBtn = document.createElement("button");
-        dBtn.className = "rn-ws-btn";
-        dBtn.style.width = "auto";
-        dBtn.style.padding = "0 10px";
-        dBtn.textContent = row._rnBusy ? "Describing..." : "Describe into frame";
-        dBtn.disabled = !!row._rnBusy;
-        dBtn.title = "Caption the chosen image into Subject, Surroundings and Light "
-                   + "and colour, as a layer under your own words. Your text always "
-                   + "comes first; clearing the layer never touches it.";
-        dBtn.onclick = async () => {
-          let entry = "";
-          if (dSel.value === "paint") entry = cfg.paint.source || "";
-          else {
-            const t = cfg.tabs[dSel.value];
-            entry = t?.images?.[Array.isArray(t.sel) ? t.sel[0] : t.sel] || "";
-          }
-          if (!entry) { alert("That tab has no image selected."); return; }
-          row._rnBusy = true;
-          render(node);
-          try {
-            const r = await api.fetchApi("/rednode/describe_frame", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ entry }),
-            });
-            const d = await r.json();
-            if (d.error) throw new Error(d.error);
-            row.auto = { subject: d.subject || "", surroundings: d.surroundings || "",
-                         light_and_colour: d.light_and_colour || "" };
-            writeCfg(node);
-          } catch (e) {
-            alert("Could not describe that image: " + e.message);
-          }
-          row._rnBusy = false;
-          render(node);
-        };
-        dRow.append(dSel, dBtn);
-        const hasAuto = ["subject", "surroundings", "light_and_colour"]
-          .some((k) => row.auto[k] && row.auto[k].trim());
-        if (hasAuto) {
-          const clr = document.createElement("button");
-          clr.className = "rn-ws-btn";
-          clr.style.width = "auto";
-          clr.textContent = "\u2715 caption layer";
-          clr.title = "Drop the caption layer. Your typed text is untouched.";
-          clr.onclick = () => { row.auto = {}; writeCfg(node); render(node); };
-          dRow.appendChild(clr);
-        }
-        box.appendChild(dRow);
-        if (hasAuto) {
-          const al = document.createElement("div");
-          al.className = "rn-ws-note";
-          al.textContent = "Caption layer on: "
-            + ["subject", "surroundings", "light_and_colour"]
-              .filter((k) => row.auto[k] && row.auto[k].trim())
-              .map((k) => k.replace(/_/g, " ")).join(", ")
-            + ". Joined after your words in the preview.";
-          box.appendChild(al);
-        }
+
       }
     } else {
       const text = document.createElement("textarea");

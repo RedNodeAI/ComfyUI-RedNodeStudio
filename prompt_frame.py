@@ -477,14 +477,63 @@ try:
     from server import PromptServer
     from aiohttp import web
 
+    import os as _os
+
+    _FRAME_FIELDS = ("subject", "surroundings", "placement", "light_and_colour",
+                     "framing", "style", "style_extra", "lighting", "brightness",
+                     "framing_push", "placement_where", "placement_what")
+
+    def _user_preset_path():
+        import folder_paths as _fp
+        base = _os.path.join(_fp.get_user_directory(), "default", "rednode")
+        _os.makedirs(base, exist_ok=True)
+        return _os.path.join(base, "frame_prompts.json")
+
+    def _user_presets():
+        try:
+            with open(_user_preset_path(), encoding="utf-8") as f:
+                d = json.load(f)
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    @PromptServer.instance.routes.post("/rednode/frame_prompt_save")
+    async def _rednode_frame_prompt_save(request):
+        """Save or delete a user frame prompt. The shipped examples are read-only."""
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        name = str(data.get("name") or "").strip()
+        if not name:
+            return web.json_response({"error": "no name"}, status=400)
+        if name in PRESETS:
+            return web.json_response(
+                {"error": "%r ships with the pack; save under another name" % name},
+                status=400)
+        users = _user_presets()
+        if data.get("action") == "delete":
+            users.pop(name, None)
+        else:
+            pin = data.get("preset") if isinstance(data.get("preset"), dict) else {}
+            users[name] = {k: pin[k] for k in _FRAME_FIELDS if k in pin}
+        try:
+            with open(_user_preset_path(), "w", encoding="utf-8") as f:
+                json.dump(users, f, indent=1)
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=500)
+        return web.json_response({"ok": True, "user": sorted(users)})
+
     @PromptServer.instance.routes.get("/rednode/prompt_frame_presets")
     async def _rednode_prompt_frame_presets(request):
+        users = _user_presets()
+        merged = {**PRESETS, **users}
         name = request.query.get("name")
         if name:
             if name not in PRESETS:
                 return web.json_response({"error": "no such preset"}, status=404)
             return web.json_response({"name": name, "preset": PRESETS[name]})
-        return web.json_response({"presets": PRESETS})
+        return web.json_response({"presets": merged, "user": sorted(users)})
 
     @PromptServer.instance.routes.post("/rednode/prompt_frame_preview")
     async def _rednode_prompt_frame_preview(request):
