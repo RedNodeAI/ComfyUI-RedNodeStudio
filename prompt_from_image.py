@@ -180,3 +180,45 @@ class RedNodeDescribeToBoxes:
                   else "Described into %d words." % len(raw.split()))
         return (boxes["subject"], boxes["surroundings"], boxes["light_and_colour"],
                 raw, notice)
+
+
+# ---------------------------------------------------------------------------
+# HTTP: describe an input image straight into Frame slots, for the Prompts tab.
+# The same split instruction and parser the node uses, the wording that scored
+# 100% on format across 30 captions, so the tab and the node cannot drift.
+# ---------------------------------------------------------------------------
+try:
+    from server import PromptServer
+    from aiohttp import web
+
+    @PromptServer.instance.routes.post("/rednode/describe_frame")
+    async def _rednode_describe_frame(request):
+        import asyncio
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        entry = str(data.get("entry") or "")
+        if not entry:
+            return web.json_response({"error": "no image chosen"}, status=400)
+
+        def work():
+            from .workspace import load_image
+            img = load_image(entry, 1024)
+            models = _ollama_models()
+            model = str(data.get("model") or models[0])
+            try:
+                seed = int(data.get("seed", 0))
+            except (TypeError, ValueError):
+                seed = 0
+            subject, surroundings, lac, _raw, notice = RedNodeDescribeToBoxes().run(
+                img, ENGINES[0], model, SPLIT_INSTRUCTION, 400, max(0, seed))
+            return {"subject": subject, "surroundings": surroundings,
+                    "light_and_colour": lac, "notice": notice}
+        try:
+            out = await asyncio.get_event_loop().run_in_executor(None, work)
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        return web.json_response(out)
+except Exception:  # no server (tests, headless import)
+    pass

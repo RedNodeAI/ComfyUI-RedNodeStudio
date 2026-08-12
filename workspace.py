@@ -756,6 +756,11 @@ def parse_config(config_json):
             # route), so nothing downstream needs to re-run the assembly.
             "frame": {str(k): v for k, v in fr.items()
                       if isinstance(v, (str, int, float, bool))},
+            # the caption layer: sectioned by the split instruction, kept apart from
+            # the typed text so clearing it never eats the user's words
+            "auto": {str(k): str(v) for k, v in
+                     (p.get("auto") if isinstance(p.get("auto"), dict) else {}).items()
+                     if isinstance(v, str)},
         })
     prompts_cfg = {"rows": prompt_rows}
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask

@@ -8349,11 +8349,24 @@ function promptsBody(node, body) {
         fetchFrameDef().then(() => render(node));
       } else {
         row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
+        row.auto = row.auto && typeof row.auto === "object" ? row.auto : {};
         const host = document.createElement("div");
+        // The caption layer joins AFTER the typed text, the standing rule, and only
+        // in what gets assembled: the boxes keep showing your words alone, so
+        // clearing the layer never eats them and re-describing never doubles.
+        const typedOf = (n) => (row.frame[n] !== undefined ? row.frame[n]
+                                                           : FRAME_DEF.defaults[n]);
+        const joined = (n) => {
+          const typed = typedOf(n);
+          const cap = row.auto[n];
+          if (!cap || typeof typed !== "string") return typed;
+          const t = String(typed).trim().replace(/,\s*$/, "");
+          return t ? t + ", " + cap : cap;
+        };
         const F = {
           opts: FRAME_DEF.opts,
-          get: (n) => (row.frame[n] !== undefined ? row.frame[n]
-                                                  : FRAME_DEF.defaults[n]),
+          get: typedOf,
+          getPreview: joined,
           set: (n, v) => { row.frame[n] = v; },
           folds: {
             get: (k) => node.properties?.rn_prompt_groups?.[i + ":" + k],
@@ -8372,6 +8385,79 @@ function promptsBody(node, body) {
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
         box.appendChild(host);
+
+        // Describe into this frame: the split-instruction captioner, the wording
+        // that scored 100 percent on format across 30 captions, landing in the
+        // slots as a layer under the typed text.
+        const dRow = document.createElement("div");
+        dRow.className = "rn-ws-row";
+        const dSel = document.createElement("select");
+        dSel.className = "rn-ws-res";
+        for (const [v, l] of [["subject", "Subject image"], ["scene", "Scene image"],
+                              ["i2i", "Img2Img image"], ["paint", "Paint source"]]) {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = l;
+          dSel.appendChild(o);
+        }
+        const dBtn = document.createElement("button");
+        dBtn.className = "rn-ws-btn";
+        dBtn.style.width = "auto";
+        dBtn.style.padding = "0 10px";
+        dBtn.textContent = row._rnBusy ? "Describing..." : "Describe into frame";
+        dBtn.disabled = !!row._rnBusy;
+        dBtn.title = "Caption the chosen image into Subject, Surroundings and Light "
+                   + "and colour, as a layer under your own words. Your text always "
+                   + "comes first; clearing the layer never touches it.";
+        dBtn.onclick = async () => {
+          let entry = "";
+          if (dSel.value === "paint") entry = cfg.paint.source || "";
+          else {
+            const t = cfg.tabs[dSel.value];
+            entry = t?.images?.[Array.isArray(t.sel) ? t.sel[0] : t.sel] || "";
+          }
+          if (!entry) { alert("That tab has no image selected."); return; }
+          row._rnBusy = true;
+          render(node);
+          try {
+            const r = await api.fetchApi("/rednode/describe_frame", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ entry }),
+            });
+            const d = await r.json();
+            if (d.error) throw new Error(d.error);
+            row.auto = { subject: d.subject || "", surroundings: d.surroundings || "",
+                         light_and_colour: d.light_and_colour || "" };
+            writeCfg(node);
+          } catch (e) {
+            alert("Could not describe that image: " + e.message);
+          }
+          row._rnBusy = false;
+          render(node);
+        };
+        dRow.append(dSel, dBtn);
+        const hasAuto = ["subject", "surroundings", "light_and_colour"]
+          .some((k) => row.auto[k] && row.auto[k].trim());
+        if (hasAuto) {
+          const clr = document.createElement("button");
+          clr.className = "rn-ws-btn";
+          clr.style.width = "auto";
+          clr.textContent = "\u2715 caption layer";
+          clr.title = "Drop the caption layer. Your typed text is untouched.";
+          clr.onclick = () => { row.auto = {}; writeCfg(node); render(node); };
+          dRow.appendChild(clr);
+        }
+        box.appendChild(dRow);
+        if (hasAuto) {
+          const al = document.createElement("div");
+          al.className = "rn-ws-note";
+          al.textContent = "Caption layer on: "
+            + ["subject", "surroundings", "light_and_colour"]
+              .filter((k) => row.auto[k] && row.auto[k].trim())
+              .map((k) => k.replace(/_/g, " ")).join(", ")
+            + ". Joined after your words in the preview.";
+          box.appendChild(al);
+        }
       }
     } else {
       const text = document.createElement("textarea");
