@@ -8164,8 +8164,20 @@ function promptsBody(node, body) {
     const box = document.createElement("div");
     box.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:7px;"
                       + "background:#1a1d22;border:1px solid #2a2e34;border-radius:6px";
+    const folded = () => !!node.properties?.rn_prompt_folds?.[i];
     const head = document.createElement("div");
     head.className = "rn-ws-row";
+    const caret = document.createElement("button");
+    caret.className = "rn-ws-btn";
+    caret.style.width = "auto";
+    caret.textContent = folded() ? "\u25b8" : "\u25be";
+    caret.title = "Fold this prompt down to its header.";
+    caret.onclick = () => {
+      node.properties = node.properties || {};
+      (node.properties.rn_prompt_folds ||= {})[i] = !folded();
+      render(node);
+    };
+    head.appendChild(caret);
     const name = document.createElement("input");
     name.type = "text";
     name.value = row.name;
@@ -8203,6 +8215,8 @@ function promptsBody(node, body) {
     head.append(name, rigPick, kind, del);
     box.appendChild(head);
 
+    if (folded()) { body.appendChild(box); return; }
+
     if (row.kind === "krea2") {
       // THE PROMPT FRAME ITSELF, one for one: the same buildFrameEditor the node's
       // panel calls, values living in row.frame, the assembled prompt streaming into
@@ -8222,6 +8236,13 @@ function promptsBody(node, body) {
           get: (n) => (row.frame[n] !== undefined ? row.frame[n]
                                                   : FRAME_DEF.defaults[n]),
           set: (n, v) => { row.frame[n] = v; },
+          folds: {
+            get: (k) => node.properties?.rn_prompt_groups?.[i + ":" + k],
+            set: (k, v) => {
+              node.properties = node.properties || {};
+              (node.properties.rn_prompt_groups ||= {})[i + ":" + k] = v;
+            },
+          },
           dirty: () => writeCfg(node),
           onPreview: (assembled) => {
             // the row's text IS the assembled prompt, so everything downstream

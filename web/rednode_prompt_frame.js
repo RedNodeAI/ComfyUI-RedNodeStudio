@@ -125,6 +125,18 @@ const STYLE = `
   border-radius: 5px; padding: 7px 9px; white-space: pre-wrap;
   resize: vertical;              /* drag it taller when a prompt gets long */
 }
+/* collapsible groups: caret first, title, hint trailing, per the house convention */
+.rn-pf-box { border: 1px solid var(--rn-line); border-radius: 6px;
+  background: rgba(0,0,0,0.10); }
+.rn-pf-box > .head { display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; cursor: pointer; user-select: none; }
+.rn-pf-box > .head .car { width: 12px; color: #9aa0a8; font-size: 11px; }
+.rn-pf-box > .head b { font-size: 12px; }
+.rn-pf-box > .head .hint2 { margin-left: auto; font-size: 11px; color: #7f8792; }
+.rn-pf-box > .head:hover .car { color: #fff; }
+.rn-pf-box > .body { display: flex; flex-direction: column; gap: 8px;
+  padding: 2px 8px 8px; }
+
 /* highlighting for the pipeline the Prompt Box also speaks */
 .rn-pf-wc { color: #8ab4ff; }
 .rn-pf-kw { color: #9fe38b; }
@@ -219,32 +231,23 @@ export function buildFrameEditor(wrap, F) {
   // ---- style --------------------------------------------------------------------
   const styleSel = document.createElement("select");
   fillSelect(styleSel, F.opts.style || [], F.get("style"));
-  wrap.appendChild(labelledRow("Style", styleSel));
+  const styleRow = labelledRow("Style", styleSel);
 
   const styleExtra = document.createElement("textarea");
   styleExtra.rows = 2;
   styleExtra.placeholder = "your own style wording (optional)";
   styleExtra.value = F.get("style_extra") || "";
-  wrap.appendChild(styleExtra);
 
   // ---- subject / surroundings -----------------------------------------------------
-  const subjLbl = el("div", "rn-pf-lbl");
-  subjLbl.appendChild(el("b", null, "Subject"));
-  subjLbl.appendChild(el("span", null, "who or what, and how it looks"));
   const subject = document.createElement("textarea");
   subject.rows = 3;
   subject.placeholder = "a woman in her thirties, red waterproof jacket, rucksack";
   subject.value = F.get("subject") || "";
-  wrap.appendChild(subjLbl); wrap.appendChild(subject);
 
-  const surrLbl = el("div", "rn-pf-lbl");
-  surrLbl.appendChild(el("b", null, "Surroundings"));
-  surrLbl.appendChild(el("span", null, "where it is"));
   const surroundings = document.createElement("textarea");
   surroundings.rows = 3;
   surroundings.placeholder = "a mountain ridge under heavy cloud, wet black rock, a thin path";
   surroundings.value = F.get("surroundings") || "";
-  wrap.appendChild(surrLbl); wrap.appendChild(surroundings);
 
   // ---- framing slider --------------------------------------------------------------
   const framings = F.opts.framing || [];
@@ -256,10 +259,7 @@ export function buildFrameEditor(wrap, F) {
   frameRange.value = String(Math.max(0, framings.indexOf(F.get("framing"))));
   const frameVal = el("div", "rn-pf-val", F.get("framing"));
   frameWrap.appendChild(frameRange); frameWrap.appendChild(frameVal);
-  const frameLbl = el("div", "rn-pf-lbl");
-  frameLbl.appendChild(el("b", null, "Framing"));
-  frameLbl.appendChild(el("span", null, "tight to wide"));
-  wrap.appendChild(frameLbl); wrap.appendChild(frameWrap);
+
 
   // Directly under the slider, because it does nothing except make that slider louder.
   const pushRow = el("div", "rn-pf-row");
@@ -269,7 +269,6 @@ export function buildFrameEditor(wrap, F) {
   pushSel.title = F.opts.push_tooltip || "";
   pushSel.className = "grow";
   pushRow.appendChild(pushSel);
-  wrap.appendChild(pushRow);
 
   // ---- placement --------------------------------------------------------------------
   const placeRow = el("div", "rn-pf-row");
@@ -283,18 +282,17 @@ export function buildFrameEditor(wrap, F) {
   whereSel.style.flex = "1"; whatSel.style.flex = "1.4";
   pgrow.appendChild(whereSel); pgrow.appendChild(whatSel);
   placeRow.appendChild(pgrow);
-  wrap.appendChild(placeRow);
 
   const placement = document.createElement("input");
   placement.type = "text";
   placement.placeholder = "or type it: standing at the water's edge";
   placement.value = F.get("placement") || "";
-  wrap.appendChild(labelledRow("", placement));
+  const placementRow = labelledRow("", placement);
 
   // ---- lighting + brightness ----------------------------------------------------------
   const lightSel = document.createElement("select");
   fillSelect(lightSel, F.opts.lighting || [], F.get("lighting"));
-  wrap.appendChild(labelledRow("Lighting", lightSel));
+  const lightRow = labelledRow("Lighting", lightSel);
 
   const brightWrap = el("div", "rn-pf-slider");
   const brightRange = document.createElement("input");
@@ -305,13 +303,44 @@ export function buildFrameEditor(wrap, F) {
   brightRange.value = String(F.get("brightness") ?? 0);
   const brightVal = el("div", "rn-pf-val", "");
   brightWrap.appendChild(brightRange); brightWrap.appendChild(brightVal);
-  wrap.appendChild(labelledRow("Brightness", brightWrap));
+  const brightRow = labelledRow("Brightness", brightWrap);
 
   const lac = document.createElement("textarea");
   lac.rows = 2;
   lac.placeholder = "palette and mood: muted slate and rust, quiet and still";
   lac.value = F.get("light_and_colour") || "";
-  wrap.appendChild(lac);
+
+  // ---- the groups: every section folds, so a row can be as small as its writing.
+  // State goes through F.folds when the host remembers it (node.properties, so a
+  // fold never dirties what a render produces); a host without one gets the session.
+  const localFolds = {};
+  const foldGet = (k) => (F.folds?.get ? F.folds.get(k) : localFolds[k]);
+  const foldSet = (k, v) => { if (F.folds?.set) F.folds.set(k, v); else localFolds[k] = v; };
+  const group = (key, title, hint, els) => {
+    const gbox = el("div", "rn-pf-box");
+    const gh = el("div", "head");
+    const car = el("span", "car", "\u25be");
+    gh.appendChild(car);
+    gh.appendChild(el("b", null, title));
+    if (hint) gh.appendChild(el("span", "hint2", hint));
+    const bd = el("div", "body");
+    for (const e of els) bd.appendChild(e);
+    const isOpen = () => foldGet(key) !== false;
+    const apply = () => {
+      bd.style.display = isOpen() ? "" : "none";
+      car.textContent = isOpen() ? "\u25be" : "\u25b8";
+    };
+    gh.addEventListener("click", () => { foldSet(key, !isOpen()); apply(); });
+    apply();
+    gbox.appendChild(gh); gbox.appendChild(bd);
+    wrap.appendChild(gbox);
+  };
+  group("style", "Style", "how the picture is made", [styleRow, styleExtra]);
+  group("subject", "Subject", "who or what, and how it looks", [subject]);
+  group("surroundings", "Surroundings", "where it is", [surroundings]);
+  group("framing", "Framing & placement", "tight to wide",
+        [frameWrap, pushRow, placeRow, placementRow]);
+  group("light", "Light & colour", "", [lightRow, brightRow, lac]);
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
@@ -451,6 +480,13 @@ function buildPanel(node) {
     get: (n) => W[n].value,
     set: (n, v) => { W[n].value = v; },
     dirty: () => node.graph?.setDirtyCanvas(true, false),
+    folds: {
+      get: (k) => node.properties?.rn_pf_groups?.[k],
+      set: (k, v) => {
+        node.properties = node.properties || {};
+        (node.properties.rn_pf_groups ||= {})[k] = v;
+      },
+    },
   };
   const editor = buildFrameEditor(wrap, F);
   const fold = el("button", "rn-pf-btn", "▾ tools");
