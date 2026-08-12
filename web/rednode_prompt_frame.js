@@ -218,8 +218,10 @@ function buildPanel(node) {
   presetSel.style.maxWidth = "180px";
   fillSelect(presetSel, ["Load an example..."], "Load an example...");
   const presetBtn = el("button", "rn-pf-btn", "Load");
+  const fold = el("button", "rn-pf-btn", "▾ tools");
   head.appendChild(presetSel);
   head.appendChild(presetBtn);
+  head.appendChild(fold);
   wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------
@@ -466,6 +468,52 @@ function buildPanel(node) {
   const i = node.widgets.indexOf(widget);
   if (i > 0) { node.widgets.splice(i, 1); node.widgets.unshift(widget); }
 
+  // ---- tools fold: the rows under the panel (seed, wildcards toggle, font, colour) ----
+  // Same button and the same properties key as the Prompt Box, so folding one node
+  // teaches the other. The panel's own FIELDS are hidden for good and are SKIPPED here:
+  // treating them like the rest would resurrect the raw rows this panel exists to
+  // replace the first time somebody unfolds.
+  const toolsHidden = () => !!node.properties?.rn_tools_hidden;
+  const applyFold = () => {
+    const hide = toolsHidden();
+    for (const w of node.widgets || []) {
+      if (w === widget || FIELDS.includes(w.name)) continue;
+      if (hide) {
+        if (w._rnFoldOrig === undefined) {
+          w._rnFoldOrig = { type: w.type, computeSize: w.computeSize, hidden: w.hidden };
+        }
+        w.type = "hidden";
+        w.hidden = true;
+        w.computeSize = () => [0, -4];
+        if (w.element) w.element.style.display = "none";
+      } else if (w._rnFoldOrig) {
+        w.type = w._rnFoldOrig.type;
+        w.hidden = w._rnFoldOrig.hidden;
+        w.computeSize = w._rnFoldOrig.computeSize;
+        if (w.element) w.element.style.display = "";
+        delete w._rnFoldOrig;
+      }
+    }
+    fold.textContent = hide ? "▸ tools" : "▾ tools";
+    fold.title = hide ? "show the seed, wildcard, font and colour rows"
+                      : "hide the rows under the panel";
+    // folding never resizes the node; unfolding into a node too short to hold the rows
+    // grows it just enough that they do not overlap the panel
+    if (!hide) {
+      const min = node.computeSize()[1];
+      if (node.size[1] < min) node.setSize([node.size[0], min]);
+    }
+    node.setDirtyCanvas(true, true);
+  };
+  fold.onclick = (e) => {
+    e.stopPropagation();
+    node.properties = node.properties || {};
+    node.properties.rn_tools_hidden = !toolsHidden() || undefined;
+    applyFold();
+  };
+  node._rnPfApplyFold = applyFold;
+  applyFold();                       // honour the state the workflow was saved with
+
   pushToWidgets();
   preview();
 
@@ -491,7 +539,7 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
       onConfigure?.apply(this, arguments);
-      requestAnimationFrame(() => { buildPanel(this); this._rnPfSync?.(); });
+      requestAnimationFrame(() => { buildPanel(this); this._rnPfSync?.(); this._rnPfApplyFold?.(); });
     };
   },
 });
