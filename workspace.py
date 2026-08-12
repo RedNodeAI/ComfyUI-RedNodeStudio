@@ -1364,6 +1364,12 @@ class RedNodeStudioWorkspace:
             model = rig_model
         if clip is None and rig_clip is not None:
             clip = rig_clip
+        # THE VAE TOO. The i2i encode, the latent tab and the folded Studio all read
+        # `vae`, and each of them silently sat out on a rig-only graph because only
+        # the wired socket was consulted: an image on the Img2Img tab was ignored
+        # outright. One rule, everywhere: wired wins, the rig fills.
+        if vae is None and rig_vae is not None:
+            vae = rig_vae
         _rigs = cfg["models"]["rigs"]
         _ar = (_rigs[cfg["models"]["active"]] if _rigs
                else {"steps": 8, "cfg": 1.0, "sampler": "euler",
