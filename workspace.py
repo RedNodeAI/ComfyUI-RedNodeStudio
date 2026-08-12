@@ -941,13 +941,27 @@ def parse_config(config_json):
 _RIG_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
 
 
-def load_active_rig(cfg):
-    """(name, model, clip, vae) for the active Models-tab rig; Nones when unset."""
+def load_active_rig(cfg, name=""):
+    """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
+
+    `name` pins a specific rig, which is how two Paint Out nodes carry two different
+    chains' models at once. Empty or "(active rig)" follows the Models tab's choice.
+    A name that matches nothing falls back to the active rig AND SAYS SO: a renamed
+    rig should degrade to the tab's choice, not to silence.
+    """
     m = cfg.get("models") or {}
     rigs = m.get("rigs") or []
     if not rigs:
         return "", None, None, None
     rig = rigs[max(0, min(int(m.get("active", 0)), len(rigs) - 1))]
+    want = str(name or "").strip()
+    if want and want != "(active rig)":
+        match = next((r for r in rigs if r["name"] == want), None)
+        if match is not None:
+            rig = match
+        else:
+            print("[RedNode Workspace] no rig named %r on the Models tab; using the "
+                  "active rig %r instead" % (want, rig["name"]), flush=True)
     key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"], rig["vae"])
     if not any(key):
         return rig["name"], None, None, None

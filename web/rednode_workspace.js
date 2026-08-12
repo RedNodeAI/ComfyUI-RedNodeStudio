@@ -9576,6 +9576,50 @@ app.registerExtension({
       };
       return;
     }
+    if (nodeData?.name === "RedNodePaintOut") {
+      // The rig widget arrives as a plain STRING; here it becomes a dropdown of the
+      // Models tab's rig names, read LIVE from whichever workspace is on the graph,
+      // so a rig added a second ago is already in the list. Values-as-function is
+      // LiteGraph's own combo contract. Setting .type on the existing widget is not
+      // honoured on current frontends (see rednode_slots.makeCombo), so replace it
+      // at the SAME index: widgets_values is positional.
+      const rigNames = () => {
+        const names = ["(active rig)"];
+        const seen = new Set();
+        const walkGraph = (graph) => {
+          for (const n of graph?._nodes || []) {
+            if (n?.type === NODE_NAME) {
+              try {
+                const cfgW = n.widgets?.find((w) => w.name === "config");
+                const rigs = JSON.parse(cfgW?.value || "{}").models?.rigs || [];
+                rigs.forEach((r, i) => {
+                  const nm = String(r?.name || "") || `Rig ${i + 1}`;
+                  if (!seen.has(nm)) { seen.add(nm); names.push(nm); }
+                });
+              } catch (e) { /* a half-typed config is not an error */ }
+            }
+            if (n?.subgraph) walkGraph(n.subgraph);
+          }
+        };
+        walkGraph(app.graph);
+        return names;
+      };
+      const onCreatedPO = nodeType.prototype.onNodeCreated;
+      nodeType.prototype.onNodeCreated = function () {
+        onCreatedPO?.apply(this, arguments);
+        const i = (this.widgets || []).findIndex((w) => w.name === "rig");
+        if (i < 0) return;
+        const prev = this.widgets[i].value || "(active rig)";
+        const tip = this.widgets[i].options?.tooltip;
+        this.widgets.splice(i, 1);
+        const combo = this.addWidget("combo", "rig", prev, () => {},
+                                     { values: rigNames });
+        if (tip) combo.options.tooltip = tip;
+        const at = this.widgets.indexOf(combo);
+        if (at !== i) { this.widgets.splice(at, 1); this.widgets.splice(i, 0, combo); }
+      };
+      return;
+    }
     if (nodeData?.name !== NODE_NAME) return;
     injectStyle();
 

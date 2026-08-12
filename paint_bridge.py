@@ -92,6 +92,16 @@ class RedNodePaintOut:
                                   "your main negative. When the Paint tab's negative "
                                   "box is empty, the negative output hands this out "
                                   "instead."}),
+                # APPENDED after every existing widget, so no saved value moves.
+                # WHICH Models-tab rig this node hands out on model / clip / vae. Two
+                # chains can each name their own rig and stop caring which one is
+                # active: the Z Turbo chain always gets Z Turbo, the XL chain XL.
+                # The frontend turns this into a dropdown of the rig names.
+                "rig": ("STRING", {"default": "(active rig)", "tooltip":
+                        "Which Models-tab rig comes out of the model, clip and vae "
+                        "sockets. (active rig) follows whichever rig is active on "
+                        "the Models tab; naming one pins this node to it, so two "
+                        "chains can each carry their own model."}),
             },
             "hidden": {"prompt": "PROMPT"},
         }
@@ -196,7 +206,7 @@ class RedNodePaintOut:
 
     def handoff(self, scope="whole frame", context=0.25, region_size=1024,
                 region_shape="auto", image=None, prompt=None,
-                main_prompt="", main_negative=""):
+                main_prompt="", main_negative="", rig="(active rig)"):
         pc = _paint_from_prompt(prompt) or {}
         base = image
         if base is None:
@@ -386,7 +396,7 @@ class RedNodePaintOut:
         try:
             from .workspace import load_active_rig, parse_config as _pc_full
             _, rig_model, rig_clip, rig_vae = load_active_rig(
-                _pc_full(json.dumps(_workspace_cfg(prompt))))
+                _pc_full(json.dumps(_workspace_cfg(prompt))), name=rig)
         except Exception as exc:
             print("[RedNode Paint Out] no Models-tab rig: %s" % exc, flush=True)
         return (out_img, out_mask, denoise, words,
