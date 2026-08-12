@@ -1274,6 +1274,22 @@ class RedNodeStudioWorkspace:
                                            "overrides the one painted on the Masks tab"}),
                 "edit_mask_in": ("MASK", {"tooltip": "optional wired edit mask — overrides the "
                                           "one painted on the Masks tab"}),
+                # APPENDED: the Frame-vocabulary inputs, the same four the Prompt
+                # Frame node takes, for the helper nodes that build prompt pieces.
+                # Each joins the ACTIVE rig's prompt row: on a Krea 2 row it lands in
+                # its slot after the typed text; on a plain row all four combine and
+                # append at the end. The old *_caption_in sockets keep feeding the
+                # per-tab auto prompts exactly as before.
+                "style_in": ("STRING", {"forceInput": True, "tooltip":
+                    "style wording for the active prompt row, joined after its own"}),
+                "subject_in": ("STRING", {"forceInput": True, "tooltip":
+                    "subject wording for the active prompt row, joined after its own"}),
+                "surroundings_in": ("STRING", {"forceInput": True, "tooltip":
+                    "surroundings wording for the active prompt row, joined after "
+                    "its own"}),
+                "light_and_colour_in": ("STRING", {"forceInput": True, "tooltip":
+                    "light and colour wording for the active prompt row, joined "
+                    "after its own"}),
             },
         }
 
@@ -1336,7 +1352,8 @@ class RedNodeStudioWorkspace:
               boost_mask_in=None, edit_mask_in=None,
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
                mood_caption_in=None, clip=None, i2i_caption_in=None, vae=None,
-               model=None, latent=None):
+               model=None, latent=None, style_in=None, subject_in=None,
+               surroundings_in=None, light_and_colour_in=None):
         latent_in = latent
         cfg = parse_config(config)
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
@@ -1747,11 +1764,27 @@ class RedNodeStudioWorkspace:
             _cap = (prompts.get(_tn) or "").strip()
             if _a.get("on") and _a.get("inject_row") and _cap:
                 injections.setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
+        _wired_frame = {"style": style_in, "subject": subject_in,
+                        "surroundings": surroundings_in,
+                        "light_and_colour": light_and_colour_in}
+        if any(str(v or "").strip() for v in _wired_frame.values()):
+            _target = prompt_row_for(cfg["models"], cfg["prompts"])
+            if _target is None and cfg["prompts"]["rows"]:
+                _target = cfg["prompts"]["rows"][0]
+            if _target is None:
+                print("[RedNode Workspace] frame inputs are wired but the Prompts "
+                      "tab has no row to receive them", flush=True)
+            else:
+                _hit0 = injections.setdefault(_target["name"], {})
+                for _k, _v in _wired_frame.items():
+                    _v = str(_v or "").strip()
+                    if _v:
+                        _hit0.setdefault(_k, []).append(_v)
         for _row in cfg["prompts"]["rows"]:
             _hit = injections.get(_row["name"])
             if not _hit:
                 continue
-            _flat = ", ".join(c for k in ("subject", "surroundings",
+            _flat = ", ".join(c for k in ("style", "subject", "surroundings",
                                           "light_and_colour", "prompt")
                               for c in _hit.get(k, []))
             if _row["kind"] == "krea2" and _row.get("frame"):
@@ -1773,6 +1806,7 @@ class RedNodeStudioWorkspace:
                         style=str(_fr.get("style") or "None"),
                         style_extra=str(_fr.get("style_extra") or ""),
                         framing_push=str(_fr.get("framing_push") or "Off"),
+                        style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),
                         light_and_colour_in=", ".join(
