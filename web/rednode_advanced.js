@@ -178,111 +178,164 @@ function buildPanel(node) {
     cap("START · the workspace's image arrives");
     const rigs = rigNames();
     d.stages.forEach((s, i) => {
+      const isFolded = !!node.properties?.rn_adv_folds?.[i];
       const card = document.createElement("div");
       card.className = "card" + (s.on === false ? " off" : "");
+      // THE DROP TARGET: a dragged card lands on whichever card you let go over.
+      // Fold flags ride along by being remapped with the same move, or a folded
+      // card would unfold its neighbour every time it travelled past one.
+      card.addEventListener("dragover", (e) => e.preventDefault());
+      card.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const from = parseInt(e.dataTransfer?.getData("text/plain"), 10);
+        if (!Number.isFinite(from) || from === i || !d.stages[from]) return;
+        const folds = node.properties?.rn_adv_folds || {};
+        const arr = d.stages.map((st, k) => ({ st, fold: !!folds[k] }));
+        arr.splice(i, 0, arr.splice(from, 1)[0]);
+        d.stages = arr.map((x) => x.st);
+        node.properties = node.properties || {};
+        node.properties.rn_adv_folds = {};
+        arr.forEach((x, k) => { if (x.fold) node.properties.rn_adv_folds[k] = true; });
+        writeCfg(node, d);
+        render();
+      });
+
       const top = document.createElement("div");
       top.className = "line";
+      const caret = document.createElement("button");
+      caret.className = "eye";
+      caret.textContent = isFolded ? "\u25b8" : "\u25be";
+      caret.title = "Fold this pass down to one line.";
+      caret.onclick = () => {
+        node.properties = node.properties || {};
+        (node.properties.rn_adv_folds ||= {})[i] = !isFolded;
+        render();
+      };
+      const grip = document.createElement("span");
+      grip.textContent = "\u22ee\u22ee";
+      grip.title = "Drag to reorder. Only the grip drags, so the controls stay "
+                 + "controls.";
+      grip.style.cssText = "cursor:grab;color:#7f8792;flex:none;padding:0 2px;"
+                         + "user-select:none;letter-spacing:-2px";
+      grip.draggable = true;
+      grip.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", String(i));
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setDragImage?.(card, 24, 12);    // the drag image is the card
+      });
       const eye = document.createElement("button");
       eye.className = "eye";
-      eye.textContent = s.on === false ? "—" : "👁";
+      eye.textContent = s.on === false ? "\u2014" : "\ud83d\udc41";
       eye.title = "Skip this pass without losing its settings.";
       eye.onclick = () => { s.on = s.on === false; writeCfg(node, d); render(); };
       const chip = document.createElement("span");
       chip.className = "chip " + s.type;
       chip.textContent = s.type === "sampler" ? "SAMPLER" : "DETAILER";
-      top.append(eye, chip, lab("Rig"),
-                 sel(rigs, s.rig, "Which Models-tab rig runs this pass.",
-                     (v) => { s.rig = v; writeCfg(node, d); }, "(active rig)"));
-      if (s.type === "detailer") {
-        top.append(lab("Target"),
-                   sel(TARGETS.includes(s.target) ? TARGETS
-                                                  : [s.target, ...TARGETS],
-                       s.target, "What SAM3 segments and this pass redraws.",
-                       (v) => { s.target = v; writeCfg(node, d); }));
-        top.append(lab("SAM"),
-                   sel(L.samModels, s.sam_model,
-                       L.samModels.length
-                         ? "Which SAM checkpoint segments. Loader default when "
-                           + "unset."
-                         : "ComfyUI-Easy-Sam3 is not installed, so there is "
-                           + "nothing to pick; this pass will say so and pass "
-                           + "the image through.",
-                       (v) => { s.sam_model = v; writeCfg(node, d); },
-                       "(loader default)"));
+      top.append(caret, grip, eye, chip);
+      if (isFolded) {
+        // folded, the header still says what would run
+        const sum = document.createElement("span");
+        sum.className = "k";
+        sum.style.fontSize = "12px";
+        sum.textContent = (s.rig || "(active rig)")
+          + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
+          + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
+          + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "");
+        top.appendChild(sum);
+      } else {
+        top.append(lab("Rig"),
+                   sel(rigs, s.rig, "Which Models-tab rig runs this pass.",
+                       (v) => { s.rig = v; writeCfg(node, d); }, "(active rig)"));
+        if (s.type === "detailer") {
+          top.append(lab("Target"),
+                     sel(TARGETS.includes(s.target) ? TARGETS
+                                                    : [s.target, ...TARGETS],
+                         s.target, "What SAM3 segments and this pass redraws.",
+                         (v) => { s.target = v; writeCfg(node, d); }));
+          top.append(lab("SAM"),
+                     sel(L.samModels, s.sam_model,
+                         L.samModels.length
+                           ? "Which SAM checkpoint segments. Loader default when "
+                             + "unset."
+                           : "ComfyUI-Easy-Sam3 is not installed, so there is "
+                             + "nothing to pick; this pass will say so and pass "
+                             + "the image through.",
+                         (v) => { s.sam_model = v; writeCfg(node, d); },
+                         "(loader default)"));
+        }
       }
       const spacer = document.createElement("span");
       spacer.className = "grow";
-      const up = document.createElement("button");
-      up.textContent = "↑";
-      up.title = "Run this pass earlier.";
-      up.disabled = i === 0;
-      up.onclick = () => {
-        d.stages.splice(i - 1, 0, d.stages.splice(i, 1)[0]);
-        writeCfg(node, d); render();
-      };
-      const down = document.createElement("button");
-      down.textContent = "↓";
-      down.title = "Run this pass later.";
-      down.disabled = i === d.stages.length - 1;
-      down.onclick = () => {
-        d.stages.splice(i + 1, 0, d.stages.splice(i, 1)[0]);
-        writeCfg(node, d); render();
-      };
       const del = document.createElement("button");
-      del.textContent = "✕";
+      del.textContent = "\u2715";
       del.title = "Remove this pass.";
-      del.onclick = () => { d.stages.splice(i, 1); writeCfg(node, d); render(); };
-      top.append(spacer, up, down, del);
+      del.onclick = () => {
+        d.stages.splice(i, 1);
+        const folds = node.properties?.rn_adv_folds;
+        if (folds) {
+          const next = {};
+          Object.keys(folds).forEach((k) => {
+            const n2 = parseInt(k, 10);
+            if (folds[k] && n2 !== i) next[n2 > i ? n2 - 1 : n2] = true;
+          });
+          node.properties.rn_adv_folds = next;
+        }
+        writeCfg(node, d);
+        render();
+      };
+      top.append(spacer, del);
       card.appendChild(top);
 
-      const mid = document.createElement("div");
-      mid.className = "line";
-      mid.append(
-        lab("Steps"),
-        num(s.steps || "", 1, "Steps for this pass. 0 or empty inherits the "
-            + "rig's: detailer passes take its Detailer steps, sampler passes "
-            + "its Steps.", (v) => { s.steps = Math.max(0, Math.round(v)); writeCfg(node, d); }),
-        lab("Start"),
-        num(s.start_step || 0, 1, "Start at this step instead of 0, the detailer "
-            + "trick that keeps composition and only reworks detail.",
-            (v) => { s.start_step = Math.max(0, Math.round(v)); writeCfg(node, d); }),
-        lab("End"),
-        num(s.end_step || 0, 1, "Stop at this step. 0 runs to the end.",
-            (v) => { s.end_step = Math.max(0, Math.round(v)); writeCfg(node, d); }),
-        lab("CFG"),
-        num(s.cfg || "", 0.1, "CFG for this pass. 0 or empty inherits the rig's.",
-            (v) => { s.cfg = Math.max(0, v); writeCfg(node, d); }),
-        lab("Sampler"),
-        sel(L.samplers, s.sampler, "Sampler for this pass; (rig) inherits.",
-            (v) => { s.sampler = v; writeCfg(node, d); }, "(rig)"),
-        lab("Sched"),
-        sel(L.schedulers, s.scheduler, "Scheduler for this pass; (rig) inherits.",
-            (v) => { s.scheduler = v; writeCfg(node, d); }, "(rig)"),
-        lab("Scale"),
-        num(s.scale ?? 1.0, 0.05, "Resize ratio for this pass. 1 is the picture "
-            + "as it arrives. On a sampler pass the new size STICKS, so 0.5 then "
-            + "2.0 across two passes is the shrink-and-regrow chain that invents "
-            + "detail. On a detailer it renders the crop bigger and puts it back "
-            + "at its own size.",
-            (v) => { s.scale = Math.max(0.25, Math.min(4, v)); writeCfg(node, d); }),
-        lab("Denoise"),
-        num(s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3), 0.05,
-            "Denoise for this pass.",
-            (v) => { s.denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }));
-      card.appendChild(mid);
+      if (!isFolded) {
+        const mid = document.createElement("div");
+        mid.className = "line";
+        mid.append(
+          lab("Steps"),
+          num(s.steps || "", 1, "Steps for this pass. 0 or empty inherits the "
+              + "rig's: detailer passes take its Detailer steps, sampler passes "
+              + "its Steps.", (v) => { s.steps = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("Start"),
+          num(s.start_step || 0, 1, "Start at this step instead of 0, the detailer "
+              + "trick that keeps composition and only reworks detail.",
+              (v) => { s.start_step = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("End"),
+          num(s.end_step || 0, 1, "Stop at this step. 0 runs to the end.",
+              (v) => { s.end_step = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("CFG"),
+          num(s.cfg || "", 0.1, "CFG for this pass. 0 or empty inherits the rig's.",
+              (v) => { s.cfg = Math.max(0, v); writeCfg(node, d); }),
+          lab("Sampler"),
+          sel(L.samplers, s.sampler, "Sampler for this pass; (rig) inherits.",
+              (v) => { s.sampler = v; writeCfg(node, d); }, "(rig)"),
+          lab("Sched"),
+          sel(L.schedulers, s.scheduler, "Scheduler for this pass; (rig) inherits.",
+              (v) => { s.scheduler = v; writeCfg(node, d); }, "(rig)"),
+          lab("Scale"),
+          num(s.scale ?? 1.0, 0.05, "Resize ratio for this pass. 1 is the picture "
+              + "as it arrives. On a sampler pass the new size STICKS, so 0.5 then "
+              + "2.0 across two passes is the shrink-and-regrow chain that invents "
+              + "detail. On a detailer it renders the crop bigger and puts it back "
+              + "at its own size.",
+              (v) => { s.scale = Math.max(0.25, Math.min(4, v)); writeCfg(node, d); }),
+          lab("Denoise"),
+          num(s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3), 0.05,
+              "Denoise for this pass.",
+              (v) => { s.denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }));
+        card.appendChild(mid);
 
-      const bottom = document.createElement("div");
-      bottom.className = "line";
-      const pr = document.createElement("input");
-      pr.type = "text";
-      pr.placeholder = "Prompt: empty uses this rig's Prompts-tab row";
-      pr.title = "Empty means the rig's own prompt from the workspace, the same "
-               + "text the main render used, wildcards rolled on this run's seed. "
-               + "Typed text wins.";
-      pr.value = s.prompt || "";
-      pr.onchange = () => { s.prompt = pr.value; writeCfg(node, d); };
-      bottom.appendChild(pr);
-      card.appendChild(bottom);
+        const bottom = document.createElement("div");
+        bottom.className = "line";
+        const pr = document.createElement("input");
+        pr.type = "text";
+        pr.placeholder = "Prompt: empty uses this rig's Prompts-tab row";
+        pr.title = "Empty means the rig's own prompt from the workspace, the same "
+                 + "text the main render used, wildcards rolled on this run's seed. "
+                 + "Typed text wins.";
+        pr.value = s.prompt || "";
+        pr.onchange = () => { s.prompt = pr.value; writeCfg(node, d); };
+        bottom.appendChild(pr);
+        card.appendChild(bottom);
+      }
       wrap.appendChild(card);
     });
     cap("END · onward to the post process");
