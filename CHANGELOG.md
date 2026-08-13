@@ -28,7 +28,7 @@ wired input always wins, and the rig fills what is empty.
 - The Img2Img tab works rig-only: the rig's VAE encodes the source, which previously required a wired VAE and silently ignored the image without one
 - Image Review and Save tolerate an empty run, and Review grew a real images passthrough output
 - Paint Out picks its rig by name, so two external chains each carry their own model
-- RedNode Studio Advanced, new node: the post-render passes as a list you can read. Start, then sampler refines and SAM3 face detailers in whatever order, each naming its rig, then End into the post process. The detailers segment face, hair, hands and friends through ComfyUI-Easy-Sam3 when it is installed, and say plainly when it is not
+- RedNode Studio Detailer, new node: the post-render passes as a list you can read. Start, then sampler refines and SAM3 face detailers in whatever order, then End into the post process. Each pass names its rig and carries the full vocabulary: steps, CFG, sampler, scheduler, a start/end step window, a scale ratio for the shrink-and-regrow chains that invent detail, and a prompt that defaults to the rig's own Prompts-tab row. Settings left empty inherit the rig's. The detailers segment face, hair, hands and friends through ComfyUI-Easy-Sam3 with a visible SAM model choice, and say plainly when the pack is not installed
 
 **1.1.0** - 2026-08-12
 
