@@ -46,6 +46,8 @@ css.textContent = `
 .rn-adv .add button{flex:1;font-weight:600}
 .rn-adv .hint{font-size:11px;color:#7f8792}
 .rn-adv .card.run{border-color:#b8283c;box-shadow:inset 0 0 0 1px #b8283c}
+.rn-adv .tog{flex:none}
+.rn-adv .tog.on{background:#b8283c;border-color:#b8283c;color:#fff;font-weight:600}
 .rn-adv .card.run .chip{background:#b8283c;color:#fff}
 `;
 
@@ -266,7 +268,9 @@ function buildPanel(node) {
         sum.textContent = (s.rig || "(active rig)")
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
           + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
-          + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "");
+          + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
+          + (s.loras === false ? " \u00b7 raw" : "")
+          + ((s.use_subject || s.use_scene || s.use_moodboard) ? " \u00b7 refs" : "");
         top.appendChild(sum);
       } else {
         top.append(lab("Rig"),
@@ -377,6 +381,27 @@ function buildPanel(node) {
 
         const bottom = document.createElement("div");
         bottom.className = "line";
+        const tog = (label, key, dv, tip) => {
+          const cur = s[key] === undefined ? dv : !!s[key];
+          const b = document.createElement("button");
+          b.className = "tog" + (cur ? " on" : "");
+          b.textContent = label;
+          b.title = tip;
+          b.onclick = () => { s[key] = !cur; writeCfg(node, d); render(); };
+          return b;
+        };
+        bottom.append(
+          tog("LoRAs", "loras", true,
+              "Apply the main LoRAs tab's stack to this pass's model and clip. "
+              + "Off runs the rig raw."),
+          tog("Subject", "use_subject", false,
+              "Krea 2 rigs only: this pass encodes with the Subject tab's image "
+              + "as the identity reference."),
+          tog("Scene", "use_scene", false,
+              "Krea 2 rigs only: the Scene tab's image rides this pass's "
+              + "conditioning."),
+          tog("Mood", "use_moodboard", false,
+              "Krea 2 rigs only: the Moodboard batch styles this pass."));
         const pr = document.createElement("input");
         pr.type = "text";
         pr.placeholder = "Prompt: empty uses this rig's Prompts-tab row";

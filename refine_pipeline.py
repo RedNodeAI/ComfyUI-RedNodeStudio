@@ -82,6 +82,14 @@ def parse_pipeline(config_json):
             # at 2.0 is the shrink-and-regrow chain that invents detail, which is
             # the whole point of this node being a list.
             "scale": _num("scale", 0.25, 4.0, 1.0),
+            # ON by default, because everywhere else in the pack a rig arrives
+            # carrying its stack; raw is the explicit choice, not the accident
+            "loras": bool(s.get("loras", True)),
+            # Krea 2 references for this pass, the same three toggles the Paint
+            # tab offers, off by default for the same reason they are there
+            "use_subject": bool(s.get("use_subject")),
+            "use_scene": bool(s.get("use_scene")),
+            "use_moodboard": bool(s.get("use_moodboard")),
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
             "feather": _num("feather", 0, 64, 8, int),
             "padding": _num("padding", 0.0, 2.0, 0.35),
@@ -230,6 +238,31 @@ class RedNodeStudioDetailer:
                    "and put the post process after it.")
 
     @staticmethod
+    def _tab_tensor(ws_cfg, name, multi=False):
+        """The tab's selected image(s) as a tensor, or None, never an error."""
+        try:
+            t = ws_cfg.get("tabs", {}).get(name) or {}
+            if not t.get("on") or not t.get("images"):
+                return None
+            target = ws_cfg.get("resize", 1024) or 1024
+            if multi and isinstance(t.get("sel"), list):
+                picks = [t["images"][j] for j in t["sel"]
+                         if 0 <= j < len(t["images"])]
+                if not picks:
+                    return None
+                return _ws.batch_images(
+                    [_ws.load_image(pk, target) for pk in picks])
+            j = t.get("sel") or 0
+            if isinstance(j, list):
+                j = j[0] if j else 0
+            j = max(0, min(int(j), len(t["images"]) - 1))
+            return _ws.load_image(t["images"][j], target)
+        except Exception as exc:
+            print("[RedNode Detailer] could not load the %s reference: %s"
+                  % (name, exc), flush=True)
+            return None
+
+    @staticmethod
     def _notify(unique_id, stage, total, state):
         """Tell the panel which card is running, so the list lights up live.
 
@@ -274,6 +307,23 @@ class RedNodeStudioDetailer:
                 continue
             rig = _rig_settings(ws_cfg, s["rig"])
             steps, cfg_v, sampler, scheduler, start, end = resolve_sampling(s, rig)
+            # THE STACK, unless this pass says raw: the main LoRAs tab applied to
+            # model AND clip, the same halves the rest of the pack learned to keep
+            # together the hard way
+            lc = ws_cfg.get("loras") or {}
+            if s["loras"] and lc.get("on", True) and lc.get("slots"):
+                try:
+                    from . import lora_stack as _lora
+                    model, _c2, _w, _applied = _lora.apply_stack(
+                        model, clip, _lora.CUSTOM_SENTINEL,
+                        json.dumps({"ui": lc.get("ui") or {},
+                                    "slots": lc.get("slots") or []}),
+                        int(lc.get("seed", 0) or 0), unique_id,
+                        tag="Detailer LoRAs")
+                    clip = _c2 if _c2 is not None else clip
+                except Exception as exc:
+                    print("[RedNode Detailer] LoRAs failed on this pass: %s" % exc,
+                          flush=True)
             # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
             # the same text the main render used, wildcards rolled on this seed.
             # Typed text in the pass wins, the standing rule.
@@ -287,8 +337,39 @@ class RedNodeStudioDetailer:
                         text = _pf_expand(row["text"], seed + i, True)
                     except Exception:
                         text = row["text"]
-            pos = _encode_text(clip, text)
-            neg = _encode_text(clip, s["negative"])
+            # THE REFERENCES, for a Krea 2 rig: any of the three toggles routes
+            # this pass through the Studio encode with the tab images loaded, the
+            # identity system instead of plain text. On any other rig they are
+            # politely ignored, the same rule the Paint tab follows.
+            refs_wanted = (s["use_subject"] or s["use_scene"]
+                           or s["use_moodboard"])
+            rig_is_krea2 = rig.get("clip_type") == "krea2"
+            pos = neg = None
+            if refs_wanted and rig_is_krea2:
+                try:
+                    from .rednode import Krea2RedNode
+                    pos, neg = Krea2RedNode().encode(
+                        clip, text,
+                        ws_cfg.get("studio_preset") or "Balanced",
+                        0.5, negative_prompt=s["negative"], vae=vae,
+                        subject_image=(self._tab_tensor(ws_cfg, "subject")
+                                       if s["use_subject"] else None),
+                        scene_image=(self._tab_tensor(ws_cfg, "scene")
+                                     if s["use_scene"] else None),
+                        moodboard_style=(self._tab_tensor(ws_cfg, "moodboard",
+                                                          multi=True)
+                                         if s["use_moodboard"] else None))
+                except Exception as exc:
+                    print("[RedNode Detailer] reference encode failed, plain "
+                          "text instead: %s" % exc, flush=True)
+                    pos = neg = None
+            elif refs_wanted:
+                print("[RedNode Detailer] references are Krea 2 conditioning and "
+                      "rig %r is not a Krea 2 rig; encoding plain text"
+                      % (rig_name or "(active)"), flush=True)
+            if pos is None:
+                pos = _encode_text(clip, text)
+                neg = _encode_text(clip, s["negative"])
             window = ("" if start == 0 and end is None
                       else ", steps %d..%s" % (start, end if end is not None
                                                else "end"))
