@@ -285,7 +285,7 @@ class RedNodeStudioDetailer:
         if image is None:
             print("[RedNode Detailer] no image arrived (paint run or external "
                   "sampler), passes skipped", flush=True)
-            return (None, "no image arrived, passes skipped")
+            return (_ws.blocked(), "no image arrived, passes skipped")
         cfg = parse_pipeline(config)
         stages = [(k, s) for k, s in enumerate(cfg["stages"]) if s["on"]]
         report = []

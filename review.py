@@ -37,7 +37,9 @@ class RedNodeImageReview(nodes.PreviewImage):
         if images is None:
             print("[RedNode Image Review] no image on this run; nothing to preview",
                   flush=True)
-            return {"ui": {"images": []}, "result": (None,)}
+            # blocked, not None: a core node wired after this has no None guard
+            from .workspace import blocked
+            return {"ui": {"images": []}, "result": (blocked(),)}
         out = super().save_images(images=images, **kw)
         out["result"] = (images,)
         return out

@@ -1210,7 +1210,10 @@ class RedNodeSave:
         # Review: file nothing, quietly, rather than TypeError inside the writer
         if images is None:
             print("[RedNode Save] no image on this run; nothing to file", flush=True)
-            return {"ui": {"images": []}}
+            # blocked, not absent: this node declares a passthrough output, and a
+            # core node wired to it has no None guard
+            from .workspace import blocked
+            return {"ui": {"images": []}, "result": (blocked(),)}
         cfg = parse_config(config)
         out_dir = folder_paths.get_output_directory()
         ws = workspace_from_prompt(prompt)

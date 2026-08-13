@@ -1036,6 +1036,24 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
     return None
 
 
+def blocked():
+    """A silent ExecutionBlocker: downstream nodes skip instead of crashing.
+
+    Core nodes like PreviewImage have no None guard, so handing them None on a
+    paint run or in external-sampler mode is a TypeError in the user's face.
+    Blocking the socket is core's own way of saying "nothing this run". Plain
+    None offline, where comfy_execution does not exist.
+    """
+    try:
+        from comfy_execution.graph_utils import ExecutionBlocker
+    except Exception:
+        try:
+            from comfy_execution.graph import ExecutionBlocker
+        except Exception:
+            return None
+    return ExecutionBlocker(None)
+
+
 def load_active_rig(cfg, name=""):
     """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
 
@@ -2188,11 +2206,16 @@ class RedNodeStudioWorkspace:
                 # wired to these five needs no Sampler Config and no channels.
                 rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer,
                 # APPENDED: the folded-in Studio's conditioning, and the embedded
-                # sampler's picture. The whole classic chain, one node.
-                positive, negative, rig_image,
+                # sampler's picture. The whole classic chain, one node. The two
+                # render products block when nothing rendered (paint run,
+                # external mode), so a core PreviewImage skips instead of dying;
+                # the other None sockets stay None because there None means
+                # "unset", not "absent this run".
+                positive, negative,
+                rig_image if rig_image is not None else blocked(),
                 # APPENDED: the embedded sampler's latent before decode, for
                 # chaining a same-model workspace with no VAE round trip
-                result_latent_out)
+                result_latent_out if result_latent_out is not None else blocked())
         if ui_extra:
             return {"ui": ui_extra, "result": _result}
         return _result
