@@ -176,6 +176,7 @@ are unsure about.
 | Node | What it does |
 |---|---|
 | RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. Start here. |
+| RedNode Studio Advanced | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each through a rig from the Models tab, no wires between them. |
 | RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. |
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
 
