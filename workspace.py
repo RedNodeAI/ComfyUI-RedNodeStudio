@@ -792,6 +792,10 @@ def parse_config(config_json):
         "on": bool(pin.get("on")),
         "source": str(pin.get("source") or ""),
         "mask": str(pin.get("mask") or ""),
+        # The colour sheet: an RGBA file of everything painted in colour mode,
+        # composited over the source before any paint pass renders. Its own key
+        # because colour is PIXELS and the mask is COVERAGE; the two never mix.
+        "colour": str(pin.get("colour") or ""),
         # The segmenter's mask, which the tab draws UNDER the brush strokes. Its own key
         # on purpose: "mask" above is overwritten with the exported base-plus-strokes
         # composite every time a paint pass runs, so keeping the auto mask there would
@@ -1216,6 +1220,36 @@ def load_image(name, target):
             rgb = rgb.resize((nw, nh), Image.LANCZOS)
     arr = np.asarray(rgb, dtype=np.float32) / 255.0
     return torch.from_numpy(arr)[None,]
+
+
+def composite_colour(base, colour_name, who="RedNode Paint"):
+    """The colour sheet alpha-composited over the base IMAGE tensor.
+
+    base is [1,H,W,3]; the sheet is an RGBA PNG in the sheet's own size, rescaled
+    to the base. The colours become part of the picture the paint pass renders
+    from, which is the whole colour-paint workflow: paint rough colour, mask over
+    it, and a raised denoise resolves it into the image. A missing or broken
+    sheet leaves the base untouched with a console line, never an error.
+    """
+    if not colour_name:
+        return base
+    try:
+        img = Image.open(_filepath(colour_name))
+        img = ImageOps.exif_transpose(img).convert("RGBA")
+        h, w = int(base.shape[1]), int(base.shape[2])
+        if (img.width, img.height) != (w, h):
+            img = img.resize((w, h), Image.LANCZOS)
+        arr = np.asarray(img, dtype=np.float32) / 255.0
+        rgb = torch.from_numpy(arr[..., :3])
+        alpha = torch.from_numpy(arr[..., 3:4])
+        out = base.clone()
+        out[0] = base[0] * (1.0 - alpha) + rgb * alpha
+        print(f"[{who}] colour paint composited over the source", flush=True)
+        return out
+    except Exception as e:
+        print(f"[{who}] could not composite the colour paint ({e}); "
+              "using the source as it is", flush=True)
+        return base
 
 
 def load_mask(name, size_hw=None):

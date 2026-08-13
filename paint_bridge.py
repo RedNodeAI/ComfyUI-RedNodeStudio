@@ -221,6 +221,9 @@ class RedNodePaintOut:
             else:
                 base = _ws.load_image_or_blank(pc["source"], 0,
                                                "RedNode Paint Out")
+        # the colour sheet rides out to external renderers too: what the tab
+        # produces is the frame WITH the colours, whoever renders it
+        base = _ws.composite_colour(base, pc.get("colour"), "RedNode Paint Out")
         full_h, full_w = base.shape[1], base.shape[2]
 
         mask = None

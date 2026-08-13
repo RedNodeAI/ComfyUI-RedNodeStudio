@@ -153,6 +153,11 @@ css.textContent = `
    dash are set live; everything static lives here. */
 .rn-ws-ring{position:absolute;left:0;top:0;display:none;z-index:3;border-radius:50%;
   pointer-events:none;border:1px solid #fff;box-shadow:0 0 0 1px #000a}
+/* colour paint: the mode pair, the palette chips and the picker swatch */
+.rn-ws-cclu{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.rn-ws-cchip{width:16px;height:16px;border:1px solid #444a52;border-radius:3px;
+  cursor:pointer;flex:none;padding:0}
+.rn-ws-cchip.on{outline:2px solid #e8ecf1;outline-offset:1px}
 .rn-ws-fsov{position:fixed;inset:0;z-index:9990;background:#0c0d10ee;display:flex;
   flex-direction:column;padding:14px}
 .rn-ws-fsbar{display:flex;align-items:center;gap:10px;flex:none;padding:0 2px 10px}
@@ -1332,6 +1337,22 @@ async function saveMaskNow(node) {
     node._rnMaskDirty = true;               // still owed, so the next chance retries
     console.error("[RedNode Workspace] could not save the paint mask:", e);
   }
+  // The colour sheet saves at the same moments, into its own file. The canvas
+  // already holds base coat plus strokes, so it uploads as-is (RGBA, transparent
+  // where unpainted); the server composites it over the source at load time.
+  if (node._rnColourDirty && node._rnColourCanvas) {
+    node._rnColourDirty = false;
+    try {
+      const cname = await uploadMask(node, node._rnColourCanvas);
+      const live2 = node._rnCfg?.paint || P;
+      live2.colour = cname;
+      writeCfg(node);
+      if (node._rnMaskNote) node._rnMaskNote.textContent = "Paint saved";
+    } catch (e) {
+      node._rnColourDirty = true;
+      console.error("[RedNode Workspace] could not save the colour paint:", e);
+    }
+  }
 }
 
 /** Mark the mask as needing a save. It happens when the brush is put down, not during.
@@ -2332,7 +2353,9 @@ function openPaintCanvasOnly(node) {
     const d = await res.json();
     if (d.error) throw new Error(d.error);
     live.auto_mask = d.mask;
-    node._rnStrokes = [];
+    // only the MASK strokes yield to the segmenter; colour paint is not coverage
+    // and survives the press
+    node._rnStrokes = (node._rnStrokes || []).filter((st) => st[8]);
     node._rnRedo = [];
     writeCfg(node);
     node._rnSeedBase?.(d.mask);        // in place: a render would empty this room
@@ -2398,6 +2421,7 @@ function openPaintCanvasOnly(node) {
         { label: "↷ Redo", title: "redo", run: () => pane.redo?.() },
       ] },
       { group: [{ el: brushGroup }] },
+      { group: [{ el: buildColourCluster(node).el }] },
       { group: [
         { name: "shape-round", label: "⚪ Round", title: "round brush: soft, even strokes",
           run: (refresh) => {
@@ -2433,15 +2457,18 @@ function openPaintCanvasOnly(node) {
             finally { busy.on = false; refresh(); }
           } },
         { name: "clear", label: "Clear paint",
-          title: "Wipe the strokes and any saved or auto mask.",
+          title: "Wipe everything painted: strokes, masks and colour paint.",
           run: (refresh) => {
             const live = P();
             node._rnStrokes = [];
             live.mask = "";
             live.auto_mask = "";
+            live.colour = "";
             node._rnMaskDirty = false;
+            node._rnColourDirty = false;
             writeCfg(node);
             node._rnResetPaint?.();
+            node._rnResetColour?.();
             refresh();
           } },
       ] },
@@ -5651,6 +5678,10 @@ function paintBody(node, body) {
         if (P.mask) { P.mask = ""; writeCfg(node); }
         if (P.auto_mask) { P.auto_mask = ""; writeCfg(node); }
       }
+      // The colour sheet NEVER survives a source change, Keep mask or not. The
+      // render already resolved those colours into the result; carrying the sheet
+      // onto it would stamp the same flat blobs over the detail it just made.
+      if (P.colour) { P.colour = ""; writeCfg(node); }
     }
     node._rnStrokesFor = src;
   }
@@ -5694,6 +5725,8 @@ function paintBody(node, body) {
     node._rnRebuildMask = null;
     node._rnMaskCanvas = null;
     node._rnPaintLayer = null;
+    node._rnColourCanvas = null;
+    node._rnRebuildColour = null;
     if (node._rnShapeNoteEl) node._rnShapeNoteEl.textContent = "";
     const empty = document.createElement("div");
     empty.className = "rn-ws-pempty";
@@ -5720,8 +5753,13 @@ function paintBody(node, body) {
     // brush ring and hatch around a made-up 300px source.
     let paintCanvasReady = false;
     layer.className = "paintlayer";
-    left.append(base, layer);
+    // the colour sheet: real colours between the picture and the mask view, the
+    // fourth canvas the design named. It shows itself, so it needs no hatch.
+    const sheet = document.createElement("canvas");
+    sheet.className = "paintcolour";
+    left.append(base, sheet, layer);
     node._rnPaintLayer = layer;
+    node._rnColourCanvas = sheet;
 
     // THE MASK AND THE LOOK OF IT ARE TWO DIFFERENT THINGS, and they used to be one
     // canvas. The brush drew at 55% alpha so you could see the picture underneath,
@@ -5886,6 +5924,35 @@ function paintBody(node, body) {
     };
     node._rnRebuildMask = rebuildMask;
     node._rnShowAll = showAll;
+    // THE COLOUR SHEET'S TRUTH, rebuilt the same way the mask is: base coat from
+    // the saved file, live strokes replayed on top. The saved file is skipped as
+    // base while colour strokes are pending, because it already has them baked
+    // in, the exact double-paint rule the mask fought over first.
+    let colourBaseImg = null;
+    const rebuildColour = () => {
+      const sc = sheet.getContext("2d");
+      sc.clearRect(0, 0, sheet.width, sheet.height);
+      if (colourBaseImg?.naturalWidth) {
+        sc.globalCompositeOperation = "source-over";
+        sc.drawImage(colourBaseImg, 0, 0, sheet.width, sheet.height);
+      }
+      replayColour(node, sheet);
+    };
+    node._rnRebuildColour = rebuildColour;
+    const colourBaseSrc = (node._rnStrokes || []).some((st) => st[8])
+      ? "" : (P.colour || "");
+    if (colourBaseSrc) {
+      colourBaseImg = new Image();
+      colourBaseImg.onload = () => {
+        if ((livePaint().colour || "") === colourBaseSrc) rebuildColour();
+      };
+      colourBaseImg.onerror = () => {
+        console.warn("[RedNode Workspace] the saved colour paint is gone:",
+                     colourBaseSrc);
+        colourBaseImg = null;
+      };
+      colourBaseImg.src = viewUrl(colourBaseSrc);
+    }
     // What Automatic would pick, computed the way the server computes it. The scan
     // runs on a <=96px downsample and only at settle moments (a rebuild, a save),
     // never per stroke segment: at 4096 the full canvas is millions of pixels and a
@@ -5962,6 +6029,10 @@ function paintBody(node, body) {
       baseFor = "";
       rebuildMask();
     };
+    node._rnResetColour = () => {
+      colourBaseImg = null;
+      rebuildColour();
+    };
     // WHICH FILE IS THE BASE COAT depends on whether strokes are still pending, and
     // the two answers are different files:
     //
@@ -6012,6 +6083,7 @@ function paintBody(node, body) {
       const t = V.z === 1 && !V.x && !V.y
         ? "" : `translate(${V.x}px, ${V.y}px) scale(${V.z})`;
       base.style.transform = t;
+      sheet.style.transform = t;
       layer.style.transform = t;
       // The hatch is sized in SCREEN pixels, so a zoom change means redrawing it. A
       // pan does not: the picture moves, the scale does not, and repainting a 4K view
@@ -6067,11 +6139,16 @@ function paintBody(node, body) {
       base.height = layer.height = img.naturalHeight;
       mask.width = layer.width;
       mask.height = layer.height;
+      sheet.width = layer.width;
+      sheet.height = layer.height;
       base.getContext("2d").drawImage(img, 0, 0);
       paintCanvasReady = true;
       // the strokes so far survive a re-render, so switching tabs is not destructive,
       // and the auto mask under them survives it the same way
       if (node._rnStrokes?.length || baseImg || overlayDrawOwed) rebuildMask();
+      if ((node._rnStrokes || []).some((st) => st[8]) || colourBaseImg) {
+        rebuildColour();
+      }
       node._rnSyncRing?.();
       // the layout can hold the full height now, so a scroll restore the browser
       // clamped at render time is paid here, once. The still-at-zero check is what
@@ -6114,6 +6191,18 @@ function paintBody(node, body) {
     // however fast you move.
     const stroke = (x0, y0, x1, y1, erase) => {
       const lp = livePaint();
+      if (paintMode(node) === "colour") {
+        // colour goes on the SHEET and records its colour as the 9th field; it
+        // never touches the mask, the two passes stay deliberately separate
+        const col = paintColour(node);
+        maskSegment(sheet, x0, y0, x1, y1, lp.brush, erase,
+                    lp.brush_shape || "round", col);
+        (node._rnStrokes ||= []).push([x0, y0, x1, y1, lp.brush, erase ? 1 : 0,
+                                       node._rnDragSeq, lp.brush_shape || "round",
+                                       col]);
+        node._rnColourDirty = true;
+        return;
+      }
       maskSegment(mask, x0, y0, x1, y1, lp.brush, erase, lp.brush_shape || "round");
       // repaint only what this segment touched, padded by the brush radius
       const pad = lp.brush / 2 + 2;
@@ -6166,6 +6255,8 @@ function paintBody(node, body) {
       const py = (node._rnLastPtr.y - lr.top) / z - 1;
       ring.style.transform = `translate(${px}px, ${py}px) translate(-50%, -50%)`;
       ring.style.borderStyle = ringErase ? "dashed" : "solid";
+      ring.style.borderColor = paintMode(node) === "colour"
+        ? paintColour(node) : "#fff";
       // the ring IS the brush preview, so it takes the brush's shape: a circle
       // promising a square mark is the shape chooser looking broken
       ring.style.borderRadius = (livePaint().brush_shape === "square") ? "0" : "50%";
@@ -6185,7 +6276,9 @@ function paintBody(node, body) {
       ring.style.display = "none";
       // the moment the brush is put down. Saving here costs nothing anybody can see,
       // and it means the mask is already current before the mouse reaches Generate.
-      if (node._rnMaskDirty && !drawing) saveMaskNow(node);
+      if ((node._rnMaskDirty || node._rnColourDirty) && !drawing) {
+        saveMaskNow(node);
+      }
     });
 
     layer.addEventListener("pointerdown", (e) => {
@@ -6215,6 +6308,27 @@ function paintBody(node, body) {
         layer.addEventListener("pointermove", pmove);
         layer.addEventListener("pointerup", pup);
         layer.addEventListener("pointercancel", pup);
+        return;
+      }
+      if (paintMode(node) === "colour" && e.button === 0
+          && (node._rnEyedrop || e.altKey)) {
+        // the eyedropper: the pixels are already here, on the picture and the
+        // sheet; sample the composite of the two at the brush point
+        const [sx, sy] = at(e);
+        try {
+          const scr = document.createElement("canvas");
+          scr.width = scr.height = 1;
+          const sc = scr.getContext("2d");
+          sc.drawImage(base, Math.floor(sx), Math.floor(sy), 1, 1, 0, 0, 1, 1);
+          sc.drawImage(sheet, Math.floor(sx), Math.floor(sy), 1, 1, 0, 0, 1, 1);
+          const px = sc.getImageData(0, 0, 1, 1).data;
+          node.properties = node.properties || {};
+          node.properties.rn_paint_colour = "#" + [px[0], px[1], px[2]]
+            .map((v) => v.toString(16).padStart(2, "0")).join("");
+        } catch (err) { /* a tainted canvas keeps the old colour */ }
+        node._rnEyedrop = false;
+        node._rnSyncColourUI?.();
+        node._rnSyncRing?.();
         return;
       }
       drawing = true;
@@ -6259,7 +6373,9 @@ function paintBody(node, body) {
       // the mask is what undo and redo change; the view is repainted from it, and the
       // auto mask is put back first because undo takes back STROKES, not the base coat
       rebuildMask();
+      rebuildColour();
       node._rnPaintDirty = true;
+      node._rnColourDirty = true;    // an undone colour stroke must reach the file too
     };
     const undo = () => {
       const st = node._rnStrokes || [];
@@ -6386,6 +6502,7 @@ function paintBody(node, body) {
     brushCtl.append(bTop, bPre);
     syncShape();
     bSync();
+    const colourClu = buildColourCluster(node);
     if (fs) {
       // THE RAIL OWNS THE BRUSH in the big room, per the user's drawing: a vertical
       // bar filling the rail's empty middle, label at the top, value beneath it, the
@@ -6402,7 +6519,7 @@ function paintBody(node, body) {
       const shapeCol = document.createElement("div");
       shapeCol.style.cssText = "display:flex;flex-direction:column;gap:4px";
       for (const [bt] of shapeBtns) shapeCol.appendChild(bt);
-      rb.append(bLab, bRng, bVal, shapeCol);
+      rb.append(bLab, bRng, bVal, shapeCol, colourClu.el);
       zbar.appendChild(rb);
     } else {
       // ONE line under the canvas, the user's sketch: view buttons with undo beside
@@ -6414,6 +6531,7 @@ function paintBody(node, body) {
       bTop.style.flex = "1 1 auto";
       brushCtl.append(bTop);
       zbar.appendChild(brushCtl);
+      bPre.appendChild(colourClu.el);
       zbar.appendChild(bPre);
     }
     const sp = document.createElement("span");
@@ -6475,6 +6593,7 @@ function paintBody(node, body) {
     const syncControls = () => {
       bSync();
       syncShape();
+      colourClu.sync();
       node._rnSyncZbar?.();
     };
     node._rnPaintPane = { src, fs, left, zbar, syncControls, undo, redo, zoomAt,
@@ -7424,7 +7543,8 @@ function paintBody(node, body) {
         // asked for: press it and the canvas shows that mask. The strokes go with it,
         // because they were drawn against a mask that is no longer the one underneath.
         live.auto_mask = d.mask;
-        node._rnStrokes = [];
+        // the segmenter replaces mask coverage; colour paint is not coverage
+        node._rnStrokes = (node._rnStrokes || []).filter((st) => st[8]);
         node._rnRedo = [];
         writeCfg(node);
         // the pane persists across renders, so the new base coat is seeded here
@@ -7536,11 +7656,22 @@ function paintBody(node, body) {
   clear.style.width = "auto";
   clear.style.padding = "0 10px";
   clear.textContent = "Clear paint";
-  clear.title = "Wipe the brush strokes and any saved or auto mask. The picture "
-              + "underneath is untouched.";
+  clear.title = "Wipe the current mode's work: in Mask mode the strokes and any "
+              + "saved or auto mask, in Colour mode the painted colours. The other "
+              + "mode's work and the picture underneath are untouched.";
   clear.onclick = () => {
-    node._rnStrokes = [];
     const live = node._rnCfg?.paint || P;
+    if (paintMode(node) === "colour") {
+      // only the coloured strokes and the sheet go; the mask keeps its coverage
+      node._rnStrokes = (node._rnStrokes || []).filter((st) => !st[8]);
+      if (live.colour) { live.colour = ""; writeCfg(node); }
+      node._rnColourDirty = false;
+      node._rnPaintDirty = true;
+      node._rnResetColour?.();
+      render(node);
+      return;
+    }
+    node._rnStrokes = (node._rnStrokes || []).filter((st) => st[8]);
     // Both files are base coats when the pane rebuilds. Clearing only the strokes
     // lets either one redraw the coverage immediately after Clear appears to wipe it.
     if (live.mask || live.auto_mask) {
@@ -7907,7 +8038,8 @@ function paintBody(node, body) {
     // to paint something first, when the subject is sitting there masked, is the panel
     // arguing with what is on screen. One tap of the brush "fixed" it, which is the
     // tell: the mask was always fine, the question was wrong.
-    if (!node._rnStrokes?.length && !P.mask && !P.auto_mask && !P.invert) {
+    if (!(node._rnStrokes || []).some((st) => !st[8])
+        && !P.mask && !P.auto_mask && !P.invert) {
       alert("Paint something first: Generate renders only the region you painted. "
           + "(Mask background or Mask subject count too, and with Invert on, nothing "
           + "painted means the whole frame.)");
@@ -7920,6 +8052,15 @@ function paintBody(node, body) {
     // "nothing is painted yet" with the tab covered in brush strokes.
     const layer = node._rnMaskCanvas;      // the mask, not the hatched view of it
     const snapshot = layer ? maskCanvas(layer, P.feather) : null;
+    // the colour sheet is snapshotted at the same moment, for the same reason;
+    // only when unsaved work is on it, else the saved file is already the truth
+    let csnap = null;
+    if (node._rnColourDirty && node._rnColourCanvas?.width) {
+      csnap = document.createElement("canvas");
+      csnap.width = node._rnColourCanvas.width;
+      csnap.height = node._rnColourCanvas.height;
+      csnap.getContext("2d").drawImage(node._rnColourCanvas, 0, 0);
+    }
     const settings = paintBatchSettings(node);
     const run = {
       active: true,
@@ -7938,6 +8079,10 @@ function paintBody(node, body) {
         // This IS the save-before-Generate half of the rule, and it always was: the
         // snapshot was taken above, before any re-render could blank the canvas.
         P.mask = await uploadMask(node, snapshot);
+        if (csnap) {
+          P.colour = await uploadMask(node, csnap);
+          node._rnColourDirty = false;
+        }
         node._rnMaskDirty = false;
         writeCfg(node);
       }
@@ -8058,11 +8203,13 @@ function paintBody(node, body) {
 // and the strength of the change is denoise's job. Drawing it at the brush's
 // see-through display alpha is what made an even stroke land unevenly, and made erase
 // leave a ghost that took several passes to scrub out.
-function maskSegment(mask, x0, y0, x1, y1, w, erase, shape) {
+function maskSegment(mask, x0, y0, x1, y1, w, erase, shape, colour) {
   const ctx = mask.getContext("2d");
   ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
-  ctx.strokeStyle = "#fff";
-  ctx.fillStyle = "#fff";
+  // the same primitive draws the mask (white, exported as alpha) and the colour
+  // sheet (the chosen colour, shown as itself): one implementation, per the rule
+  ctx.strokeStyle = colour || "#fff";
+  ctx.fillStyle = colour || "#fff";
   ctx.lineWidth = w;
   const square = shape === "square";
   ctx.lineCap = square ? "square" : "round";
@@ -8087,9 +8234,110 @@ function maskSegment(mask, x0, y0, x1, y1, w, erase, shape) {
 // tab keeps one per mask slot, so two painters can be open at once without sharing
 // the single node-level list the Paint tab uses.
 function replayStrokes(node, mask, strokes) {
-  for (const [x0, y0, x1, y1, w, erase, , shape] of strokes || node._rnStrokes || []) {
+  // the 9th field is the COLOUR, and its presence routes the stroke: coloured
+  // strokes belong to the colour sheet and must never feed the mask
+  for (const [x0, y0, x1, y1, w, erase, , shape, col]
+       of strokes || node._rnStrokes || []) {
+    if (col) continue;
     maskSegment(mask, x0, y0, x1, y1, w, erase, shape || "round");
   }
+}
+
+// Rebuild the COLOUR SHEET from the recorded strokes: only the coloured ones,
+// each in the colour it was made with, erases included.
+function replayColour(node, sheet, strokes) {
+  for (const [x0, y0, x1, y1, w, erase, , shape, col]
+       of strokes || node._rnStrokes || []) {
+    if (!col) continue;
+    maskSegment(sheet, x0, y0, x1, y1, w, erase, shape || "round", col);
+  }
+}
+
+// Colour paint mode state. Panel state, so it lives on node.properties like the
+// strip tab, never in the config: the server only ever needs the finished sheet.
+function paintMode(node) {
+  return node.properties?.rn_paint_mode === "colour" ? "colour" : "mask";
+}
+function paintColour(node) {
+  return node.properties?.rn_paint_colour || "#e03131";
+}
+
+// The Mask / Colour pair with the palette, the picker swatch and the eyedropper,
+// one builder for the strip and the canvas-only room. Mode and colour live on
+// node.properties: panel state, never config.
+function buildColourCluster(node) {
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-cclu";
+  const setMode = (m) => {
+    node.properties = node.properties || {};
+    node.properties.rn_paint_mode = m;
+    if (m !== "colour") node._rnEyedrop = false;
+    sync();
+    node._rnSyncRing?.();
+  };
+  const setColour = (c) => {
+    node.properties = node.properties || {};
+    node.properties.rn_paint_colour = c;
+    node.properties.rn_paint_mode = "colour";   // picking a colour means painting it
+    sync();
+    node._rnSyncRing?.();
+  };
+  const maskB = document.createElement("button");
+  maskB.textContent = "Mask";
+  maskB.title = "Mask mode: the brush marks WHERE the render may change things, "
+              + "exactly as the tab has always worked.";
+  maskB.onclick = () => setMode("mask");
+  const colB = document.createElement("button");
+  colB.textContent = "Colour";
+  colB.title = "Colour mode: the brush paints real colour onto the picture. Paint "
+             + "rough colour, switch back to Mask and mask over it, and a slightly "
+             + "raised denoise resolves the colours into the image.";
+  colB.onclick = () => setMode("colour");
+  wrap.append(maskB, colB);
+  const pal = ["#e03131", "#f59f00", "#ffd43b", "#2f9e44", "#1971c2",
+               "#f8f9fa", "#141414"];
+  const chips = [];
+  for (const c of pal) {
+    const ch = document.createElement("button");
+    ch.className = "rn-ws-cchip";
+    ch.style.background = c;
+    ch.title = "Paint with this colour.";
+    ch.onclick = () => setColour(c);
+    wrap.appendChild(ch);
+    chips.push(ch);
+  }
+  const pickIn = document.createElement("input");
+  pickIn.type = "color";
+  pickIn.style.cssText = "width:0;height:0;border:0;padding:0;opacity:0;flex:none";
+  pickIn.oninput = () => setColour(pickIn.value);
+  const swatch = document.createElement("button");
+  swatch.className = "rn-ws-cchip";
+  swatch.style.borderRadius = "50%";
+  swatch.title = "The colour on the brush. Click for the full picker; the chips "
+               + "are just the fast ones.";
+  swatch.onclick = () => pickIn.click?.();
+  const eyeB = document.createElement("button");
+  eyeB.textContent = "\u2299";
+  eyeB.title = "Eyedropper: the next click on the picture picks up its colour "
+             + "instead of painting. Alt+click samples any time in Colour mode.";
+  eyeB.onclick = () => { node._rnEyedrop = !node._rnEyedrop; sync(); };
+  wrap.append(swatch, pickIn, eyeB);
+  const sync = () => {
+    const mode = paintMode(node);
+    const col = paintColour(node);
+    maskB.className = "rn-ws-btn rn-ws-zb" + (mode === "mask" ? " on" : "");
+    colB.className = "rn-ws-btn rn-ws-zb" + (mode === "colour" ? " on" : "");
+    swatch.style.background = col;
+    pickIn.value = col;
+    for (let i = 0; i < chips.length; i++) {
+      chips[i].className = "rn-ws-cchip"
+        + (mode === "colour" && pal[i] === col ? " on" : "");
+    }
+    eyeB.className = "rn-ws-btn rn-ws-zb" + (node._rnEyedrop ? " on" : "");
+  };
+  node._rnSyncColourUI = sync;
+  sync();
+  return { el: wrap, sync };
 }
 
 // The saved mask follows ComfyUI's own convention: PAINTED areas are transparent,

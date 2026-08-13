@@ -550,6 +550,10 @@ class RedNodePaintRender:
             base = _ws.load_image_or_blank(pc["source"], 0, "RedNode Paint Render")
             print(f"[RedNode Paint] painting {pc['source']} from the Paint tab",
                   flush=True)
+        # colour mode's sheet becomes part of the picture being painted, wired or
+        # not: the wired image in every real route IS the tab's source (the door,
+        # the upscale round trip), and the mask already follows the same rule
+        base = _ws.composite_colour(base, pc.get("colour"), "RedNode Paint Render")
         full_h, full_w = base.shape[1], base.shape[2]
         mask = None
         if pc.get("mask"):
