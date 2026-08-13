@@ -280,6 +280,12 @@ class RedNodeStudioDetailer:
             pass
 
     def run(self, image, config="{}", prompt=None, unique_id=None):
+        # A paint-door run or an external-sampler workspace hands over no image
+        # at all; pass the nothing along like Review and Save do, don't crash
+        if image is None:
+            print("[RedNode Detailer] no image arrived (paint run or external "
+                  "sampler), passes skipped", flush=True)
+            return (None, "no image arrived, passes skipped")
         cfg = parse_pipeline(config)
         stages = [(k, s) for k, s in enumerate(cfg["stages"]) if s["on"]]
         report = []
