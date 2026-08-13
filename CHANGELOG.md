@@ -4,6 +4,31 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.2.0** - 2026-08-13
+
+The workspace becomes the whole studio. Models load inside it, prompts live with the
+model they were written for, the sampler runs inside the node, and painting picks its
+model from a list. A full render is one node, a review and a save; the new
+RedNodeStudio_Simple workflow ships exactly that. Existing workflows keep working
+unchanged, because every new socket is appended and every new system is an option: a
+wired input always wins, and the rig fills what is empty.
+
+- Models tab: named rigs, several kept, one active. Checkpoint or diffusion model, CLIP with type, VAE, each field a searchable picker with recents. A checkpoint's baked CLIP and VAE are used when the separate fields stay on None, and a line under the box says where each piece comes from
+- Each rig carries its sampler settings, the five Sampler Config profile keys, out on typed sockets a stock KSampler accepts, plus a seed with Randomize
+- Built-in sampler: comfy core's own KSampler and the VAE decode run inside the node, positive, negative and the finished image on outputs. External stays the default
+- The rig's CLIP type decides the encode: krea2 runs the Studio identity system with references and edit masks; anything else encodes plain text, so an XL rig renders as XL instead of erroring
+- Prompts tab: named prompts linked to rigs, the Krea 2 rows drawing the full Prompt Frame editor, one implementation shared with the node. Sections fold, rows fold, the prompt library saves your own next to the examples
+- Auto prompts inject themselves: each image tab's auto prompt names a prompt and a Frame slot, and the caption lands there at queue time, always after the typed text. The caption out-and-back wiring is retired
+- The workspace takes style_in, subject_in, surroundings_in and light_and_colour_in, the Frame's own vocabulary, for helper chains; they join the active prompt after the typed text
+- Wildcards in the prompts resolve at queue time on the run seed, shared with the sampler: Randomize re-rolls picks and noise together, one number reproduces the whole render
+- Painting: the Model choice lists the rigs, and picking one runs the paint pass inside the workspace, on the routed paint model with the Studio's conditioning, no render node needed. External chains stay on the list
+- Paint LoRAs: its own tab in the paint column with the shared stack presets, two routings, paint overriding main. Unwired Paint Render and Paint Out both take the rig through whichever stack the routing names, model half and text half together
+- Use as reference follows the model: a Krea 2 rig opens Subject, Scene and Moodboard for painting wherever the render runs
+- Chaining: the Img2Img tab's canvas can be a wired image (any model to any model) or a wired latent (same model, no VAE round trip, from the new result_latent output), at the tab's own denoise
+- The Img2Img tab works rig-only: the rig's VAE encodes the source, which previously required a wired VAE and silently ignored the image without one
+- Image Review and Save tolerate an empty run, and Review grew a real images passthrough output
+- Paint Out picks its rig by name, so two external chains each carry their own model
+
 **1.1.0** - 2026-08-12
 
 Four new nodes. Video gets the filing system the pictures already had, and prompting gets
