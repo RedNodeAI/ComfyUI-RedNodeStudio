@@ -45,7 +45,31 @@ css.textContent = `
 .rn-adv .add{display:flex;gap:6px}
 .rn-adv .add button{flex:1;font-weight:600}
 .rn-adv .hint{font-size:11px;color:#7f8792}
+.rn-adv .card.run{border-color:#b8283c;box-shadow:inset 0 0 0 1px #b8283c}
+.rn-adv .card.run .chip{background:#b8283c;color:#fff}
 `;
+
+// the live light: the node says which card is running, the panel lights it. One
+// listener for every Detailer on the graph, matched by node id.
+let wiredProgress = false;
+function wireProgress() {
+  if (wiredProgress) return;
+  wiredProgress = true;
+  api.addEventListener?.("rednode-detailer-step", (e) => {
+    const d = e?.detail || {};
+    const want = String(d.node ?? "");
+    const walk = (graph) => {
+      for (const n of graph?._nodes || []) {
+        if (NODE_NAMES.includes(n?.type) && String(n.id) === want) {
+          n._rnAdvActive = d.state === "run" ? d.stage : null;
+          n._rnAdvRender?.();
+        }
+        if (n?.subgraph) walk(n.subgraph);
+      }
+    };
+    walk(app.graph);
+  });
+}
 
 // samplers, schedulers and the SAM checkpoints, off the live definitions so the
 // lists can never drift from what the install can actually run
@@ -128,6 +152,7 @@ function buildPanel(node) {
   cw.computeSize = () => [0, -4];
   if (!document.getElementById("rn-adv-style")) document.head.appendChild(css);
   if (!LISTS) fetchLists().then(() => node._rnAdvRender?.());
+  wireProgress();
 
   const wrap = document.createElement("div");
   wrap.className = "rn-adv";
@@ -180,7 +205,8 @@ function buildPanel(node) {
     d.stages.forEach((s, i) => {
       const isFolded = !!node.properties?.rn_adv_folds?.[i];
       const card = document.createElement("div");
-      card.className = "card" + (s.on === false ? " off" : "");
+      card.className = "card" + (s.on === false ? " off" : "")
+                     + (node._rnAdvActive === i ? " run" : "");
       // THE DROP TARGET: a dragged card lands on whichever card you let go over.
       // Fold flags ride along by being remapped with the same move, or a folded
       // card would unfold its neighbour every time it travelled past one.
@@ -318,9 +344,35 @@ function buildPanel(node) {
               + "at its own size.",
               (v) => { s.scale = Math.max(0.25, Math.min(4, v)); writeCfg(node, d); }),
           lab("Denoise"),
-          num(s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3), 0.05,
-              "Denoise for this pass.",
-              (v) => { s.denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }));
+          (() => {
+            // a drag bar, the user's call: denoise is the dial you ride while
+            // tuning a pass, and a slider reads at a glance where a box does not
+            const box = document.createElement("span");
+            box.style.cssText = "display:inline-flex;align-items:center;gap:4px;"
+                              + "flex:1;min-width:110px";
+            const r = document.createElement("input");
+            r.type = "range";
+            r.min = "0";
+            r.max = "1";
+            r.step = "0.01";
+            r.style.cssText = "flex:1;min-width:70px";
+            const dv = s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3);
+            r.value = String(dv);
+            r.title = "Denoise for this pass.";
+            const val = document.createElement("span");
+            val.className = "k";
+            val.style.width = "30px";
+            val.textContent = Number(dv).toFixed(2);
+            r.addEventListener("input", () => {
+              val.textContent = Number(r.value).toFixed(2);
+            });
+            r.addEventListener("change", () => {
+              s.denoise = Math.max(0, Math.min(1, parseFloat(r.value) || 0));
+              writeCfg(node, d);
+            });
+            box.append(r, val);
+            return box;
+          })());
         card.appendChild(mid);
 
         const bottom = document.createElement("div");

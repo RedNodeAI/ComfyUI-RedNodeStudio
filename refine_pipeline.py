@@ -229,9 +229,26 @@ class RedNodeStudioDetailer:
                    "workspace's image output in, take the finished picture out, "
                    "and put the post process after it.")
 
+    @staticmethod
+    def _notify(unique_id, stage, total, state):
+        """Tell the panel which card is running, so the list lights up live.
+
+        Config indices, not enabled-only ones: a skipped pass must not shift the
+        highlight onto its neighbour. Fails silent, because the progress light is
+        a nicety and the render is the job.
+        """
+        try:
+            from server import PromptServer
+            PromptServer.instance.send_sync(
+                "rednode-detailer-step",
+                {"node": str(unique_id), "stage": stage, "total": total,
+                 "state": state})
+        except Exception:
+            pass
+
     def run(self, image, config="{}", prompt=None, unique_id=None):
         cfg = parse_pipeline(config)
-        stages = [s for s in cfg["stages"] if s["on"]]
+        stages = [(k, s) for k, s in enumerate(cfg["stages"]) if s["on"]]
         report = []
         if not stages:
             return (image, "no passes configured")
@@ -243,7 +260,8 @@ class RedNodeStudioDetailer:
         seed = (_random.getrandbits(48) if cfg["seed_random"] else cfg["seed"])
 
         out = image
-        for i, s in enumerate(stages, 1):
+        for i, (card_idx, s) in enumerate(stages, 1):
+            self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
             tag = "%d/%d %s" % (i, len(stages), s["type"])
             rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"])
             if model is None or clip is None or vae is None:
@@ -293,6 +311,7 @@ class RedNodeStudioDetailer:
                             % (steps, window, sampler, scheduler, s["denoise"])))
             print("[RedNode Detailer] " + line, flush=True)
             report.append(line)
+        self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
 
     @staticmethod
