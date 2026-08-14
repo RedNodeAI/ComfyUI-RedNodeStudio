@@ -620,6 +620,7 @@ from .prompt_box import RedNodePromptBox  # noqa: E402
 from .prompt_frame import RedNodePromptFrame  # noqa: E402
 from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
+from .rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
 from .selector import RedNodeSelector  # noqa: E402
 from .combo_control import RedNodeComboControl  # noqa: E402
 from .control_panel import RedNodeControlPanel  # noqa: E402
@@ -666,6 +667,8 @@ NODE_CLASS_MAPPINGS = {
     "RedNodePromptFrame": RedNodePromptFrame,
     "RedNodeDescribeToBoxes": RedNodeDescribeToBoxes,
     "RedNodeStudioAdvanced": RedNodeStudioAdvanced,
+    "RedNodeRigOut": RedNodeRigOut,
+    "RedNodeRigIn": RedNodeRigIn,
     "RedNodeSelector": RedNodeSelector,
     "RedNodeComboControl": RedNodeComboControl,
     "RedNodeControlPanel": RedNodeControlPanel,
@@ -711,6 +714,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePromptFrame": "RedNode Prompt Frame",
     "RedNodeDescribeToBoxes": "RedNode Describe To Boxes",
     "RedNodeStudioAdvanced": "RedNode Studio Advanced",
+    "RedNodeRigOut": "RedNode Rig Out",
+    "RedNodeRigIn": "RedNode Rig In",
     "RedNodeSelector": "RedNode Selector",
     "RedNodeComboControl": "RedNode Combo Control",
     "RedNodeControlPanel": "RedNode Control Panel",
