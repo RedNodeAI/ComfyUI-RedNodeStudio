@@ -738,6 +738,14 @@ def parse_config(config_json):
             "sampler": str(r.get("sampler") or "euler"),
             "scheduler": str(r.get("scheduler") or "simple"),
             "detailer_steps": _num("detailer_steps", 0, 200, 8),
+            # IDENTITY RESCUE, per rig: restore the layers the named LoRA
+            # touches back toward the named base checkpoint before the stack
+            # lands, which is what makes an identity LoRA fire on a merged
+            # model. Off unless every piece is named, per the house rule.
+            "rescue": bool(r.get("rescue")),
+            "rescue_base": str(r.get("rescue_base") or ""),
+            "rescue_lora": str(r.get("rescue_lora") or ""),
+            "rescue_strength": _num("rescue_strength", 0.0, 1.0, 1.0, float),
         })
     try:
         active = int(min_.get("active", 0))
@@ -1087,8 +1095,15 @@ def load_active_rig(cfg, name=""):
         else:
             print("[RedNode Workspace] no rig named %r on the Models tab; using the "
                   "active rig %r instead" % (want, rig["name"]), flush=True)
-    key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"], rig["vae"])
-    if not any(key):
+    # the rescue fields ride the cache key: toggling Rescue or moving its dial
+    # must reload, or the cache would keep handing out the unpatched model
+    _resc = (bool(rig.get("rescue")) and rig.get("rescue_base")
+             and rig.get("rescue_lora"))
+    key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"],
+           rig["vae"],
+           (rig["rescue_base"], rig["rescue_lora"],
+            rig.get("rescue_strength", 1.0)) if _resc else None)
+    if not any(key[:5]):
         return rig["name"], None, None, None
     if _RIG_CACHE["key"] == key:
         return rig["name"], _RIG_CACHE["model"], _RIG_CACHE["clip"], _RIG_CACHE["vae"]
@@ -1109,6 +1124,14 @@ def load_active_rig(cfg, name=""):
                 type=rig["clip_type"] or "stable_diffusion")[0]
         if rig["vae"]:
             vae = _nodes.VAELoader().load_vae(vae_name=rig["vae"])[0]
+        if _resc and model is not None:
+            # the Models tab's Rescue toggle: this rig's LoRA-landing layers
+            # restored toward the named base, so an identity LoRA fires on a
+            # merged model. Everything that takes this rig gets it for free.
+            from .identity_rescue import rescue_model
+            model = rescue_model(model, rig["rescue_base"], rig["rescue_lora"],
+                                 rig.get("rescue_strength", 1.0),
+                                 who="RedNode Workspace rescue")
     except Exception as exc:
         print("[RedNode Workspace] the Models tab could not load %r: %s"
               % (rig["name"] or key, exc), flush=True)

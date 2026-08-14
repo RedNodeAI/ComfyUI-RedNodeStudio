@@ -8386,6 +8386,7 @@ async function fetchModelLists() {
     clips: await pull("CLIPLoader", "clip_name"),
     clip_types: await pull("CLIPLoader", "type"),
     vaes: await pull("VAELoader", "vae_name"),
+    loras: await pull("LoraLoader", "lora_name"),
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
   };
@@ -8555,6 +8556,67 @@ function modelsBody(node, page) {
       + "; CLIP from " + from(rig.clip, "CLIP")
       + "; VAE from " + from(rig.vae, "VAE") + ".";
     body.appendChild(src);
+  }
+
+  // IDENTITY RESCUE, per rig, a toggle instead of a node by the user's call:
+  // an identity LoRA is a delta trained against ONE base, and a merged model
+  // has averaged that base away, which is why faces stopped landing on mixes.
+  // The rescue restores only the layers the named LoRA touches back toward the
+  // named base before the stack lands; the mix keeps its look everywhere else.
+  body = mkBox("Identity rescue");
+  {
+    const rh = document.createElement("div");
+    rh.className = "rn-ws-note";
+    rh.textContent = "For merged models that stopped answering an identity "
+                   + "LoRA: restores just the layers that LoRA touches back "
+                   + "toward the base it was trained on. Name the base and the "
+                   + "LoRA, leave the rest of the mix alone.";
+    body.appendChild(rh);
+    const trow = document.createElement("div");
+    trow.className = "rn-ws-row";
+    const tb = document.createElement("button");
+    tb.className = "rn-ws-on" + (rig.rescue ? " on" : "");
+    tb.style.width = "auto";
+    tb.style.padding = "0 10px";
+    tb.textContent = rig.rescue ? "Rescue on" : "Rescue off";
+    tb.title = "Patch this rig's model at load time so the identity LoRA fires "
+             + "on it. Off changes nothing, exactly as before.";
+    tb.onclick = () => { rig.rescue = !rig.rescue; writeCfg(node); render(node); };
+    trow.appendChild(tb);
+    body.appendChild(trow);
+  }
+  if (rig.rescue) {
+    pickRow("Base model", "rescue_base", () => L.checkpoints, "models",
+            "The checkpoint the LoRA was trained against - for the Identity "
+            + "Edit LoRA, the official Krea 2 Turbo. Only the needed tensors "
+            + "are read from the file, never a whole second model.");
+    pickRow("LoRA", "rescue_lora", () => L.loras || [], "loras",
+            "The identity LoRA. Its own file says which layers to restore; "
+            + "nothing else on this rig is touched.");
+    const srow = document.createElement("div");
+    srow.className = "rn-ws-row";
+    const slab = document.createElement("span");
+    slab.className = "rn-ws-note";
+    slab.style.cssText = "flex:none;width:110px";
+    slab.textContent = "Strength";
+    const sr = document.createElement("input");
+    sr.type = "range";
+    sr.min = 0; sr.max = 1; sr.step = 0.05;
+    sr.value = rig.rescue_strength ?? 1.0;
+    sr.style.cssText = "width:160px;height:20px;accent-color:#b8283c";
+    sr.title = "1.0 makes the touched layers exactly the base's before the "
+             + "LoRA lands. Lower keeps more of the mix in those layers and "
+             + "trades identity fidelity back for the mix's look.";
+    const sv = document.createElement("span");
+    sv.className = "rn-ws-note";
+    sv.textContent = Number(rig.rescue_strength ?? 1.0).toFixed(2);
+    sr.addEventListener("input", () => {
+      rig.rescue_strength = snapStep(sr.value, 0, 1, 0.05);
+      sv.textContent = Number(rig.rescue_strength).toFixed(2);
+      writeCfg(node);
+    });
+    srow.append(slab, sr, sv);
+    body.appendChild(srow);
   }
 
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
