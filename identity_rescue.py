@@ -52,6 +52,23 @@ def _lora_target_names(keys):
     return names
 
 
+def _true_weight(t):
+    """The real values behind a live model tensor, as float32.
+
+    A quantised model (the mixed-precision moody mix that started this) keeps
+    packed int8/fp4 storage in its state dict; raw .float() on that is garbage
+    at ~100x the true magnitude, which is exactly what the magnitude guard
+    caught in the field. comfy_kitchen's QuantizedTensor knows how to unpack
+    itself, so ask it; anything unquantised just casts.
+    """
+    if hasattr(t, "dequantize"):
+        try:
+            return t.dequantize().float()
+        except Exception:
+            return t.float()      # the magnitude guard has the last word
+    return t.float()
+
+
 def _dequant(t, sd_get, name):
     """A base tensor as float32, scaled fp8 dequantised whichever way the file
     spells its scale.
@@ -156,6 +173,7 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
                 if mix_w is None or ck is None:
                     missing += 1
                     continue
+                mix_w = _true_weight(mix_w)
                 base_w = _dequant(f.get_tensor(ck), sd_get, ck)
                 if tuple(base_w.shape) != tuple(mix_w.shape):
                     missing += 1
