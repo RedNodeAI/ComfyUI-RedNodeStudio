@@ -818,3 +818,24 @@ app.registerExtension({
     };
   },
 });
+
+// Rig Out / Rig In: the typed rig box becomes a DROPDOWN of the workspace's
+// actual rig names, refreshed every time it opens, because a typo here fell
+// silently to the active rig and rendered with the wrong prompt.
+app.registerExtension({
+  name: "RedNode.RigBridge",
+  async beforeRegisterNodeDef(nodeType, nodeData) {
+    if (!["RedNodeRigOut", "RedNodeRigIn"].includes(nodeData?.name)) return;
+    const onCreated = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+      onCreated?.apply(this, arguments);
+      const w = this.widgets?.find((x) => x.name === "rig");
+      if (!w) return;
+      w.type = "combo";
+      w.options = w.options || {};
+      // a function, so the list is live: rigs added on the Models tab appear
+      // the next time the dropdown opens, no reload
+      w.options.values = () => ["(active rig)", ...rigNames()];
+    };
+  },
+});

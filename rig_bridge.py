@@ -57,8 +57,15 @@ class RedNodeRigOut:
 
     def pull(self, image=None, rig="(active rig)", prompt=None):
         cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
-        r = _rig_settings(cfg, "" if rig == "(active rig)" else rig)
+        want = "" if rig == "(active rig)" else str(rig or "").strip()
+        r = _rig_settings(cfg, want)
         name = r.get("name") or "(unnamed)"
+        if want and name != want:
+            # a typo must be LOUD, not a silent fall to the active rig with a
+            # different prompt - exactly the confusion the user hit
+            print("[RedNode Rig Out] no rig named %r on the Models tab; using "
+                  "the active rig %r and ITS prompt row. Pick from the "
+                  "dropdown to avoid typos." % (want, name), flush=True)
         row = _ws.prompt_row_for(cfg["models"], cfg["prompts"], r.get("name", ""))
         seed = (random.getrandbits(48) if cfg["models"]["seed_random"]
                 else cfg["models"]["seed"])
