@@ -53,7 +53,16 @@ def parse_pipeline(config_json):
         data = {}
     stages = []
     for s in (data.get("stages") if isinstance(data.get("stages"), list) else []):
-        if not isinstance(s, dict) or s.get("type") not in ("sampler", "detailer"):
+        if not isinstance(s, dict):
+            continue
+        if s.get("type") == "title":
+            # a group header: pure panel furniture that divides the list. The
+            # run skips it; it parses so the round trip never loses a group.
+            stages.append({"type": "title", "on": bool(s.get("on", True)),
+                           "name": str(s.get("name") or ""),
+                           "color": str(s.get("color") or "")})
+            continue
+        if s.get("type") not in ("sampler", "detailer"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -93,6 +102,10 @@ def parse_pipeline(config_json):
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
             "feather": _num("feather", 0, 64, 8, int),
             "padding": _num("padding", 0.0, 2.0, 0.35),
+            # iteration, the Paint tab's Passes on a single pass: run this pass
+            # over its own result N times, fresh seed each round
+            "repeat": _num("repeat", 1, 10, 1, int),
+            "color": str(s.get("color") or ""),      # panel cosmetics, kept
         })
     try:
         seed = int(data.get("seed", 0))
@@ -317,7 +330,8 @@ class RedNodeStudioDetailer:
                   "sampler), passes skipped", flush=True)
             return (_ws.blocked(), "no image arrived, passes skipped")
         cfg = parse_pipeline(config)
-        stages = [(k, s) for k, s in enumerate(cfg["stages"]) if s["on"]]
+        stages = [(k, s) for k, s in enumerate(cfg["stages"])
+                  if s["on"] and s["type"] != "title"]
         report = []
         if not stages:
             return (image, "no passes configured")
@@ -409,25 +423,45 @@ class RedNodeStudioDetailer:
             window = ("" if start == 0 and end is None
                       else ", steps %d..%s" % (start, end if end is not None
                                                else "end"))
-            if s["type"] == "sampler":
-                out = self._sample(out, model, pos, neg, vae, s, seed + i,
-                                   steps, cfg_v, sampler, scheduler, start, end)
-                line = ("%s: rig %r, %d steps%s, cfg %.1f, %s/%s, denoise %.2f"
-                        % (tag, rig_name, steps, window, cfg_v, sampler,
-                           scheduler, s["denoise"]))
-                if abs(s["scale"] - 1.0) >= 1e-3:
-                    line += ", scale %.2f -> %d x %d" % (
-                        s["scale"], out.shape[2], out.shape[1])
-            else:
-                out, why = self._detail(out, model, pos, neg, vae, s, seed + i,
-                                        steps, cfg_v, sampler, scheduler, start,
-                                        end)
-                line = "%s: %s on rig %r, %s" % (
-                    tag, s["target"], rig_name,
-                    why or ("%d steps%s, %s/%s, denoise %.2f"
-                            % (steps, window, sampler, scheduler, s["denoise"])))
-            print("[RedNode Detailer] " + line, flush=True)
-            report.append(line)
+            # REPEAT, the Paint tab's iteration on one pass: the pass runs over
+            # its own result N times, a fresh seed each round, and only the last
+            # picture moves on. A detailer that passed through (no mask, no SAM)
+            # stops repeating: the same miss N times is noise in the console.
+            reps = int(s.get("repeat", 1))
+            why = None
+            for r in range(max(1, reps)):
+                rseed = seed + i + r * 131
+                if s["type"] == "sampler":
+                    out = self._sample(out, model, pos, neg, vae, s, rseed,
+                                       steps, cfg_v, sampler, scheduler, start,
+                                       end)
+                    line = ("%s: rig %r, %d steps%s, cfg %.1f, %s/%s, denoise "
+                            "%.2f" % (tag, rig_name, steps, window, cfg_v,
+                                      sampler, scheduler, s["denoise"]))
+                    if abs(s["scale"] - 1.0) >= 1e-3:
+                        line += ", scale %.2f -> %d x %d" % (
+                            s["scale"], out.shape[2], out.shape[1])
+                else:
+                    out, why = self._detail(out, model, pos, neg, vae, s, rseed,
+                                            steps, cfg_v, sampler, scheduler,
+                                            start, end)
+                    line = "%s: %s on rig %r, %s" % (
+                        tag, s["target"], rig_name,
+                        why or ("%d steps%s, %s/%s, denoise %.2f"
+                                % (steps, window, sampler, scheduler,
+                                   s["denoise"])))
+                if reps > 1:
+                    line += ", repeat %d of %d" % (r + 1, reps)
+                print("[RedNode Detailer] " + line, flush=True)
+                report.append(line)
+                if why:
+                    break
+                # a sampler pass's scale must not compound across repeats: 1.5x
+                # three times is 3.4x and a VRAM surprise. The first round
+                # scales, the rest refine at the size it landed on.
+                if r == 0 and reps > 1 and s["type"] == "sampler" \
+                        and abs(s["scale"] - 1.0) >= 1e-3:
+                    s = dict(s, scale=1.0)
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
 
@@ -501,6 +535,75 @@ class RedNodeStudioDetailer:
         merged = image.clone()
         merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
         return merged, None
+
+
+# ---- named pass-list presets: the user's layouts, one JSON in the user dir ------
+# The panel ships premade layouts client-side (the proven face-identity chain among
+# them); this store holds the user's OWN saved lists, server-side so they survive
+# browsers and reinstalls the way sampler profiles do.
+
+def _presets_path(make=False):
+    import os
+    import folder_paths
+    base = os.path.join(folder_paths.get_user_directory(), "default", "rednode")
+    if make:
+        os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "detailer_presets.json")
+
+
+def load_presets():
+    try:
+        with open(_presets_path(), "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if isinstance(raw, dict):
+        for name, stages in raw.items():
+            if not str(name).strip() or not isinstance(stages, list):
+                continue
+            # the parse is the gatekeeper: junk never gets stored or served
+            out[str(name).strip()[:48]] = parse_pipeline(
+                json.dumps({"stages": stages}))["stages"]
+    return out
+
+
+try:
+    from server import PromptServer
+    from aiohttp import web
+
+    @PromptServer.instance.routes.get("/rednode/detailer_presets")
+    async def _rn_detailer_presets_get(request):
+        return web.json_response({"presets": load_presets()})
+
+    @PromptServer.instance.routes.post("/rednode/detailer_presets")
+    async def _rn_detailer_presets_post(request):
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request"}, status=400)
+        name = str(body.get("name") or "").strip()[:48]
+        if not name:
+            return web.json_response({"error": "a preset needs a name"},
+                                     status=400)
+        presets = load_presets()
+        if body.get("delete"):
+            presets.pop(name, None)
+        else:
+            stages = body.get("stages")
+            if not isinstance(stages, list) or not stages:
+                return web.json_response({"error": "no passes to save"},
+                                         status=400)
+            presets[name] = parse_pipeline(
+                json.dumps({"stages": stages}))["stages"]
+        try:
+            with open(_presets_path(make=True), "w", encoding="utf-8") as f:
+                json.dump(presets, f, indent=1)
+        except OSError as e:
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response({"presets": presets})
+except Exception as _e:
+    print(f"[RedNode Detailer] preset routes not registered: {_e}", flush=True)
 
 
 # The class carried "Advanced" for a few hours before the user named it properly.

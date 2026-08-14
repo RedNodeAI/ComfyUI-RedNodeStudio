@@ -16,6 +16,38 @@ import { api } from "../../scripts/api.js";
 const NODE_NAMES = ["RedNodeStudioDetailer", "RedNodeStudioAdvanced"];
 const TARGETS = ["face", "hair", "hands", "eyes", "clothes", "background"];
 
+// the Control Panel's row palette, verbatim: one set of colours across the pack
+const COLORS = [
+  { n: "none", v: null }, { n: "red", v: "#7f2230" }, { n: "orange", v: "#7a4416" },
+  { n: "green", v: "#1e5233" }, { n: "teal", v: "#14514f" }, { n: "blue", v: "#1d3f6e" },
+  { n: "purple", v: "#492a6b" }, { n: "pink", v: "#6b2450" }, { n: "grey", v: "#3a3f47" },
+];
+
+// shipped layouts. The face identity chain is the user's own proven recipe
+// (2026-08-14, verified against a real reference; DOC_NOTES.md tells the story):
+// grow the frame, redraw the face with the Subject refs, then one gentle
+// whole-frame pass. Rigs stay unset because rig names are per-workspace: the
+// LAST TWO passes belong on the official Krea 2 Turbo rig, where identity
+// LoRAs actually fire - merged models will not answer them.
+const PREMADES = {
+  "Face identity chain": [
+    { type: "sampler", on: true, rig: "", steps: 4, denoise: 0.09, scale: 1.5,
+      use_subject: true, prompt: "" },
+    { type: "detailer", on: true, rig: "", target: "face", steps: 8,
+      denoise: 0.5, sampler: "euler_ancestral", scheduler: "simple",
+      threshold: 0.5, feather: 8, padding: 0.35, use_subject: true, prompt: "" },
+    { type: "sampler", on: true, rig: "", steps: 4, denoise: 0.15,
+      sampler: "euler", scheduler: "simple", use_subject: true, prompt: "" },
+  ],
+  "Shrink and regrow": [
+    { type: "sampler", on: true, rig: "", denoise: 0.35, scale: 0.5, prompt: "" },
+    { type: "sampler", on: true, rig: "", denoise: 0.2, scale: 2.0, prompt: "" },
+  ],
+  "Upscale polish": [
+    { type: "sampler", on: true, rig: "", denoise: 0.12, scale: 1.5, prompt: "" },
+  ],
+};
+
 const css = document.createElement("style");
 css.id = "rn-adv-style";
 css.textContent = `
@@ -49,6 +81,32 @@ css.textContent = `
 .rn-adv .tog{flex:none}
 .rn-adv .tog.on{background:#b8283c;border-color:#b8283c;color:#fff;font-weight:600}
 .rn-adv .card.run .chip{background:#b8283c;color:#fff}
+.rn-adv .card.grp{margin-left:22px}
+.rn-adv .rep{width:42px}
+.rn-adv .rep.on{border-color:#b8283c;background:#1d1418;color:#fff}
+.rn-adv .tcard{display:flex;align-items:center;gap:6px;background:#212429;
+  border:1px solid #2a2e34;border-radius:6px;padding:5px 6px}
+.rn-adv .tcard input.name{flex:1;font-weight:700;letter-spacing:.04em;
+  background:transparent;border:none;min-width:60px}
+.rn-adv .tcard.off input.name{text-decoration:line-through;color:#f87171}
+.rn-adv .tcard.off{background:#17191d}
+`;
+
+const menuCss = document.createElement("style");
+menuCss.id = "rn-adv-menu-style";
+menuCss.textContent = `
+.rn-adv-menu{position:fixed;z-index:10000;display:flex;flex-direction:column;
+  gap:5px;background:#1a1d22;border:1px solid #3a3f47;border-radius:6px;
+  padding:8px;min-width:170px;font:12px 'Segoe UI',system-ui,sans-serif;
+  color:#d6d9de;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.rn-adv-menu h5{margin:2px 0 0;font-size:10px;color:#7f8792;font-weight:700;
+  letter-spacing:.05em}
+.rn-adv-menu .swrow{display:flex;gap:4px}
+.rn-adv-menu .swrow div{width:18px;height:18px;border-radius:4px;
+  border:1px solid #3a3f47;cursor:pointer}
+.rn-adv-menu button{background:#15171b;border:1px solid #33373d;border-radius:4px;
+  color:#c8ccd2;cursor:pointer;font-size:12px;padding:4px 8px;text-align:left}
+.rn-adv-menu button:hover{border-color:#b8283c;color:#fff}
 `;
 
 // the live light: the node says which card is running, the panel lights it. One
@@ -129,6 +187,120 @@ function rigNames() {
   return names;
 }
 
+// the user's own saved layouts, server-side like sampler profiles
+let SAVED = null;
+async function fetchPresets() {
+  try {
+    const r = await api.fetchApi("/rednode/detailer_presets");
+    SAVED = (await r.json())?.presets || {};
+  } catch (e) { SAVED = {}; }
+  return SAVED;
+}
+async function postPreset(body) {
+  try {
+    const r = await api.fetchApi("/rednode/detailer_presets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d?.presets) SAVED = d.presets;
+    return d?.error || null;
+  } catch (e) { return String(e); }
+}
+
+// fold flags are keyed by index; every insert or delete shifts the tail
+function shiftFolds(node, from, delta) {
+  const folds = node.properties?.rn_adv_folds;
+  if (!folds) return;
+  const next = {};
+  Object.keys(folds).forEach((k) => {
+    const n = parseInt(k, 10);
+    if (!folds[k]) return;
+    if (delta < 0 && n >= from && n < from - delta) return;   // deleted rows
+    next[n >= from ? n + delta : n] = true;
+  });
+  node.properties.rn_adv_folds = next;
+}
+
+// the house right-click menu: DOM at the cursor, closed by any outside press,
+// never LiteGraph.ContextMenu (it draws at canvas scale inside a panel)
+function openCardMenu(node, d, i, ev, writeAndRender) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  document.querySelector(".rn-adv-menu")?.remove();
+  if (!document.getElementById("rn-adv-menu-style")) {
+    document.head.appendChild(menuCss);
+  }
+  const s = d.stages[i];
+  const m = document.createElement("div");
+  m.className = "rn-adv-menu";
+  m.style.left = ev.clientX + "px";
+  m.style.top = ev.clientY + "px";
+  const h = document.createElement("h5");
+  h.textContent = "Row colour";
+  const sw = document.createElement("div");
+  sw.className = "swrow";
+  COLORS.forEach((c) => {
+    const dot = document.createElement("div");
+    dot.title = c.n;
+    dot.style.background = c.v || "transparent";
+    if (!c.v) dot.style.border = "2px dashed #555";
+    if ((s.color || null) === c.v) dot.style.borderColor = "#fff";
+    dot.onclick = () => { s.color = c.v || undefined; writeAndRender(); m.remove(); };
+    sw.appendChild(dot);
+  });
+  m.append(h, sw);
+  const mk = (label, fn) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = () => { m.remove(); fn(); };
+    m.appendChild(b);
+  };
+  if (s.type === "title") {
+    // the whole group travels: title plus members down to the next title
+    let end = i + 1;
+    while (end < d.stages.length && d.stages[end].type !== "title") end++;
+    mk("Duplicate group", () => {
+      const copy = d.stages.slice(i, end).map((x) => JSON.parse(JSON.stringify(x)));
+      d.stages.splice(end, 0, ...copy);
+      shiftFolds(node, end, copy.length);
+      writeAndRender();
+    });
+    mk("Delete group and passes", () => {
+      d.stages.splice(i, end - i);
+      shiftFolds(node, i, -(end - i));
+      writeAndRender();
+    });
+  } else {
+    mk("Duplicate pass", () => {
+      d.stages.splice(i + 1, 0, JSON.parse(JSON.stringify(s)));
+      shiftFolds(node, i + 1, 1);
+      writeAndRender();
+    });
+    mk("Add group title above", () => {
+      d.stages.splice(i, 0, { type: "title", name: "GROUP", on: true });
+      shiftFolds(node, i, 1);
+      writeAndRender();
+    });
+    mk(s.on === false ? "Turn on" : "Turn off", () => {
+      s.on = s.on === false;
+      writeAndRender();
+    });
+  }
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  if (r.bottom > innerHeight) m.style.top = Math.max(4, innerHeight - r.height - 8) + "px";
+  if (r.right > innerWidth) m.style.left = Math.max(4, innerWidth - r.width - 8) + "px";
+  const close = (e) => {
+    if (!m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener("pointerdown", close, true);
+    }
+  };
+  document.addEventListener("pointerdown", close, true);
+}
+
 function readCfg(node) {
   const w = node.widgets?.find((x) => x.name === "config");
   let d = {};
@@ -154,6 +326,7 @@ function buildPanel(node) {
   cw.computeSize = () => [0, -4];
   if (!document.getElementById("rn-adv-style")) document.head.appendChild(css);
   if (!LISTS) fetchLists().then(() => node._rnAdvRender?.());
+  if (SAVED === null) fetchPresets().then(() => node._rnAdvRender?.());
   wireProgress();
 
   const wrap = document.createElement("div");
@@ -202,18 +375,80 @@ function buildPanel(node) {
       c.textContent = t;
       wrap.appendChild(c);
     };
+    // THE PRESET ROW: premade layouts (starred) and the user's saved ones.
+    // Picking replaces the whole list; Save stores the list under a name,
+    // server-side like sampler profiles, so it survives browsers.
+    {
+      const prow = document.createElement("div");
+      prow.className = "line";
+      const psel = document.createElement("select");
+      const names = [...Object.keys(PREMADES).map((n) => "★ " + n),
+                     ...Object.keys(SAVED || {})];
+      for (const v of ["", ...names]) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = v || "(preset: pick a layout)";
+        o.selected = v === (node._rnAdvPreset || "");
+        psel.appendChild(o);
+      }
+      psel.title = "Premade layouts (★) and your saved ones. Picking one "
+                 + "REPLACES the passes below. Premades leave rigs unset; for "
+                 + "the face identity chain, put the last two passes on your "
+                 + "official Krea 2 Turbo rig - identity LoRAs fire there, "
+                 + "merged models will not answer them.";
+      psel.onchange = () => {
+        const v = psel.value;
+        node._rnAdvPreset = v;
+        if (!v) return;
+        const src = v.startsWith("★ ") ? PREMADES[v.slice(2)]
+                                            : (SAVED || {})[v];
+        if (!src) return;
+        d.stages = src.map((x) => JSON.parse(JSON.stringify(x)));
+        node.properties = node.properties || {};
+        node.properties.rn_adv_folds = {};
+        writeCfg(node, d);
+        render();
+      };
+      const nameInp = document.createElement("input");
+      nameInp.type = "text";
+      nameInp.placeholder = "save as…";
+      nameInp.style.maxWidth = "130px";
+      nameInp.value = node._rnAdvPresetName || "";
+      nameInp.oninput = () => { node._rnAdvPresetName = nameInp.value; };
+      const saveB = document.createElement("button");
+      saveB.textContent = "Save";
+      saveB.title = "Save the passes below under this name. Same name overwrites.";
+      saveB.onclick = async () => {
+        const nm = (nameInp.value || "").trim();
+        if (!nm || !d.stages.length) return;
+        const err = await postPreset({ name: nm, stages: d.stages });
+        if (!err) { node._rnAdvPreset = nm; node._rnAdvPresetName = ""; }
+        render();
+      };
+      prow.append(lab("Preset"), psel, nameInp, saveB);
+      const cur = node._rnAdvPreset || "";
+      if (cur && !cur.startsWith("★ ") && (SAVED || {})[cur]) {
+        const delB = document.createElement("button");
+        delB.textContent = "Delete";
+        delB.title = "Delete the saved preset “" + cur + "”. The "
+                   + "passes below stay as they are.";
+        delB.onclick = async () => {
+          await postPreset({ name: cur, delete: true });
+          node._rnAdvPreset = "";
+          render();
+        };
+        prow.append(delB);
+      }
+      wrap.appendChild(prow);
+    }
     cap("START · the workspace's image arrives");
     const rigs = rigNames();
-    d.stages.forEach((s, i) => {
-      const isFolded = !!node.properties?.rn_adv_folds?.[i];
-      const card = document.createElement("div");
-      card.className = "card" + (s.on === false ? " off" : "")
-                     + (node._rnAdvActive === i ? " run" : "");
-      // THE DROP TARGET: a dragged card lands on whichever card you let go over.
-      // Fold flags ride along by being remapped with the same move, or a folded
-      // card would unfold its neighbour every time it travelled past one.
-      card.addEventListener("dragover", (e) => e.preventDefault());
-      card.addEventListener("drop", (e) => {
+    // THE DROP TARGET: a dragged card lands on whichever card you let go over.
+    // Fold flags ride along by being remapped with the same move, or a folded
+    // card would unfold its neighbour every time it travelled past one.
+    const wireDrop = (el, i) => {
+      el.addEventListener("dragover", (e) => e.preventDefault());
+      el.addEventListener("drop", (e) => {
         e.preventDefault();
         const from = parseInt(e.dataTransfer?.getData("text/plain"), 10);
         if (!Number.isFinite(from) || from === i || !d.stages[from]) return;
@@ -227,6 +462,91 @@ function buildPanel(node) {
         writeCfg(node, d);
         render();
       });
+    };
+    const mkGrip = (i, dragEl) => {
+      const grip = document.createElement("span");
+      grip.textContent = "⋮⋮";
+      grip.title = "Drag to reorder. Only the grip drags, so the controls stay "
+                 + "controls.";
+      grip.style.cssText = "cursor:grab;color:#7f8792;flex:none;padding:0 2px;"
+                         + "user-select:none;letter-spacing:-2px";
+      grip.draggable = true;
+      grip.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/plain", String(i));
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setDragImage?.(dragEl, 24, 12);
+      });
+      return grip;
+    };
+    let inGroup = false;
+    let groupFolded = false;
+    d.stages.forEach((s, i) => {
+      const isFolded = !!node.properties?.rn_adv_folds?.[i];
+      const writeAndRender = () => { writeCfg(node, d); render(); };
+      if (s.type === "title") {
+        // a group header, the Group Control look: caret boxed at the front,
+        // its own eye flipping every member down to the next title, the name,
+        // OFF as strikethrough. Members indent beneath it.
+        inGroup = true;
+        groupFolded = isFolded;
+        const t = document.createElement("div");
+        t.className = "tcard" + (s.on === false ? " off" : "");
+        if (s.color) t.style.background = s.color;
+        wireDrop(t, i);
+        t.addEventListener("contextmenu", (e) =>
+          openCardMenu(node, d, i, e, writeAndRender));
+        const caret = document.createElement("button");
+        caret.className = "eye";
+        caret.textContent = isFolded ? "▸" : "▾";
+        caret.title = "Fold this group's passes away.";
+        caret.onclick = () => {
+          node.properties = node.properties || {};
+          (node.properties.rn_adv_folds ||= {})[i] = !isFolded;
+          render();
+        };
+        const members = () => {
+          const out = [];
+          for (let k = i + 1; k < d.stages.length
+               && d.stages[k].type !== "title"; k++) out.push(d.stages[k]);
+          return out;
+        };
+        const eyeT = document.createElement("button");
+        eyeT.className = "eye";
+        eyeT.textContent = s.on === false ? "—" : "👁";
+        eyeT.title = "Turn every pass in this group off or on in one click.";
+        eyeT.onclick = () => {
+          const anyOn = members().some((m) => m.on !== false);
+          members().forEach((m) => { m.on = !anyOn; });
+          s.on = !anyOn;
+          writeAndRender();
+        };
+        const nameI = document.createElement("input");
+        nameI.className = "name";
+        nameI.value = s.name || "GROUP";
+        nameI.title = "Name this group. Right-click for colour, duplicate and "
+                    + "delete.";
+        nameI.onchange = () => { s.name = nameI.value.trim(); writeCfg(node, d); };
+        const delT = document.createElement("button");
+        delT.textContent = "✕";
+        delT.title = "Remove this title; its passes stay.";
+        delT.onclick = () => {
+          d.stages.splice(i, 1);
+          shiftFolds(node, i, -1);
+          writeAndRender();
+        };
+        t.append(caret, mkGrip(i, t), eyeT, nameI, delT);
+        wrap.appendChild(t);
+        return;
+      }
+      if (inGroup && groupFolded) return;
+      const card = document.createElement("div");
+      card.className = "card" + (s.on === false ? " off" : "")
+                     + (node._rnAdvActive === i ? " run" : "")
+                     + (inGroup ? " grp" : "");
+      if (s.color) card.style.background = s.color;
+      wireDrop(card, i);
+      card.addEventListener("contextmenu", (e) =>
+        openCardMenu(node, d, i, e, writeAndRender));
 
       const top = document.createElement("div");
       top.className = "line";
@@ -239,18 +559,7 @@ function buildPanel(node) {
         (node.properties.rn_adv_folds ||= {})[i] = !isFolded;
         render();
       };
-      const grip = document.createElement("span");
-      grip.textContent = "\u22ee\u22ee";
-      grip.title = "Drag to reorder. Only the grip drags, so the controls stay "
-                 + "controls.";
-      grip.style.cssText = "cursor:grab;color:#7f8792;flex:none;padding:0 2px;"
-                         + "user-select:none;letter-spacing:-2px";
-      grip.draggable = true;
-      grip.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/plain", String(i));
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setDragImage?.(card, 24, 12);    // the drag image is the card
-      });
+      const grip = mkGrip(i, card);
       const eye = document.createElement("button");
       eye.className = "eye";
       eye.textContent = s.on === false ? "\u2014" : "\ud83d\udc41";
@@ -270,7 +579,8 @@ function buildPanel(node) {
           + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
           + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
           + (s.loras === false ? " \u00b7 raw" : "")
-          + ((s.use_subject || s.use_scene || s.use_moodboard) ? " \u00b7 refs" : "");
+          + ((s.use_subject || s.use_scene || s.use_moodboard) ? " \u00b7 refs" : "")
+          + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat : "");
         top.appendChild(sum);
       } else {
         top.append(lab("Rig"),
@@ -296,6 +606,26 @@ function buildPanel(node) {
       }
       const spacer = document.createElement("span");
       spacer.className = "grow";
+      if (!isFolded) {
+        // iteration on one pass, the Paint tab's Passes: N rounds over its own
+        // result inside one queue, so "run it twice" stops meaning two cards
+        const rep = document.createElement("input");
+        rep.type = "number";
+        rep.min = 1; rep.max = 10; rep.step = 1;
+        rep.className = "rep" + ((s.repeat || 1) > 1 ? " on" : "");
+        rep.value = String(s.repeat || 1);
+        rep.title = "Run this pass over its own result this many times, a fresh "
+                  + "seed each round; only the last picture moves on. A sampler "
+                  + "pass's scale applies on the first round only, so the size "
+                  + "does not compound. 1 is a single run, as always.";
+        rep.onchange = () => {
+          s.repeat = Math.max(1, Math.min(10, Math.round(Number(rep.value) || 1)));
+          writeCfg(node, d);
+          render();
+        };
+        rep.addEventListener("wheel", () => rep.blur(), { passive: true });
+        top.append(lab("Repeat"), rep);
+      }
       const del = document.createElement("button");
       del.textContent = "\u2715";
       del.title = "Remove this pass.";
@@ -430,33 +760,7 @@ function buildPanel(node) {
                                    target: "face", denoise: 0.15, steps: 0,
                                    threshold: 0.5, feather: 8, padding: 0.35,
                                    sam_model: "", prompt: "" }));
-    // The proven face-identity recipe, one button (the user built and verified
-    // it 2026-08-14; DOC_NOTES.md tells the story): grow the frame, redraw the
-    // face with the Subject refs, then one gentle full-frame pass on the rig
-    // whose stack carries the identity LoRA - the official Turbo, where that
-    // LoRA actually fires. Merged models will not answer it; official does.
-    {
-      const b = document.createElement("button");
-      b.textContent = "＋ Face identity chain";
-      b.title = "Adds the proven three-pass likeness recipe: upscale 1.5x at "
-              + "denoise 0.09, a face detailer with Subject refs at 0.5, then "
-              + "a whole-frame pass at 0.15. SET THE LAST PASS'S RIG to your "
-              + "official Krea 2 Turbo rig (identity LoRA in its stack) - "
-              + "identity fires there, not on merged models.";
-      b.onclick = () => {
-        d.stages.push(
-          { on: true, type: "sampler", rig: "", denoise: 0.09, steps: 4,
-            scale: 1.5, prompt: "" },
-          { on: true, type: "detailer", rig: "", target: "face", denoise: 0.5,
-            steps: 8, threshold: 0.5, feather: 8, padding: 0.35,
-            sam_model: "", use_subject: true, prompt: "" },
-          { on: true, type: "sampler", rig: "", denoise: 0.15, steps: 4,
-            prompt: "" });
-        writeCfg(node, d);
-        render();
-      };
-      add.appendChild(b);
-    }
+    mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");
     hint.className = "hint";
