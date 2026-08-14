@@ -809,3 +809,25 @@ else:
           f"{len(NODE_CLASS_MAPPINGS)} nodes loaded normally and work with any model. "
           f"Krea 2 arrived in ComfyUI on 2026-06-23: update ComfyUI to get them.",
           flush=True)
+
+# ---- personal-only extensions ---------------------------------------------
+# Anything under local/ loads if present and ships never (the folder is
+# gitignored). A local module may register rig-kind handlers in
+# workspace.RIG_KIND_HANDLERS or add node mappings of its own. A public
+# install has no local/ and skips this in silence.
+import glob as _glob                                        # noqa: E402
+import importlib as _importlib                              # noqa: E402
+import os as _os                                            # noqa: E402
+
+_local_dir = _os.path.join(_os.path.dirname(__file__), "local")
+if _os.path.isdir(_local_dir):
+    for _lp in sorted(_glob.glob(_os.path.join(_local_dir, "*.py"))):
+        _ln = _os.path.splitext(_os.path.basename(_lp))[0]
+        if _ln.startswith("_"):
+            continue
+        try:
+            _importlib.import_module(f".local.{_ln}", __name__)
+            print(f"[RedNode Krea2] local extension loaded: {_ln}", flush=True)
+        except Exception as _le:
+            print(f"[RedNode Krea2] local extension {_ln} failed: {_le}",
+                  flush=True)

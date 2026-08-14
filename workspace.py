@@ -743,8 +743,14 @@ def parse_config(config_json):
             # ride the typed output sockets; sampler and scheduler are free
             # text because an external engine names its own. The denoise field
             # is its i2i strength, carried on the denoise socket when active.
-            "kind": "external" if r.get("kind") == "external" else "files",
+            "kind": (str(r.get("kind"))
+                     if r.get("kind") == "external"
+                     or r.get("kind") in RIG_KIND_HANDLERS else "files"),
             "denoise": _num("denoise", 0.0, 1.0, 1.0, float),
+            # a handled kind (the personal NovelAI rig) carries its own extra
+            # settings; the raw dict rides along so the handler reads them
+            # without this parse needing to know their names
+            "raw": (dict(r) if r.get("kind") in RIG_KIND_HANDLERS else None),
             # IDENTITY RESCUE, per rig: restore the layers the named LoRA
             # touches back toward the named base checkpoint before the stack
             # lands, which is what makes an identity LoRA fire on a merged
@@ -1045,6 +1051,14 @@ def parse_config(config_json):
 # ---------------------------------------------------------------------------
 _RIG_CACHE = {"slots": []}     # newest first: {key, model, clip, vae}
 
+# Rig-kind handlers, registered by personal-only modules under local/ (which
+# is gitignored and never ships). A handler owns its kind end to end:
+# handler(op, **ctx) - op "render" receives rig, cfg, prompt_text,
+# negative_text, seed, source_image and denoise, and returns an IMAGE tensor
+# or None. On a public install this dict is empty and such kinds simply do
+# not exist: the toggle never offers them and the parse folds them to files.
+RIG_KIND_HANDLERS = {}
+
 
 def _rig_cache_clear():
     _RIG_CACHE["slots"] = []
@@ -1114,13 +1128,12 @@ def load_active_rig(cfg, name=""):
         else:
             print("[RedNode Workspace] no rig named %r on the Models tab; using the "
                   "active rig %r instead" % (want, rig["name"]), flush=True)
-    if rig.get("kind") == "external":
-        # the NovelAI-style rig: nothing to load, and that is the point. Its
-        # numbers and prompt ride the workspace's output sockets; the render
-        # happens in whatever node those wires reach.
-        print("[RedNode Workspace] rig %r is external: no files load; its "
-              "numbers and prompt ride the output sockets"
-              % (rig["name"] or "(unnamed)"), flush=True)
+    if rig.get("kind") == "external" or rig.get("kind") in RIG_KIND_HANDLERS:
+        # an engine rig: nothing to load, and that is the point. External rigs
+        # ride the sockets and the Rig Out bridge; a handled kind renders
+        # inside build() through its registered handler.
+        print("[RedNode Workspace] rig %r is %s: no files load"
+              % (rig["name"] or "(unnamed)", rig.get("kind")), flush=True)
         return rig["name"], None, None, None
     # the rescue fields ride the cache key: toggling Rescue or moving its dial
     # must reload, or the cache would keep handing out the unpatched model
@@ -2222,6 +2235,22 @@ class RedNodeStudioWorkspace:
                 pass
 
         _prt = str(cfg["paint"].get("run_token") or "")
+        # A HANDLED RIG KIND renders here: the registered handler (a personal
+        # local/ module, the NovelAI rig) is the engine, and its picture takes
+        # the image output exactly as the embedded sampler's would. Everything
+        # downstream - Detailer chains, Review, Save - neither knows nor cares.
+        _hk = _ar.get("kind")
+        if (_mode == "internal" and not _prt and _hk in RIG_KIND_HANDLERS):
+            try:
+                _himg = RIG_KIND_HANDLERS[_hk](
+                    "render", rig=_ar, cfg=cfg, prompt_text=prompt_text_out,
+                    negative_text=negative_text_out, seed=int(run_seed),
+                    source_image=i2i_img, denoise=denoise_out)
+                if _himg is not None:
+                    rig_image = _himg
+            except Exception as exc:
+                print("[RedNode Workspace] the %r rig's handler failed: %s"
+                      % (_hk, exc), flush=True)
         if (_mode == "internal" and not _prt and positive is not None
                 and model is not None):
             try:

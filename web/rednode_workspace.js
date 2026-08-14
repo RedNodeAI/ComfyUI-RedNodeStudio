@@ -8516,20 +8516,23 @@ function modelsBody(node, page) {
     const krow = document.createElement("div");
     krow.className = "rn-ws-row";
     const kb = document.createElement("button");
-    kb.className = "rn-ws-on" + (rig.kind === "external" ? " on" : "");
+    kb.className = "rn-ws-on" + (rig.kind ? " on" : "");
     kb.style.width = "auto";
     kb.style.padding = "0 10px";
+    // personal-only kinds (window.rnLocalRigKinds, from a gitignored local
+    // web file) join the cycle when present; public installs never see them
+    const kinds = ["", "external", ...(window.rnLocalRigKinds || [])];
     kb.textContent = rig.kind === "external" ? "External renderer"
-                                             : "Local files";
+                   : rig.kind ? (window.rnLocalRigLabel?.(rig.kind) || rig.kind)
+                   : "Local files";
     kb.title = "Local files loads a checkpoint or diffusion model here, as "
              + "always. External renderer loads NOTHING: this rig carries the "
-             + "numbers and prompt for an engine outside the workspace, like a "
-             + "NovelAI chain. Wire prompt_text, negative_text, seed, denoise, "
-             + "steps and cfg from the workspace's outputs into that node; its "
-             + "image comes back through the i2i tab's Wired image canvas or "
-             + "straight into the Studio Detailer.";
+             + "numbers and prompt for an engine outside the workspace; use "
+             + "RedNode Rig Out and Rig In to bridge it. Click to cycle the "
+             + "kinds.";
     kb.onclick = () => {
-      rig.kind = rig.kind === "external" ? "" : "external";
+      const at = Math.max(0, kinds.indexOf(rig.kind || ""));
+      rig.kind = kinds[(at + 1) % kinds.length] || "";
       writeCfg(node); render(node);
     };
     krow.appendChild(kb);
@@ -8541,10 +8544,16 @@ function modelsBody(node, page) {
     en.textContent = "No files load for this rig. Set its numbers in the "
                    + "Sampler box (sampler and scheduler are free text there, "
                    + "an external engine names its own), link a Prompts-tab "
-                   + "row to it by name, and wire the workspace's prompt_text, "
-                   + "negative_text, seed and denoise outputs into your "
-                   + "renderer node.";
+                   + "row to it by name, and bridge with RedNode Rig Out and "
+                   + "Rig In: Rig Out hands your engine the prompt, seed and "
+                   + "numbers; its image input is the i2i switch.";
     body.appendChild(en);
+  } else if (rig.kind) {
+    // a personal-only kind: its settings box comes from the local web file
+    window.rnLocalRigUI?.(node, body, rig, {
+      write: () => writeCfg(node),
+      redraw: () => render(node),
+    });
   } else {
   pickRow("Checkpoint", "checkpoint", () => L.checkpoints, "models",
           "A full checkpoint: model, CLIP and VAE in one file.");
@@ -8736,7 +8745,7 @@ function modelsBody(node, page) {
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
-  if (rig.kind === "external") {
+  if (rig.kind) {
     // an external engine names its own samplers, so these are free text notes
     // riding the sockets, not comfy's lists
     const txtRow = (label, key, hint) => {

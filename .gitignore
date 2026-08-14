@@ -9,3 +9,8 @@ tests/local_root.txt
 # the test suite is development scaffolding, not something a user installs
 tests/
 docs/
+
+# personal-only extensions: loaded when present, NEVER shipped. The NovelAI
+# rig lives here. Tokens too - nothing under these paths may ever be added.
+local/
+web/rednode_local*.js
