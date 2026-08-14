@@ -580,7 +580,8 @@ function buildPanel(node) {
           + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
           + (s.loras === false ? " \u00b7 raw" : "")
           + ((s.use_subject || s.use_scene || s.use_moodboard) ? " \u00b7 refs" : "")
-          + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat : "");
+          + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat : "")
+          + (s.crop_res ? " \u00b7 " + s.crop_res + "px" : "");
         top.appendChild(sum);
       } else {
         top.append(lab("Rig"),
@@ -602,6 +603,19 @@ function buildPanel(node) {
                              + "the image through.",
                          (v) => { s.sam_model = v; writeCfg(node, d); },
                          "(loader default)"));
+          top.append(lab("Res"),
+                     sel(["512", "768", "1024", "1280", "1536", "2048"],
+                         s.crop_res ? String(s.crop_res) : "",
+                         "The working resolution for the crop: its long edge "
+                         + "is resized to this before rendering, and the result "
+                         + "goes back at the crop's own size. (crop) renders at "
+                         + "whatever size the box happens to be, times Scale. "
+                         + "1024 is the classic detailer sweet spot; higher "
+                         + "costs more VRAM for finer faces.",
+                         (v) => {
+                           s.crop_res = v ? parseInt(v, 10) : 0;
+                           writeCfg(node, d);
+                         }, "(crop)"));
         }
       }
       const spacer = document.createElement("span");

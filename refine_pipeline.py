@@ -102,6 +102,11 @@ def parse_pipeline(config_json):
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
             "feather": _num("feather", 0, 64, 8, int),
             "padding": _num("padding", 0.0, 2.0, 0.35),
+            # the crop's working resolution: its long edge is resized to this
+            # before rendering, then the result goes back at the crop's own
+            # size. 0 keeps the old behaviour, the crop as it comes (x Scale).
+            # A small face stops meaning a quality-starved render.
+            "crop_res": _num("crop_res", 0, 4096, 0, int),
             # iteration, the Paint tab's Passes on a single pass: run this pass
             # over its own result N times, fresh seed each round
             "repeat": _num("repeat", 1, 10, 1, int),
@@ -515,8 +520,17 @@ class RedNodeStudioDetailer:
         y0, y1, x0, x1 = box
         crop = image[:, y0:y1, x0:x1, :3]
         # a detailer's scale renders the crop BIGGER, then puts it back at its own
-        # size: more pixels spent on the face, no change to the frame
-        work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
+        # size: more pixels spent on the face, no change to the frame. A crop_res
+        # goes further and pins the working size outright, so the render quality
+        # stops depending on how large the face happened to be in frame.
+        if s.get("crop_res"):
+            f = s["crop_res"] / max(crop.shape[1], crop.shape[2])
+            work = self._resize(crop, f)
+            print("[RedNode Detailer] %s crop %d x %d, working at %d x %d"
+                  % (s["target"], crop.shape[2], crop.shape[1],
+                     work.shape[2], work.shape[1]), flush=True)
+        else:
+            work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
         lat = {"samples": vae.encode(work)}
         out = self._ksample(model, seed, steps, cfg_v, sampler, scheduler, pos,
                             neg, lat, s["denoise"], start, end)
