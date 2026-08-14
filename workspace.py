@@ -762,6 +762,10 @@ def parse_config(config_json):
                   # the default and exactly what every workflow did before.
                   "sampler_mode": ("internal" if min_.get("sampler_mode") == "internal"
                                    else "external"),
+                  # hold TWO rigs in RAM instead of one: the two-rig Detailer
+                  # flow stops reloading both models every queue. Explicitly
+                  # off by default; it costs a second model's system RAM.
+                  "hold_two": bool(min_.get("hold_two")),
                   "seed": max(0, mseed),
                   "seed_random": (True if min_.get("seed_random") is None
                                   else bool(min_.get("seed_random")))}
@@ -1022,13 +1026,21 @@ def parse_config(config_json):
 
 
 # ---------------------------------------------------------------------------
-# The Models tab's loader. ONE rig cached at a time, keyed by the filenames, so a
-# queue that changes nothing re-reads nothing and switching rigs drops the old
-# references before the new files load. Loading goes through ComfyUI's own loader
-# nodes rather than reimplementing them: those are the code paths every workflow
-# already exercises, and they follow core across versions.
+# The Models tab's loader. ONE rig cached at a time by default, keyed by the
+# filenames, so a queue that changes nothing re-reads nothing and switching rigs
+# drops the old references before the new files load. The Models tab's "Hold two
+# rigs" toggle widens this to TWO slots, which is the two-rig Detailer flow
+# (mix main render + official face passes) skipping both full disk loads every
+# queue - at the price of both models held in system RAM, which is why it is an
+# explicit choice and not the behaviour. Loading goes through ComfyUI's own
+# loader nodes rather than reimplementing them: those are the code paths every
+# workflow already exercises, and they follow core across versions.
 # ---------------------------------------------------------------------------
-_RIG_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
+_RIG_CACHE = {"slots": []}     # newest first: {key, model, clip, vae}
+
+
+def _rig_cache_clear():
+    _RIG_CACHE["slots"] = []
 
 
 def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
@@ -1105,10 +1117,17 @@ def load_active_rig(cfg, name=""):
             rig.get("rescue_strength", 1.0)) if _resc else None)
     if not any(key[:5]):
         return rig["name"], None, None, None
-    if _RIG_CACHE["key"] == key:
-        return rig["name"], _RIG_CACHE["model"], _RIG_CACHE["clip"], _RIG_CACHE["vae"]
-    # drop the old rig BEFORE loading the new one, so both never sit in RAM at once
-    _RIG_CACHE.update({"key": None, "model": None, "clip": None, "vae": None})
+    for n, slot in enumerate(_RIG_CACHE["slots"]):
+        if slot["key"] == key:
+            _RIG_CACHE["slots"].insert(0, _RIG_CACHE["slots"].pop(n))
+            return rig["name"], slot["model"], slot["clip"], slot["vae"]
+    # make room BEFORE loading, so the cap is a peak-RAM promise, not a tidy-up:
+    # one slot by default, two when the Models tab's Hold-two toggle says so
+    cap = 2 if (cfg.get("models") or {}).get("hold_two") else 1
+    while len(_RIG_CACHE["slots"]) >= cap:
+        dropped = _RIG_CACHE["slots"].pop()
+        print("[RedNode Workspace] rig cache: dropping %r to make room"
+              % (dropped["key"][0] or dropped["key"][1],), flush=True)
     model = clip = vae = None
     try:
         import nodes as _nodes
@@ -1136,7 +1155,8 @@ def load_active_rig(cfg, name=""):
         print("[RedNode Workspace] the Models tab could not load %r: %s"
               % (rig["name"] or key, exc), flush=True)
         return rig["name"], None, None, None
-    _RIG_CACHE.update({"key": key, "model": model, "clip": clip, "vae": vae})
+    _RIG_CACHE["slots"].insert(0, {"key": key, "model": model, "clip": clip,
+                                   "vae": vae})
     kinds = [k for k, v in (("model", model), ("clip", clip), ("vae", vae)) if v is not None]
     print("[RedNode Workspace] Models tab loaded %s (%s)"
           % (rig["name"] or rig["checkpoint"] or rig["unet"], ", ".join(kinds)),

@@ -827,6 +827,7 @@ export function readCfg(node) {
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
   }
   if (d.models.sampler_mode !== "internal") d.models.sampler_mode = "external";
+  if (typeof d.models.hold_two !== "boolean") d.models.hold_two = false;
   if (typeof d.models.seed !== "number") d.models.seed = 0;
   if (typeof d.models.seed_random !== "boolean") d.models.seed_random = true;
   d.models.active = Math.max(0, Math.min(
@@ -8556,6 +8557,28 @@ function modelsBody(node, page) {
       + "; CLIP from " + from(rig.clip, "CLIP")
       + "; VAE from " + from(rig.vae, "VAE") + ".";
     body.appendChild(src);
+  }
+
+  // HOLD TWO RIGS: the two-rig Detailer flow (mix render, official face pass)
+  // reloads both models from disk every queue on the one-slot cache. This
+  // toggle keeps both in system RAM instead. Explicitly off by default, per
+  // the house rule: it costs a second model's RAM the whole session.
+  {
+    const hrow = document.createElement("div");
+    hrow.className = "rn-ws-row";
+    const hb = document.createElement("button");
+    hb.className = "rn-ws-on" + (M.hold_two ? " on" : "");
+    hb.style.width = "auto";
+    hb.style.padding = "0 10px";
+    hb.textContent = M.hold_two ? "Hold two rigs: on" : "Hold two rigs: off";
+    hb.title = "Keep the last TWO rigs loaded instead of one, so a chain that "
+             + "renders on one rig and detail-passes on another stops reloading "
+             + "both models from disk every queue. Costs a second model's "
+             + "system RAM (roughly 13 GB for a Krea 2) for as long as ComfyUI "
+             + "runs - only worth it with plenty of RAM to spare.";
+    hb.onclick = () => { M.hold_two = !M.hold_two; writeCfg(node); render(node); };
+    hrow.appendChild(hb);
+    body.appendChild(hrow);
   }
 
   // IDENTITY RESCUE, SHELVED (2026-08-14, the user's call): restoring the
