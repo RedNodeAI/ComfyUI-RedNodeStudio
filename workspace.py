@@ -1721,10 +1721,10 @@ class RedNodeStudioWorkspace:
                   "it has no usable image, so there is nothing to encode. output_latent "
                   "falls back to the Latent tab and denoise stays 1.0.", flush=True)
 
-        # an EXTERNAL active rig is the cockpit for a renderer outside this
-        # node: the denoise socket carries ITS strength dial, so the NovelAI
-        # chain reads i2i strength off the same wire a KSampler would
-        if _ar.get("kind") == "external":
+        # any ENGINE rig (external, or a handled kind like the personal NAI
+        # rig) is the cockpit for a renderer that is not a loaded checkpoint:
+        # the denoise socket and the handler both read ITS strength dial
+        if _ar.get("kind", "files") != "files":
             denoise_out = _ar.get("denoise", 1.0)
 
         # the Latent tab: the canvas for a prompt-only pass, or for a plain
