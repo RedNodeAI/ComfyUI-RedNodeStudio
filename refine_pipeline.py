@@ -163,6 +163,9 @@ def _defaults_for(cls):
     return out
 
 
+_SAM3_CACHE = {"key": None, "model": None}
+
+
 def _sam3_mask(image, target, threshold, sam_model=""):
     """A [1,H,W] mask for `target`, through ComfyUI-Easy-Sam3, or None with a reason.
 
@@ -186,7 +189,23 @@ def _sam3_mask(image, target, threshold, sam_model=""):
                 if key in _all_inputs(loader_cls):
                     lkw[key] = sam_model
                     break
-        model = getattr(loader, loader_cls.FUNCTION)(**lkw)[0]
+        # a default checkpoint name that is not actually in the loader's list
+        # (folder renamed, file updated) raises before anything segments; the
+        # first real choice beats a stale default
+        for key in ("model_name", "model", "ckpt_name"):
+            spec = _all_inputs(loader_cls).get(key)
+            if (spec and isinstance(spec[0], list) and spec[0]
+                    and lkw.get(key) not in spec[0]):
+                lkw[key] = spec[0][0]
+        # ONE load per model choice, not one per pass: SAM3 is a full checkpoint
+        # off disk, and three face passes were three multi-second reloads
+        ckey = json.dumps(lkw, sort_keys=True, default=str)
+        if _SAM3_CACHE["key"] == ckey and _SAM3_CACHE["model"] is not None:
+            model = _SAM3_CACHE["model"]
+        else:
+            model = getattr(loader, loader_cls.FUNCTION)(**lkw)[0]
+            _SAM3_CACHE["key"] = ckey
+            _SAM3_CACHE["model"] = model
         seg = seg_cls()
         kwargs = _defaults_for(seg_cls)
         for key in ("sam3_model", "model"):
@@ -202,9 +221,20 @@ def _sam3_mask(image, target, threshold, sam_model=""):
             if key in _all_inputs(seg_cls):
                 kwargs[key] = threshold
         out = getattr(seg, seg_cls.FUNCTION)(**kwargs)
-        # the mask is whichever output is mask-shaped; packs disagree about order
-        for v in (out if isinstance(out, (tuple, list)) else [out]):
+        # the mask is whichever output is mask-shaped; packs disagree about order.
+        # A V3 node (comfy_api io.ComfyNode, which Easy-Sam3 is) hands back a
+        # NodeOutput whose values live in .args, not a tuple: the old scan looked
+        # AT the NodeOutput instead of inside it, found no tensor, and every
+        # detailer pass "passed through" while claiming there was no mask.
+        vals = getattr(out, "args", None)
+        if vals is None:
+            vals = out if isinstance(out, (tuple, list)) else [out]
+        for v in vals:
             if torch.is_tensor(v) and v.ndim == 3:
+                if v.shape[0] > 1:
+                    # several detections (two faces, both hands): one coverage
+                    # mask, so the pass redraws them all rather than erroring
+                    v = v.amax(0, keepdim=True)
                 return v, None
         return None, "the segmenter returned no mask for %r" % target
     except Exception as exc:
