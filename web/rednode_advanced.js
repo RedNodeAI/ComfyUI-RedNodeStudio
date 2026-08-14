@@ -430,6 +430,33 @@ function buildPanel(node) {
                                    target: "face", denoise: 0.15, steps: 0,
                                    threshold: 0.5, feather: 8, padding: 0.35,
                                    sam_model: "", prompt: "" }));
+    // The proven face-identity recipe, one button (the user built and verified
+    // it 2026-08-14; DOC_NOTES.md tells the story): grow the frame, redraw the
+    // face with the Subject refs, then one gentle full-frame pass on the rig
+    // whose stack carries the identity LoRA - the official Turbo, where that
+    // LoRA actually fires. Merged models will not answer it; official does.
+    {
+      const b = document.createElement("button");
+      b.textContent = "＋ Face identity chain";
+      b.title = "Adds the proven three-pass likeness recipe: upscale 1.5x at "
+              + "denoise 0.09, a face detailer with Subject refs at 0.5, then "
+              + "a whole-frame pass at 0.15. SET THE LAST PASS'S RIG to your "
+              + "official Krea 2 Turbo rig (identity LoRA in its stack) - "
+              + "identity fires there, not on merged models.";
+      b.onclick = () => {
+        d.stages.push(
+          { on: true, type: "sampler", rig: "", denoise: 0.09, steps: 4,
+            scale: 1.5, prompt: "" },
+          { on: true, type: "detailer", rig: "", target: "face", denoise: 0.5,
+            steps: 8, threshold: 0.5, feather: 8, padding: 0.35,
+            sam_model: "", use_subject: true, prompt: "" },
+          { on: true, type: "sampler", rig: "", denoise: 0.15, steps: 4,
+            prompt: "" });
+        writeCfg(node, d);
+        render();
+      };
+      add.appendChild(b);
+    }
     wrap.appendChild(add);
     const hint = document.createElement("div");
     hint.className = "hint";
