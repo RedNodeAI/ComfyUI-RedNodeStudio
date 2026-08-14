@@ -599,6 +599,14 @@ def parse_config(config_json):
             except (TypeError, ValueError):
                 isc = 1.0
             tabs[name]["scale"] = max(0.25, min(3.0, isc))
+            # iteration, the Paint tab's Passes brought over: the embedded sampler
+            # runs the i2i chain this many times, fresh seed each pass, and only
+            # the last picture comes back
+            try:
+                ips = int(t.get("passes", 1))
+            except (TypeError, ValueError):
+                ips = 1
+            tabs[name]["passes"] = max(1, min(PAINT_PASS_MAX, ips))
         if name in CONVERTER_TABS:
             conv_in = t.get("conv") if isinstance(t.get("conv"), dict) else {}
             tabs[name]["conv"] = {
@@ -2162,9 +2170,25 @@ class RedNodeStudioWorkspace:
                       "cfg %.1f, %s/%s, denoise %.2f" % (
                           _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
                           _dn), flush=True)
-                _out = _core.common_ksampler(
-                    model, _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
-                    positive, negative, _lat, denoise=_dn)[0]
+                # PASSES, the Paint tab's iteration on the i2i chain: each pass
+                # samples the previous pass's latent at the same denoise with a
+                # fresh seed, which adds detail while the low denoise holds the
+                # shape. Only a real i2i run iterates; a fresh canvas or an edit
+                # latent runs once, passes or no passes.
+                _i2i_run = (real_i2i
+                            or (it["on"] and not it["prompt_only"]
+                                and it["canvas"] == "latent"
+                                and latent_in is not None))
+                _npass = int(it.get("passes", 1)) if _i2i_run else 1
+                _out = _lat
+                for _p in range(max(1, _npass)):
+                    if _npass > 1:
+                        print("[RedNode Workspace] i2i pass %d of %d, denoise "
+                              "%.2f" % (_p + 1, _npass, _dn), flush=True)
+                    _out = _core.common_ksampler(
+                        model, _seed + _p, rig_steps, rig_cfg, rig_sampler,
+                        rig_scheduler, positive, negative, _out,
+                        denoise=_dn)[0]
                 result_latent_out = _out
                 _v = vae if vae is not None else rig_vae
                 if _v is None:

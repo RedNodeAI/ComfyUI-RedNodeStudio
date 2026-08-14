@@ -9080,7 +9080,7 @@ function i2iPassRow(node, body, tabName) {
     dr.type = "range";
     dr.min = 0; dr.max = 1; dr.step = 0.05;
     dr.value = t.denoise;
-    dr.style.cssText = "width:110px;accent-color:#b8283c";
+    dr.style.cssText = "width:160px;height:20px;accent-color:#b8283c";
     const dv = document.createElement("span");
     dv.className = "rn-ws-note";
     dv.textContent = Number(t.denoise).toFixed(2);
@@ -9116,6 +9116,39 @@ function i2iPassRow(node, body, tabName) {
       writeCfg(node);
     });
     row.append(slab, sr, sv);
+
+    // PASSES, the Paint tab's iteration brought over: the same box, the same
+    // red glow when it is more than one, because a queue that quietly runs five
+    // samples should look like it will
+    const pWrap = document.createElement("div");
+    const pLab = document.createElement("span");
+    pLab.className = "k";
+    pLab.textContent = "Passes";
+    const pInp = document.createElement("input");
+    pInp.type = "number";
+    pInp.min = 1; pInp.max = PASS_MAX; pInp.step = 1;
+    pInp.value = String(t.passes ?? 1);
+    pInp.title = "How many times the built-in sampler runs this denoise over its "
+               + "own result. 1 is a single pass, as always. 4 at a denoise of "
+               + "0.25 adds detail while the low denoise holds the shape, a fresh "
+               + "seed each pass, and only the last picture comes back. Drives "
+               + "the built-in sampler; an external sampler wired to the sockets "
+               + "still runs once.";
+    const syncPass = () => {
+      const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+      pWrap.className = "rn-ws-passes" + (n > 1 ? " on" : "");
+    };
+    pInp.addEventListener("change", () => {
+      t.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
+      pInp.value = String(t.passes);
+      syncPass();
+      writeCfg(node);
+    });
+    // the wheel is for sliders; a focused number box must not catch it
+    pInp.addEventListener("wheel", () => pInp.blur(), { passive: true });
+    pWrap.append(pLab, pInp);
+    syncPass();
+    row.append(pWrap);
   }
   body.appendChild(row);
 }
