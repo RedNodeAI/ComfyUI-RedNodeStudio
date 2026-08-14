@@ -8558,34 +8558,33 @@ function modelsBody(node, page) {
     body.appendChild(src);
   }
 
-  // IDENTITY RESCUE, per rig, a toggle instead of a node by the user's call:
-  // an identity LoRA is a delta trained against ONE base, and a merged model
-  // has averaged that base away, which is why faces stopped landing on mixes.
-  // The rescue restores only the layers the named LoRA touches back toward the
-  // named base before the stack lands; the mix keeps its look everywhere else.
-  body = mkBox("Identity rescue");
-  {
+  // IDENTITY RESCUE, SHELVED (2026-08-14, the user's call): restoring the
+  // LoRA-touched layers toward the official base did not bring faces back on
+  // the moody mix - even attention layers that literally WERE the official
+  // weights changed nothing, so the mechanism lives deeper. The backend
+  // (identity_rescue.py, the parse fields, the load hook, the RAM cap) stays
+  // intact and tested for a revisit; this box only appears when a saved
+  // config still has the toggle ON, so it can be switched off, then it hides.
+  if (rig.rescue) {
+    body = mkBox("Identity rescue (shelved)");
     const rh = document.createElement("div");
     rh.className = "rn-ws-note";
-    rh.textContent = "For merged models that stopped answering an identity "
-                   + "LoRA: restores just the layers that LoRA touches back "
-                   + "toward the base it was trained on. Name the base and the "
-                   + "LoRA, leave the rest of the mix alone.";
+    rh.textContent = "This experiment is shelved: it did not bring identity "
+                   + "back on merged models. It shows because this rig still "
+                   + "has it on. Switch it off and the box disappears; the "
+                   + "Detailer's official-rig face pass is the working method.";
     body.appendChild(rh);
     const trow = document.createElement("div");
     trow.className = "rn-ws-row";
     const tb = document.createElement("button");
-    tb.className = "rn-ws-on" + (rig.rescue ? " on" : "");
+    tb.className = "rn-ws-on on";
     tb.style.width = "auto";
     tb.style.padding = "0 10px";
-    tb.textContent = rig.rescue ? "Rescue on" : "Rescue off";
-    tb.title = "Patch this rig's model at load time so the identity LoRA fires "
-             + "on it. Off changes nothing, exactly as before.";
+    tb.textContent = "Rescue on";
+    tb.title = "Switch the shelved rescue off. The box hides once it is off.";
     tb.onclick = () => { rig.rescue = !rig.rescue; writeCfg(node); render(node); };
     trow.appendChild(tb);
     body.appendChild(trow);
-  }
-  if (rig.rescue) {
     pickRow("Base model", "rescue_base",
             () => [...(L.checkpoints || []), ...(L.unets || [])], "models",
             "The model the LoRA was trained against - for the Identity Edit "
