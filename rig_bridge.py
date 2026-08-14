@@ -31,9 +31,9 @@ class RedNodeRigOut:
                    "RedNode Rig In. The workspace just sits in the graph, no "
                    "wire between it and this node.")
     RETURN_TYPES = ("STRING", "STRING", "INT", "FLOAT", "INT", "FLOAT",
-                    "STRING", "STRING", "INT", "INT")
+                    "STRING", "STRING", "INT", "INT", "IMAGE")
     RETURN_NAMES = ("prompt", "negative", "seed", "denoise", "steps", "cfg",
-                    "sampler", "scheduler", "width", "height")
+                    "sampler", "scheduler", "width", "height", "image")
     FUNCTION = "pull"
 
     @classmethod
@@ -41,6 +41,12 @@ class RedNodeRigOut:
         return {
             "required": {},
             "optional": {
+                "image": ("IMAGE", {"tooltip":
+                        "The i2i source, and the mode switch: wired, the "
+                        "denoise output carries the rig's own dial and the "
+                        "picture rides through to the image output. Empty, "
+                        "this is a fresh render and denoise comes out 1.0, "
+                        "as an image to image with no image must."}),
                 "rig": ("STRING", {"default": "(active rig)", "tooltip":
                         "Which Models-tab rig's numbers and prompt come out. "
                         "(active rig) follows the tab's Active choice; naming "
@@ -49,7 +55,7 @@ class RedNodeRigOut:
             "hidden": {"prompt": "PROMPT"},
         }
 
-    def pull(self, rig="(active rig)", prompt=None):
+    def pull(self, image=None, rig="(active rig)", prompt=None):
         cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
         r = _rig_settings(cfg, "" if rig == "(active rig)" else rig)
         name = r.get("name") or "(unnamed)"
@@ -73,16 +79,22 @@ class RedNodeRigOut:
             scale = 1.0
         w = max(64, int(int(lc.get("w", 832)) * scale) // 8 * 8)
         h = max(64, int(int(lc.get("h", 1216)) * scale) // 8 * 8)
-        denoise = float(r.get("denoise", 1.0))
-        print("[RedNode Rig Out] rig %r%s: seed %d, denoise %.2f, %d steps, "
-              "cfg %.1f, %s/%s, %d x %d, prompt %d char(s)"
+        # THE MODE SWITCH, the user's design: an image wired in means i2i and
+        # the rig's own strength dial; nothing wired means a fresh render, and
+        # an image to image with no image runs at denoise 1.0, no guessing
+        denoise = float(r.get("denoise", 1.0)) if image is not None else 1.0
+        print("[RedNode Rig Out] rig %r%s: %s, seed %d, denoise %.2f, "
+              "%d steps, cfg %.1f, %s/%s, %d x %d, prompt %d char(s)"
               % (name, " (external)" if r.get("kind") == "external" else "",
+                 ("i2i from %d x %d" % (image.shape[2], image.shape[1]))
+                 if image is not None else "fresh render",
                  seed, denoise, int(r.get("steps", 8)),
                  float(r.get("cfg", 1.0)), r.get("sampler") or "?",
                  r.get("scheduler") or "?", w, h, len(text)), flush=True)
         return (text, negative, int(seed), denoise, int(r.get("steps", 8)),
                 float(r.get("cfg", 1.0)), str(r.get("sampler") or ""),
-                str(r.get("scheduler") or ""), w, h)
+                str(r.get("scheduler") or ""), w, h,
+                image if image is not None else _ws.blocked())
 
 
 class RedNodeRigIn:
