@@ -53,14 +53,27 @@ def _lora_target_names(keys):
 
 
 def _dequant(t, sd_get, name):
-    """A base tensor as float32, scaled-fp8 handled when the scale rides along."""
+    """A base tensor as float32, scaled fp8 dequantised whichever way the file
+    spells its scale.
+
+    The official Krea 2 Turbo fp8 stores a per-tensor F32 scalar named
+    "{layer}.weight_scale"; comfy's older fp8 ops used "{layer}.scale_weight".
+    The first release of this file read only the second spelling, missed, and
+    handed back raw fp8 values at wrong magnitudes: the diffs then DESTROYED
+    the model and the render came out as pure noise. Both spellings now, and
+    the caller sanity-checks magnitudes besides.
+    """
     out = t.float()
-    if t.dtype in (getattr(torch, "float8_e4m3fn", None),
-                   getattr(torch, "float8_e5m2", None)):
-        scale = sd_get(name.replace(".weight", ".scale_weight"))
+    if t.dtype not in (getattr(torch, "float8_e4m3fn", None),
+                       getattr(torch, "float8_e5m2", None)):
+        return out
+    stem = name[:-len(".weight")] if name.endswith(".weight") else name
+    for sib in (stem + ".weight_scale", stem + ".scale_weight",
+                name + "_scale"):
+        scale = sd_get(sib)
         if scale is not None:
-            out = out * scale.float()
-    return out
+            return out * scale.float()
+    return out          # plain unscaled fp8: the cast alone is the right answer
 
 
 def rescue_model(model, base_checkpoint, lora_name, strength,
@@ -120,6 +133,7 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
         model_sd = model.model.state_dict()
         patches = {}
         missing = 0
+        wild = 0
         mb = 0.0
         with safe_open(ckpt_path, framework="pt", device="cpu") as f:
             names = set(f.keys())
@@ -146,15 +160,34 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
                 if tuple(base_w.shape) != tuple(mix_w.shape):
                     missing += 1
                     continue
+                # THE MAGNITUDE GUARD. A base value that is 8x away from the
+                # mix's on the same layer is not a different model, it is a
+                # quantisation format this code failed to read, and patching it
+                # in would (did) destroy the model. Skip the layer and say so.
+                bn = float(base_w.abs().mean())
+                mn = float(mix_w.float().abs().mean())
+                if mn > 1e-8 and (bn > mn * 8.0 or bn * 8.0 < mn):
+                    wild += 1
+                    continue
                 diff = (base_w - mix_w.float()).to(torch.float16)
                 patches[key] = ("diff", (diff,))
                 mb += diff.numel() * 2 / (1024.0 * 1024.0)
 
+        if wild and wild >= len(patches):
+            # most layers failed the magnitude check: the whole read is suspect,
+            # and half a rescue is worse than none
+            print("[%s] the base's values are far from the mix's on %d layer(s)"
+                  " - a quantisation format this code cannot read safely. "
+                  "Rescue aborted, rendering without it." % (who, wild),
+                  flush=True)
+            return model
         m = model.clone()
         applied = m.add_patches(patches, float(strength))
         line = ("[%s] %d layer(s) restored toward %r at strength %.2f "
                 "(%.0f MB of diffs)"
                 % (who, len(applied), base_checkpoint, strength, mb))
+        if wild:
+            line += ", %d skipped on the magnitude guard" % wild
         if missing:
             line += ", %d not found in the base" % missing
         if offset_skipped:
