@@ -351,6 +351,16 @@ class RedNodeStudioDetailer:
         for i, (card_idx, s) in enumerate(stages, 1):
             self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
             tag = "%d/%d %s" % (i, len(stages), s["type"])
+            # AN ENGINE RIG (a handled kind, the personal NovelAI rig) takes
+            # its own road: the handler renders, nothing loads
+            rigd = _rig_settings(ws_cfg, s["rig"])
+            if rigd.get("kind") in _ws.RIG_KIND_HANDLERS:
+                out, lines = self._handler_pass(out, rigd, s, ws_cfg,
+                                                seed + i, tag)
+                for line in lines:
+                    print("[RedNode Detailer] " + line, flush=True)
+                    report.append(line)
+                continue
             rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"])
             if model is None or clip is None or vae is None:
                 line = "%s: rig %r is missing a %s, pass skipped" % (
@@ -503,20 +513,41 @@ class RedNodeStudioDetailer:
             img = img[0]
         return img
 
-    def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
-                scheduler, start, end):
+    def _locate(self, image, s):
+        """The target's mask and padded box, or a why-string: shared by the
+        model path and the engine-rig path, so both aim identically."""
         mask, why = _sam3_mask(image, s["target"], s["threshold"], s["sam_model"])
         if mask is None:
-            return image, why + "; passed through"
+            return None, None, why + "; passed through"
         h, w = image.shape[1], image.shape[2]
         if mask.shape[1] != h or mask.shape[2] != w:
             mask = F.interpolate(mask.unsqueeze(1), size=(h, w),
                                  mode="bilinear", align_corners=False)[:, 0]
         box = _bbox(mask, pad=s["padding"])
         if box is None:
-            return image, "nothing matched %r; passed through" % s["target"]
+            return None, None, "nothing matched %r; passed through" % s["target"]
         box = grow_to_aspect(box, h, w, region_aspect(box[3] - box[2],
                                                       box[1] - box[0], "auto"))
+        return mask, box, None
+
+    @staticmethod
+    def _paste(image, crop, rendered, mask, box, feather):
+        """The rendered crop back into the frame under the feathered mask."""
+        y0, y1, x0, x1 = box
+        m = mask[:, y0:y1, x0:x1].unsqueeze(-1).clamp(0, 1)
+        if feather > 0:
+            k = int(feather) * 2 + 1
+            m = F.avg_pool2d(m.permute(0, 3, 1, 2), k, stride=1,
+                             padding=k // 2).permute(0, 2, 3, 1).clamp(0, 1)
+        merged = image.clone()
+        merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
+        return merged
+
+    def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
+                scheduler, start, end):
+        mask, box, why = self._locate(image, s)
+        if why is not None:
+            return image, why
         y0, y1, x0, x1 = box
         crop = image[:, y0:y1, x0:x1, :3]
         # a detailer's scale renders the crop BIGGER, then puts it back at its own
@@ -541,14 +572,85 @@ class RedNodeStudioDetailer:
             rendered = F.interpolate(rendered.permute(0, 3, 1, 2),
                                      size=crop.shape[1:3], mode="bilinear",
                                      align_corners=False).permute(0, 2, 3, 1)
-        m = mask[:, y0:y1, x0:x1].unsqueeze(-1).clamp(0, 1)
-        if s["feather"] > 0:
-            k = int(s["feather"]) * 2 + 1
-            m = F.avg_pool2d(m.permute(0, 3, 1, 2), k, stride=1,
-                             padding=k // 2).permute(0, 2, 3, 1).clamp(0, 1)
-        merged = image.clone()
-        merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
-        return merged, None
+        return self._paste(image, crop, rendered, mask, box,
+                           s["feather"]), None
+
+    def _handler_pass(self, image, rigd, s, ws_cfg, seed, tag):
+        """A pass on an engine rig (a RIG_KIND_HANDLERS kind, the personal
+        NovelAI rig): a sampler pass is whole-frame i2i through the handler,
+        a detailer pass crops the target, sends the crop, and pastes the
+        result back under the feathered mask. No model, clip or vae loads;
+        LoRA and reference toggles do not apply to an outside engine.
+        """
+        handler = _ws.RIG_KIND_HANDLERS[rigd["kind"]]
+        eff = dict(rigd)
+        for key in ("steps", "cfg", "sampler", "scheduler"):
+            if s[key]:
+                eff[key] = s[key]
+        text = s["prompt"]
+        if not text.strip():
+            row = _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"],
+                                     s["rig"])
+            if row is not None:
+                try:
+                    from .prompt_frame import expand as _pf_expand
+                    text = _pf_expand(row["text"], seed, True)
+                except Exception:
+                    text = row["text"]
+        lines = []
+        out = image
+        reps = int(s.get("repeat", 1))
+        for r in range(max(1, reps)):
+            rseed = seed + r * 131
+            why = None
+            try:
+                if s["type"] == "sampler":
+                    src = self._resize(out, s["scale"])
+                    img = handler("render", rig=eff, cfg=ws_cfg,
+                                  prompt_text=text,
+                                  negative_text=s["negative"], seed=rseed,
+                                  source_image=src, denoise=s["denoise"])
+                    if img is None:
+                        why = "the engine returned nothing"
+                    else:
+                        out = img[:, :, :, :3]
+                else:
+                    mask, box, why = self._locate(out, s)
+                    if why is None:
+                        y0, y1, x0, x1 = box
+                        crop = out[:, y0:y1, x0:x1, :3]
+                        img = handler("render", rig=eff, cfg=ws_cfg,
+                                      prompt_text=text,
+                                      negative_text=s["negative"],
+                                      seed=rseed, source_image=crop,
+                                      denoise=s["denoise"])
+                        if img is None:
+                            why = "the engine returned nothing"
+                        else:
+                            img = img[:, :, :, :3]
+                            if img.shape[1:3] != crop.shape[1:3]:
+                                img = F.interpolate(
+                                    img.permute(0, 3, 1, 2),
+                                    size=crop.shape[1:3], mode="bilinear",
+                                    align_corners=False).permute(0, 2, 3, 1)
+                            out = self._paste(out, crop, img, mask, box,
+                                              s["feather"])
+            except Exception as exc:
+                why = "the engine failed: %s" % exc
+            line = "%s: %s rig %r, %s" % (
+                tag, rigd["kind"], rigd.get("name") or s["rig"],
+                why or ("%s, denoise %.2f"
+                        % (s["target"] if s["type"] == "detailer"
+                           else "whole frame", s["denoise"])))
+            if reps > 1:
+                line += ", repeat %d of %d" % (r + 1, reps)
+            lines.append(line)
+            if why:
+                break
+            if r == 0 and reps > 1 and s["type"] == "sampler" \
+                    and abs(s["scale"] - 1.0) >= 1e-3:
+                s = dict(s, scale=1.0)
+        return out, lines
 
 
 # ---- named pass-list presets: the user's layouts, one JSON in the user dir ------
