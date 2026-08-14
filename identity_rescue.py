@@ -30,6 +30,18 @@ _LORA_SUFFIXES = (".lora_a.weight", ".lora_b.weight", ".lora_down.weight",
                   ".lora_up.weight", ".alpha", ".dora_scale", ".diff",
                   ".diff_b")
 
+# THE RAM CAP. An identity LoRA can touch essentially every core layer of a
+# 12B model, and holding fp16 diffs for all of them is 20+ GB on top of a
+# running ComfyUI - which took the user's whole machine down on 2026-08-14.
+# The rescue now prices the diffs from the file header BEFORE reading a single
+# tensor, and past this budget it refuses and points at the offline bake
+# (Comfy Development/tools/bake_rescue.py), which streams to disk instead.
+import os as _os
+try:
+    RESCUE_MAX_MB = int(_os.environ.get("RN_RESCUE_MAX_MB", "") or 2048)
+except ValueError:
+    RESCUE_MAX_MB = 2048
+
 
 def _header_keys(path):
     """Tensor names out of a safetensors header. Never the weights."""
@@ -158,18 +170,43 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
             def sd_get(n):
                 return f.get_tensor(n) if n in names else None
 
+            # PRICE FIRST, READ SECOND. Resolve every key and total what the
+            # fp16 diffs would weigh, from header shapes alone. Refusing here
+            # costs nothing; agreeing blindly cost the user their machine.
+            resolved = {}
+            est_mb = 0.0
             for key in sorted(model_keys):
-                mix_w = model_sd.get(key)
-                # three dialects for the same tensor: the live state dict's name,
-                # a checkpoint file's "model." prefix, and a bare diffusion-model
-                # file which drops the "diffusion_model." prefix entirely
-                ck = None
+                if model_sd.get(key) is None:
+                    continue
                 for cand in (key, "model." + key,
                              key[len("diffusion_model."):]
                              if key.startswith("diffusion_model.") else None):
                     if cand and cand in names:
-                        ck = cand
+                        resolved[key] = cand
                         break
+                if key not in resolved:
+                    continue
+                try:
+                    shape = f.get_slice(resolved[key]).get_shape()
+                except Exception:
+                    shape = tuple(model_sd[key].shape)
+                n = 1
+                for d in shape:
+                    n *= int(d)
+                est_mb += n * 2 / (1024.0 * 1024.0)
+            if est_mb > RESCUE_MAX_MB:
+                print("[%s] the diffs for %r would need about %d MB of RAM "
+                      "(cap %d MB): this LoRA touches most of the model, and "
+                      "patching that live is what a bake is for. Run the "
+                      "offline bake (Comfy Development/tools/bake_rescue.py) "
+                      "and put the baked file on the rig instead. Rescue "
+                      "skipped, rendering without it."
+                      % (who, lora_name, est_mb, RESCUE_MAX_MB), flush=True)
+                return model
+
+            for key in sorted(model_keys):
+                mix_w = model_sd.get(key)
+                ck = resolved.get(key)
                 if mix_w is None or ck is None:
                     missing += 1
                     continue
