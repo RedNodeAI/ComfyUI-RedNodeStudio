@@ -8586,10 +8586,12 @@ function modelsBody(node, page) {
     body.appendChild(trow);
   }
   if (rig.rescue) {
-    pickRow("Base model", "rescue_base", () => L.checkpoints, "models",
-            "The checkpoint the LoRA was trained against - for the Identity "
-            + "Edit LoRA, the official Krea 2 Turbo. Only the needed tensors "
-            + "are read from the file, never a whole second model.");
+    pickRow("Base model", "rescue_base",
+            () => [...(L.checkpoints || []), ...(L.unets || [])], "models",
+            "The model the LoRA was trained against - for the Identity Edit "
+            + "LoRA, the official Krea 2 Turbo. Checkpoints and diffusion "
+            + "models both work; only the needed tensors are read from the "
+            + "file, never a whole second model.");
     pickRow("LoRA", "rescue_lora", () => L.loras || [], "loras",
             "The identity LoRA. Its own file says which layers to restore; "
             + "nothing else on this rig is touched.");

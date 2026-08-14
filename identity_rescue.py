@@ -78,8 +78,18 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
         from safetensors import safe_open
 
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
-        ckpt_path = folder_paths.get_full_path_or_raise("checkpoints",
-                                                        base_checkpoint)
+        # the base can be a full checkpoint OR a bare diffusion model; the
+        # official Krea 2 Turbo fp8 ships as the latter
+        ckpt_path = None
+        for folder in ("checkpoints", "diffusion_models"):
+            ckpt_path = folder_paths.get_full_path(folder, base_checkpoint)
+            if ckpt_path:
+                break
+        if not ckpt_path:
+            print("[%s] base %r is in neither checkpoints nor diffusion_models; "
+                  "rendering without the rescue" % (who, base_checkpoint),
+                  flush=True)
+            return model
         targets = _lora_target_names(_header_keys(lora_path))
         if not targets:
             print("[%s] no LoRA layers recognised in %r; the model passes "
@@ -119,10 +129,17 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
 
             for key in sorted(model_keys):
                 mix_w = model_sd.get(key)
-                # a checkpoint file carries the "model." prefix the live state
-                # dict has already shed
-                ck = key if key in names else "model." + key
-                if mix_w is None or ck not in names:
+                # three dialects for the same tensor: the live state dict's name,
+                # a checkpoint file's "model." prefix, and a bare diffusion-model
+                # file which drops the "diffusion_model." prefix entirely
+                ck = None
+                for cand in (key, "model." + key,
+                             key[len("diffusion_model."):]
+                             if key.startswith("diffusion_model.") else None):
+                    if cand and cand in names:
+                        ck = cand
+                        break
+                if mix_w is None or ck is None:
                     missing += 1
                     continue
                 base_w = _dequant(f.get_tensor(ck), sd_get, ck)
