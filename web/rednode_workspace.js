@@ -825,6 +825,8 @@ export function readCfg(node) {
     if (typeof r.sampler !== "string") r.sampler = "euler";
     if (typeof r.scheduler !== "string") r.scheduler = "simple";
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
+    if (r.kind !== "external") r.kind = "";
+    if (typeof r.denoise !== "number") r.denoise = 1.0;
   }
   if (d.models.sampler_mode !== "internal") d.models.sampler_mode = "external";
   if (typeof d.models.hold_two !== "boolean") d.models.hold_two = false;
@@ -8507,6 +8509,43 @@ function modelsBody(node, page) {
     row.append(lab, input);
     body.appendChild(row);
   };
+  // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
+  // workspace (the NovelAI chain). No files load; its numbers and prompt ride
+  // the typed output sockets instead.
+  {
+    const krow = document.createElement("div");
+    krow.className = "rn-ws-row";
+    const kb = document.createElement("button");
+    kb.className = "rn-ws-on" + (rig.kind === "external" ? " on" : "");
+    kb.style.width = "auto";
+    kb.style.padding = "0 10px";
+    kb.textContent = rig.kind === "external" ? "External renderer"
+                                             : "Local files";
+    kb.title = "Local files loads a checkpoint or diffusion model here, as "
+             + "always. External renderer loads NOTHING: this rig carries the "
+             + "numbers and prompt for an engine outside the workspace, like a "
+             + "NovelAI chain. Wire prompt_text, negative_text, seed, denoise, "
+             + "steps and cfg from the workspace's outputs into that node; its "
+             + "image comes back through the i2i tab's Wired image canvas or "
+             + "straight into the Studio Detailer.";
+    kb.onclick = () => {
+      rig.kind = rig.kind === "external" ? "" : "external";
+      writeCfg(node); render(node);
+    };
+    krow.appendChild(kb);
+    body.appendChild(krow);
+  }
+  if (rig.kind === "external") {
+    const en = document.createElement("div");
+    en.className = "rn-ws-note";
+    en.textContent = "No files load for this rig. Set its numbers in the "
+                   + "Sampler box (sampler and scheduler are free text there, "
+                   + "an external engine names its own), link a Prompts-tab "
+                   + "row to it by name, and wire the workspace's prompt_text, "
+                   + "negative_text, seed and denoise outputs into your "
+                   + "renderer node.";
+    body.appendChild(en);
+  } else {
   pickRow("Checkpoint", "checkpoint", () => L.checkpoints, "models",
           "A full checkpoint: model, CLIP and VAE in one file.");
   pickRow("Diffusion model", "unet", () => L.unets, "models",
@@ -8557,6 +8596,7 @@ function modelsBody(node, page) {
       + "; CLIP from " + from(rig.clip, "CLIP")
       + "; VAE from " + from(rig.vae, "VAE") + ".";
     body.appendChild(src);
+  }
   }
 
   // HOLD TWO RIGS: the two-rig Detailer flow (mix render, official face pass)
@@ -8696,10 +8736,65 @@ function modelsBody(node, page) {
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
-  selRow("Sampler", "sampler", L.samplers || [],
-         "Comes out typed, so it wires straight into a KSampler's sampler_name.");
-  selRow("Scheduler", "scheduler", L.schedulers || [],
-         "Wires straight into a KSampler's scheduler.");
+  if (rig.kind === "external") {
+    // an external engine names its own samplers, so these are free text notes
+    // riding the sockets, not comfy's lists
+    const txtRow = (label, key, hint) => {
+      const row = document.createElement("div");
+      row.className = "rn-ws-row";
+      const l2 = document.createElement("span");
+      l2.className = "rn-ws-note";
+      l2.style.cssText = "flex:none;width:110px";
+      l2.textContent = label;
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = rig[key];
+      inp.title = hint;
+      inp.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px "
+                        + "solid #33373d;border-radius:4px;color:#e8ecf1;"
+                        + "font-size:12px;padding:4px 7px";
+      inp.onchange = () => { rig[key] = inp.value; writeCfg(node); };
+      row.append(l2, inp);
+      body.appendChild(row);
+    };
+    txtRow("Sampler", "sampler",
+           "Free text for an external engine's sampler name (NovelAI's names "
+           + "are its own). Rides the sampler_name output as a plain value; a "
+           + "comfy KSampler would not accept it, which is fine, this rig is "
+           + "not for one.");
+    txtRow("Scheduler", "scheduler",
+           "Free text for the external engine's scheduler or noise schedule.");
+    const drow = document.createElement("div");
+    drow.className = "rn-ws-row";
+    const dlab = document.createElement("span");
+    dlab.className = "rn-ws-note";
+    dlab.style.cssText = "flex:none;width:110px";
+    dlab.textContent = "Denoise";
+    const dr = document.createElement("input");
+    dr.type = "range";
+    dr.min = 0; dr.max = 1; dr.step = 0.05;
+    dr.value = rig.denoise ?? 1.0;
+    dr.style.cssText = "width:160px;height:20px;accent-color:#b8283c";
+    dr.title = "The strength dial for the external engine, carried on the "
+             + "workspace's denoise output while this rig is active. 1.0 for "
+             + "a fresh render; lower it when you wire an image into the "
+             + "engine for an i2i pass.";
+    const dv = document.createElement("span");
+    dv.className = "rn-ws-note";
+    dv.textContent = Number(rig.denoise ?? 1.0).toFixed(2);
+    dr.addEventListener("input", () => {
+      rig.denoise = snapStep(dr.value, 0, 1, 0.05);
+      dv.textContent = Number(rig.denoise).toFixed(2);
+      writeCfg(node);
+    });
+    drow.append(dlab, dr, dv);
+    body.appendChild(drow);
+  } else {
+    selRow("Sampler", "sampler", L.samplers || [],
+           "Comes out typed, so it wires straight into a KSampler's sampler_name.");
+    selRow("Scheduler", "scheduler", L.schedulers || [],
+           "Wires straight into a KSampler's scheduler.");
+  }
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for detailer passes, on its own output.");
 

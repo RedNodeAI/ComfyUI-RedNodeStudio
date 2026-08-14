@@ -738,6 +738,13 @@ def parse_config(config_json):
             "sampler": str(r.get("sampler") or "euler"),
             "scheduler": str(r.get("scheduler") or "simple"),
             "detailer_steps": _num("detailer_steps", 0, 200, 8),
+            # an EXTERNAL rig loads no files: it is the cockpit for a renderer
+            # outside the workspace (the NovelAI chain). Its numbers and prompt
+            # ride the typed output sockets; sampler and scheduler are free
+            # text because an external engine names its own. The denoise field
+            # is its i2i strength, carried on the denoise socket when active.
+            "kind": "external" if r.get("kind") == "external" else "files",
+            "denoise": _num("denoise", 0.0, 1.0, 1.0, float),
             # IDENTITY RESCUE, per rig: restore the layers the named LoRA
             # touches back toward the named base checkpoint before the stack
             # lands, which is what makes an identity LoRA fire on a merged
@@ -1107,6 +1114,14 @@ def load_active_rig(cfg, name=""):
         else:
             print("[RedNode Workspace] no rig named %r on the Models tab; using the "
                   "active rig %r instead" % (want, rig["name"]), flush=True)
+    if rig.get("kind") == "external":
+        # the NovelAI-style rig: nothing to load, and that is the point. Its
+        # numbers and prompt ride the workspace's output sockets; the render
+        # happens in whatever node those wires reach.
+        print("[RedNode Workspace] rig %r is external: no files load; its "
+              "numbers and prompt ride the output sockets"
+              % (rig["name"] or "(unnamed)"), flush=True)
+        return rig["name"], None, None, None
     # the rescue fields ride the cache key: toggling Rescue or moving its dial
     # must reload, or the cache would keep handing out the unpatched model
     _resc = (bool(rig.get("rescue")) and rig.get("rescue_base")
@@ -1417,7 +1432,8 @@ class RedNodeStudioWorkspace:
                     "MODEL", "VAE", "INT", "FLOAT",
                     comfy.samplers.KSampler.SAMPLERS,
                     comfy.samplers.KSampler.SCHEDULERS, "INT",
-                    "CONDITIONING", "CONDITIONING", "IMAGE", "LATENT")
+                    "CONDITIONING", "CONDITIONING", "IMAGE", "LATENT", "INT",
+                    "STRING", "STRING")
     RETURN_NAMES = ("workspace", "subject_image", "scene_image", "moodboard_style",
                     "extra_subjects", "subject_boost_mask", "edit_mask", "settings",
                     "output_latent", "style_strength", "studio_preset",
@@ -1426,7 +1442,8 @@ class RedNodeStudioWorkspace:
                     "model", "lora_keywords", "clip", "paint_prompt",
                     "paint_model", "vae",
                     "steps", "cfg", "sampler_name", "scheduler", "detailer_steps",
-                    "positive", "negative", "image", "result_latent")
+                    "positive", "negative", "image", "result_latent", "seed",
+                    "prompt_text", "negative_text")
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -1690,6 +1707,12 @@ class RedNodeStudioWorkspace:
             print("[RedNode Workspace] the Img2Img tab is on and set to a real pass, but "
                   "it has no usable image, so there is nothing to encode. output_latent "
                   "falls back to the Latent tab and denoise stays 1.0.", flush=True)
+
+        # an EXTERNAL active rig is the cockpit for a renderer outside this
+        # node: the denoise socket carries ITS strength dial, so the NovelAI
+        # chain reads i2i strength off the same wire a KSampler would
+        if _ar.get("kind") == "external":
+            denoise_out = _ar.get("denoise", 1.0)
 
         # the Latent tab: the canvas for a prompt-only pass, or for a plain
         # generation. Its source can be a latent wired into this node instead.
@@ -2182,6 +2205,22 @@ class RedNodeStudioWorkspace:
         # NEVER ON A PAINT RUN: a paint Generate queues this node with a run token,
         # and rendering a whole fresh image underneath the paint pass is exactly
         # the "ignores everything I painted" the user reported. A paint run paints.
+        # the active rig's prompt row as PLAIN TEXT for the two appended string
+        # sockets: what an external renderer (the NovelAI chain) reads instead
+        # of conditioning. Wildcards roll on this run's seed, same as the
+        # folded encode, so both sides of a hybrid chain see the same prompt.
+        prompt_text_out = ""
+        negative_text_out = ""
+        _prow0 = prompt_row_for(cfg["models"], cfg["prompts"], "")
+        if _prow0 is not None:
+            prompt_text_out = _prow0["text"]
+            negative_text_out = str(_prow0.get("negative") or "")
+            try:
+                from .prompt_frame import expand as _pf_expand0
+                prompt_text_out = _pf_expand0(prompt_text_out, run_seed, True)
+            except Exception:
+                pass
+
         _prt = str(cfg["paint"].get("run_token") or "")
         if (_mode == "internal" and not _prt and positive is not None
                 and model is not None):
@@ -2316,7 +2355,16 @@ class RedNodeStudioWorkspace:
                 rig_image if rig_image is not None else blocked(),
                 # APPENDED: the embedded sampler's latent before decode, for
                 # chaining a same-model workspace with no VAE round trip
-                result_latent_out if result_latent_out is not None else blocked())
+                result_latent_out if result_latent_out is not None else blocked(),
+                # APPENDED: this run's seed, randomised or pinned per the Models
+                # tab. Wire it into an external renderer (the NovelAI chain) so
+                # the workspace stays the one cockpit for reproducibility too.
+                int(run_seed),
+                # APPENDED: the active rig's Prompts-tab row as plain text,
+                # wildcards rolled on this run's seed, and its negative. The
+                # rest of what an external renderer needs: prompt in, strength
+                # off the denoise socket, seed above, numbers on their sockets.
+                prompt_text_out, negative_text_out)
         if ui_extra:
             return {"ui": ui_extra, "result": _result}
         return _result
