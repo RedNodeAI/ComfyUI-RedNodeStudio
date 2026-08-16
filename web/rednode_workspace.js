@@ -139,7 +139,12 @@ css.textContent = `
 .rn-ws-pill input,.rn-ws-pill select{flex:1;min-width:0;background:transparent;
   border:none;outline:none;color:#e8ecf1;font-size:13px;font-weight:600;
   text-align:right;padding:0}
-.rn-ws-pill select{appearance:auto;cursor:pointer}
+.rn-ws-pill select{appearance:auto;cursor:pointer;color-scheme:dark}
+/* the OPEN list of a select is painted by the browser from the option
+   colours: pin them dark, or a light host theme paints white on white */
+.rn-ws-pill select option,.rn-ws-res option,.rn-ws-wrap select option{
+  background:#1b1e23;color:#e8ecf1}
+.rn-ws-wrap select{color-scheme:dark}
 .rn-ws-pill .v{margin-left:auto;font-size:12px;color:#7f8792;flex:none}
 
 /* the ON/OFF switch: a sliding pill, the Sick Ollie affordance the user

@@ -21,13 +21,18 @@ const CSS = `
    and the menus at 10003. A picker is transient and always answers the click that
    opened it, so topmost is the only correct answer: at 2400 it opened behind the
    full screen backdrop and simply appeared not to work. */
+/* every colour here is !important on purpose: the newer ComfyUI frontend
+   ships global light-theme rules that repainted this list white with light
+   text on top, and the pack's dark surface must win regardless of host */
 .rn-pick-drop { position: fixed; z-index: 10004; max-height: 320px; overflow-y: auto;
-  background: #1b1b1f; border: 1px solid #3a3a42; border-radius: 6px; padding: 3px;
+  background: #1b1e23 !important; border: 1px solid #3a3f47 !important;
+  border-radius: 6px; padding: 3px; color-scheme: dark;
   box-shadow: 0 8px 26px rgba(0,0,0,.55); font-size: 12px; }
 .rn-pick-drop > div { padding: 4px 8px; border-radius: 4px; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ddd; }
-.rn-pick-drop > div:hover { background: #2b2b33; }
-.rn-pick-drop > div.sel { background: #33415c; color: #fff; }
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: #e8ecf1 !important; background: transparent; }
+.rn-pick-drop > div:hover { background: #2b2f38 !important; }
+.rn-pick-drop > div.sel { background: #33415c !important; color: #fff !important; }
 .rn-pick-drop .hint { float: right; margin-left: 14px; font-size: 10px; opacity: .45; }
 .rn-pick-drop .make { color: #86d3a1; }
 .rn-pick-drop .cur { color: #f0c58a; }
