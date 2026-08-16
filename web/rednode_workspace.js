@@ -121,11 +121,12 @@ css.textContent = `
 .rn-ws-host .rn-ws-foot option{font-size:11px}
 .rn-ws-host{display:flex;flex-direction:column;gap:0;flex:1 1 auto;min-height:0;
   box-sizing:border-box}
-.rn-ws-tabs{display:flex;gap:3px;flex:none;flex-wrap:wrap}
-.rn-ws-tab{background:#1b1e23;border:1px solid #2a2e35;border-bottom:0;border-radius:6px 6px 0 0;
-  color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 14px;display:flex;
-  align-items:center;gap:6px}
-.rn-ws-tab.cur{background:#242830;color:#fff;border-color:#3d434c}
+.rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
+.rn-ws-tab{background:#15171b;border:1px solid #2a2e35;border-radius:7px;
+  color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 15px;display:flex;
+  align-items:center;gap:7px}
+.rn-ws-tab:hover{border-color:#3d434c;color:#c8ccd2}
+.rn-ws-tab.cur{background:#242830;color:#fff}
 /* the PILL CONTROL, the Sick Ollie primitive the user asked to adopt: one
    dark rounded box per setting, dim label left, bold value right, uniform
    height, laid in a responsive grid. Unity comes from repetition. */
@@ -152,12 +153,13 @@ css.textContent = `
 .rn-ws-sw.on{background:#2e7d4f;border-color:#2e7d4f}
 .rn-ws-sw.on::after{left:20px;background:#fff}
 /* group colours: canvas blue, mood amber, edit-node red, settings grey */
-.rn-ws-tab{border-top:2px solid transparent}
-.rn-ws-tab.g-canvas{border-top-color:#4a8fe0}
-.rn-ws-tab.g-model{border-top-color:#a855f7}
-.rn-ws-tab.g-mood{border-top-color:#e08a3c}
-.rn-ws-tab.g-edit{border-top-color:#b8283c}
-.rn-ws-tab.g-post{border-top-color:#22a39f}
+/* the ACTIVE tab lights in its own group colour, the mock's treatment:
+   full accent border, a whisper of the same colour underneath */
+.rn-ws-tab.cur.g-canvas{border-color:#4a8fe0;background:#4a8fe01a}
+.rn-ws-tab.cur.g-model{border-color:#a855f7;background:#a855f71a}
+.rn-ws-tab.cur.g-mood{border-color:#e08a3c;background:#e08a3c1a}
+.rn-ws-tab.cur.g-edit{border-color:#b8283c;background:#b8283c1a}
+.rn-ws-tab.cur.g-post{border-color:#22a39f;background:#22a39f1a}
 .rn-ws-tier.high{border-color:#3d434c;color:#9aa0a8}
 .rn-ws-tier.medium{border-color:#e08a3c;color:#f0c58a}
 .rn-ws-tier.low{border-color:#22c55e;color:#a7f3c0}
@@ -429,7 +431,7 @@ css.textContent = `
 .rn-ws-tab.gstart{margin-left:9px}
 .rn-ws-tab .dot{width:7px;height:7px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-tab .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
-.rn-ws-body{background:#242830;border:1px solid #3d434c;border-radius:0 7px 7px 7px;padding:8px;
+.rn-ws-body{background:#242830;border:1px solid #3d434c;border-radius:7px;padding:8px;
   display:flex;flex-direction:column;gap:7px;flex:1 1 auto;min-height:0;overflow:auto}
 /* a stretched node must not stretch the reading: every tab's content stays a
    centred column at a comfortable width, so rows stop running the full span
