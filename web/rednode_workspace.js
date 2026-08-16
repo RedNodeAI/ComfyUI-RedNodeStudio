@@ -9560,7 +9560,13 @@ function latentBody(node, body) {
     : "Drag to reshape: sideways for width, up and down for height. Snaps to 64.";
   if (!L.random) {
     rect.addEventListener("pointerdown", (e) => {
+      // OWN THE GESTURE: without capture, the moment the pointer leaves the
+      // panel LiteGraph takes the drag and pans the canvas (the user's
+      // "bugs out and drags when the mouse leaves the node") - and the
+      // events stop reaching us, so the box freezes half-resized
       e.stopPropagation();
+      e.preventDefault();
+      try { rect.setPointerCapture(e.pointerId); } catch (err) { /* older hosts */ }
       const startX = e.clientX, startY = e.clientY, w0 = L.w, h0 = L.h;
       const move = (ev) => {
         const dx = ev.clientX - startX, dy = ev.clientY - startY;
@@ -9573,15 +9579,20 @@ function latentBody(node, body) {
         rect.style.height = Math.max(32, Math.round(L.h * f)) + "px";
         rectLabel();
       };
-      const up = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
+      const up = (ev) => {
+        rect.removeEventListener("pointermove", move);
+        rect.removeEventListener("pointerup", up);
+        rect.removeEventListener("pointercancel", up);
+        try { rect.releasePointerCapture(ev.pointerId); } catch (err) { /* ok */ }
         L.aspect = "";                     // hand-shaped: no ratio chip owns it
         L.mp = Math.round((L.w * L.h) / 1e6 * 20) / 20;
         writeCfg(node); render(node);
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      // listeners on the CAPTURING element: with capture set, every move and
+      // the release arrive here wherever the pointer roams
+      rect.addEventListener("pointermove", move);
+      rect.addEventListener("pointerup", up);
+      rect.addEventListener("pointercancel", up);
     });
   }
   stage.appendChild(rect);
@@ -9613,8 +9624,8 @@ function latentBody(node, body) {
   chips.className = "rn-ws-latchips";
   for (const [key, wr, hr, name] of ASPECTS) {
     const chip = document.createElement("div");
-    const cur = !L.random && (L.aspect === key
-      || Math.abs(L.w / L.h - wr / hr) < 0.02);
+    const cur = !L.random && (L.aspect ? L.aspect === key
+      : Math.abs(L.w / L.h - wr / hr) < 0.02);
     chip.className = "rn-ws-latchip" + (cur ? " cur" : "");
     chip.title = key + " (" + name + ")";
     const mini = document.createElement("i");
@@ -9678,11 +9689,18 @@ function latentBody(node, body) {
       return c;
     };
     const w0 = eff(L.w), h0 = eff(L.h);
-    const gb = (w0 * h0 * (L.batch || 1) * 3.2) / 1e9;
+    // tokens = latent pixels / 4 (2x2 patch); ~0.55 MB of working set per
+    // token on a 12B DiT with fused attention, plus ~0.35 GB fixed sampling
+    // overhead - calibrated to turbo runs peaking ~2.5 GB over the weights
+    // at 832x1216 and ~4 GB at 1152x1536. This is the ACTIVATION cost on top of
+    // the model weights (which are the same at any size). Rough by design.
+    const tokens = (w0 / 8) * (h0 / 8) / 4;
+    const gb = 0.35 + (tokens * (L.batch || 1) * 0.55) / 1024;
     strip.append(
       cell("▦", "Canvas", L.random ? "random" : w0 + " × " + h0),
       cell("⬚", "Latent grid", L.random ? "—" : (w0 / 8) + " × " + (h0 / 8)),
-      cell("∿", "VRAM (estimate)", L.random ? "—" : "~" + gb.toFixed(2) + " GB"));
+      cell("∿", "VRAM (est., activations)", L.random ? "—"
+           : "~" + gb.toFixed(1) + " GB + model"));
     previewCard.appendChild(strip);
   }
   cols.appendChild(previewCard);
@@ -9716,7 +9734,14 @@ function latentBody(node, body) {
     swapTop.style.cssText = "width:auto;padding:0 12px";
     swapTop.textContent = "⇄ Swap";
     swapTop.title = "Swap width and height.";
-    swapTop.onclick = () => { const w = L.w; L.w = L.h; L.h = w; writeCfg(node); render(node); };
+    swapTop.onclick = () => {
+      const w = L.w; L.w = L.h; L.h = w;
+      // the tag follows the flip, or the old tag and the new ratio light
+      // two chips at once (the user's report)
+      const flipped = ASPECTS.find((x) => Math.abs(L.w / L.h - x[1] / x[2]) < 0.02);
+      L.aspect = flipped ? flipped[0] : "";
+      writeCfg(node); render(node);
+    };
     arow.append(alab, asel, swapTop);
     canvasCard.appendChild(arow);
   }
