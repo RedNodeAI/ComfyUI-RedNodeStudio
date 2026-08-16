@@ -9367,6 +9367,9 @@ function promptsBody(node, body) {
         // the frame lays itself out in two columns now (writing left,
         // dials and preview right), the arrangement the user drew
         F.twoColumn = true;
+        // the Auto sort button borrows the Auto Prompt's Ollama choice
+        F.sortModel = () => cfg.auto?.model || "";
+        F.sortUrl = () => cfg.auto?.url || "";
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
         box.appendChild(host);

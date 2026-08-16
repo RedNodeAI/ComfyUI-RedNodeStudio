@@ -254,6 +254,60 @@ export function buildFrameEditor(wrap, F) {
   const presetBtn = el("button", "rn-pf-btn", "Load");
   head.appendChild(presetSel);
   head.appendChild(presetBtn);
+  // AUTO SORT, the user's ask: the same Ollama the auto prompt leans on reads
+  // every box and puts each phrase where it belongs - a lumped prompt tidied
+  // into Style, Subject, Surroundings, Light and placement in one press.
+  // The host names the model (F.sortModel); without one the button says so.
+  const sortBtn = el("button", "rn-pf-btn", "✨ Auto sort");
+  sortBtn.title = "Reorganise what is written across the boxes into the right "
+                + "boxes, keeping every phrase (moves and light tidying only, "
+                + "nothing invented, nothing dropped). Uses the Ollama model "
+                + "chosen on the Auto Prompt section.";
+  sortBtn.addEventListener("click", async () => {
+    const model = F.sortModel?.() || "";
+    if (!model) {
+      sortBtn.textContent = "pick an Auto Prompt model first";
+      setTimeout(() => { sortBtn.textContent = "✨ Auto sort"; }, 2200);
+      return;
+    }
+    sortBtn.disabled = true;
+    sortBtn.textContent = "sorting…";
+    try {
+      const fields = {
+        subject: subject.value, surroundings: surroundings.value,
+        style_extra: styleExtra.value, light_and_colour: lac.value,
+        placement: placement.value,
+      };
+      const r = await fetch("/rednode/prompt_sort", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, url: F.sortUrl?.() || "", fields }),
+      });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      const f = j.fields || {};
+      subject.value = f.subject ?? subject.value;
+      surroundings.value = f.surroundings ?? surroundings.value;
+      styleExtra.value = f.style_extra ?? styleExtra.value;
+      lac.value = f.light_and_colour ?? lac.value;
+      placement.value = f.placement ?? placement.value;
+      if (f.style && [...styleSel.options].some((o) => o.value === f.style)) {
+        styleSel.value = f.style;
+      }
+      if (f.lighting && [...lightSel.options].some((o) => o.value === f.lighting)) {
+        lightSel.value = f.lighting;
+      }
+      changed();
+      pullFromWidgets();
+      sortBtn.textContent = "sorted";
+    } catch (e) {
+      sortBtn.textContent = "sort failed";
+      console.warn("[RedNode Prompt Frame] auto sort:", e);
+    } finally {
+      sortBtn.disabled = false;
+      setTimeout(() => { sortBtn.textContent = "✨ Auto sort"; }, 1800);
+    }
+  });
+  head.appendChild(sortBtn);
   wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------
