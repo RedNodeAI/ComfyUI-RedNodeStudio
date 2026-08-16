@@ -8443,14 +8443,35 @@ function modelsBody(node, page) {
   const mwrap = document.createElement("div");
   mwrap.style.cssText = "display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start";
   page.appendChild(mwrap);
-  const mkBox = (title) => {
+  // box headers carry an icon, an accent and an optional badge now, the
+  // ChatGPT-mock direction the user pointed at: sections identify themselves
+  // at a glance and the border whispers the same colour
+  const mkBox = (title, accent, icon, badge) => {
+    const a = accent || "#c8ccd2";
     const b = document.createElement("div");
     b.style.cssText = "flex:1 1 340px;max-width:560px;min-width:300px;display:flex;"
-                    + "flex-direction:column;gap:6px;padding:8px;background:#1a1d22;"
-                    + "border:1px solid #2a2e34;border-radius:6px";
+                    + "flex-direction:column;gap:6px;padding:9px;background:#1a1d22;"
+                    + "border:1px solid " + a + "44;border-radius:7px";
     const t = document.createElement("div");
-    t.style.cssText = "font-size:12px;font-weight:700;letter-spacing:.04em;color:#c8ccd2";
-    t.textContent = title;
+    t.style.cssText = "display:flex;align-items:center;gap:7px;font-size:12.5px;"
+                    + "font-weight:700;letter-spacing:.04em;color:" + a;
+    if (icon) {
+      const ic = document.createElement("span");
+      ic.textContent = icon;
+      ic.style.cssText = "font-size:13px";
+      t.appendChild(ic);
+    }
+    const tt = document.createElement("span");
+    tt.textContent = title;
+    t.appendChild(tt);
+    if (badge) {
+      const bd = document.createElement("span");
+      bd.textContent = badge;
+      bd.style.cssText = "font-size:9.5px;font-weight:700;letter-spacing:.05em;"
+        + "padding:2px 7px;border-radius:8px;background:#3a2f14;color:#c98a2d;"
+        + "border:1px solid #c98a2d55";
+      t.appendChild(bd);
+    }
     b.appendChild(t);
     mwrap.appendChild(b);
     return b;
@@ -8477,7 +8498,7 @@ function modelsBody(node, page) {
     pillMount(box).appendChild(row);
     return row;
   };
-  let body = mkBox("Rigs");
+  let body = mkBox("Rigs", "#b8283c", "⚙");
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -8540,7 +8561,7 @@ function modelsBody(node, page) {
 
   const rig = M.rigs[M.active];
   if (!rig) return;
-  body = mkBox("Model");
+  body = mkBox("Model", "#4a8fe0", "🧊");
 
   // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
   // with recents shared per kind so the model you use daily is always on top
@@ -8679,7 +8700,7 @@ function modelsBody(node, page) {
   // intact and tested for a revisit; this box only appears when a saved
   // config still has the toggle ON, so it can be switched off, then it hides.
   if (rig.rescue) {
-    body = mkBox("Identity rescue (shelved)");
+    body = mkBox("Identity rescue", "#c98a2d", "⭐", "SHELVED");
     const rh = document.createElement("div");
     rh.className = "rn-ws-note";
     rh.textContent = "This experiment is shelved: it did not bring identity "
@@ -8736,7 +8757,7 @@ function modelsBody(node, page) {
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
   // scheduler from the workspace outputs and the channel run becomes optional.
-  body = mkBox("Sampler");
+  body = mkBox("Sampler", "#3f9e63", "🎛");
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";
   sh.textContent = "Sampler settings for this rig. They ride the workspace outputs "
@@ -8844,6 +8865,7 @@ function modelsBody(node, page) {
   smRow.appendChild(smSeg);
   body.appendChild(smRow);
   if (M.sampler_mode === "internal") {
+    body = mkBox("Seed", "#8fa8c8", "🎲");
     const seed = document.createElement("input");
     seed.type = "number";
     seed.min = 0;
