@@ -9319,8 +9319,19 @@ function latentBody(node, body) {
   dice.onclick = () => { L.random = !L.random; writeCfg(node); render(node); };
   chips.appendChild(dice);
 
+  // the whole canvas cluster lives in ONE card, the user's call: slightly
+  // darker ground and a border, so size controls read as a single place
+  const canvasCard = document.createElement("div");
+  canvasCard.style.cssText = "display:flex;flex-direction:column;gap:7px;"
+    + "background:#1b1e23;border:1px solid #2a2e34;border-radius:7px;"
+    + "padding:9px";
+  const cardTitle = document.createElement("div");
+  cardTitle.style.cssText = "font-size:11px;font-weight:700;"
+    + "letter-spacing:.06em;color:#8fa8c8";
+  cardTitle.textContent = "CANVAS";
+  canvasCard.appendChild(cardTitle);
   vrow.append(stage, chips);
-  body.appendChild(vrow);
+  canvasCard.appendChild(vrow);
   // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
   // for beside the visual chips: squares for the eye, names for the click
   {
@@ -9347,13 +9358,13 @@ function latentBody(node, body) {
                + "budget it shapes. Same presets as the chips above.";
     asel.onchange = () => { if (asel.value) applyAspect(asel.value); };
     arow.append(alab, asel);
-    body.appendChild(arow);
+    canvasCard.appendChild(arow);
   }
   if (L.random && node._rnPicks?.latent) {
     const rolled = document.createElement("div");
     rolled.className = "rn-ws-note";
     rolled.textContent = `last roll: ${node._rnPicks.latent}`;
-    body.appendChild(rolled);
+    canvasCard.appendChild(rolled);
   }
 
   const srow = document.createElement("div");
@@ -9387,7 +9398,7 @@ function latentBody(node, body) {
   });
   sr.addEventListener("change", () => render(node));
   srow.append(slab, sr, sv);
-  body.appendChild(srow);
+  canvasCard.appendChild(srow);
 
   const drow = document.createElement("div");
   drow.className = "rn-ws-row";
@@ -9415,7 +9426,8 @@ function latentBody(node, body) {
   swap.onclick = () => { const w = L.w; L.w = L.h; L.h = w; writeCfg(node); render(node); };
   drow.append(...num("Width", "w", 256, 4096), ...num("Height", "h", 256, 4096), swap,
               ...num("Batch", "batch", 1, 64));
-  body.appendChild(drow);
+  canvasCard.appendChild(drow);
+  body.appendChild(canvasCard);
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
