@@ -126,6 +126,16 @@ css.textContent = `
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 14px;display:flex;
   align-items:center;gap:6px}
 .rn-ws-tab.cur{background:#242830;color:#fff;border-color:#3d434c}
+/* the ON/OFF switch: a sliding pill, the Sick Ollie affordance the user
+   picked - state reads at a glance, green is on. Labelled choice buttons
+   keep the rn-ws-on look; this class is only for pure on/off. */
+.rn-ws-sw{position:relative;flex:none;width:40px;height:22px;border-radius:11px;
+  background:#3a3f47;border:1px solid #2a2e34;cursor:pointer;padding:0;
+  transition:background .15s}
+.rn-ws-sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;
+  height:16px;border-radius:50%;background:#c8ccd2;transition:left .15s}
+.rn-ws-sw.on{background:#2e7d4f;border-color:#2e7d4f}
+.rn-ws-sw.on::after{left:20px;background:#fff}
 /* group colours: canvas blue, mood amber, edit-node red, settings grey */
 .rn-ws-tab{border-top:2px solid transparent}
 .rn-ws-tab.g-canvas{border-top-color:#4a8fe0}
@@ -1819,8 +1829,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (t.on ? " on" : "");
-  on.textContent = t.on ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (t.on ? " on" : "");
   on.title = t.on ? "This tab feeds the studio. Click to disable it."
                   : "Disabled: this tab outputs nothing.";
   on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
@@ -2168,8 +2177,7 @@ function masksBody(node, body) {
     dot.style.cssText = "width:7px;height:7px;border-radius:50%;flex:none;"
                       + "background:" + (t.on ? "#22c55e" : "#4a5058");
     const on = document.createElement("button");
-    on.className = "rn-ws-on" + (t.on ? " on" : "");
-    on.textContent = t.on ? "ON" : "OFF";
+    on.className = "rn-ws-sw" + (t.on ? " on" : "");
     on.onclick = (e) => {
       e.stopPropagation();                 // the head folds; the toggle does not
       t.on = !t.on;
@@ -3265,8 +3273,7 @@ function autoSection(node, body, tabName) {
     ? "AUTO PROMPT"
     : "AUTO PROMPT" + (a.on ? ` (${a.mode.replace("_", " ")})` : "");
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (a.on ? " on" : "");
-  on.textContent = a.on ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (a.on ? " on" : "");
   on.title = isPaint
     ? a.on
       ? "On: caption the visible result and combine it before your Paint prompt, or "
@@ -3444,8 +3451,7 @@ function autoSection(node, body, tabName) {
         t.textContent = label;
         t.title = hint;
         const b = document.createElement("button");
-        b.className = "rn-ws-on" + (cfg.auto[key] ? " on" : "");
-        b.textContent = cfg.auto[key] ? "ON" : "OFF";
+        b.className = "rn-ws-sw" + (cfg.auto[key] ? " on" : "");
         b.title = hint;
         b.onclick = () => { cfg.auto[key] = !cfg.auto[key]; writeCfg(node); render(node); };
         w.append(t, b);
@@ -4094,8 +4100,7 @@ function lorasBody(node, body) {
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (L.on ? " on" : "");
-  on.textContent = L.on ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (L.on ? " on" : "");
   on.title = L.on
     ? "The stack is applied to the model input and handed back on the model output."
     : "Off: the model passes through untouched.";
@@ -5486,8 +5491,7 @@ function paintBody(node, body) {
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (P.on ? " on" : "");
-  on.textContent = P.on ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (P.on ? " on" : "");
   on.title = P.on
     ? "The painted region drives output_latent, edit_mask and denoise. Queue to run "
       + "it. Switching this OFF also hands back whatever the paint renderer left in "
@@ -9221,8 +9225,7 @@ function latentBody(node, body) {
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (L.on ? " on" : "");
-  on.textContent = L.on ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (L.on ? " on" : "");
   on.title = L.on ? "The empty latent goes out on output_latent."
                   : "Off: output_latent stays empty unless the edit mask provides one.";
   on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
@@ -9637,8 +9640,7 @@ function converterSection(node, body, tabName) {
       t.className = "rn-ws-note";
       t.textContent = label;
       const b = document.createElement("button");
-      b.className = "rn-ws-on" + (c[key] ? " on" : "");
-      b.textContent = c[key] ? "ON" : "OFF";
+      b.className = "rn-ws-sw" + (c[key] ? " on" : "");
       b.title = hint;
       b.onclick = () => { c[key] = !c[key]; writeCfg(node); render(node); };
       w.append(t, b);
@@ -9694,8 +9696,7 @@ function dialSection(node, body, tabId) {
   ttl.textContent = `DIALS: ${dials.map((d) => d.label).join(", ")}`
                   + (touched ? ` · ${touched} set` : "");
   const on = document.createElement("button");
-  on.className = "rn-ws-on" + (cfg.use_dials ? " on" : "");
-  on.textContent = cfg.use_dials ? "ON" : "OFF";
+  on.className = "rn-ws-sw" + (cfg.use_dials ? " on" : "");
   on.title = cfg.use_dials
     ? "Every dial on every tab goes out as the settings. The studio needs preset 'custom (use settings)'."
     : "Off: the settings output is empty and the studio's preset stays in charge.";
@@ -9740,8 +9741,7 @@ Held to ${ceiling} by the ${cfg.vram_tier} VRAM tier. Change the tier `
       if (d.bool) {
         const cur = cfg.dials[d.key] ?? d.def;
         const sw = document.createElement("button");
-        sw.className = "rn-ws-on" + (cur ? " on" : "");
-        sw.textContent = cur ? "ON" : "OFF";
+        sw.className = "rn-ws-sw" + (cur ? " on" : "");
         sw.title = d.hint;
         sw.onclick = () => {
           cfg.dials[d.key] = !cur;
