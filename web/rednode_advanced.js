@@ -308,6 +308,7 @@ function readCfg(node) {
   if (!Array.isArray(d.stages)) d.stages = [];
   if (typeof d.seed !== "number") d.seed = 0;
   if (typeof d.seed_random !== "boolean") d.seed_random = true;
+  if (typeof d.taps !== "boolean") d.taps = false;
   return d;
 }
 
@@ -426,6 +427,19 @@ function buildPanel(node) {
         render();
       };
       prow.append(lab("Preset"), psel, nameInp, saveB);
+      // TAPS: record the input, every pass and the output into the RedNode
+      // Stage View strip - a chain read step by step, no tap nodes wired.
+      // Off by default (the house rule); the strip is the Stage View node.
+      const tapB = document.createElement("button");
+      tapB.className = "tog" + (d.taps ? " on" : "");
+      tapB.style.marginLeft = "auto";
+      tapB.textContent = "◉ Taps";
+      tapB.title = "Record this run into RedNode Stage View: the input as it "
+                 + "arrives, a frame after every pass (every repeat round too) "
+                 + "and the output. Drop a Stage View node anywhere to watch "
+                 + "the strip; nothing to wire.";
+      tapB.onclick = () => { d.taps = !d.taps; writeCfg(node, d); render(); };
+      prow.append(tapB);
       const cur = node._rnAdvPreset || "";
       if (cur && !cur.startsWith("★ ") && (SAVED || {})[cur]) {
         const delB = document.createElement("button");

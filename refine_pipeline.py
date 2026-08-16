@@ -118,7 +118,11 @@ def parse_pipeline(config_json):
         seed = 0
     return {"stages": stages, "seed": max(0, seed),
             "seed_random": (True if data.get("seed_random") is None
-                            else bool(data.get("seed_random")))}
+                            else bool(data.get("seed_random"))),
+            # record the input, every pass and the output into the RedNode
+            # Stage View strip, so a chain can be read step by step without
+            # wiring taps. Off by default, per the house rule.
+            "taps": bool(data.get("taps"))}
 
 
 def _rig_settings(ws_cfg, name):
@@ -346,6 +350,20 @@ class RedNodeStudioDetailer:
             ws_cfg = _ws.parse_config("{}")
         import random as _random
         seed = (_random.getrandbits(48) if cfg["seed_random"] else cfg["seed"])
+        # THE TAPS: with the toggle on, the strip gets the input as it arrived,
+        # a frame after every pass (every repeat round too), and the output.
+        # Recording is never fatal: a thumbnail that fails to build is one
+        # missing frame in the strip, not a dead queue.
+        tap = None
+        if cfg.get("taps"):
+            try:
+                from . import stages as _stages
+                tap = lambda img, label: _stages.record(
+                    img, label, prompt=prompt, source="detailer")
+            except Exception as exc:
+                print("[RedNode Detailer] taps unavailable: %s" % exc, flush=True)
+        if tap:
+            tap(image, "Detailer in")
 
         out = image
         for i, (card_idx, s) in enumerate(stages, 1):
@@ -356,7 +374,7 @@ class RedNodeStudioDetailer:
             rigd = _rig_settings(ws_cfg, s["rig"])
             if rigd.get("kind") in _ws.RIG_KIND_HANDLERS:
                 out, lines = self._handler_pass(out, rigd, s, ws_cfg,
-                                                seed + i, tag)
+                                                seed + i, tag, tap)
                 for line in lines:
                     print("[RedNode Detailer] " + line, flush=True)
                     report.append(line)
@@ -469,6 +487,10 @@ class RedNodeStudioDetailer:
                     line += ", repeat %d of %d" % (r + 1, reps)
                 print("[RedNode Detailer] " + line, flush=True)
                 report.append(line)
+                if tap and not why:
+                    tap(out, "%d %s%s" % (i, s["target"] if s["type"] == "detailer"
+                                          else "sampler",
+                                          " x%d" % (r + 1) if reps > 1 else ""))
                 if why:
                     break
                 # a sampler pass's scale must not compound across repeats: 1.5x
@@ -477,6 +499,8 @@ class RedNodeStudioDetailer:
                 if r == 0 and reps > 1 and s["type"] == "sampler" \
                         and abs(s["scale"] - 1.0) >= 1e-3:
                     s = dict(s, scale=1.0)
+        if tap:
+            tap(out, "Detailer out")
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
 
@@ -575,7 +599,7 @@ class RedNodeStudioDetailer:
         return self._paste(image, crop, rendered, mask, box,
                            s["feather"]), None
 
-    def _handler_pass(self, image, rigd, s, ws_cfg, seed, tag):
+    def _handler_pass(self, image, rigd, s, ws_cfg, seed, tag, tap=None):
         """A pass on an engine rig (a RIG_KIND_HANDLERS kind, the personal
         NovelAI rig): a sampler pass is whole-frame i2i through the handler,
         a detailer pass crops the target, sends the crop, and pastes the
@@ -645,6 +669,9 @@ class RedNodeStudioDetailer:
             if reps > 1:
                 line += ", repeat %d of %d" % (r + 1, reps)
             lines.append(line)
+            if tap and not why:
+                tap(out, "%s %s%s" % (tag.split(" ")[0], rigd.get("kind"),
+                                      " x%d" % (r + 1) if reps > 1 else ""))
             if why:
                 break
             if r == 0 and reps > 1 and s["type"] == "sampler" \
