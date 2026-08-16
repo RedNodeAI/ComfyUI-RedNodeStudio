@@ -9184,25 +9184,37 @@ function promptsBody(node, body) {
     sub.textContent = "Write prompts that live with the model they were written for.";
     head.append(h1, sub);
     body.appendChild(head);
-    if (M.rigs.length) {
+    // the PROMPT bar, the user's call: switch and add prompts up here, one
+    // editor below for the active one. The chip names the prompt and its
+    // rig; the active prompt is lit and badged.
+    {
       const bar = document.createElement("div");
       bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"
         + "background:#1a1d22;border:1px solid #2a2e34;border-radius:7px;padding:9px";
       const bt = document.createElement("span");
       bt.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
-        + "color:#b8283c;flex:none";
-      bt.textContent = "RIG";
+        + "color:#a855f7;flex:none";
+      bt.textContent = "PROMPT";
       bar.appendChild(bt);
-      M.rigs.forEach((r, i) => {
+      if (typeof node._rnPromptSel !== "number" || node._rnPromptSel >= R.length) {
+        node._rnPromptSel = Math.max(0, R.length - 1);
+      }
+      R.forEach((row, i) => {
         const chip = document.createElement("button");
-        const on = M.active === i;
+        const on = node._rnPromptSel === i;
         chip.style.cssText = "display:flex;align-items:center;gap:7px;padding:8px 14px;"
           + "border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;"
           + "background:" + (on ? "#a855f71a" : "#15171b") + ";border:1px solid "
           + (on ? "#a855f7" : "#2a2e34") + ";color:#e8ecf1";
         const nm = document.createElement("span");
-        nm.textContent = r.name || ("Rig " + (i + 1));
+        nm.textContent = row.name || ("Prompt " + (i + 1));
         chip.appendChild(nm);
+        if (row.rig) {
+          const rg = document.createElement("span");
+          rg.className = "rn-ws-note";
+          rg.textContent = row.rig;
+          chip.appendChild(rg);
+        }
         if (on) {
           const badge = document.createElement("span");
           badge.textContent = "ACTIVE";
@@ -9210,10 +9222,20 @@ function promptsBody(node, body) {
             + "border-radius:8px;background:#1e5233;color:#a7f3c0";
           chip.appendChild(badge);
         }
-        chip.title = "Make this rig active; prompts link to rigs by name.";
-        chip.onclick = () => { M.active = i; writeCfg(node); render(node); };
+        chip.title = "Edit this prompt below.";
+        chip.onclick = () => { node._rnPromptSel = i; render(node); };
         bar.appendChild(chip);
       });
+      const addP = document.createElement("button");
+      addP.className = "rn-ws-btn";
+      addP.style.cssText = "width:auto;padding:0 14px";
+      addP.textContent = "\uFF0B New Prompt";
+      addP.onclick = () => {
+        R.push({ name: "", rig: "", kind: "krea2", text: "", negative: "" });
+        node._rnPromptSel = R.length - 1;
+        writeCfg(node); render(node);
+      };
+      bar.appendChild(addP);
       body.appendChild(bar);
     }
   }
@@ -9224,23 +9246,14 @@ function promptsBody(node, body) {
   if (note.textContent) body.appendChild(note);
 
   R.forEach((row, i) => {
+    if (i !== node._rnPromptSel) return;      // one editor: the active prompt's
     const box = document.createElement("div");
     box.style.cssText = "display:flex;flex-direction:column;gap:5px;padding:7px;"
                       + "background:#1a1d22;border:1px solid #2a2e34;border-radius:6px";
-    const folded = () => !!node.properties?.rn_prompt_folds?.[i];
+    const folded = () => false;
     const head = document.createElement("div");
     head.className = "rn-ws-row";
-    const caret = document.createElement("button");
-    caret.className = "rn-ws-btn";
-    caret.style.width = "auto";
-    caret.textContent = folded() ? "\u25b8" : "\u25be";
-    caret.title = "Fold this prompt down to its header.";
-    caret.onclick = () => {
-      node.properties = node.properties || {};
-      (node.properties.rn_prompt_folds ||= {})[i] = !folded();
-      render(node);
-    };
-    head.appendChild(caret);
+
     const name = document.createElement("input");
     name.type = "text";
     name.value = row.name;
@@ -9248,7 +9261,7 @@ function promptsBody(node, body) {
     name.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
-    name.addEventListener("change", () => { row.name = name.value; writeCfg(node); });
+    name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
     const rigPick = document.createElement("input");
     rigPick.type = "text";
     rigPick.value = row.rig;
@@ -9274,7 +9287,11 @@ function promptsBody(node, body) {
     del.className = "rn-ws-btn";
     del.style.width = "auto";
     del.textContent = "\u2715";
-    del.onclick = () => { R.splice(i, 1); writeCfg(node); render(node); };
+    del.onclick = () => {
+      R.splice(i, 1);
+      node._rnPromptSel = Math.max(0, Math.min(node._rnPromptSel, R.length - 1));
+      writeCfg(node); render(node);
+    };
     head.append(name, rigPick, kind, del);
     box.appendChild(head);
 
@@ -9356,15 +9373,8 @@ function promptsBody(node, body) {
     body.appendChild(box);
   });
 
-  const add = document.createElement("button");
-  add.className = "rn-ws-btn";
-  add.style.width = "auto";
-  add.style.padding = "0 10px";
-  add.textContent = "\uFF0B Prompt";
-  add.onclick = () => {
-    R.push({ name: "", rig: "", kind: "krea2", text: "", negative: "" });
-    writeCfg(node); render(node);
-  };
+  const add = document.createElement("span");
+  add.style.display = "none";                // adding moved to the PROMPT bar
   body.appendChild(add);
 }
 
@@ -10473,7 +10483,8 @@ export function render(node) {
   host.appendChild(tabs);
 
   const body = document.createElement("div");
-  body.className = "rn-ws-body" + (cur === "paint" ? " full" : "");
+  body.className = "rn-ws-body"
+    + (cur === "paint" || cur === "prompts" ? " full" : "");
   if (cur === "people") peopleBody(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);

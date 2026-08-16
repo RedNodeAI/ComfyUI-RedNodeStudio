@@ -88,7 +88,7 @@ const STYLE = `
 .rn-pf select:focus, .rn-pf input:focus, .rn-pf textarea:focus { border-color: #8ab4ff; }
 
 .rn-pf textarea {
-  box-sizing: border-box; width: 100%; min-height: 46px;
+  box-sizing: border-box; width: 100%; min-height: 72px;
   padding: 6px 8px; background: var(--rn-bg); color: #e2e5ea;
   border: 1px solid var(--rn-line); border-radius: 5px;
   font: inherit; font-size: 13px; line-height: 1.35;
@@ -255,18 +255,18 @@ export function buildFrameEditor(wrap, F) {
   const styleRow = labelledRow("Style", styleSel);
 
   const styleExtra = document.createElement("textarea");
-  styleExtra.rows = 2;
+  styleExtra.rows = 3;
   styleExtra.placeholder = "your own style wording (optional)";
   styleExtra.value = F.get("style_extra") || "";
 
   // ---- subject / surroundings -----------------------------------------------------
   const subject = document.createElement("textarea");
-  subject.rows = 3;
+  subject.rows = 6;
   subject.placeholder = "a woman in her thirties, red waterproof jacket, rucksack";
   subject.value = F.get("subject") || "";
 
   const surroundings = document.createElement("textarea");
-  surroundings.rows = 3;
+  surroundings.rows = 5;
   surroundings.placeholder = "a mountain ridge under heavy cloud, wet black rock, a thin path";
   surroundings.value = F.get("surroundings") || "";
 
@@ -347,7 +347,7 @@ export function buildFrameEditor(wrap, F) {
   const brightRow = labelledRow("Brightness", brightWrap);
 
   const lac = document.createElement("textarea");
-  lac.rows = 2;
+  lac.rows = 3;
   lac.placeholder = "palette and mood: muted slate and rust, quiet and still";
   lac.value = F.get("light_and_colour") || "";
 
@@ -357,7 +357,7 @@ export function buildFrameEditor(wrap, F) {
   const localFolds = {};
   const foldGet = (k) => (F.folds?.get ? F.folds.get(k) : localFolds[k]);
   const foldSet = (k, v) => { if (F.folds?.set) F.folds.set(k, v); else localFolds[k] = v; };
-  const ICONS = { style: "\u2728", subject: "\U0001F464", surroundings: "\u26F0",
+  const ICONS = { style: "✨", subject: "👤", surroundings: "⛰",
                   framing: "\u2316", light: "\u2600" };
   const group = (key, title, hint, els) => {
     const gbox = el("div", "rn-pf-box");
