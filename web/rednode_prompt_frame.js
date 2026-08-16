@@ -348,15 +348,14 @@ export function buildFrameEditor(wrap, F) {
   const frameChips = el("div", "rn-pf-chips");
   const drawChips = () => {
     frameChips.replaceChildren();
+    const curF = framings[Number(frameRange.value)] ?? F.get("framing");
     framings.forEach((f, i) => {
-      const c = el("div", "rn-pf-chip" + (F.get("framing") === f ? " on" : ""));
+      const c = el("div", "rn-pf-chip" + (curF === f ? " on" : ""));
       c.appendChild(el("span", null, f));
       c.title = "Set the framing to " + f + ".";
       c.addEventListener("click", () => {
         frameRange.value = String(i);
         frameRange.dispatchEvent(new Event("input", { bubbles: true }));
-        frameRange.dispatchEvent(new Event("change", { bubbles: true }));
-        drawChips();
       });
       frameChips.appendChild(c);
     });
@@ -381,7 +380,7 @@ export function buildFrameEditor(wrap, F) {
   const camLabel = el("div", "rn-pf-sublabel", "Camera height");
   const drawCamChips = () => {
     camChips.replaceChildren();
-    const cur = F.get("camera_height") || "Eye level";
+    const cur = heights[Number(camRange.value)] ?? (F.get("camera_height") || "Eye level");
     heights.forEach((h, i) => {
       const c = el("div", "rn-pf-chip" + (cur === h ? " on" : ""));
       c.appendChild(el("span", null, h));
@@ -389,8 +388,6 @@ export function buildFrameEditor(wrap, F) {
       c.addEventListener("click", () => {
         camRange.value = String(i);
         camRange.dispatchEvent(new Event("input", { bubbles: true }));
-        camRange.dispatchEvent(new Event("change", { bubbles: true }));
-        drawCamChips();
       });
       camChips.appendChild(c);
     });
@@ -688,7 +685,7 @@ export function buildFrameEditor(wrap, F) {
 
   for (const c of [styleSel, whereSel, whatSel, lightSel, pushSel]) c.addEventListener("change", changed);
   for (const c of [styleExtra, subject, surroundings, placement, lac]) c.addEventListener("input", changed);
-  for (const c of [frameRange, brightRange]) c.addEventListener("input", changed);
+  for (const c of [frameRange, brightRange, camRange]) c.addEventListener("input", changed);
   // middle-click still pans the canvas
   wrap.addEventListener("pointerdown", (e) => {
     if (e.button === 1) app.canvas?.processMouseDown?.(e);
