@@ -366,8 +366,10 @@ export function buildFrameEditor(wrap, F) {
 
   // ---- camera height: the same chips + slider as the framing, right beneath it.
   // Framing is zoom; this is where the camera stands, ground to overhead.
-  const heights = F.opts.camera_height || ["Worm's eye", "Low angle", "Eye level",
-                                           "High angle", "Bird's eye"];
+  const heights = (F.opts.camera_height && F.opts.camera_height.length)
+    ? F.opts.camera_height
+    : ["Worm's eye", "Low angle", "Slight low", "Eye level", "Slight high",
+       "High angle", "Bird's eye"];
   const camChips = el("div", "rn-pf-chips");
   const camWrap = el("div", "rn-pf-slider");
   const camRange = document.createElement("input");

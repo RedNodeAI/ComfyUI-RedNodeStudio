@@ -61,23 +61,65 @@ SCALE_CUE = {
     "Roomscale": "small in the distance",
 }
 
-# CAMERA HEIGHT, the user's ask (2026-08-17): the framing slider is zoom, this is
-# where the camera stands - from the ground looking up to straight down. Five
-# stops. The wording deliberately describes what the camera would SEE from
-# there (the sky behind the head, the floor around the feet), because Krea 2's
-# natural-language encoder answers consequences far more reliably than the
-# old "from below" / "from above" tags it half-ignores. Eye level says nothing.
-CAMERA_HEIGHTS = ["Worm's eye", "Low angle", "Eye level", "High angle", "Bird's eye"]
+# CAMERA HEIGHT, the user's ask (2026-08-17), rewritten the same day from their
+# research into Krea's own Krea 2 prompting docs, June 2026 slider notes and
+# community testing. The findings that shape this table:
+#   - treat the camera as a PHYSICAL OBJECT: position -> direction -> the
+#     subject's relation to it -> which surfaces it sees -> the ground/sky. Each
+#     stop stacks those as mutually reinforcing constraints a natural-language
+#     encoder cannot quietly reinterpret as eye level; a bare "high angle" can.
+#   - a lens per stop: 50mm for gentle stops, wider as the angle steepens, never
+#     below ~18mm or the model reads "crazy wide" instead of "camera above".
+#   - high angle, near-overhead and true top-down are DIFFERENT results, so the
+#     scale has seven stops, three each side of eye level, not five.
+#   - camera-first: the block LEADS the prompt (community testing reports strong
+#     positional bias for camera/lens words), so assemble() puts it in front of
+#     everything, before the style block. Eye level says nothing.
+# Two knobs the research calls decisive live OUTSIDE the prompt and the tooltip
+# says so: Krea's Movement slider (+30-50 obeys angles far better than the
+# -10..0 the user runs), Creativity Raw/Low, and moodboard strength kept to
+# 20-40% while the geometry is being solved, since references carry composition.
+CAMERA_HEIGHTS = ["Worm's eye", "Low angle", "Slight low", "Eye level",
+                  "Slight high", "High angle", "Bird's eye"]
 CAMERA_HEIGHT_TEXT = {
-    "Worm's eye": ("shot from a worm's-eye view, the camera on the ground looking "
-                   "steeply up, figures towering overhead against the sky"),
-    "Low angle": ("shot from a low angle, the camera below eye level looking up, "
-                  "the sky and ceiling visible behind the subject"),
+    "Worm's eye": (
+        "Extreme low-angle photograph, a worm's-eye view. The camera sits on the "
+        "ground and points steeply upward at around 60 degrees. The subject stands "
+        "above the camera and looks down toward the lens; the underside of the chin "
+        "and the soles of the shoes are nearest the camera, the head and shoulders "
+        "recede upward, and the sky or ceiling fills the background behind them. "
+        "Pronounced upward foreshortening. Shot with a 24mm wide-angle lens"),
+    "Low angle": (
+        "Low-angle photograph. The camera is positioned below the subject's eye "
+        "level, roughly at waist height, and tilted upward at around 30 degrees. "
+        "The subject is above the camera and looks down toward the lens; the "
+        "underside of the jaw is visible and the sky or ceiling shows behind the "
+        "head. Clear upward perspective. Shot with a 35mm lens"),
+    "Slight low": (
+        "Slightly low-angle photograph, the camera a little below eye level and "
+        "tilted gently upward toward the face; a hint of the ceiling or sky "
+        "behind the head, subtle heroic perspective, natural proportions. Shot "
+        "with a 50mm lens"),
     "Eye level": "",
-    "High angle": ("shot from a high angle, the camera above eye level looking down, "
-                   "the ground visible around the subject's feet"),
-    "Bird's eye": ("shot from a bird's-eye view, the camera far overhead looking "
-                   "straight down, the whole scene laid out below like a map"),
+    "Slight high": (
+        "High-angle portrait photograph, the camera around 40 cm above the "
+        "subject's eye level and tilted downward about 20 degrees toward the "
+        "face. The subject raises their eyes toward the camera; the top of the "
+        "hair and shoulders slightly visible, subtle elevated perspective, "
+        "natural proportions. Shot with a 50mm lens"),
+    "High angle": (
+        "Strong high-angle photograph. The camera is positioned about 1.5 meters "
+        "above the subject's head and tilted downward at 45 degrees. The subject "
+        "stands beneath the camera looking upward into the lens; the top planes "
+        "of the head and shoulders are clearly visible and the floor surrounds "
+        "the body. Strong but realistic perspective. Shot with a 35mm lens"),
+    "Bird's eye": (
+        "Direct overhead photograph. The camera is mounted vertically above the "
+        "subject and points straight down at 90 degrees, its optical axis "
+        "perpendicular to the floor. The subject is directly beneath the lens; "
+        "the top of the head and shoulders are seen from above and the floor "
+        "fills the entire background. True top-down perspective, not an oblique "
+        "high-angle view. Shot with a 28mm wide-angle lens"),
 }
 
 # PUSHING THE FRAMING HARDER. Two levers, because the framing loses to two different
@@ -257,6 +299,13 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     restate = push in (PUSH_RESTATE, PUSH_BOTH)
 
     parts = []
+    # CAMERA FIRST: the block leads everything, before the style, because a
+    # camera instruction that arrives after the picture is already established
+    # in the reader's head loses; in front, everything else is described from
+    # that viewpoint. Eye level contributes nothing.
+    cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
+    if cam and (subject or surroundings):
+        parts.append(_cap(cam) + ".")
     if style:
         parts.append(_cap(style) + ".")
 
@@ -290,11 +339,6 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             joined = " ".join(t for t in tail if t).replace(" ,", ",")
             parts.append(_cap(joined) + ".")
 
-    # the camera's height, one sentence after the subject and before the light:
-    # geometry beside the thing it frames, never buried after the palette
-    cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
-    if cam and (subject or surroundings):
-        parts.append(_cap(cam) + ".")
     if light_and_colour:
         parts.append(_cap(light_and_colour) + ".")
     # LAST, after the light: the point is to hold the end of the prompt, and anything
@@ -419,10 +463,16 @@ class RedNodePromptFrame:
                 "camera_height": (CAMERA_HEIGHTS, {
                     "default": "Eye level",
                     "tooltip": "Where the camera stands, from the ground looking up "
-                               "to straight down. Eye level adds nothing. The framing "
-                               "slider is zoom; this is height. Wordings describe what "
-                               "the camera sees from there, which is what a "
-                               "natural-language model actually obeys."}),
+                               "to straight down; the framing slider is zoom, this is "
+                               "height. Eye level adds nothing. Each stop LEADS the "
+                               "prompt with a physical camera description: position, "
+                               "tilt, what it sees of the subject, the floor or sky, "
+                               "and a lens - the form Krea 2 obeys. Two knobs outside "
+                               "the prompt matter as much: Krea's Movement slider "
+                               "(+30 to +50 obeys angles far better than 0) with "
+                               "Creativity on Raw or Low, and moodboard strength kept "
+                               "to 20-40% while you solve the angle, since references "
+                               "carry composition."}),
                 "framing_push": (FRAMING_PUSH, {
                     "default": PUSH_OFF,
                     "tooltip": "Push the framing harder when a long prompt is talking over "
