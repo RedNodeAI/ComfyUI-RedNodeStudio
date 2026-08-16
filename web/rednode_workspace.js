@@ -9058,31 +9058,58 @@ function modelsBody(node, page) {
   body.appendChild(smRow);
   if (M.sampler_mode === "internal") {
     body = mkBox("Seed", "#8fa8c8", "🎲");
+    {
+      const sub = document.createElement("div");
+      sub.className = "rn-ws-note";
+      sub.textContent = "Seed value used to generate results.";
+      body.appendChild(sub);
+    }
+    // THE NUMBER, in its own big field: the mock's seed box, tall and full
+    // width, the state riding inside at the right edge
+    const seedBox = document.createElement("div");
+    seedBox.style.cssText = "display:flex;align-items:center;gap:10px;background:#101216;"
+      + "border:1px solid #2f333a;border-radius:8px;padding:0 14px;min-height:46px";
     const seed = document.createElement("input");
     seed.type = "number";
     seed.min = 0;
     seed.value = M.seed;
     seed.disabled = M.seed_random;
+    seed.style.cssText = "flex:1;min-width:0;background:transparent;border:none;"
+      + "outline:none;color:#e8ecf1;font-size:16px;font-weight:600;padding:0";
+    seed.title = M.seed_random
+      ? "Random every run: pin one with New fixed random or Use last queued to edit."
+      : "The pinned seed. Type one, or use the buttons below.";
     seed.addEventListener("change", () => {
       M.seed = Math.max(0, parseInt(seed.value, 10) || 0);
       writeCfg(node);
     });
-    const seedPill = pill(body, "Seed", seed);
     const state = document.createElement("span");
-    state.className = "v";
+    state.className = "rn-ws-note";
+    state.style.cssText = "flex:none;font-size:12px";
     state.textContent = M.seed_random ? "Random every run" : "Fixed";
-    seedPill.appendChild(state);
-    // the four-way seed console, the shape the user picked out of Sick Ollie:
-    // random each run, pin a fresh random, reuse the last queued, copy it
+    seedBox.append(seed, state);
+    body.appendChild(seedBox);
+
+    // THE THREE ACTIONS, tall bordered buttons in a row, each in its tint;
+    // the active mode fills. Copy is a fourth, full-width, when there is a
+    // last seed to copy - a real button, not a note.
     const act = document.createElement("div");
-    act.className = "rn-ws-row";
-    const mkSeedBtn = (label, tip, fn, opts = {}) => {
+    act.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px";
+    const mkSeedBtn = (icon, label, tip, fn, opts = {}) => {
       const b = document.createElement("button");
-      b.className = "rn-ws-segb" + (opts.on ? " on" : "");
-      b.style.cssText = "flex:1;width:auto;padding:0 8px"
-        + (opts.tint && !opts.on
-           ? ";border-color:" + opts.tint + "88;color:" + opts.tint : "");
-      b.textContent = label;
+      const tint = opts.tint || "#8fa8c8";
+      b.style.cssText = "display:flex;align-items:center;justify-content:center;gap:8px;"
+        + "min-height:44px;padding:0 12px;border-radius:8px;cursor:pointer;"
+        + "font-size:13px;font-weight:600;"
+        + (opts.on
+           ? "background:" + tint + ";border:1px solid " + tint + ";color:#fff"
+           : "background:#15171b;border:1px solid " + tint + "88;color:" + tint);
+      const ic = document.createElement("span");
+      ic.textContent = icon;
+      ic.style.fontSize = "15px";
+      const tx = document.createElement("span");
+      tx.textContent = label;
+      b.append(ic, tx);
       b.title = tip;
       b.disabled = !!opts.disabled;
       if (b.disabled) b.style.opacity = ".4";
@@ -9091,18 +9118,18 @@ function modelsBody(node, page) {
     };
     const last = node._rnLastSeed;
     act.append(
-      mkSeedBtn("🔀 Random each run",
+      mkSeedBtn("🔀", "Random each run",
         "A fresh seed every queue, the default.",
         () => { M.seed_random = true; writeCfg(node); render(node); },
         { on: M.seed_random, tint: "#b8283c" }),
-      mkSeedBtn("🎲 New fixed random",
+      mkSeedBtn("🎲", "New fixed random",
         "Roll one random seed and PIN it, for repeatable A/B runs.",
         () => {
           M.seed = Math.floor(Math.random() * 2 ** 48);
           M.seed_random = false;
           writeCfg(node); render(node);
-        }, { tint: "#4a8fe0" }),
-      mkSeedBtn("🕓 Use last queued",
+        }, { on: !M.seed_random && node._rnSeedMode === "fixed", tint: "#4a8fe0" }),
+      mkSeedBtn("🕓", "Use last queued",
         last == null
           ? "Becomes available after the first queue this session."
           : "Pin the seed the last run actually used: " + last,
@@ -9110,17 +9137,20 @@ function modelsBody(node, page) {
           if (node._rnLastSeed == null) return;
           M.seed = node._rnLastSeed;
           M.seed_random = false;
+          node._rnSeedMode = "last";
           writeCfg(node); render(node);
-        }, { disabled: last == null }));
+        }, { disabled: last == null, tint: "#c8ccd2" }));
     body.appendChild(act);
     if (last != null) {
-      const crow = document.createElement("div");
-      crow.className = "rn-ws-row";
-      const cp = mkSeedBtn("Copy last used seed: " + last,
+      const cp = mkSeedBtn("📋", "Copy last used seed: " + last,
         "Copy it to the clipboard.",
-        () => { navigator.clipboard?.writeText(String(last)); });
-      crow.appendChild(cp);
-      body.appendChild(crow);
+        () => {
+          navigator.clipboard?.writeText(String(last));
+          cp.lastChild.textContent = "Copied " + last;
+          setTimeout(() => { cp.lastChild.textContent = "Copy last used seed: " + last; }, 1200);
+        }, { tint: "#8fa8c8" });
+      cp.style.width = "100%";
+      body.appendChild(cp);
     }
   }
 }
