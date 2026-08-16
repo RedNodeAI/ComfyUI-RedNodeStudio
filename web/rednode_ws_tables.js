@@ -8,12 +8,15 @@
 
 // Which tabs exist, in the order they are shown.
 
+// GROUPED ORDER (2026-08-16, the user's call): each group runs contiguously
+// so the strip's colour underlines read as bands - model tabs, then canvas
+// tabs, then mood, edit, post, settings - instead of interleaving.
 export const TAB_ORDER = [
   { id: "models", label: "Models", group: "model" },
   { id: "prompts", label: "Prompts", group: "model" },
+  { id: "loras", label: "LoRAs", group: "model" },
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },
-  { id: "loras", label: "LoRAs", group: "model" },
   { id: "paint", label: "Paint", group: "canvas" },
   { id: "moodboard", label: "Moodboard", group: "mood" },
   { id: "subject", label: "Subject", group: "edit" },

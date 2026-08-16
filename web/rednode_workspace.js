@@ -124,7 +124,19 @@ css.textContent = `
 .rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
 .rn-ws-tab{background:#15171b;border:1px solid #2a2e35;border-radius:7px;
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 15px;display:flex;
-  align-items:center;gap:7px}
+  align-items:center;justify-content:center;gap:7px;position:relative;overflow:hidden}
+/* the GROUP UNDERLINE: every tab, active or not, carries its group colour as
+   a thin bar along its bottom edge, so the strip's grouping reads at a
+   glance; the active tab lights the whole border on top of that */
+.rn-ws-tab::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
+  border-radius:2px 2px 0 0;background:var(--rn-g,#4a5058);opacity:.7}
+.rn-ws-tab.cur::after{opacity:1}
+.rn-ws-tab.g-canvas{--rn-g:#4a8fe0}
+.rn-ws-tab.g-model{--rn-g:#a855f7}
+.rn-ws-tab.g-mood{--rn-g:#e08a3c}
+.rn-ws-tab.g-edit{--rn-g:#b8283c}
+.rn-ws-tab.g-post{--rn-g:#22a39f}
+.rn-ws-tab.g-cfg{--rn-g:#8a919b}
 .rn-ws-tab:hover{border-color:#3d434c;color:#c8ccd2}
 .rn-ws-tab.cur{background:#242830;color:#fff}
 /* the PILL CONTROL, the Sick Ollie primitive the user asked to adopt: one
@@ -433,7 +445,9 @@ css.textContent = `
 .rn-ws-pempty{font-size:11.5px;opacity:.45;text-align:center;padding:0 14px;
   line-height:1.5}
 .rn-ws-tab.g-cfg{border-top-color:#6b7280}
-.rn-ws-tab.gstart{margin-left:9px}
+.rn-ws-tab.gstart{margin-left:16px}
+.rn-ws-tab.gstart::before{content:"";position:absolute;left:-11px;top:6px;bottom:6px;
+  width:1px;background:#3a3f47}
 .rn-ws-tab .dot{width:7px;height:7px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-tab .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
 .rn-ws-body{background:#242830;border:1px solid #3d434c;border-radius:7px;padding:8px;
