@@ -1952,7 +1952,9 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       writeCfg(node); render(node);
     }, Object.keys(t.groups).length <= 1),
   );
-  body.appendChild(coll);
+  const gcard = sectionCard(tabName === "i2i" ? "SOURCE" : "IMAGES");
+  body.appendChild(gcard);
+  gcard.appendChild(coll);
 
   grid = document.createElement("div");        // the slider above closes over this
   grid.className = "rn-ws-grid";
@@ -2046,7 +2048,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       cseg.appendChild(b);
     }
     crow.append(clab, cseg);
-    body.appendChild(crow);
+    gcard.appendChild(crow);
   }
   const add = document.createElement("button");
   add.className = "rn-ws-add";
@@ -2083,7 +2085,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
     grid.classList.add("drag");            // the drop look, so the paste visibly lands
     uploadFiles(node, tabName, [file]);    // ends in render(), which replaces the grid
   });
-  body.appendChild(grid);
+  gcard.appendChild(grid);
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -2100,7 +2102,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       : multi
         ? `${t.sel.length} of ${t.images.length} in the batch. Click to add or remove; numbers show batch order.`
         : `${t.images.length} remembered. The highlighted one is used.`;
-  body.appendChild(note);
+  gcard.appendChild(note);
 }
 
 function peopleBody(node, body) {
@@ -9108,6 +9110,24 @@ function promptsBody(node, body) {
 // small box grows into a proper fullscreen writing surface. Esc cancels,
 // Ctrl+Enter saves, Save commits through the same change path the inline box
 // uses, so config writing stays in one place.
+// ONE CARD STYLE for grouped controls, the user's box treatment: slightly
+// darker ground, a border, a small title. The Latent tab's CANVAS card set
+// the look; every tab's clusters use this same helper now.
+function sectionCard(title) {
+  const card = document.createElement("div");
+  card.style.cssText = "display:flex;flex-direction:column;gap:7px;"
+    + "background:#1b1e23;border:1px solid #2a2e34;border-radius:7px;"
+    + "padding:9px";
+  if (title) {
+    const t = document.createElement("div");
+    t.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
+      + "color:#8fa8c8";
+    t.textContent = title;
+    card.appendChild(t);
+  }
+  return card;
+}
+
 function openBigEdit(title, value, onSave) {
   document.querySelector(".rn-ws-bigedit")?.remove();
   const ov = document.createElement("div");
@@ -9321,15 +9341,7 @@ function latentBody(node, body) {
 
   // the whole canvas cluster lives in ONE card, the user's call: slightly
   // darker ground and a border, so size controls read as a single place
-  const canvasCard = document.createElement("div");
-  canvasCard.style.cssText = "display:flex;flex-direction:column;gap:7px;"
-    + "background:#1b1e23;border:1px solid #2a2e34;border-radius:7px;"
-    + "padding:9px";
-  const cardTitle = document.createElement("div");
-  cardTitle.style.cssText = "font-size:11px;font-weight:700;"
-    + "letter-spacing:.06em;color:#8fa8c8";
-  cardTitle.textContent = "CANVAS";
-  canvasCard.appendChild(cardTitle);
+  const canvasCard = sectionCard("CANVAS");
   vrow.append(stage, chips);
   canvasCard.appendChild(vrow);
   // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
@@ -9470,6 +9482,7 @@ function i2iPassRow(node, body, tabName) {
       + "only instead.";
   b.onclick = () => { t.prompt_only = !t.prompt_only; writeCfg(node); render(node); };
   row.append(lab, b);
+  const pcard = sectionCard("PASS");
 
   if (!t.prompt_only) {
     const dlab = document.createElement("span");
@@ -9549,7 +9562,8 @@ function i2iPassRow(node, body, tabName) {
     syncPass();
     row.append(pWrap);
   }
-  body.appendChild(row);
+  pcard.appendChild(row);
+  body.appendChild(pcard);
 }
 
 function converterSection(node, body, tabName) {
