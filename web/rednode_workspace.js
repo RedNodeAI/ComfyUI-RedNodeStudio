@@ -1952,7 +1952,12 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       writeCfg(node); render(node);
     }, Object.keys(t.groups).length <= 1),
   );
-  const gcard = sectionCard(tabName === "i2i" ? "SOURCE" : "IMAGES");
+  const gAccents = { i2i: "#4a8fe0", subject: "#3f9e63", scene: "#b8493c",
+                     moodboard: "#c98a2d", subject2: "#3f9e63",
+                     subject3: "#3f9e63" };
+  const gcard = sectionCard(tabName === "i2i" ? "SOURCE" : "IMAGES",
+    gAccents[tabName] || "#8fa8c8",
+    (t.images?.length || 0) + " image(s)");
   body.appendChild(gcard);
   gcard.appendChild(coll);
 
@@ -9113,17 +9118,27 @@ function promptsBody(node, body) {
 // ONE CARD STYLE for grouped controls, the user's box treatment: slightly
 // darker ground, a border, a small title. The Latent tab's CANVAS card set
 // the look; every tab's clusters use this same helper now.
-function sectionCard(title) {
+function sectionCard(title, accent, summary) {
   const card = document.createElement("div");
+  const a = accent || "#8fa8c8";
   card.style.cssText = "display:flex;flex-direction:column;gap:7px;"
-    + "background:#1b1e23;border:1px solid #2a2e34;border-radius:7px;"
+    + "background:#1b1e23;border:1px solid " + a + "55;border-radius:7px;"
     + "padding:9px";
   if (title) {
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:baseline;gap:8px";
     const t = document.createElement("div");
     t.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
-      + "color:#8fa8c8";
+      + "color:" + a;
     t.textContent = title;
-    card.appendChild(t);
+    head.appendChild(t);
+    if (summary) {
+      const sm = document.createElement("div");
+      sm.style.cssText = "margin-left:auto;font-size:11px;color:#7f8792";
+      sm.textContent = summary;
+      head.appendChild(sm);
+    }
+    card.appendChild(head);
   }
   return card;
 }
@@ -9341,7 +9356,9 @@ function latentBody(node, body) {
 
   // the whole canvas cluster lives in ONE card, the user's call: slightly
   // darker ground and a border, so size controls read as a single place
-  const canvasCard = sectionCard("CANVAS");
+  const canvasCard = sectionCard("CANVAS", "#4a8fe0",
+    (L.random ? "random preset" : L.w + " × " + L.h)
+    + " · batch " + L.batch);
   vrow.append(stage, chips);
   canvasCard.appendChild(vrow);
   // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
@@ -9482,7 +9499,10 @@ function i2iPassRow(node, body, tabName) {
       + "only instead.";
   b.onclick = () => { t.prompt_only = !t.prompt_only; writeCfg(node); render(node); };
   row.append(lab, b);
-  const pcard = sectionCard("PASS");
+  const pcard = sectionCard("PASS", "#4a8fe0",
+    t.prompt_only ? "prompt only"
+                  : "denoise " + Number(t.denoise).toFixed(2)
+                    + ((t.passes || 1) > 1 ? " · ×" + t.passes : ""));
 
   if (!t.prompt_only) {
     const dlab = document.createElement("span");
