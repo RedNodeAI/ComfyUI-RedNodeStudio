@@ -2003,6 +2003,12 @@ class RedNodeStudioWorkspace:
                         style=str(_fr.get("style") or "None"),
                         style_extra=str(_fr.get("style_extra") or ""),
                         framing_push=str(_fr.get("framing_push") or "Off"),
+                        # the camera: the Camera Studio state when set, else the
+                        # simple height stop. Missing here meant the studio's
+                        # paragraph vanished from the QUEUED prompt whenever the
+                        # auto prompt re-assembled the frame (the user's report)
+                        camera_height=str(_fr.get("camera_height") or "Eye level"),
+                        camera=str(_fr.get("camera") or ""),
                         style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),
