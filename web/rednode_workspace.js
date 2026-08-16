@@ -8500,13 +8500,103 @@ function modelsBody(node, page) {
     pillMount(box).appendChild(row);
     return row;
   };
-  let body = mkBox("Rigs", "#b8283c", "⚙");
+  // ---- the page header and the RIG bar, the user's mock made real:
+  // rig chips with an ACTIVE badge, add and manage on the same line
+  {
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;flex-direction:column;gap:2px";
+    const h1 = document.createElement("div");
+    h1.style.cssText = "font-size:19px;font-weight:700;color:#e8ecf1";
+    h1.textContent = "Models";
+    const sub = document.createElement("div");
+    sub.className = "rn-ws-note";
+    sub.textContent = "Configure the active rig and sampling settings.";
+    head.append(h1, sub);
+    page.insertBefore(head, mwrap);
+
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"
+      + "background:#1a1d22;border:1px solid #2a2e34;border-radius:7px;"
+      + "padding:9px";
+    const blab = document.createElement("div");
+    blab.style.cssText = "display:flex;flex-direction:column;flex:none;"
+      + "max-width:170px";
+    const bt = document.createElement("span");
+    bt.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
+      + "color:#b8283c";
+    bt.textContent = "RIG";
+    const bh = document.createElement("span");
+    bh.className = "rn-ws-note";
+    bh.textContent = "The active rig loads at queue time.";
+    blab.append(bt, bh);
+    bar.appendChild(blab);
+    M.rigs.forEach((r, i) => {
+      const chip = document.createElement("button");
+      const activeChip = M.active === i;
+      chip.style.cssText = "display:flex;align-items:center;gap:7px;"
+        + "padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;"
+        + "font-weight:600;background:" + (activeChip ? "#a855f71a" : "#15171b")
+        + ";border:1px solid " + (activeChip ? "#a855f7" : "#2a2e34")
+        + ";color:#e8ecf1";
+      const dot = document.createElement("span");
+      dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none;"
+        + "background:" + ([r.checkpoint || r.unet, r.clip, r.vae]
+          .filter(Boolean).length || r.kind !== "files" ? "#3f9e63" : "#666");
+      chip.appendChild(dot);
+      const nm = document.createElement("span");
+      nm.textContent = r.name || ("Rig " + (i + 1));
+      chip.appendChild(nm);
+      if (activeChip) {
+        const badge = document.createElement("span");
+        badge.textContent = "ACTIVE";
+        badge.style.cssText = "font-size:9px;font-weight:700;padding:2px 7px;"
+          + "border-radius:8px;background:#1e5233;color:#a7f3c0";
+        chip.appendChild(badge);
+      }
+      chip.title = activeChip
+        ? "The active rig: it loads and renders. Its settings fill the boxes "
+          + "below."
+        : "Make this rig active. The boxes below edit the active rig.";
+      chip.onclick = () => { M.active = i; writeCfg(node); render(node); };
+      bar.appendChild(chip);
+    });
+    const addChip = document.createElement("button");
+    addChip.className = "rn-ws-btn";
+    addChip.style.cssText = "width:auto;padding:0 14px";
+    addChip.textContent = "＋ New Rig";
+    addChip.onclick = () => {
+      M.rigs.push({ name: "", checkpoint: "", unet: "", clip: "",
+                    clip_type: "", vae: "" });
+      M.active = M.rigs.length - 1;
+      node._rnRigManage = true;
+      writeCfg(node); render(node);
+    };
+    bar.appendChild(addChip);
+    const spring = document.createElement("span");
+    spring.style.flex = "1";
+    bar.appendChild(spring);
+    const manage = document.createElement("button");
+    manage.className = "rn-ws-btn";
+    manage.style.cssText = "width:auto;padding:0 14px";
+    manage.textContent = "⚙ Manage rigs";
+    manage.title = "Rename, reorder or remove rigs.";
+    manage.onclick = () => {
+      node._rnRigManage = !node._rnRigManage;
+      render(node);
+    };
+    bar.appendChild(manage);
+    page.insertBefore(bar, mwrap);
+  }
+
+  let body = null;
+  if (node._rnRigManage || !M.rigs.length) {
+  body = mkBox("Rigs", "#b8283c", "⚙");
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = M.rigs.length
-    ? "The active rig loads at queue time and fills the model, clip and vae "
-      + "outputs. Anything wired into the workspace still wins."
+    ? "Rename rigs here; the Prompts tab links prompts to a rig by its name. "
+      + "Close with Manage rigs when done."
     : "No rigs yet. Add one, name it, and pick its files; the workspace then loads "
       + "it so the graph needs no loader nodes.";
   body.appendChild(note);
@@ -8560,6 +8650,7 @@ function modelsBody(node, page) {
     writeCfg(node); render(node);
   };
   body.appendChild(add);
+  }
 
   const rig = M.rigs[M.active];
   if (!rig) return;
@@ -8569,6 +8660,9 @@ function modelsBody(node, page) {
   // with recents shared per kind so the model you use daily is always on top
   const L = MODEL_LISTS
     || { checkpoints: [], unets: [], clips: [], clip_types: [], vaes: [] };
+  const FILE_ICONS = { "Checkpoint": "📦", "Diffusion model": "✳",
+                       "CLIP": "🔗", "VAE": "〰", "Base model": "🧊",
+                       "LoRA": "⭐" };
   const pickRow = (label, key, items, recentKey, hint) => {
     const input = document.createElement("input");
     input.type = "text";
@@ -8579,7 +8673,32 @@ function modelsBody(node, page) {
       rig[key] = v;
       writeCfg(node); render(node);
     }, { current: () => rig[key], emptyLabel: "none", recent: recentKey });
-    pill(body, label, input, hint);
+    // the mock's file pill: icon, label over the value, Local files button
+    const row = document.createElement("div");
+    row.className = "rn-ws-pill";
+    row.style.cssText = "min-height:52px;grid-column:1/-1";
+    if (hint) row.title = hint;
+    const ic = document.createElement("span");
+    ic.style.cssText = "font-size:15px;flex:none";
+    ic.textContent = FILE_ICONS[label] || "📄";
+    const mid = document.createElement("div");
+    mid.style.cssText = "display:flex;flex-direction:column;gap:1px;flex:1;"
+      + "min-width:0";
+    const lab = document.createElement("span");
+    lab.className = "k";
+    lab.textContent = label;
+    input.style.cssText = "background:transparent;border:none;outline:none;"
+      + "color:#e8ecf1;font-size:13px;font-weight:600;text-align:left;"
+      + "padding:0;width:100%";
+    mid.append(lab, input);
+    const browse = document.createElement("button");
+    browse.className = "rn-ws-btn";
+    browse.style.cssText = "width:auto;padding:0 12px;flex:none";
+    browse.textContent = "📁 Local files";
+    browse.title = "Browse and search the installed files.";
+    browse.onclick = () => { input.focus(); input.click(); };
+    row.append(ic, mid, browse);
+    pillMount(body).appendChild(row);
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
   // workspace (the NovelAI chain). No files load; its numbers and prompt ride
@@ -8677,21 +8796,24 @@ function modelsBody(node, page) {
   // toggle keeps both in system RAM instead. Explicitly off by default, per
   // the house rule: it costs a second model's RAM the whole session.
   {
-    const hrow = document.createElement("div");
-    hrow.className = "rn-ws-row";
-    const hb = document.createElement("button");
-    hb.className = "rn-ws-on" + (M.hold_two ? " on" : "");
-    hb.style.width = "auto";
-    hb.style.padding = "0 10px";
-    hb.textContent = M.hold_two ? "Hold two rigs: on" : "Hold two rigs: off";
-    hb.title = "Keep the last TWO rigs loaded instead of one, so a chain that "
-             + "renders on one rig and detail-passes on another stops reloading "
-             + "both models from disk every queue. Costs a second model's "
-             + "system RAM (roughly 13 GB for a Krea 2) for as long as ComfyUI "
-             + "runs - only worth it with plenty of RAM to spare.";
-    hb.onclick = () => { M.hold_two = !M.hold_two; writeCfg(node); render(node); };
-    hrow.appendChild(hb);
-    body.appendChild(hrow);
+    const hs = document.createElement("select");
+    for (const [v, lbl] of [["", "Off"], ["on", "On"]]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = lbl;
+      o.selected = (M.hold_two ? "on" : "") === v;
+      hs.appendChild(o);
+    }
+    hs.onchange = () => {
+      M.hold_two = hs.value === "on";
+      writeCfg(node); render(node);
+    };
+    pill(body, "Hold two rigs", hs,
+         "Keep the last TWO rigs loaded instead of one, so a chain that "
+         + "renders on one rig and detail-passes on another stops reloading "
+         + "both models from disk every queue. Costs a second model's system "
+         + "RAM (roughly 13 GB for a Krea 2) for as long as ComfyUI runs - "
+         + "only worth it with plenty of RAM to spare.");
   }
 
   // IDENTITY RESCUE, SHELVED (2026-08-14, the user's call): restoring the
@@ -8760,6 +8882,50 @@ function modelsBody(node, page) {
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
   // scheduler from the workspace outputs and the channel run becomes optional.
   body = mkBox("Sampler", "#3f9e63", "🎛");
+  // the mock's Sampler presets: the saved sampler profiles, applied to this
+  // rig's five numbers in one pick
+  {
+    const headRow = body.firstChild;
+    const spring = document.createElement("span");
+    spring.style.flex = "1";
+    headRow.appendChild(spring);
+    const psel = document.createElement("select");
+    psel.className = "rn-ws-res";
+    psel.style.cssText = "font-size:11px;max-width:150px";
+    const fill = (profiles) => {
+      psel.replaceChildren();
+      const o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = "Sampler presets";
+      psel.appendChild(o0);
+      Object.keys(profiles || {}).forEach((nm) => {
+        const o = document.createElement("option");
+        o.value = nm;
+        o.textContent = nm;
+        psel.appendChild(o);
+      });
+    };
+    fill(node._rnSamplerProfiles);
+    if (!node._rnSamplerProfiles) {
+      api.fetchApi("/rednode/sampler_profiles").then(async (r) => {
+        node._rnSamplerProfiles = (await r.json())?.profiles || {};
+        fill(node._rnSamplerProfiles);
+      }).catch(() => {});
+    }
+    psel.title = "Apply a saved sampler profile (the Sampler Config node's "
+               + "presets) to this rig's steps, cfg, sampler, scheduler and "
+               + "detailer steps.";
+    psel.onchange = () => {
+      const pr = node._rnSamplerProfiles?.[psel.value];
+      if (!pr) return;
+      for (const k of ["steps", "cfg", "sampler", "scheduler",
+                       "detailer_steps"]) {
+        if (pr[k] !== undefined && pr[k] !== null) rig[k] = pr[k];
+      }
+      writeCfg(node); render(node);
+    };
+    headRow.appendChild(psel);
+  }
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";
   sh.textContent = "Sampler settings for this rig. They ride the workspace outputs "
@@ -8889,7 +9055,9 @@ function modelsBody(node, page) {
     const mkSeedBtn = (label, tip, fn, opts = {}) => {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (opts.on ? " on" : "");
-      b.style.cssText = "flex:1;width:auto;padding:0 8px";
+      b.style.cssText = "flex:1;width:auto;padding:0 8px"
+        + (opts.tint && !opts.on
+           ? ";border-color:" + opts.tint + "88;color:" + opts.tint : "");
       b.textContent = label;
       b.title = tip;
       b.disabled = !!opts.disabled;
@@ -8899,18 +9067,18 @@ function modelsBody(node, page) {
     };
     const last = node._rnLastSeed;
     act.append(
-      mkSeedBtn("Random each run",
+      mkSeedBtn("🔀 Random each run",
         "A fresh seed every queue, the default.",
         () => { M.seed_random = true; writeCfg(node); render(node); },
-        { on: M.seed_random }),
-      mkSeedBtn("New fixed random",
+        { on: M.seed_random, tint: "#b8283c" }),
+      mkSeedBtn("🎲 New fixed random",
         "Roll one random seed and PIN it, for repeatable A/B runs.",
         () => {
           M.seed = Math.floor(Math.random() * 2 ** 48);
           M.seed_random = false;
           writeCfg(node); render(node);
-        }),
-      mkSeedBtn("Use last queued",
+        }, { tint: "#4a8fe0" }),
+      mkSeedBtn("🕓 Use last queued",
         last == null
           ? "Becomes available after the first queue this session."
           : "Pin the seed the last run actually used: " + last,
