@@ -71,17 +71,30 @@ def parse_state(config_json):
         if not isinstance(s, dict):
             continue
         p = s.get("pos") if isinstance(s.get("pos"), list) and len(s.get("pos")) == 3 else [0, 0, 0]
+        kind = str(s.get("kind") or "person")
+        if kind not in ("person", "object", "wall", "window", "door"):
+            kind = "object"
         subjects.append({
-            "name": str(s.get("name") or "").strip() or "the subject",
+            "name": str(s.get("name") or "").strip()
+                    or ("the subject" if kind == "person" else "an object"),
             "pos": [num(p[0], 0, -30, 30), num(p[1], 0, 0, 30), num(p[2], 0, -30, 30)],
-            "height": num(s.get("height"), 1.7, 0.3, 4.0),
+            "height": num(s.get("height"), 1.7 if kind == "person" else 0.8, 0.05, 6.0),
             "facing_deg": num(s.get("facing_deg"), 0, -360, 720) % 360,
+            "kind": kind,
+            # a relation to another entry: {"kind": "on", "to": index}
+            "rel": ({"kind": str(s["rel"].get("kind") or ""),
+                     "to": int(num(s["rel"].get("to"), -1, -1, 64))}
+                    if isinstance(s.get("rel"), dict) else None),
+            # objects have a footprint; people are points
+            "size": [num((s.get("size") or [0.6, 0.6])[0], 0.6, 0.05, 20),
+                     num((s.get("size") or [0.6, 0.6])[-1], 0.6, 0.05, 20)],
         })
     if not subjects:
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
                      "facing_deg": 0}]
-    if camera["target"] >= len(subjects):
-        camera["target"] = 0
+    if camera["target"] >= len(subjects) or subjects[camera["target"]]["kind"] != "person":
+        people = [i for i, x in enumerate(subjects) if x["kind"] == "person"]
+        camera["target"] = people[0] if people else 0
     return {"camera": camera, "subjects": subjects,
             "output": str(d.get("output") or "krea2"),
             "join": str(d.get("join") or "lead"),

@@ -291,7 +291,7 @@ def describe(camera, subjects, output="krea2"):
     # horizontal relation and distance
     rel = _facing_relation(geo["yaw"], float(prime.get("facing_deg", 0)))
     if locked:
-        parts.append(_cap("%s is %s, %s from the camera, centred in the frame, "
+        parts.append(_cap("%s is %s, %s from the camera, centered in the frame, "
                           "framed as %s."
                           % (sname, rel, _metres(geo["distance"]),
                              _distance_words(geo["distance"], focal))))
@@ -303,11 +303,11 @@ def describe(camera, subjects, output="krea2"):
         half = fov_deg(focal) / 2.0
         frac = max(-1.4, min(1.4, d_yaw / max(1e-6, half)))
         if abs(frac) < 0.15:
-            where = "near the centre of the frame"
+            where = "near the center of the frame"
         elif abs(frac) < 0.5:
-            where = "a little %s of centre" % ("right" if frac > 0 else "left")
+            where = "a little %s of center" % ("right" if frac > 0 else "left")
         elif abs(frac) < 0.9:
-            where = "well %s of centre, in the %s third of the frame" % (
+            where = "well %s of center, in the %s third of the frame" % (
                 ("right", "right") if frac > 0 else ("left", "left"))
         elif abs(frac) <= 1.0:
             where = "at the very %s edge of the frame" % ("right" if frac > 0 else "left")
@@ -316,13 +316,44 @@ def describe(camera, subjects, output="krea2"):
                 "right" if frac > 0 else "left")
         parts.append(_cap("The camera is not aimed at %s: it points %s, at open %s, "
                           "and %s falls %s, %s, %s from the camera. The composition "
-                          "gives space to the scene rather than centring the figure."
+                          "gives space to the scene rather than centering the figure."
                           % (sname, _aim_words(aim_geo, look_at, cpos),
                              "ground" if look_at[1] < 0.6 else "space",
                              sname, where, rel, _metres(geo["distance"]))))
-    # the other subjects: blocking relative to the primary and the camera
+    # RELATIONSHIPS, the user's ask: "the girl sits on the bed" is a relation,
+    # not two positions. An entry may declare rel = {kind, to}; the pair's
+    # relation is stated in words FIRST (the model reads "on the bed" far
+    # more reliably than "0.4 m above and level with"), and the geometry
+    # blocking below then covers everything else.
+    REL_WORDS = {
+        "on": "%s is on %s", "in": "%s is in %s", "beside": "%s is right beside %s",
+        "behind": "%s is directly behind %s", "holding": "%s is holding %s",
+        "leaning on": "%s is leaning on %s", "under": "%s is under %s",
+        "at": "%s is at %s", "sitting on": "%s is sitting on %s",
+        "lying on": "%s is lying on %s", "standing on": "%s is standing on %s",
+        "looking at": "%s is looking at %s", "next to": "%s is next to %s",
+    }
+    related_pairs = set()
+    for k, s_ in enumerate(subjects):
+        rel = s_.get("rel")
+        if not isinstance(rel, dict):
+            continue
+        kind = str(rel.get("kind") or "").strip().lower()
+        to = rel.get("to")
+        if kind not in REL_WORDS or not isinstance(to, int) or to < 0 or to >= len(subjects) or to == k:
+            continue
+        a = str(s_.get("name") or "the subject")
+        b = str(subjects[to].get("name") or "the object")
+        parts.append(_cap(REL_WORDS[kind] % (a, b)) + ".")
+        related_pairs.add((k, to))
+    # the other subjects: blocking relative to the primary and the camera. A
+    # related pair's member skips its geometry line against the primary when
+    # the relation already said where it is (on the bed says enough).
     others = [s for k, s in enumerate(subjects) if k != ti]
     for o in others:
+        ok = subjects.index(o)
+        if (ti, ok) in related_pairs or (ok, ti) in related_pairs:
+            continue
         opos = [float(x) for x in o.get("pos", [0, 0, 0])]
         d_cam = _len(_v(cpos, opos))
         d_prime = _len(_v(spos, opos))
@@ -337,9 +368,17 @@ def describe(camera, subjects, output="krea2"):
         side_dot = (opos[0] - spos[0]) * right[0] + (opos[2] - spos[2]) * right[2]
         side = ("to the right of" if side_dot > 0.35 else "to the left of"
                 if side_dot < -0.35 else "in line with")
-        oname = str(o.get("name") or "a second person")
-        parts.append(_cap("%s stands %s, %s %s, %s from the camera."
-                          % (oname, depth, side, sname, _metres(d_cam))))
+        # OBJECTS share the stage with people (the user's ask: a bed, a lamp,
+        # a window placed and named, and the words say where they are - the
+        # Subject and Surroundings text still say what they LOOK like). A
+        # person "stands"; an object "sits" (or "is" for a wall/window).
+        kind = str(o.get("kind") or "person")
+        oname = str(o.get("name") or ("a second person" if kind == "person"
+                                      else "an object"))
+        verb = ("stands" if kind == "person" else "is"
+                if kind in ("wall", "window", "door") else "sits")
+        parts.append(_cap("%s %s %s, %s %s, %s from the camera."
+                          % (oname, verb, depth, side, sname, _metres(d_cam))))
     roll = float(camera.get("roll_deg", 0) or 0)
     if abs(roll) >= 5:
         parts.append("The camera is rolled %d degrees to the %s, a Dutch tilt."
@@ -435,3 +474,53 @@ def auto_latent_size(camera, subjects, megapixels=1.0, multiple=64):
     h = w * hr / wr
     r = lambda v: max(multiple, int(round(v / multiple)) * multiple)
     return r(w), r(h), "%d:%d, %s" % (wr, hr, why)
+
+
+# ---------------------------------------------------------------- frame presets
+# The Prompt Frame's simple controls become PRESETS over the studio state, the
+# user's design: a framing chip sets how close the camera is and the lens; a
+# camera-height stop sets its height and pitch; the two compose. One engine
+# writes every word, so "Portrait" and "Slight high" together mean exactly what
+# the studio would say for that camera.
+FRAMING_SHOTS = {
+    # framing -> (ground distance to the face in metres, focal mm)
+    "Portrait":   (1.6, 65),
+    "Half body":  (2.0, 50),
+    "Balanced":   (3.0, 35),
+    "Full scene": (4.5, 28),
+    "Roomscale":  (7.0, 24),
+}
+
+
+def camera_from_frame(framing="Balanced", camera_height="Eye level",
+                      subject_height=1.7, subject_pos=(0.0, 0.0, 0.0), bearing_deg=0.0):
+    """A camera state for the frame's two simple choices.
+
+    bearing_deg keeps whatever side the camera was on (0 = in front, +z).
+    """
+    dist, focal = FRAMING_SHOTS.get(framing, FRAMING_SHOTS["Balanced"])
+    face = subject_pos[1] + subject_height * 0.92
+    heights = {
+        "Worm's eye":  (0.15, -60), "Low angle": (0.9, -30), "Slight low": (face - 0.3, -12),
+        "Eye level":   (face, 0), "Slight high": (face + 0.4, 20),
+        "High angle":  (subject_height + 1.5, 45), "Bird's eye": (subject_height + 2.5, 88),
+    }
+    y, pitch = heights.get(camera_height, heights["Eye level"])
+    if not pitch:
+        ground = dist
+    elif abs(pitch) < 30:
+        # a GENTLE stop keeps the framing's distance and RISES to hold its
+        # pitch: at roomscale a fixed 40 cm would flatten to eye level (true
+        # physics, wrong intent). Steep stops keep their height and sit where
+        # that height gives the pitch, close by construction.
+        ground = dist
+        y = face + math.tan(math.radians(pitch)) * ground
+        y = max(0.1, y)
+    else:
+        ground = abs(y - face) / math.tan(math.radians(abs(pitch)))
+        ground = max(0.05 if abs(pitch) >= 85 else 0.35, min(12.0, ground))
+    yaw = math.radians(bearing_deg)
+    pos = [subject_pos[0] + math.sin(yaw) * ground, y,
+           subject_pos[2] + math.cos(yaw) * ground]
+    return {"pos": pos, "target": 0, "target_height": None,
+            "focal_mm": focal, "roll_deg": 0, "lock": True, "aim": [0, 0, 0]}

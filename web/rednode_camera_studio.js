@@ -89,6 +89,10 @@ function normalise(d) {
         pos: Array.isArray(s.pos) && s.pos.length === 3 ? s.pos.map(Number) : [0, 0, 0],
         height: typeof s.height === "number" ? s.height : 1.7,
         facing_deg: typeof s.facing_deg === "number" ? s.facing_deg : 0,
+        kind: ["person", "object", "wall", "window", "door"].includes(s.kind) ? s.kind : "person",
+        size: Array.isArray(s.size) && s.size.length === 2 ? s.size.map(Number) : [0.6, 0.6],
+        rel: (s.rel && typeof s.rel === "object" && typeof s.rel.to === "number")
+          ? { kind: String(s.rel.kind || ""), to: s.rel.to } : null,
       }));
     }
     if (typeof d.output === "string") o.output = d.output;
@@ -333,8 +337,49 @@ export function buildStudio(host, S) {
       g.textAlign = "center";
       g.fillText("aim", ax, ay + 24);
     }
-    // subjects
+    // relations: a dashed line between related entries, drawn underneath
+    st.subjects.forEach((s) => {
+      if (!s.rel || !st.subjects[s.rel.to]) return;
+      const o = st.subjects[s.rel.to];
+      const [ax, ay] = worldToPx(s.pos[0], s.pos[2]);
+      const [bx, by] = worldToPx(o.pos[0], o.pos[2]);
+      g.setLineDash([3, 3]);
+      g.strokeStyle = "#8fa8c8";
+      g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = "#8fa8c8";
+      g.font = "9px system-ui";
+      g.textAlign = "center";
+      g.fillText(s.rel.kind, (ax + bx) / 2, (ay + by) / 2 - 4);
+    });
+    // objects: rectangles with their footprint (walls as lines), before people
     st.subjects.forEach((s, i) => {
+      if (s.kind === "person") return;
+      const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
+      const w = Math.max(10, s.size[0] * PX_PER_M), d = Math.max(10, s.size[1] * PX_PER_M);
+      g.save();
+      g.translate(sx, sy);
+      g.rotate(-(s.facing_deg * Math.PI) / 180);
+      g.fillStyle = "#3a4552";
+      g.strokeStyle = i === sel ? "#4a8fe0" : "#5b6675";
+      g.lineWidth = i === sel ? 3 : 1.5;
+      g.beginPath();
+      if (s.kind === "object") g.rect(-w / 2, -d / 2, w, d);
+      else g.rect(-w / 2, -3, w, 6);
+      g.fill(); g.stroke();
+      g.restore();
+      g.fillStyle = "#e8ecf1";
+      g.font = "bold 10px system-ui";
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(String.fromCharCode(65 + i), sx, sy);
+      g.fillStyle = "#9aa0a8";
+      g.font = "10px system-ui";
+      g.fillText(s.name.slice(0, 18), sx, sy + Math.max(d, 8) / 2 + 12);
+    });
+    // people: dots with a facing arrow
+    st.subjects.forEach((s, i) => {
+      if (s.kind !== "person") return;
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
       const r = 9 + s.height * 2;
       g.fillStyle = i === cam.target ? "#e0a84a" : "#c8ccd2";
@@ -383,6 +428,15 @@ export function buildStudio(host, S) {
     for (let i = st.subjects.length - 1; i >= 0; i--) {
       const s = st.subjects[i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
+      if (s.kind !== "person") {
+        const w = Math.max(10, s.size[0] * PX_PER_M), d = Math.max(10, s.size[1] * PX_PER_M);
+        const a = (s.facing_deg * Math.PI) / 180;
+        const lx = (px - sx) * Math.cos(a) - (py - sy) * Math.sin(a);
+        const ly = (px - sx) * Math.sin(a) + (py - sy) * Math.cos(a);
+        const hh = s.kind === "object" ? d / 2 : 6;
+        if (Math.abs(lx) <= w / 2 + 3 && Math.abs(ly) <= hh + 3) return { kind: "subj", i };
+        continue;
+      }
       const r = 9 + s.height * 2;
       const fa = (s.facing_deg * Math.PI) / 180;
       const ax = sx + Math.sin(fa) * (r + 16), ay = sy + Math.cos(fa) * (r + 16);
@@ -503,6 +557,7 @@ export function buildStudio(host, S) {
     tk.textContent = "Target";
     const tsel = document.createElement("select");
     st.subjects.forEach((s, i) => {
+      if (s.kind !== "person") return;         // the lens locks on people
       const o = document.createElement("option");
       o.value = String(i);
       o.textContent = String.fromCharCode(65 + i) + " · " + s.name;
@@ -593,24 +648,103 @@ export function buildStudio(host, S) {
         sel = Math.max(0, Math.min(sel, st.subjects.length - 1));
         write(); render();
       };
-      head.append(tag, nm, del);
+      const kindB = document.createElement("select");
+      for (const v of ["person", "object", "wall", "window", "door"]) {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = v; o.selected = v === s.kind;
+        kindB.appendChild(o);
+      }
+      kindB.title = "What this is: a person (the lens can lock on it), an object "
+                  + "with a footprint, or a wall / window / door drawn as a line.";
+      kindB.onchange = () => {
+        s.kind = kindB.value;
+        if (s.kind !== "person" && s.height > 2.5) s.height = 0.8;
+        if (st.camera.target === i && s.kind !== "person") {
+          const p = st.subjects.findIndex((x) => x.kind === "person");
+          st.camera.target = p >= 0 ? p : 0;
+        }
+        write(); render();
+      };
+      head.append(tag, kindB, nm, del);
       box.appendChild(head);
-      box.appendChild(slider("Height", 0.5, 2.5, 0.01, () => s.height,
-        (v) => { s.height = v; }, (v) => v.toFixed(2) + " m"));
+      if (s.kind === "person") {
+        box.appendChild(slider("Height", 0.5, 2.5, 0.01, () => s.height,
+          (v) => { s.height = v; }, (v) => v.toFixed(2) + " m"));
+      } else {
+        box.appendChild(slider("Height", 0.05, 4, 0.05, () => s.height,
+          (v) => { s.height = v; }, (v) => v.toFixed(2) + " m"));
+        box.appendChild(slider("Width", 0.1, 8, 0.1, () => s.size[0],
+          (v) => { s.size[0] = v; }, (v) => v.toFixed(1) + " m"));
+        if (s.kind === "object") {
+          box.appendChild(slider("Depth", 0.1, 8, 0.1, () => s.size[1],
+            (v) => { s.size[1] = v; }, (v) => v.toFixed(1) + " m"));
+        }
+      }
       box.appendChild(slider("Facing", 0, 359, 1, () => s.facing_deg,
         (v) => { s.facing_deg = v; }, (v) => Math.round(v) + "°"));
+      // RELATION: "is [sitting on] [the bed]" - the words the model reads best;
+      // the geometry then covers what the relation leaves unsaid
+      if (st.subjects.length > 1) {
+        const rrow = document.createElement("div");
+        rrow.className = "row";
+        const rk = document.createElement("span");
+        rk.className = "k";
+        rk.textContent = "Relation";
+        const rkind = document.createElement("select");
+        const KINDS = ["", "on", "sitting on", "lying on", "standing on", "in", "beside",
+                       "next to", "behind", "under", "at", "holding", "leaning on",
+                       "looking at"];
+        for (const k of KINDS) {
+          const o = document.createElement("option");
+          o.value = k; o.textContent = k || "(none)";
+          o.selected = k === (s.rel ? s.rel.kind : "");
+          rkind.appendChild(o);
+        }
+        const rto = document.createElement("select");
+        st.subjects.forEach((o2, j) => {
+          if (j === i) return;
+          const o = document.createElement("option");
+          o.value = String(j);
+          o.textContent = String.fromCharCode(65 + j) + " · " + o2.name;
+          o.selected = !!(s.rel && s.rel.to === j);
+          rto.appendChild(o);
+        });
+        const commitRel = () => {
+          s.rel = rkind.value ? { kind: rkind.value, to: parseInt(rto.value, 10) } : null;
+          write(); render();
+        };
+        rkind.onchange = commitRel;
+        rto.onchange = commitRel;
+        rrow.append(rk, rkind, rto);
+        box.appendChild(rrow);
+      }
       subjCard.appendChild(box);
     });
+    const addRow = document.createElement("div");
+    addRow.className = "row";
     const add = document.createElement("button");
-    add.textContent = "＋ Subject";
+    add.textContent = "＋ Person";
     add.onclick = () => {
       const n = st.subjects.length;
       st.subjects.push({ name: n === 1 ? "a second person" : "another person",
-                         pos: [n * 1.2 - 0.6, 0, -1.5 * n], height: 1.75, facing_deg: 0 });
+                         pos: [n * 1.2 - 0.6, 0, -1.5 * n], height: 1.75, facing_deg: 0,
+                         kind: "person", size: [0.6, 0.6], rel: null });
       sel = st.subjects.length - 1;
       write(); render();
     };
-    subjCard.appendChild(add);
+    const addObj = document.createElement("button");
+    addObj.textContent = "＋ Object";
+    addObj.title = "A bed, a lamp, a table: placed and named here, described in your "
+                 + "Subject or Surroundings text. The paragraph says WHERE it is.";
+    addObj.onclick = () => {
+      const n = st.subjects.length;
+      st.subjects.push({ name: "the object", pos: [1.5, 0, -1.0 * n], height: 0.8,
+                         facing_deg: 0, kind: "object", size: [1.0, 0.8], rel: null });
+      sel = st.subjects.length - 1;
+      write(); render();
+    };
+    addRow.append(add, addObj);
+    subjCard.appendChild(addRow);
   }
 
   function renderLatent() {
