@@ -126,6 +126,21 @@ css.textContent = `
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 14px;display:flex;
   align-items:center;gap:6px}
 .rn-ws-tab.cur{background:#242830;color:#fff;border-color:#3d434c}
+/* the PILL CONTROL, the Sick Ollie primitive the user asked to adopt: one
+   dark rounded box per setting, dim label left, bold value right, uniform
+   height, laid in a responsive grid. Unity comes from repetition. */
+.rn-ws-pillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:8px}
+.rn-ws-pill{display:flex;align-items:center;gap:10px;min-height:40px;
+  background:#101216;border:1px solid #2f333a;border-radius:8px;
+  padding:6px 12px;box-sizing:border-box}
+.rn-ws-pill>.k{font-size:12px;color:#8a919b;flex:none}
+.rn-ws-pill input,.rn-ws-pill select{flex:1;min-width:0;background:transparent;
+  border:none;outline:none;color:#e8ecf1;font-size:13px;font-weight:600;
+  text-align:right;padding:0}
+.rn-ws-pill select{appearance:auto;cursor:pointer}
+.rn-ws-pill .v{margin-left:auto;font-size:12px;color:#7f8792;flex:none}
+
 /* the ON/OFF switch: a sliding pill, the Sick Ollie affordance the user
    picked - state reads at a glance, green is on. Labelled choice buttons
    keep the rn-ws-on look; this class is only for pure on/off. */
@@ -8440,6 +8455,28 @@ function modelsBody(node, page) {
     mwrap.appendChild(b);
     return b;
   };
+  // pills flow in a grid; the grid appears where the first pill lands, so
+  // notes and other rows keep their document order around it
+  const pillMount = (box) => {
+    if (!box._grid || box._grid !== box.lastChild) {
+      const g = document.createElement("div");
+      g.className = "rn-ws-pillgrid";
+      box.appendChild(g);
+      box._grid = g;
+    }
+    return box._grid;
+  };
+  const pill = (box, label, control, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-pill";
+    if (hint) row.title = hint;
+    const lab = document.createElement("span");
+    lab.className = "k";
+    lab.textContent = label;
+    row.append(lab, control);
+    pillMount(box).appendChild(row);
+    return row;
+  };
   let body = mkBox("Rigs");
 
   const note = document.createElement("div");
@@ -8510,26 +8547,16 @@ function modelsBody(node, page) {
   const L = MODEL_LISTS
     || { checkpoints: [], unets: [], clips: [], clip_types: [], vaes: [] };
   const pickRow = (label, key, items, recentKey, hint) => {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const lab = document.createElement("span");
-    lab.className = "rn-ws-note";
-    lab.style.cssText = "flex:none;width:110px";
-    lab.textContent = label;
     const input = document.createElement("input");
     input.type = "text";
     input.value = rig[key];
     input.placeholder = "None";
     input.title = hint + " Click and type to search; recently used come first.";
-    input.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
-                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:12px;"
-                        + "padding:4px 7px";
     makePicker(input, () => items(), (v) => {
       rig[key] = v;
       writeCfg(node); render(node);
     }, { current: () => rig[key], emptyLabel: "none", recent: recentKey });
-    row.append(lab, input);
-    body.appendChild(row);
+    pill(body, label, input, hint);
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
   // workspace (the NovelAI chain). No files load; its numbers and prompt ride
@@ -8586,14 +8613,7 @@ function modelsBody(node, page) {
           + "LEAVE ON NONE with a checkpoint chosen and the checkpoint's own baked "
           + "CLIP is used.");
   {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const lab = document.createElement("span");
-    lab.className = "rn-ws-note";
-    lab.style.cssText = "flex:none;width:110px";
-    lab.textContent = "CLIP type";
     const sel = document.createElement("select");
-    sel.className = "rn-ws-res";
     for (const t of ["", ...L.clip_types]) {
       const o = document.createElement("option");
       o.value = t;
@@ -8605,8 +8625,7 @@ function modelsBody(node, page) {
               + "This also decides how the built-in render encodes prompts: krea2 "
               + "runs the Studio identity system, anything else encodes plain text.";
     sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); };
-    row.append(lab, sel);
-    body.appendChild(row);
+    pill(body, "CLIP type", sel);
   }
   pickRow("VAE", "vae", () => L.vaes, "vaes",
           "The VAE. Comes out on the workspace's vae output and through Paint Out. "
@@ -8724,35 +8743,19 @@ function modelsBody(node, page) {
                  + "named steps, cfg, sampler_name, scheduler and detailer_steps.";
   body.appendChild(sh);
   const numRow = (label, key, step, hint) => {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const lab = document.createElement("span");
-    lab.className = "rn-ws-note";
-    lab.style.cssText = "flex:none;width:110px";
-    lab.textContent = label;
     const inp = document.createElement("input");
     inp.type = "number";
     inp.step = String(step);
     inp.value = rig[key];
     inp.title = hint;
-    inp.style.cssText = "width:110px;background:#15171b;border:1px solid #33373d;"
-                      + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
     inp.addEventListener("change", () => {
       const v = parseFloat(inp.value);
       if (Number.isFinite(v)) { rig[key] = step === 1 ? Math.round(v) : v; writeCfg(node); }
     });
-    row.append(lab, inp);
-    body.appendChild(row);
+    pill(body, label, inp, hint);
   };
   const selRow = (label, key, items, hint) => {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const lab = document.createElement("span");
-    lab.className = "rn-ws-note";
-    lab.style.cssText = "flex:none;width:110px";
-    lab.textContent = label;
     const sel = document.createElement("select");
-    sel.className = "rn-ws-res";
     for (const v of items.length ? items : [rig[key]]) {
       const o = document.createElement("option");
       o.value = v;
@@ -8762,8 +8765,7 @@ function modelsBody(node, page) {
     }
     sel.title = hint;
     sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
-    row.append(lab, sel);
-    body.appendChild(row);
+    pill(body, label, sel, hint);
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
@@ -8771,22 +8773,12 @@ function modelsBody(node, page) {
     // an external engine names its own samplers, so these are free text notes
     // riding the sockets, not comfy's lists
     const txtRow = (label, key, hint) => {
-      const row = document.createElement("div");
-      row.className = "rn-ws-row";
-      const l2 = document.createElement("span");
-      l2.className = "rn-ws-note";
-      l2.style.cssText = "flex:none;width:110px";
-      l2.textContent = label;
       const inp = document.createElement("input");
       inp.type = "text";
       inp.value = rig[key];
       inp.title = hint;
-      inp.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px "
-                        + "solid #33373d;border-radius:4px;color:#e8ecf1;"
-                        + "font-size:12px;padding:4px 7px";
       inp.onchange = () => { rig[key] = inp.value; writeCfg(node); };
-      row.append(l2, inp);
-      body.appendChild(row);
+      pill(body, label, inp, hint);
     };
     txtRow("Sampler", "sampler",
            "Free text for an external engine's sampler name (NovelAI's names "
@@ -8852,28 +8844,20 @@ function modelsBody(node, page) {
   smRow.appendChild(smSeg);
   body.appendChild(smRow);
   if (M.sampler_mode === "internal") {
-    const seedRow = document.createElement("div");
-    seedRow.className = "rn-ws-row";
-    const slab = document.createElement("span");
-    slab.className = "rn-ws-note";
-    slab.style.cssText = "flex:none;width:110px";
-    slab.textContent = "Seed";
     const seed = document.createElement("input");
     seed.type = "number";
     seed.min = 0;
     seed.value = M.seed;
     seed.disabled = M.seed_random;
-    seed.style.cssText = "width:150px;background:#15171b;border:1px solid #33373d;"
-                       + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
     seed.addEventListener("change", () => {
       M.seed = Math.max(0, parseInt(seed.value, 10) || 0);
       writeCfg(node);
     });
+    const seedPill = pill(body, "Seed", seed);
     const state = document.createElement("span");
-    state.className = "rn-ws-note";
+    state.className = "v";
     state.textContent = M.seed_random ? "Random every run" : "Fixed";
-    seedRow.append(slab, seed, state);
-    body.appendChild(seedRow);
+    seedPill.appendChild(state);
     // the four-way seed console, the shape the user picked out of Sick Ollie:
     // random each run, pin a fresh random, reuse the last queued, copy it
     const act = document.createElement("div");
