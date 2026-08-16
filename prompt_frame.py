@@ -284,7 +284,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     subject, surroundings = _sentence(subject), _sentence(surroundings)
     placement = _sentence(placement)
 
-    camera = push in (PUSH_CAMERA, PUSH_BOTH)
+    camera_words = push in (PUSH_CAMERA, PUSH_BOTH)
     restate = push in (PUSH_RESTATE, PUSH_BOTH)
 
     parts = []
@@ -311,7 +311,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             parts.append(_cap(lead + subject if lead else subject) + ".")
             # the tight steps carry their framing in the lead-in, so the camera word goes
             # beside the subject rather than replacing wording that is already doing the job
-            if camera and CAMERA_CUE.get(framing):
+            if camera_words and CAMERA_CUE.get(framing):
                 parts.append(_cap(CAMERA_CUE[framing]) + ".")
         if surroundings:
             parts.append(_cap(surroundings) + ".")
@@ -328,7 +328,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             tail.append(subject)
         # the camera label replaces the descriptive cue rather than joining it: two
         # framing phrases in one clause read as two instructions, not a louder one
-        cue = (CAMERA_CUE.get(framing) if camera else None) or SCALE_CUE.get(framing)
+        cue = (CAMERA_CUE.get(framing) if camera_words else None) or SCALE_CUE.get(framing)
         if cue and subject:
             tail.append("," + " " + cue)
         if tail:
