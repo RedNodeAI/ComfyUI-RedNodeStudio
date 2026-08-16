@@ -1523,6 +1523,16 @@ class RedNodeStudioWorkspace:
         # Randomize re-rolls all of it together.
         run_seed = (_random.getrandbits(48) if cfg["models"]["seed_random"]
                     else cfg["models"]["seed"])
+        # the panel's "Use last queued" and "Copy last seed" read this: the
+        # run's seed goes out as an event the moment it is decided
+        try:
+            from server import PromptServer
+            PromptServer.instance.send_sync(
+                "rednode-workspace-seed",
+                {"node": str(unique_id or ""), "seed": int(run_seed)})
+        except Exception:
+            pass
+
         _rigs = cfg["models"]["rigs"]
         _ar = (_rigs[cfg["models"]["active"]] if _rigs
                else {"steps": 8, "cfg": 1.0, "sampler": "euler",

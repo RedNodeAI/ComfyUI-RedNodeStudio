@@ -8852,14 +8852,59 @@ function modelsBody(node, page) {
       M.seed = Math.max(0, parseInt(seed.value, 10) || 0);
       writeCfg(node);
     });
-    const rnd = document.createElement("button");
-    rnd.className = "rn-ws-segb" + (M.seed_random ? " on" : "");
-    rnd.style.cssText = "flex:none;width:auto;padding:0 14px";
-    rnd.textContent = "Randomize";
-    rnd.title = "A fresh seed every queue. Off uses the number, for repeatable runs.";
-    rnd.onclick = () => { M.seed_random = !M.seed_random; writeCfg(node); render(node); };
-    seedRow.append(slab, seed, rnd);
+    const state = document.createElement("span");
+    state.className = "rn-ws-note";
+    state.textContent = M.seed_random ? "Random every run" : "Fixed";
+    seedRow.append(slab, seed, state);
     body.appendChild(seedRow);
+    // the four-way seed console, the shape the user picked out of Sick Ollie:
+    // random each run, pin a fresh random, reuse the last queued, copy it
+    const act = document.createElement("div");
+    act.className = "rn-ws-row";
+    const mkSeedBtn = (label, tip, fn, opts = {}) => {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (opts.on ? " on" : "");
+      b.style.cssText = "flex:1;width:auto;padding:0 8px";
+      b.textContent = label;
+      b.title = tip;
+      b.disabled = !!opts.disabled;
+      if (b.disabled) b.style.opacity = ".4";
+      b.onclick = fn;
+      return b;
+    };
+    const last = node._rnLastSeed;
+    act.append(
+      mkSeedBtn("Random each run",
+        "A fresh seed every queue, the default.",
+        () => { M.seed_random = true; writeCfg(node); render(node); },
+        { on: M.seed_random }),
+      mkSeedBtn("New fixed random",
+        "Roll one random seed and PIN it, for repeatable A/B runs.",
+        () => {
+          M.seed = Math.floor(Math.random() * 2 ** 48);
+          M.seed_random = false;
+          writeCfg(node); render(node);
+        }),
+      mkSeedBtn("Use last queued",
+        last == null
+          ? "Becomes available after the first queue this session."
+          : "Pin the seed the last run actually used: " + last,
+        () => {
+          if (node._rnLastSeed == null) return;
+          M.seed = node._rnLastSeed;
+          M.seed_random = false;
+          writeCfg(node); render(node);
+        }, { disabled: last == null }));
+    body.appendChild(act);
+    if (last != null) {
+      const crow = document.createElement("div");
+      crow.className = "rn-ws-row";
+      const cp = mkSeedBtn("Copy last used seed: " + last,
+        "Copy it to the clipboard.",
+        () => { navigator.clipboard?.writeText(String(last)); });
+      crow.appendChild(cp);
+      body.appendChild(crow);
+    }
   }
 }
 
@@ -10395,6 +10440,19 @@ function build(node) {
 }
 
 // the server tells us which images a random tab actually rolled
+api.addEventListener("rednode-workspace-seed", (e) => {
+  // the run's seed, straight from the build: feeds "Use last queued" and
+  // "Copy last seed" on the Models tab, the Sick Ollie seed console the user
+  // asked ours to match
+  const d = e?.detail || {};
+  for (const n of allNodes()) {
+    if (n?.type === NODE_NAME && String(n.id) === String(d.node)) {
+      n._rnLastSeed = d.seed;
+      if (n._rnTab === "models") render(n);
+    }
+  }
+});
+
 api.addEventListener("rednode.workspace_picked", (e) => {
   const d = e.detail || {};
   const seen = new Set();
