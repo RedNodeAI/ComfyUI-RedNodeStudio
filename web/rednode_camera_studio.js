@@ -154,6 +154,32 @@ function autoLatentSize(st) {
   return [r(w), r(h), wr + ":" + hr + ", " + why];
 }
 
+// the Prompt Frame's simple chips as a studio camera, mirroring
+// camera_translate.camera_from_frame; the backend's copy is the truth
+const FRAMING_SHOTS = { "Portrait": [1.6, 65], "Half body": [2.0, 50], "Balanced": [3.0, 35],
+                        "Full scene": [4.5, 28], "Roomscale": [7.0, 24] };
+export function cameraFromFrame(framing, cameraHeight, subjectHeight = 1.7,
+                                subjectPos = [0, 0, 0], bearingDeg = 0) {
+  const [dist, focal] = FRAMING_SHOTS[framing] || FRAMING_SHOTS["Balanced"];
+  const face = subjectPos[1] + subjectHeight * 0.92;
+  const H = { "Worm's eye": [0.15, -60], "Low angle": [0.9, -30], "Slight low": [face - 0.3, -12],
+              "Eye level": [face, 0], "Slight high": [face + 0.4, 20],
+              "High angle": [subjectHeight + 1.5, 45], "Bird's eye": [subjectHeight + 2.5, 88] };
+  let [y, pitch] = H[cameraHeight] || H["Eye level"];
+  let ground;
+  if (!pitch) ground = dist;
+  else if (Math.abs(pitch) < 30) {
+    ground = dist;
+    y = Math.max(0.1, face + Math.tan(pitch * Math.PI / 180) * ground);
+  } else {
+    ground = Math.abs(y - face) / Math.tan(Math.abs(pitch) * Math.PI / 180);
+    ground = Math.max(Math.abs(pitch) >= 85 ? 0.05 : 0.35, Math.min(12, ground));
+  }
+  const yaw = bearingDeg * Math.PI / 180;
+  return { pos: [subjectPos[0] + Math.sin(yaw) * ground, y, subjectPos[2] + Math.cos(yaw) * ground],
+           target: 0, target_height: null, focal_mm: focal, roll_deg: 0, lock: true, aim: [0, 0, 0] };
+}
+
 // ---- the panel ---------------------------------------------------------------
 // S: { get(): state, set(state): void, onChange(): void, preview(state)->Promise<string> }
 export function buildStudio(host, S) {
@@ -186,8 +212,8 @@ export function buildStudio(host, S) {
   const legend = document.createElement("div");
   legend.className = "note";
   legend.textContent = "Drag a subject to move it, its arrow to turn it, the camera "
-    + "to move it. Wheel over the stage changes the lens. Up on the stage is away "
-    + "from the default camera (-z).";
+    + "to move it. Wheel over the stage changes the lens. Right-click the stage to "
+    + "reset the camera or bring everything back into view.";
   stageCard.appendChild(legend);
   cols.appendChild(stageCard);
 
@@ -468,14 +494,19 @@ export function buildStudio(host, S) {
     }
     e.preventDefault(); e.stopPropagation();
     const [wx, wz] = pxToWorld(px, py);
+    // snap to 5 cm and CLAMP inside the stage: a thing dragged off the edge
+    // was gone for good (the user's report), so the edge is a wall now
+    const maxX = STAGE_W / 2 / PX_PER_M - 0.4, maxZ = STAGE_H / 2 / PX_PER_M - 0.4;
     const snap = (v) => Math.round(v * 20) / 20;
+    const cx_ = (v) => Math.max(-maxX, Math.min(maxX, snap(v)));
+    const cz_ = (v) => Math.max(-maxZ, Math.min(maxZ, snap(v)));
     if (dragging.kind === "cam") {
-      st.camera.pos[0] = snap(wx); st.camera.pos[2] = snap(wz);
+      st.camera.pos[0] = cx_(wx); st.camera.pos[2] = cz_(wz);
     } else if (dragging.kind === "aim") {
-      st.camera.aim[0] = snap(wx); st.camera.aim[2] = snap(wz);
+      st.camera.aim[0] = cx_(wx); st.camera.aim[2] = cz_(wz);
     } else if (dragging.kind === "subj") {
-      st.subjects[dragging.i].pos[0] = snap(wx);
-      st.subjects[dragging.i].pos[2] = snap(wz);
+      st.subjects[dragging.i].pos[0] = cx_(wx);
+      st.subjects[dragging.i].pos[2] = cz_(wz);
     } else {
       const s = st.subjects[dragging.i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
@@ -492,6 +523,62 @@ export function buildStudio(host, S) {
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // right-click the stage: the house DOM menu, with the rescues - a camera
+  // dragged out of reach comes home, a scattered scene comes back in view,
+  // or the whole stage resets. Never LiteGraph.ContextMenu inside a panel.
+  canvas.addEventListener("contextmenu", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    document.querySelector(".rn-cs-menu")?.remove();
+    const m = document.createElement("div");
+    m.className = "rn-cs-menu";
+    m.style.cssText = "position:fixed;z-index:10000;display:flex;flex-direction:column;"
+      + "gap:5px;background:#1a1d22;border:1px solid #3a3f47;border-radius:6px;"
+      + "padding:8px;min-width:190px;font:12px 'Segoe UI',system-ui,sans-serif;"
+      + "color:#d6d9de;box-shadow:0 6px 20px rgba(0,0,0,.5);left:" + e.clientX
+      + "px;top:" + e.clientY + "px";
+    const mk = (label, fn) => {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.style.cssText = "background:#15171b;border:1px solid #33373d;border-radius:4px;"
+        + "color:#c8ccd2;cursor:pointer;font-size:12px;padding:5px 9px;text-align:left";
+      b.onmouseenter = () => { b.style.borderColor = "#4a8fe0"; b.style.color = "#fff"; };
+      b.onmouseleave = () => { b.style.borderColor = "#33373d"; b.style.color = "#c8ccd2"; };
+      b.onclick = () => { m.remove(); fn(); };
+      m.appendChild(b);
+    };
+    const prime = st.subjects[st.camera.target] || st.subjects[0];
+    mk("Reset camera (in front of subject)", () => {
+      st.camera.pos = [prime.pos[0], prime.pos[1] + prime.height * 0.92,
+                       prime.pos[2] + 3.0];
+      st.camera.lock = true;
+      write(); render();
+    });
+    mk("Bring everything back into view", () => {
+      const clampX = (v) => Math.max(-maxXv(), Math.min(maxXv(), v));
+      const clampZ = (v) => Math.max(-maxZv(), Math.min(maxZv(), v));
+      st.camera.pos[0] = clampX(st.camera.pos[0]); st.camera.pos[2] = clampZ(st.camera.pos[2]);
+      st.camera.aim[0] = clampX(st.camera.aim[0]); st.camera.aim[2] = clampZ(st.camera.aim[2]);
+      st.subjects.forEach((s) => { s.pos[0] = clampX(s.pos[0]); s.pos[2] = clampZ(s.pos[2]); });
+      write(); render();
+    });
+    mk("Reset the whole stage", () => {
+      const keep = { auto_latent: st.auto_latent, latent_mp: st.latent_mp,
+                     latent_batch: st.latent_batch, join: st.join, output: st.output };
+      st = normalise({ ...keep });
+      sel = 0;
+      write(); render();
+    });
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect();
+    if (r.bottom > innerHeight) m.style.top = Math.max(4, innerHeight - r.height - 8) + "px";
+    if (r.right > innerWidth) m.style.left = Math.max(4, innerWidth - r.width - 8) + "px";
+    const close = (ev) => {
+      if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("pointerdown", close, true); }
+    };
+    setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
+  });
+  const maxXv = () => STAGE_W / 2 / PX_PER_M - 0.4;
+  const maxZv = () => STAGE_H / 2 / PX_PER_M - 0.4;
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault(); e.stopPropagation();
     const f = st.camera.focal_mm;

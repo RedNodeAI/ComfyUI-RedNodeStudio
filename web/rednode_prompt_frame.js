@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { buildStudio, cameraFromFrame } from "./rednode_camera_studio.js";
 import { pinWidgetValues } from "./rednode_widget_values.js";
 
 // RedNode Prompt Frame — panel UI for RedNodePromptFrame.
@@ -38,6 +39,7 @@ const FIELDS = [
   "style", "style_extra", "subject", "surroundings", "framing",
   "placement_where", "placement_what", "placement",
   "lighting", "brightness", "light_and_colour", "framing_push", "camera_height",
+  "camera",
 ];
 
 const STYLE = `
@@ -143,6 +145,7 @@ const STYLE = `
   padding: 2px 12px 12px; }
 .rn-pf-sublabel { font-size: 11px; font-weight: 700; letter-spacing: .05em;
   color: #8f97a3; text-transform: uppercase; margin-top: 4px; }
+.rn-pf-studio { grid-column: 1 / -1; width: 100%; }
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 10px; align-items: start; }
 .rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -557,9 +560,81 @@ export function buildFrameEditor(wrap, F) {
   group("style", "Style", "the overall look and feel.", [styleRow, counted(styleExtra, 200, "Style wording")]);
   group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600, "Subject")]);
   group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300, "Surroundings")]);
-  group("framing", "Framing & placement", "how it's framed and positioned",
-        [frameChips, frameWrap, camLabel, camChips, camWrap, pushRow, placeRow,
-         placementRow]);
+  // CAMERA: the simple chips (framing = distance and lens, height = height and
+  // pitch) drive a Camera Studio state underneath; the studio, opened from the
+  // disclosure, is the advanced view and mounts FULL WIDTH below the columns.
+  // Push is retired (camera-first ordering IS the push); the placement
+  // dropdowns fold into the studio's relations, the typed placement stays.
+  const studioBar = el("div", "rn-pf-row");
+  const studioBtn = el("button", "rn-pf-btn", "\u25B8 Camera studio (advanced)");
+  studioBtn.title = "Open the Camera Studio: place people and objects on a top "
+                  + "view, aim the camera, set the lens. The chips above are "
+                  + "presets that reset it; anything you change in the studio "
+                  + "wins and writes the camera paragraph.";
+  const studioState = el("span", "hint2", "");
+  studioBar.appendChild(studioBtn);
+  studioBar.appendChild(studioState);
+  group("framing", "Camera", "framing, height, and the studio",
+        [frameChips, frameWrap, camLabel, camChips, camWrap, studioBar, placementRow]);
+  const studioHost = el("div", "rn-pf-studio");
+  studioHost.style.display = "none";
+  wrap.appendChild(studioHost);            // full width, under the columns
+  let studio = null;
+  const studioGet = () => {
+    const raw = F.get("camera");
+    if (raw && typeof raw === "object") return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      try { return JSON.parse(raw); } catch (e) { return null; }
+    }
+    return null;
+  };
+  const studioSet = (state) => {
+    F.set("camera", state ? JSON.stringify(state) : "");
+    F.dirty?.();
+    studioState.textContent = state ? "studio active" : "";
+  };
+  const seedStudioFromChips = () => {
+    // the simple chips REGENERATE the studio camera; the scene (people,
+    // objects) is kept if there is one, only the camera moves
+    const cur = studioGet();
+    const framing = framings[Number(frameRange.value)] ?? F.get("framing");
+    const height = heights[Number(camRange.value)] ?? (F.get("camera_height") || "Eye level");
+    const subj = (cur && Array.isArray(cur.subjects) && cur.subjects.length)
+      ? cur.subjects : [{ name: "the subject", pos: [0, 0, 0], height: 1.7,
+                          facing_deg: 0, kind: "person", size: [0.6, 0.6], rel: null }];
+    const target = (cur && cur.camera && typeof cur.camera.target === "number") ? cur.camera.target : 0;
+    const prime = subj[target] || subj[0];
+    const camPrev = cur && cur.camera ? cur.camera : null;
+    // keep the bearing the user chose in the studio (which side the camera is on)
+    let bearing = 0;
+    if (camPrev && Array.isArray(camPrev.pos)) {
+      bearing = Math.atan2(camPrev.pos[0] - prime.pos[0], camPrev.pos[2] - prime.pos[2]) * 180 / Math.PI;
+    }
+    const cam = cameraFromFrame(framing, height, prime.height, prime.pos, bearing);
+    cam.target = target;
+    const state = { ...(cur || {}), camera: cam, subjects: subj };
+    studioSet(state);
+    if (studio) studio.refresh();
+  };
+  const openStudio = () => {
+    const shown = studioHost.style.display !== "none";
+    studioHost.style.display = shown ? "none" : "";
+    studioBtn.textContent = (shown ? "\u25B8" : "\u25BE") + " Camera studio (advanced)";
+    if (!shown && !studio) {
+      if (!studioGet()) seedStudioFromChips();
+      studio = buildStudio(studioHost, {
+        get: () => studioGet() || {},
+        set: (state) => studioSet(state),
+        onChange: () => { changed(); },
+        preview: F.studioPreview || (async () => ""),
+      });
+    }
+  };
+  studioBtn.addEventListener("click", openStudio);
+  studioState.textContent = studioGet() ? "studio active" : "";
+  // the chips regenerate the studio camera whenever the studio is live
+  frameRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
+  camRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
   group("light", "Light & colour", "lighting mood and colours.",
         [lightRow, brightRow, counted(lac, 200, "Light and colour")]);
 
@@ -658,6 +733,7 @@ export function buildFrameEditor(wrap, F) {
       // a host may assemble richer values than its boxes show (the Prompts
       // tab joins its caption layer after the typed text here)
       for (const name of FIELDS) body[name] = (F.getPreview || F.get)(name);
+      if (body.camera && typeof body.camera === "object") body.camera = JSON.stringify(body.camera);
       // a host may keep wildcards unresolved (the Prompts tab does: the queue
       // rolls them with the run seed, so the stored text must keep the tokens)
       if (F.resolveWildcards === false) body.resolve_wildcards = false;

@@ -9372,6 +9372,15 @@ function promptsBody(node, body) {
         // the Auto sort button borrows the Auto Prompt's Ollama choice
         F.sortModel = () => cfg.auto?.model || "";
         F.sortUrl = () => cfg.auto?.url || "";
+        // the studio's own live paragraph, for the panel's CAMERA PROMPT card
+        F.studioPreview = async (state) => {
+          const r = await fetch("/rednode/camera_studio_preview", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(state),
+          });
+          const j = await r.json();
+          return j.prompt || "";
+        };
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
         box.appendChild(host);

@@ -273,8 +273,13 @@ def expand(text, seed=0, resolve_wildcards=True):
 
 
 def assemble(style, subject, surroundings, framing, placement, light_and_colour,
-             push=PUSH_OFF, camera_height="Eye level"):
-    """Order the parts for the chosen framing. Pure text; no rewriting of user words."""
+             push=PUSH_OFF, camera_height="Eye level", camera=None):
+    """Order the parts for the chosen framing. Pure text; no rewriting of user words.
+
+    `camera` is a Camera Studio state (dict with camera/subjects); when given,
+    its translator paragraph LEADS the prompt and stands in for the simple
+    camera-height stop, so one engine writes every camera word.
+    """
     style, light_and_colour = _sentence(style), _sentence(light_and_colour)
     subject, surroundings = _sentence(subject), _sentence(surroundings)
     placement = _sentence(placement)
@@ -287,9 +292,16 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     # camera instruction that arrives after the picture is already established
     # in the reader's head loses; in front, everything else is described from
     # that viewpoint. Eye level contributes nothing.
-    cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
+    cam = ""
+    if isinstance(camera, dict) and camera.get("camera"):
+        try:
+            cam = _ct.describe(camera["camera"], camera.get("subjects") or [])
+        except Exception:
+            cam = ""
+    if not cam:
+        cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
     if cam and (subject or surroundings):
-        parts.append(_cap(cam) + ".")
+        parts.append(_cap(cam) if cam.endswith(".") else _cap(cam) + ".")
     if style:
         parts.append(_cap(style) + ".")
 
@@ -444,6 +456,11 @@ class RedNodePromptFrame:
                                "rather wire it in."}),
                 # APPENDED, and it has to be. widgets_values is positional, so an input
                 # added higher up moves every value a saved workflow holds below it.
+                "camera": ("STRING", {
+                    "default": "", "multiline": True,
+                    "tooltip": "Camera Studio state as JSON (the panel writes it). "
+                               "When set, its paragraph leads the prompt and the "
+                               "simple camera height stop is superseded."}),
                 "camera_height": (CAMERA_HEIGHTS, {
                     "default": "Eye level",
                     "tooltip": "Where the camera stands, from the ground looking up "
@@ -481,15 +498,23 @@ class RedNodePromptFrame:
             text_color="default",
             style=STYLE_NONE, style_extra="",
             surroundings_in="", style_in="", subject_in="", light_and_colour_in="",
-            framing_push=PUSH_OFF, camera_height="Eye level"):
+            framing_push=PUSH_OFF, camera_height="Eye level", camera=""):
         style_text = _join_in(block(style), style_extra, style_in)
+        cam_state = None
+        if isinstance(camera, str) and camera.strip():
+            try:
+                cam_state = json.loads(camera)
+            except ValueError:
+                cam_state = None
+        elif isinstance(camera, dict):
+            cam_state = camera
         subject = _join_in(subject, subject_in)
         surroundings = _join_in(surroundings, surroundings_in)
         placed = build_placement(placement_where, placement_what, placement)
         lit = _join_in(lighting_text(lighting), exposure(brightness), light_and_colour,
                        light_and_colour_in)
         prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
-                          framing_push, camera_height)
+                          framing_push, camera_height, cam_state)
         prompt = expand(prompt, seed, resolve_wildcards)
         words = len(prompt.split())
 
@@ -547,7 +572,7 @@ try:
     _FRAME_FIELDS = ("subject", "surroundings", "placement", "light_and_colour",
                      "framing", "style", "style_extra", "lighting", "brightness",
                      "framing_push", "placement_where", "placement_what",
-                     "camera_height")
+                     "camera_height", "camera")
 
     def _user_preset_path():
         import folder_paths as _fp
@@ -624,7 +649,8 @@ try:
                 seed=data.get("seed", 0),
                 resolve_wildcards=data.get("resolve_wildcards", True),
                 framing_push=data.get("framing_push", PUSH_OFF),
-                camera_height=data.get("camera_height", "Eye level"))
+                camera_height=data.get("camera_height", "Eye level"),
+                camera=data.get("camera", ""))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,
