@@ -81,46 +81,30 @@ SCALE_CUE = {
 # 20-40% while the geometry is being solved, since references carry composition.
 CAMERA_HEIGHTS = ["Worm's eye", "Low angle", "Slight low", "Eye level",
                   "Slight high", "High angle", "Bird's eye"]
-CAMERA_HEIGHT_TEXT = {
-    "Worm's eye": (
-        "Extreme low-angle photograph, a worm's-eye view. The camera sits on the "
-        "ground and points steeply upward at around 60 degrees. The subject stands "
-        "above the camera and looks down toward the lens; the underside of the chin "
-        "and the soles of the shoes are nearest the camera, the head and shoulders "
-        "recede upward, and the sky or ceiling fills the background behind them. "
-        "Pronounced upward foreshortening. Shot with a 24mm wide-angle lens"),
-    "Low angle": (
-        "Low-angle photograph. The camera is positioned below the subject's eye "
-        "level, roughly at waist height, and tilted upward at around 30 degrees. "
-        "The subject is above the camera and looks down toward the lens; the "
-        "underside of the jaw is visible and the sky or ceiling shows behind the "
-        "head. Clear upward perspective. Shot with a 35mm lens"),
-    "Slight low": (
-        "Slightly low-angle photograph, the camera a little below eye level and "
-        "tilted gently upward toward the face; a hint of the ceiling or sky "
-        "behind the head, subtle heroic perspective, natural proportions. Shot "
-        "with a 50mm lens"),
-    "Eye level": "",
-    "Slight high": (
-        "High-angle portrait photograph, the camera around 40 cm above the "
-        "subject's eye level and tilted downward about 20 degrees toward the "
-        "face. The subject raises their eyes toward the camera; the top of the "
-        "hair and shoulders slightly visible, subtle elevated perspective, "
-        "natural proportions. Shot with a 50mm lens"),
-    "High angle": (
-        "Strong high-angle photograph. The camera is positioned about 1.5 meters "
-        "above the subject's head and tilted downward at 45 degrees. The subject "
-        "stands beneath the camera looking upward into the lens; the top planes "
-        "of the head and shoulders are clearly visible and the floor surrounds "
-        "the body. Strong but realistic perspective. Shot with a 35mm lens"),
-    "Bird's eye": (
-        "Direct overhead photograph. The camera is mounted vertically above the "
-        "subject and points straight down at 90 degrees, its optical axis "
-        "perpendicular to the floor. The subject is directly beneath the lens; "
-        "the top of the head and shoulders are seen from above and the floor "
-        "fills the entire background. True top-down perspective, not an oblique "
-        "high-angle view. Shot with a 28mm wide-angle lens"),
-}
+# The words come from the Camera Studio translator (camera_translate.py), the
+# one source of truth the studio node also runs - tuned against real renders on
+# 2026-08-17 (CAMERA_STUDIO.md). This table is built from it at import: the
+# frame's Camera height dial and the studio can never disagree about a stop.
+try:
+    from . import camera_translate as _ct
+except ImportError:  # loaded as a plain file (tests)
+    import camera_translate as _ct
+
+
+def _camera_stop_text(stop):
+    if stop == "Eye level":
+        return ""
+    cam = _ct.preset_camera(stop)
+    subj = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7, "facing_deg": 0}]
+    # the frame wants only the vertical block and the lens: the subject's
+    # facing and distance sentence belongs to the studio, where the user placed
+    # a real camera; here the stop is a viewpoint, not a blocking
+    geo = _ct.camera_geometry(cam["pos"], [0, 1.7 * 0.92, 0])
+    block = _ct.vertical_block(geo, cam["pos"][1], 1.7)
+    return block + " " + _ct.lens_phrase(cam["focal_mm"])
+
+
+CAMERA_HEIGHT_TEXT = {stop: _camera_stop_text(stop) for stop in CAMERA_HEIGHTS}
 
 # PUSHING THE FRAMING HARDER. Two levers, because the framing loses to two different
 # things and each needs its own answer.
