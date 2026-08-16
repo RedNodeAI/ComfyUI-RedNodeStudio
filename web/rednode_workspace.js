@@ -9175,6 +9175,7 @@ async function fetchFrameDef() {
       opts: {
         style: listOf("style"), framing: listOf("framing"),
         framing_push: listOf("framing_push"),
+        camera_height: listOf("camera_height"),
         placement_where: listOf("placement_where"),
         placement_what: listOf("placement_what"), lighting: listOf("lighting"),
         brightness_min: all.brightness?.[1]?.min ?? -3,
@@ -9186,6 +9187,7 @@ async function fetchFrameDef() {
         subject: "", surroundings: "",
         framing: defOf("framing") ?? "Balanced",
         framing_push: defOf("framing_push") ?? "Off",
+        camera_height: defOf("camera_height") ?? "Eye level",
         placement_where: defOf("placement_where") ?? "None",
         placement_what: defOf("placement_what") ?? "None",
         placement: "", lighting: defOf("lighting") ?? "None",

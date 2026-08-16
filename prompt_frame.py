@@ -61,6 +61,25 @@ SCALE_CUE = {
     "Roomscale": "small in the distance",
 }
 
+# CAMERA HEIGHT, the user's ask (2026-08-17): the framing slider is zoom, this is
+# where the camera stands - from the ground looking up to straight down. Five
+# stops. The wording deliberately describes what the camera would SEE from
+# there (the sky behind the head, the floor around the feet), because Krea 2's
+# natural-language encoder answers consequences far more reliably than the
+# old "from below" / "from above" tags it half-ignores. Eye level says nothing.
+CAMERA_HEIGHTS = ["Worm's eye", "Low angle", "Eye level", "High angle", "Bird's eye"]
+CAMERA_HEIGHT_TEXT = {
+    "Worm's eye": ("shot from a worm's-eye view, the camera on the ground looking "
+                   "steeply up, figures towering overhead against the sky"),
+    "Low angle": ("shot from a low angle, the camera below eye level looking up, "
+                  "the sky and ceiling visible behind the subject"),
+    "Eye level": "",
+    "High angle": ("shot from a high angle, the camera above eye level looking down, "
+                   "the ground visible around the subject's feet"),
+    "Bird's eye": ("shot from a bird's-eye view, the camera far overhead looking "
+                   "straight down, the whole scene laid out below like a map"),
+}
+
 # PUSHING THE FRAMING HARDER. Two levers, because the framing loses to two different
 # things and each needs its own answer.
 #
@@ -228,7 +247,7 @@ def expand(text, seed=0, resolve_wildcards=True):
 
 
 def assemble(style, subject, surroundings, framing, placement, light_and_colour,
-             push=PUSH_OFF):
+             push=PUSH_OFF, camera_height="Eye level"):
     """Order the parts for the chosen framing. Pure text; no rewriting of user words."""
     style, light_and_colour = _sentence(style), _sentence(light_and_colour)
     subject, surroundings = _sentence(subject), _sentence(surroundings)
@@ -271,6 +290,11 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             joined = " ".join(t for t in tail if t).replace(" ,", ",")
             parts.append(_cap(joined) + ".")
 
+    # the camera's height, one sentence after the subject and before the light:
+    # geometry beside the thing it frames, never buried after the palette
+    cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
+    if cam and (subject or surroundings):
+        parts.append(_cap(cam) + ".")
     if light_and_colour:
         parts.append(_cap(light_and_colour) + ".")
     # LAST, after the light: the point is to hold the end of the prompt, and anything
@@ -392,6 +416,13 @@ class RedNodePromptFrame:
                                "rather wire it in."}),
                 # APPENDED, and it has to be. widgets_values is positional, so an input
                 # added higher up moves every value a saved workflow holds below it.
+                "camera_height": (CAMERA_HEIGHTS, {
+                    "default": "Eye level",
+                    "tooltip": "Where the camera stands, from the ground looking up "
+                               "to straight down. Eye level adds nothing. The framing "
+                               "slider is zoom; this is height. Wordings describe what "
+                               "the camera sees from there, which is what a "
+                               "natural-language model actually obeys."}),
                 "framing_push": (FRAMING_PUSH, {
                     "default": PUSH_OFF,
                     "tooltip": "Push the framing harder when a long prompt is talking over "
@@ -416,7 +447,7 @@ class RedNodePromptFrame:
             text_color="default",
             style=STYLE_NONE, style_extra="",
             surroundings_in="", style_in="", subject_in="", light_and_colour_in="",
-            framing_push=PUSH_OFF):
+            framing_push=PUSH_OFF, camera_height="Eye level"):
         style_text = _join_in(block(style), style_extra, style_in)
         subject = _join_in(subject, subject_in)
         surroundings = _join_in(surroundings, surroundings_in)
@@ -424,7 +455,7 @@ class RedNodePromptFrame:
         lit = _join_in(lighting_text(lighting), exposure(brightness), light_and_colour,
                        light_and_colour_in)
         prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
-                          framing_push)
+                          framing_push, camera_height)
         prompt = expand(prompt, seed, resolve_wildcards)
         words = len(prompt.split())
 
@@ -481,7 +512,8 @@ try:
 
     _FRAME_FIELDS = ("subject", "surroundings", "placement", "light_and_colour",
                      "framing", "style", "style_extra", "lighting", "brightness",
-                     "framing_push", "placement_where", "placement_what")
+                     "framing_push", "placement_where", "placement_what",
+                     "camera_height")
 
     def _user_preset_path():
         import folder_paths as _fp
@@ -557,7 +589,8 @@ try:
                 style_extra=data.get("style_extra", ""),
                 seed=data.get("seed", 0),
                 resolve_wildcards=data.get("resolve_wildcards", True),
-                framing_push=data.get("framing_push", PUSH_OFF))
+                framing_push=data.get("framing_push", PUSH_OFF),
+                camera_height=data.get("camera_height", "Eye level"))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,

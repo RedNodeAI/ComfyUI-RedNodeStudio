@@ -37,7 +37,7 @@ const LOOK_FIELDS = ["font_size", "text_color"];
 const FIELDS = [
   "style", "style_extra", "subject", "surroundings", "framing",
   "placement_where", "placement_what", "placement",
-  "lighting", "brightness", "light_and_colour", "framing_push",
+  "lighting", "brightness", "light_and_colour", "framing_push", "camera_height",
 ];
 
 const STYLE = `
@@ -141,6 +141,8 @@ const STYLE = `
 .rn-pf-box > .head:hover .car { color: #fff; }
 .rn-pf-box > .body { display: flex; flex-direction: column; gap: 8px;
   padding: 2px 12px 12px; }
+.rn-pf-sublabel { font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  color: #8f97a3; text-transform: uppercase; margin-top: 4px; }
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 10px; align-items: start; }
 .rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -363,6 +365,39 @@ export function buildFrameEditor(wrap, F) {
   frameRange.addEventListener("input", drawChips);
 
 
+  // ---- camera height: the same chips + slider as the framing, right beneath it.
+  // Framing is zoom; this is where the camera stands, ground to overhead.
+  const heights = F.opts.camera_height || ["Worm's eye", "Low angle", "Eye level",
+                                           "High angle", "Bird's eye"];
+  const camChips = el("div", "rn-pf-chips");
+  const camWrap = el("div", "rn-pf-slider");
+  const camRange = document.createElement("input");
+  camRange.type = "range";
+  camRange.min = "0"; camRange.max = String(Math.max(0, heights.length - 1));
+  camRange.step = "1";
+  camRange.value = String(Math.max(0, heights.indexOf(F.get("camera_height") || "Eye level")));
+  const camVal = el("div", "rn-pf-val", F.get("camera_height") || "Eye level");
+  camWrap.appendChild(camRange); camWrap.appendChild(camVal);
+  const camLabel = el("div", "rn-pf-sublabel", "Camera height");
+  const drawCamChips = () => {
+    camChips.replaceChildren();
+    const cur = F.get("camera_height") || "Eye level";
+    heights.forEach((h, i) => {
+      const c = el("div", "rn-pf-chip" + (cur === h ? " on" : ""));
+      c.appendChild(el("span", null, h));
+      c.title = "Camera at " + h.toLowerCase() + ".";
+      c.addEventListener("click", () => {
+        camRange.value = String(i);
+        camRange.dispatchEvent(new Event("input", { bubbles: true }));
+        camRange.dispatchEvent(new Event("change", { bubbles: true }));
+        drawCamChips();
+      });
+      camChips.appendChild(c);
+    });
+  };
+  drawCamChips();
+  camRange.addEventListener("input", drawCamChips);
+
   // Directly under the slider, because it does nothing except make that slider louder.
   const pushRow = el("div", "rn-pf-row");
   pushRow.appendChild(el("label", null, "Push"));
@@ -524,7 +559,8 @@ export function buildFrameEditor(wrap, F) {
   group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600, "Subject")]);
   group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300, "Surroundings")]);
   group("framing", "Framing & placement", "how it's framed and positioned",
-        [frameChips, frameWrap, pushRow, placeRow, placementRow]);
+        [frameChips, frameWrap, camLabel, camChips, camWrap, pushRow, placeRow,
+         placementRow]);
   group("light", "Light & colour", "lighting mood and colours.",
         [lightRow, brightRow, counted(lac, 200, "Light and colour")]);
 
@@ -580,6 +616,7 @@ export function buildFrameEditor(wrap, F) {
     F.set("surroundings", surroundings.value);
     F.set("framing", framings[Number(frameRange.value)] ?? F.get("framing"));
     F.set("framing_push", pushSel.value);
+    F.set("camera_height", heights[Number(camRange.value)] ?? F.get("camera_height"));
     F.set("placement_where", whereSel.value);
     F.set("placement_what", whatSel.value);
     F.set("placement", placement.value);
@@ -587,6 +624,7 @@ export function buildFrameEditor(wrap, F) {
     F.set("brightness", Number(brightRange.value));
     F.set("light_and_colour", lac.value);
     frameVal.textContent = F.get("framing");
+    camVal.textContent = F.get("camera_height") || "Eye level";
     brightVal.textContent = brightLabel(Number(brightRange.value));
   }
 
@@ -598,6 +636,10 @@ export function buildFrameEditor(wrap, F) {
     const fi = framings.indexOf(F.get("framing"));
     if (fi >= 0) frameRange.value = String(fi);
     pushSel.value = F.get("framing_push");
+    const ci = heights.indexOf(F.get("camera_height") || "Eye level");
+    if (ci >= 0) camRange.value = String(ci);
+    camVal.textContent = F.get("camera_height") || "Eye level";
+    drawCamChips();
     whereSel.value = F.get("placement_where");
     whatSel.value = F.get("placement_what");
     placement.value = F.get("placement") || "";
