@@ -91,7 +91,8 @@ def parse_state(config_json):
         })
     if not subjects:
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
-                     "facing_deg": 0}]
+                     "facing_deg": 0, "kind": "person", "rel": None,
+                     "size": [0.6, 0.6]}]
     if camera["target"] >= len(subjects) or subjects[camera["target"]]["kind"] != "person":
         people = [i for i, x in enumerate(subjects) if x["kind"] == "person"]
         camera["target"] = people[0] if people else 0
@@ -102,9 +103,26 @@ def parse_state(config_json):
             # angle, lens and the scene's spread, at a pixel budget. Off by
             # default (the house rule); on, wire the latent output into the
             # sampler instead of an Empty Latent and the frame follows the shot.
+            # the zoom LoRA (the user's zoom_krea2_loraholic): controlled from
+            # the camera, not the LoRA tab. mode: off | auto (from shot size) | manual
+            "zoom_lora": str(d.get("zoom_lora") or ""),
+            "zoom_mode": (d.get("zoom_mode") if d.get("zoom_mode") in ("off", "auto", "manual")
+                          else "off"),
+            "zoom_strength": num(d.get("zoom_strength"), 0.0, -20.0, 20.0),
             "auto_latent": bool(d.get("auto_latent")),
             "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
             "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
+
+
+def resolve_zoom(st):
+    """{name, strength} for the zoom LoRA this state asks for, or None."""
+    if st.get("zoom_mode", "off") == "off" or not st.get("zoom_lora"):
+        return None
+    if st["zoom_mode"] == "auto":
+        strength = _ct.auto_zoom_strength(st["camera"], st["subjects"])
+    else:
+        strength = float(st.get("zoom_strength", 0.0))
+    return {"name": st["zoom_lora"], "strength": strength}
 
 
 class RedNodeCameraStudio:
@@ -142,7 +160,9 @@ class RedNodeCameraStudio:
             out = (cam_text + " " + body) if st["join"] == "lead" else (body + " " + cam_text)
         else:
             out = cam_text
+        zoom = resolve_zoom(st)
         state_out = json.dumps({"camera": st["camera"], "subjects": st["subjects"],
+                                "zoom": zoom,
                                 "geometry": _ct.camera_geometry(
                                     st["camera"]["pos"],
                                     [st["subjects"][st["camera"]["target"]]["pos"][0],

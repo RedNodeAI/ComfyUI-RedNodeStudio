@@ -70,6 +70,7 @@ const DEFAULT = () => ({
   subjects: [{ name: "the subject", pos: [0, 0, 0], height: 1.7, facing_deg: 0 }],
   output: "krea2", join: "lead",
   auto_latent: false, latent_mp: 1.0, latent_batch: 1,
+  zoom_lora: "", zoom_mode: "off", zoom_strength: 0,
 });
 
 function normalise(d) {
@@ -100,6 +101,9 @@ function normalise(d) {
     if (typeof d.output === "string") o.output = d.output;
     if (d.join === "trail") o.join = "trail";
     if (d.auto_latent === true) o.auto_latent = true;
+    if (typeof d.zoom_lora === "string") o.zoom_lora = d.zoom_lora;
+    if (["off", "auto", "manual"].includes(d.zoom_mode)) o.zoom_mode = d.zoom_mode;
+    if (typeof d.zoom_strength === "number") o.zoom_strength = d.zoom_strength;
     if (typeof d.latent_mp === "number") o.latent_mp = d.latent_mp;
     if (typeof d.latent_batch === "number") o.latent_batch = d.latent_batch;
   }
@@ -147,6 +151,27 @@ function suggestAspect(st) {
   if (widthM < 1.6) return [4, 5, "a close portrait: near square"];
   if (widthM >= 4.5) return [3, 2, "a wide view: landscape"];
   return [3, 4, "the default portrait frame"];
+}
+function autoZoomStrength(st) {
+  const cam = st.camera;
+  const prime = st.subjects[cam.target] || st.subjects[0];
+  const face = [prime.pos[0], prime.pos[1] + prime.height * 0.92, prime.pos[2]];
+  const dist = Math.hypot(face[0] - cam.pos[0], face[1] - cam.pos[1], face[2] - cam.pos[2]);
+  const widthM = 2 * dist * Math.tan((fovDeg(cam.focal_mm) / 2) * Math.PI / 180);
+  const lo = Math.log(0.5), hi = Math.log(8.0);
+  const tt = (Math.log(Math.max(0.5, Math.min(8, widthM))) - lo) / (hi - lo);
+  return Math.round((12 - tt * 22) * 0.85 * 10) / 10;
+}
+let LORA_LIST = null;
+async function fetchLoras() {
+  if (LORA_LIST) return LORA_LIST;
+  try {
+    const r = await fetch("/object_info/LoraLoader");
+    const d = await r.json();
+    const v = d?.LoraLoader?.input?.required?.lora_name?.[0];
+    LORA_LIST = Array.isArray(v) ? v : [];
+  } catch (e) { LORA_LIST = []; }
+  return LORA_LIST;
 }
 function autoLatentSize(st) {
   const [wr, hr, why] = suggestAspect(st);
@@ -707,6 +732,69 @@ export function buildStudio(host, S) {
       chips.appendChild(c);
     }
     camCard.appendChild(chips);
+    // ZOOM LORA, the user's ask: a zoom LoRA is a camera control in all but
+    // name (zoom_krea2_loraholic, about -10 wide to +12 tight), so it lives
+    // here. Off, Auto (strength from the shot size, so LoRA and words agree),
+    // or Manual with the slider. The workspace applies it as one extra slot
+    // on the rig's stack when this prompt is active.
+    const zk = document.createElement("div");
+    zk.className = "note";
+    zk.textContent = "Zoom LoRA";
+    camCard.appendChild(zk);
+    const zrow = document.createElement("div");
+    zrow.className = "row";
+    const zsel = document.createElement("select");
+    zsel.style.cssText = "flex:1;min-width:0;max-width:260px";
+    const fillZ = (list) => {
+      zsel.replaceChildren();
+      const o0 = document.createElement("option");
+      o0.value = ""; o0.textContent = "(pick a zoom LoRA)";
+      zsel.appendChild(o0);
+      const names = [...new Set([...(list || []), ...(st.zoom_lora ? [st.zoom_lora] : [])])];
+      names.sort((a, b) => (/zoom/i.test(b) - /zoom/i.test(a)) || a.localeCompare(b));
+      for (const nme of names) {
+        const o = document.createElement("option");
+        o.value = nme; o.textContent = nme.replace(/\.safetensors$/i, "");
+        o.selected = nme === st.zoom_lora;
+        zsel.appendChild(o);
+      }
+    };
+    fillZ(LORA_LIST);
+    if (!LORA_LIST) fetchLoras().then((l) => fillZ(l));
+    zsel.title = "Which LoRA is the zoom. It joins the rig's LoRA stack for this "
+               + "prompt at the strength below, applied by the workspace.";
+    zsel.onchange = () => {
+      st.zoom_lora = zsel.value;
+      if (st.zoom_lora && st.zoom_mode === "off") st.zoom_mode = "auto";
+      write(); render();
+    };
+    zrow.appendChild(zsel);
+    const modes = document.createElement("div");
+    modes.className = "chips";
+    for (const [v, l] of [["off", "Off"], ["auto", "Auto"], ["manual", "Manual"]]) {
+      const c = document.createElement("div");
+      c.className = "chip" + (st.zoom_mode === v ? " on" : "");
+      c.textContent = l;
+      c.title = v === "auto" ? "Strength follows the shot size: close pushes in, wide pulls out."
+              : v === "manual" ? "Set the strength yourself." : "The zoom LoRA is not applied.";
+      c.onclick = () => { st.zoom_mode = v; write(); render(); };
+      modes.appendChild(c);
+    }
+    zrow.appendChild(modes);
+    camCard.appendChild(zrow);
+    if (st.zoom_mode !== "off" && st.zoom_lora) {
+      if (st.zoom_mode === "manual") {
+        camCard.appendChild(slider("Strength", -10, 12, 0.1, () => st.zoom_strength,
+          (v) => { st.zoom_strength = v; }, (v) => (v > 0 ? "+" : "") + v.toFixed(1)));
+      } else {
+        const zn = document.createElement("div");
+        zn.className = "note";
+        const zs = autoZoomStrength(st);
+        zn.textContent = "Auto strength " + (zs > 0 ? "+" : "") + zs.toFixed(1)
+          + " for this shot (close pushes in, wide pulls out)";
+        camCard.appendChild(zn);
+      }
+    }
   }
 
   function renderSubjects() {

@@ -524,3 +524,37 @@ def camera_from_frame(framing="Balanced", camera_height="Eye level",
            subject_pos[2] + math.cos(yaw) * ground]
     return {"pos": pos, "target": 0, "target_height": None,
             "focal_mm": focal, "roll_deg": 0, "lock": True, "aim": [0, 0, 0]}
+
+
+# ---------------------------------------------------------------- zoom LoRA
+# The user's zoom LoRA (zoom_krea2_loraholic) is a camera control in all but
+# name: positive strength pushes in, negative pulls out, and it is strong -
+# the useful range runs about -10 (wide) to +12 (tight). auto_zoom_strength
+# maps the camera's shot size onto that range so the LoRA and the words agree:
+# a face close-up leans on the LoRA to push in, a wide view leans on it to
+# pull out, and the balanced middle leaves it near zero.
+ZOOM_MIN, ZOOM_MAX = -10.0, 12.0
+
+
+def auto_zoom_strength(camera, subjects):
+    """A zoom-LoRA strength for this camera, from the frame width at the subject."""
+    if not subjects:
+        subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
+                     "facing_deg": 0}]
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    cpos = [float(x) for x in camera.get("pos", [0, face[1], 3.0])]
+    focal = float(camera.get("focal_mm", 35))
+    dist = _len(_v(cpos, face))
+    width_m = 2.0 * dist * math.tan(math.radians(fov_deg(focal) / 2.0))
+    # width of frame at the subject: ~0.6 m is a tight face, ~2 m a figure,
+    # ~6 m a wide room. Log scale between them onto the LoRA's range.
+    lo, hi = math.log(0.5), math.log(8.0)
+    t = (math.log(max(0.5, min(8.0, width_m))) - lo) / (hi - lo)   # 0 tight .. 1 wide
+    strength = ZOOM_MAX - t * (ZOOM_MAX - ZOOM_MIN)
+    # gentle around the middle: the balanced shot should not lean on the LoRA
+    return round(strength * 0.85, 1)

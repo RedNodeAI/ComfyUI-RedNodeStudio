@@ -2049,6 +2049,27 @@ class RedNodeStudioWorkspace:
         lora_clip = clip
         raw_model = model            # the wired input, kept: the paint branch starts here
         lc = cfg["loras"]
+        # THE CAMERA'S ZOOM LORA: the active prompt row's Camera Studio may
+        # ask for a zoom LoRA at a strength (auto from the shot size, or set
+        # by hand). It joins the rig's stack as one extra slot for this run,
+        # so the camera controls it from the camera, not the LoRA tab.
+        _zoom_slot = None
+        try:
+            _zrow = prompt_row_for(cfg["models"], cfg["prompts"])
+            _zfr = (_zrow or {}).get("frame") or {}
+            _zcam = _zfr.get("camera")
+            if isinstance(_zcam, str) and _zcam.strip():
+                from .camera_studio import parse_state as _cs_parse, resolve_zoom as _cs_zoom
+                _zoom = _cs_zoom(_cs_parse(_zcam))
+                if _zoom and _zoom.get("name"):
+                    _zoom_slot = {"name": _zoom["name"], "strength": float(_zoom["strength"]),
+                                  "enabled": True, "type": "lora"}
+                    print("[RedNode Workspace] camera zoom LoRA: %s @ %.1f"
+                          % (_zoom["name"], _zoom["strength"]), flush=True)
+        except Exception as _ze:
+            print("[RedNode Workspace] camera zoom LoRA skipped: %s" % _ze, flush=True)
+        if _zoom_slot is not None:
+            lc = dict(lc, on=True, slots=list(lc["slots"]) + [_zoom_slot])
         n_lora = sum(1 for x in lc["slots"] if x.get("type") != "title")
         if model is not None and lc["on"] and lc["slots"]:
             # the CLIP goes in too when it is wired: plenty of LoRAs carry text
