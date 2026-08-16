@@ -155,14 +155,23 @@ def vertical_block(geo, cam_y, subject_height, subject_word="the subject",
                 "of the shoes are nearest the camera, the head and shoulders recede "
                 "upward, and the sky or ceiling fills the background. Pronounced upward "
                 "foreshortening." % (where, int(round(steep)), _cap(S)))
+    # LOW SIDE, rewritten from the 2026-08-17 lab sweep: the first wording said
+    # the subject "looks down toward the lens" and named "the underside of the
+    # jaw", and Krea 2 read those as a downward-looking scene and flipped the
+    # shot HIGH. The worm's-eye block that worked leads with what is NEAREST the
+    # camera and what FILLS THE BACKGROUND (sky), never with a downward verb, so
+    # both low stops now follow that template. Nothing here says "down".
     if steep >= 25:
-        return ("Low-angle photograph. The camera is %s and tilted upward at around %d "
-                "degrees. %s is above the camera and looks down toward the lens; the "
-                "underside of the jaw is visible and the sky or ceiling shows behind the "
-                "head. Clear upward perspective." % (where, int(round(steep)), _cap(S)))
-    return ("Slightly low-angle photograph. The camera is %s and tilted gently upward "
-            "toward %s face; a hint of the ceiling or sky behind the head, subtle heroic "
-            "perspective, natural proportions." % (where, ps))
+        return ("Low-angle photograph, shot from below. The camera is %s, near the "
+                "ground, pointing upward at around %d degrees toward %s. %s stands "
+                "tall above the camera; %s legs and torso are nearest the lens and "
+                "loom large, the head is furthest away and smaller, and the sky or "
+                "ceiling fills the space above and behind %s. Clear upward "
+                "perspective." % (where, int(round(steep)), S, _cap(S), ps, po))
+    return ("Slightly low-angle photograph, the camera %s and pointing gently upward "
+            "toward %s. %s chin and jawline sit slightly nearer the lens than %s eyes, "
+            "and open sky or ceiling shows above and behind the head, subtle heroic "
+            "perspective, natural proportions." % (where, S, _cap(ps), ps))
 
 
 def _cap(t):
