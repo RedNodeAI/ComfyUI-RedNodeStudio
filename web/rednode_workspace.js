@@ -406,6 +406,11 @@ css.textContent = `
 .rn-ws-tab .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
 .rn-ws-body{background:#242830;border:1px solid #3d434c;border-radius:0 7px 7px 7px;padding:8px;
   display:flex;flex-direction:column;gap:7px;flex:1 1 auto;min-height:0;overflow:auto}
+/* a stretched node must not stretch the reading: every tab's content stays a
+   centred column at a comfortable width, so rows stop running the full span
+   of a wide node. The Paint tab opts out - its canvas earns the width. */
+.rn-ws-body:not(.full)>*{max-width:940px;width:100%;box-sizing:border-box;
+  margin-left:auto;margin-right:auto}
 .rn-ws-row{display:flex;gap:7px;align-items:center;flex:none}
 .rn-ws-row .hint{font-size:11.5px;opacity:.5;line-height:1.4;flex:1}
 .rn-ws-on{background:#15171b;border:1px solid #33373d;border-radius:4px;color:#9aa0a8;cursor:pointer;
@@ -10060,7 +10065,7 @@ export function render(node) {
   host.appendChild(tabs);
 
   const body = document.createElement("div");
-  body.className = "rn-ws-body";
+  body.className = "rn-ws-body" + (cur === "paint" ? " full" : "");
   if (cur === "people") peopleBody(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
