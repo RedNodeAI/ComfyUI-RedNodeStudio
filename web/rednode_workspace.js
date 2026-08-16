@@ -612,7 +612,7 @@ css.textContent = `
 .rn-ws-vram.med{background:#241d12;color:#f0c58a;border:1px solid #6b4a1d}
 .rn-ws-vram.low{background:#16241c;color:#86d3a1;border:1px solid #2f7a4d}
 .rn-ws-vram.off{background:#1b1e23;color:#6b7280;border:1px solid #33373d}
-.rn-ws-latstage{position:relative;width:100%;height:300px;background:#0f1114;
+.rn-ws-latstage{position:relative;width:100%;height:420px;background:#0f1114;
   border:1px solid #2a2e34;border-radius:8px;display:flex;align-items:center;
   justify-content:center;flex:none;
   background-image:linear-gradient(#1a1d22 1px,transparent 1px),
@@ -622,10 +622,10 @@ css.textContent = `
   cursor:move;user-select:none;box-shadow:0 0 10px #4a8fe044}
 .rn-ws-latrect.rolling{border-color:#f0c58a;color:#f0c58a;border-style:dashed;box-shadow:0 0 10px #f0c58a44}
 .rn-ws-latchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;flex:none}
-.rn-ws-latchip{min-width:58px;height:54px;background:#15171b;border:1px solid #2a2e34;
-  border-radius:7px;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:4px;cursor:pointer;flex:none;padding:0 8px;
-  color:#c8ccd2;font-size:11.5px;font-weight:600}
+.rn-ws-latchip{min-width:76px;height:66px;background:#15171b;border:1px solid #2a2e34;
+  border-radius:8px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:5px;cursor:pointer;flex:none;padding:0 10px;
+  color:#c8ccd2;font-size:13px;font-weight:600}
 .rn-ws-latchip:hover{border-color:#4a8fe0}
 .rn-ws-latchip.cur{border-color:#4a8fe0;background:#4a8fe01a;color:#fff}
 .rn-ws-latchip i{display:block;background:transparent;border:2px solid #9dc0ff;border-radius:2px}
@@ -9532,11 +9532,11 @@ function latentBody(node, body) {
   stage.className = "rn-ws-latstage";
   const rect = document.createElement("div");
   rect.className = "rn-ws-latrect" + (L.random ? " rolling" : "");
-  const fit = 250 / Math.max(L.w, L.h);
-  rect.style.width = Math.max(40, Math.round(L.w * fit)) + "px";
-  rect.style.height = Math.max(32, Math.round(L.h * fit)) + "px";
+  const fit = 360 / Math.max(L.w, L.h);
+  rect.style.width = Math.max(48, Math.round(L.w * fit)) + "px";
+  rect.style.height = Math.max(40, Math.round(L.h * fit)) + "px";
   rect.style.flexDirection = "column";
-  rect.style.fontSize = "16px";
+  rect.style.fontSize = "20px";
   const ASPECT_LIST = [
     ["1:1", 1, 1, "Square"], ["2:3", 2, 3, "Portrait"],
     ["3:4", 3, 4, "Portrait Standard"], ["4:5", 4, 5, "Portrait Tall"],
@@ -9574,9 +9574,9 @@ function latentBody(node, body) {
         const h1 = Math.abs(dy) < 6 ? h0 : h0 + dy * 6;
         L.w = Math.max(256, Math.min(4096, Math.round(w1 / 64) * 64));
         L.h = Math.max(256, Math.min(4096, Math.round(h1 / 64) * 64));
-        const f = 250 / Math.max(L.w, L.h);
-        rect.style.width = Math.max(40, Math.round(L.w * f)) + "px";
-        rect.style.height = Math.max(32, Math.round(L.h * f)) + "px";
+        const f = 360 / Math.max(L.w, L.h);
+        rect.style.width = Math.max(48, Math.round(L.w * f)) + "px";
+        rect.style.height = Math.max(40, Math.round(L.h * f)) + "px";
         rectLabel();
       };
       const up = (ev) => {
@@ -9629,7 +9629,7 @@ function latentBody(node, body) {
     chip.className = "rn-ws-latchip" + (cur ? " cur" : "");
     chip.title = key + " (" + name + ")";
     const mini = document.createElement("i");
-    const mfit = 18 / Math.max(wr, hr);
+    const mfit = 24 / Math.max(wr, hr);
     mini.style.width = Math.max(6, Math.round(wr * mfit)) + "px";
     mini.style.height = Math.max(6, Math.round(hr * mfit)) + "px";
     chip.appendChild(mini);
@@ -9656,8 +9656,8 @@ function latentBody(node, body) {
   // the whole canvas cluster lives in ONE card, the user's call: slightly
   // darker ground and a border, so size controls read as a single place
   const cols = document.createElement("div");
-  cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1.6fr) "
-    + "minmax(260px,1fr);gap:10px;align-items:start";
+  cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1.5fr) "
+    + "minmax(320px,1fr);gap:12px;align-items:start";
   const previewCard = sectionCard("CANVAS PREVIEW", "#4a8fe0");
   const canvasCard = sectionCard("DIMENSIONS", "#4a8fe0",
     (L.random ? "random preset" : L.w + " × " + L.h)
@@ -9671,8 +9671,8 @@ function latentBody(node, body) {
     strip.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px";
     const cell = (icon, k, v) => {
       const c = document.createElement("div");
-      c.style.cssText = "display:flex;align-items:center;gap:8px;background:#101216;"
-        + "border:1px solid #2a2e34;border-radius:7px;padding:8px 10px";
+      c.style.cssText = "display:flex;align-items:center;gap:10px;background:#101216;"
+        + "border:1px solid #2a2e34;border-radius:8px;padding:12px 14px";
       const ic = document.createElement("span");
       ic.textContent = icon;
       ic.style.cssText = "font-size:14px;color:#8fa8c8";
@@ -9682,7 +9682,7 @@ function latentBody(node, body) {
       kk.className = "rn-ws-note";
       kk.textContent = k;
       const vv = document.createElement("span");
-      vv.style.cssText = "font-size:12.5px;font-weight:600;color:#e8ecf1";
+      vv.style.cssText = "font-size:15px;font-weight:600;color:#e8ecf1";
       vv.textContent = v;
       t.append(kk, vv);
       c.append(ic, t);
@@ -9792,14 +9792,14 @@ function latentBody(node, body) {
     r.style.cssText = "display:flex;align-items:center;gap:6px";
     const wl = document.createElement("span");
     wl.className = "rn-ws-note";
-    wl.style.cssText = "flex:none;width:64px";
+    wl.style.cssText = "flex:none;width:72px;font-size:13px";
     wl.textContent = label;
     const i = document.createElement("input");
     i.type = "number";
     i.min = min; i.max = max; i.step = step;
     i.value = L[key];
     i.style.cssText = "flex:1;min-width:0;background:#101216;border:1px solid #2f333a;"
-      + "border-radius:6px;color:#e8ecf1;font-size:13px;font-weight:600;padding:7px 9px";
+      + "border-radius:7px;color:#e8ecf1;font-size:15px;font-weight:600;padding:10px 12px";
     const commit = (v) => {
       const snapped = key === "batch" ? Math.round(v) : Math.round(v / 8) * 8;
       L[key] = Math.max(min, Math.min(max, snapped));
@@ -9815,7 +9815,7 @@ function latentBody(node, body) {
     const mk = (t, d) => {
       const b = document.createElement("button");
       b.className = "rn-ws-btn";
-      b.style.cssText = "width:30px;padding:0";
+      b.style.cssText = "width:38px;height:38px;padding:0;font-size:16px";
       b.textContent = t;
       b.onclick = () => commit((parseInt(i.value, 10) || min) + d);
       return b;
@@ -10509,7 +10509,7 @@ export function render(node) {
 
   const body = document.createElement("div");
   body.className = "rn-ws-body"
-    + (cur === "paint" || cur === "prompts" ? " full" : "");
+    + (["paint", "prompts", "latent"].includes(cur) ? " full" : "");
   if (cur === "people") peopleBody(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
