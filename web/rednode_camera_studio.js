@@ -55,7 +55,9 @@ css.textContent = `
   border:1px solid #2a2e34;border-radius:7px;padding:7px}
 .rn-cs .subj.sel{border-color:#4a8fe0}
 .rn-cs .subj .head{display:flex;align-items:center;gap:6px}
-.rn-cs .subj .head input[type=text]{flex:1;min-width:0}
+.rn-cs .subj .head select{flex:none;width:96px;padding-right:2px}
+.rn-cs .subj .head input[type=text]{flex:1;min-width:120px}
+.rn-cs .subj .rel select{flex:1;min-width:0}
 .rn-cs .out{background:#101216;border:1px solid #2a2e34;border-radius:7px;padding:9px 11px;
   font-size:12.5px;line-height:1.5;color:#e2e5ea;white-space:pre-wrap;min-height:90px}
 .rn-cs .note{font-size:11.5px;color:#7f8792}
@@ -773,7 +775,8 @@ export function buildStudio(host, S) {
       // the geometry then covers what the relation leaves unsaid
       if (st.subjects.length > 1) {
         const rrow = document.createElement("div");
-        rrow.className = "row";
+        rrow.className = "row rel";
+        rrow.style.flexWrap = "nowrap";
         const rk = document.createElement("span");
         rk.className = "k";
         rk.textContent = "Relation";
