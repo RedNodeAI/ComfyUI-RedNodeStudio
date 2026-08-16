@@ -174,6 +174,36 @@ def vertical_block(geo, cam_y, subject_height, subject_word="the subject",
             "perspective, natural proportions." % (where, S, _cap(ps), ps))
 
 
+def _height_only_block(geo, cam_y, subject_top, sname):
+    """The camera's height and general pitch relative to the subject, with no
+    claim of aiming at them - for the unlocked (off-centre) composition."""
+    p = geo["pitch"]
+    steep = abs(p)
+    where = _height_words(cam_y, subject_top, geo["dy"])
+    if steep < 8:
+        return ("Eye-level photograph. The camera is %s and held level."
+                % where)
+    if p < 0:
+        kind = ("Direct overhead" if steep >= 80 else "Extreme high-angle"
+                if steep >= 55 else "High-angle")
+        return ("%s photograph. The camera is %s and pitched downward about %d "
+                "degrees; the ground fills much of the frame and %s is seen from "
+                "above." % (kind, where, int(round(steep)), sname))
+    kind = ("Extreme low-angle" if steep >= 55 else "Low-angle")
+    return ("%s photograph, shot from below. The camera is %s and pointing upward "
+            "about %d degrees; the sky or ceiling fills much of the frame and %s "
+            "is seen from below." % (kind, where, int(round(steep)), sname))
+
+
+def _aim_words(aim_geo, look_at, cpos):
+    """Where the lens points when unlocked, in plain words."""
+    d = aim_geo["distance"]
+    p = aim_geo["pitch"]
+    tilt = ("level" if abs(p) < 8 else
+            "tilted %s about %d degrees" % ("down" if p < 0 else "up", int(round(abs(p)))))
+    return "%s, toward a point %s away" % (tilt, _metres(d))
+
+
 def _cap(t):
     return t[:1].upper() + t[1:] if t else t
 
@@ -234,17 +264,62 @@ def describe(camera, subjects, output="krea2"):
     spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
     face_y = spos[1] + sh * 0.92
     th = camera.get("target_height")
-    look_at = [spos[0], float(th) if th is not None else face_y, spos[2]]
     cpos = [float(x) for x in camera.get("pos", [0, face_y, 3.0])]
     focal = float(camera.get("focal_mm", 35))
-    geo = camera_geometry(cpos, look_at)
+    # LOCK ON SUBJECT (default): the camera aims at the target's face and the
+    # subject sits centre frame. UNLOCKED: the camera aims at a free point
+    # (aim: [x, y, z]), so the subject can sit off-centre or at the edge -
+    # the user's ask, for less centred compositions. The vertical block is
+    # still measured to the subject (that is what "high angle" means); the
+    # composition sentence says where in the frame the subject lands.
+    locked = camera.get("lock", True) is not False
+    aim = camera.get("aim")
+    if locked or not (isinstance(aim, (list, tuple)) and len(aim) == 3):
+        look_at = [spos[0], float(th) if th is not None else face_y, spos[2]]
+    else:
+        look_at = [float(aim[0]), float(aim[1]), float(aim[2])]
+    geo = camera_geometry(cpos, [spos[0], face_y, spos[2]])   # angle TO the subject
+    aim_geo = camera_geometry(cpos, look_at)                   # where the lens points
 
-    parts = [vertical_block(geo, cpos[1], spos[1] + sh, subject_word=sname)]
+    if locked:
+        parts = [vertical_block(geo, cpos[1], spos[1] + sh, subject_word=sname)]
+    else:
+        # unlocked: the height relation still matters (it is what makes the
+        # shot high or low) but the block must not claim the lens points at
+        # the subject - the aim sentence says where it really points
+        parts = [_height_only_block(geo, cpos[1], spos[1] + sh, sname)]
     # horizontal relation and distance
     rel = _facing_relation(geo["yaw"], float(prime.get("facing_deg", 0)))
-    parts.append(_cap("%s is %s, %s from the camera, framed as %s."
-                      % (sname, rel, _metres(geo["distance"]),
-                         _distance_words(geo["distance"], focal))))
+    if locked:
+        parts.append(_cap("%s is %s, %s from the camera, centred in the frame, "
+                          "framed as %s."
+                          % (sname, rel, _metres(geo["distance"]),
+                             _distance_words(geo["distance"], focal))))
+    else:
+        # where does the subject fall in the frame? Angle between the lens
+        # axis and the subject direction, signed left/right, as a fraction of
+        # the half-FOV
+        d_yaw = ((geo["yaw"] - aim_geo["yaw"] + 180) % 360) - 180
+        half = fov_deg(focal) / 2.0
+        frac = max(-1.4, min(1.4, d_yaw / max(1e-6, half)))
+        if abs(frac) < 0.15:
+            where = "near the centre of the frame"
+        elif abs(frac) < 0.5:
+            where = "a little %s of centre" % ("right" if frac > 0 else "left")
+        elif abs(frac) < 0.9:
+            where = "well %s of centre, in the %s third of the frame" % (
+                ("right", "right") if frac > 0 else ("left", "left"))
+        elif abs(frac) <= 1.0:
+            where = "at the very %s edge of the frame" % ("right" if frac > 0 else "left")
+        else:
+            where = "just outside the %s edge of the frame, mostly cut off" % (
+                "right" if frac > 0 else "left")
+        parts.append(_cap("The camera is not aimed at %s: it points %s, at open %s, "
+                          "and %s falls %s, %s, %s from the camera. The composition "
+                          "gives space to the scene rather than centring the figure."
+                          % (sname, _aim_words(aim_geo, look_at, cpos),
+                             "ground" if look_at[1] < 0.6 else "space",
+                             sname, where, rel, _metres(geo["distance"]))))
     # the other subjects: blocking relative to the primary and the camera
     others = [s for k, s in enumerate(subjects) if k != ti]
     for o in others:

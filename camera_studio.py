@@ -49,6 +49,12 @@ def parse_state(config_json):
                           if cam.get("target_height") is not None else None),
         "focal_mm": num(cam.get("focal_mm"), 35, 8, 400),
         "roll_deg": num(cam.get("roll_deg"), 0, -90, 90),
+        # lock on subject (default) or aim at a free point for off-centre frames
+        "lock": cam.get("lock", True) is not False,
+        "aim": ([num(cam["aim"][0], 0, -30, 30), num(cam["aim"][1], 0, 0, 30),
+                 num(cam["aim"][2], 0, -30, 30)]
+                if isinstance(cam.get("aim"), list) and len(cam.get("aim")) == 3
+                else [0.0, 0.0, 0.0]),
     }
     subjects = []
     for s in (d.get("subjects") if isinstance(d.get("subjects"), list) else []):

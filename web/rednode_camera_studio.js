@@ -63,7 +63,8 @@ css.textContent = `
 
 // ---- state -----------------------------------------------------------------
 const DEFAULT = () => ({
-  camera: { pos: [0, 1.56, 3.0], target: 0, target_height: null, focal_mm: 35, roll_deg: 0 },
+  camera: { pos: [0, 1.56, 3.0], target: 0, target_height: null, focal_mm: 35, roll_deg: 0,
+            lock: true, aim: [0, 0, 0] },
   subjects: [{ name: "the subject", pos: [0, 0, 0], height: 1.7, facing_deg: 0 }],
   output: "krea2", join: "lead",
 });
@@ -78,6 +79,8 @@ function normalise(d) {
       if (typeof c.target_height === "number") o.camera.target_height = c.target_height;
       if (typeof c.focal_mm === "number") o.camera.focal_mm = c.focal_mm;
       if (typeof c.roll_deg === "number") o.camera.roll_deg = c.roll_deg;
+      if (c.lock === false) o.camera.lock = false;
+      if (Array.isArray(c.aim) && c.aim.length === 3) o.camera.aim = c.aim.map(Number);
     }
     if (Array.isArray(d.subjects) && d.subjects.length) {
       o.subjects = d.subjects.filter((s) => s && typeof s === "object").map((s) => ({
@@ -98,7 +101,8 @@ function normalise(d) {
 const fovDeg = (f) => (2 * Math.atan(36 / (2 * Math.max(4, f)))) * 180 / Math.PI;
 function geometry(cam, subj) {
   const face = [subj.pos[0], subj.pos[1] + subj.height * 0.92, subj.pos[2]];
-  const tgt = cam.target_height != null ? [face[0], cam.target_height, face[2]] : face;
+  const tgt = cam.lock === false && Array.isArray(cam.aim) ? cam.aim
+    : cam.target_height != null ? [face[0], cam.target_height, face[2]] : face;
   const dx = tgt[0] - cam.pos[0], dy = tgt[1] - cam.pos[1], dz = tgt[2] - cam.pos[2];
   const ground = Math.hypot(dx, dz);
   return {
@@ -264,6 +268,20 @@ export function buildStudio(host, S) {
     g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke();
     g.setLineDash([]);
 
+    // the free aim point, when unlocked: a crosshair on the ground the lens
+    // looks at; drag it to compose off-centre
+    if (cam.lock === false) {
+      const [ax, ay] = worldToPx(cam.aim[0], cam.aim[2]);
+      g.strokeStyle = "#f0c58a";
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(ax, ay, 8, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(ax - 13, ay); g.lineTo(ax + 13, ay); g.stroke();
+      g.beginPath(); g.moveTo(ax, ay - 13); g.lineTo(ax, ay + 13); g.stroke();
+      g.fillStyle = "#f0c58a";
+      g.font = "10px system-ui";
+      g.textAlign = "center";
+      g.fillText("aim", ax, ay + 24);
+    }
     // subjects
     st.subjects.forEach((s, i) => {
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
@@ -307,6 +325,10 @@ export function buildStudio(host, S) {
     const cam = st.camera;
     const [cx, cy] = worldToPx(cam.pos[0], cam.pos[2]);
     if (Math.hypot(px - cx, py - cy) < 14) return { kind: "cam" };
+    if (cam.lock === false) {
+      const [ax, ay] = worldToPx(cam.aim[0], cam.aim[2]);
+      if (Math.hypot(px - ax, py - ay) < 14) return { kind: "aim" };
+    }
     for (let i = st.subjects.length - 1; i >= 0; i--) {
       const s = st.subjects[i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
@@ -330,7 +352,7 @@ export function buildStudio(host, S) {
     e.preventDefault(); e.stopPropagation();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* older hosts */ }
     dragging = h;
-    if (h.kind !== "cam") { sel = h.i; renderSubjects(); }
+    if (h.kind === "subj" || h.kind === "face") { sel = h.i; renderSubjects(); }
     canvas.style.cursor = "grabbing";
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -344,6 +366,8 @@ export function buildStudio(host, S) {
     const snap = (v) => Math.round(v * 20) / 20;
     if (dragging.kind === "cam") {
       st.camera.pos[0] = snap(wx); st.camera.pos[2] = snap(wz);
+    } else if (dragging.kind === "aim") {
+      st.camera.aim[0] = snap(wx); st.camera.aim[2] = snap(wz);
     } else if (dragging.kind === "subj") {
       st.subjects[dragging.i].pos[0] = snap(wx);
       st.subjects[dragging.i].pos[2] = snap(wz);
@@ -380,6 +404,46 @@ export function buildStudio(host, S) {
       (v) => { cam.focal_mm = v; }, (v) => Math.round(v) + "mm · " + Math.round(fovDeg(v)) + "°"));
     camCard.appendChild(slider("Roll", -45, 45, 1, () => cam.roll_deg,
       (v) => { cam.roll_deg = v; }, (v) => Math.round(v) + "°"));
+    // LOCK ON SUBJECT, the user's ask: on, the lens aims at the target and the
+    // subject sits centre frame; off, the lens aims at a free point on the
+    // stage (the amber crosshair, drag it) so the subject can sit off-centre
+    const lrow = document.createElement("div");
+    lrow.className = "row";
+    const lk = document.createElement("span");
+    lk.className = "k";
+    lk.textContent = "Aim";
+    const lockB = document.createElement("button");
+    lockB.className = cam.lock !== false ? "on" : "";
+    lockB.textContent = cam.lock !== false ? "◎ Locked on subject" : "◎ Free aim";
+    lockB.title = "Locked: the camera aims at the target subject, centred in the "
+                + "frame. Free aim: it aims at the amber crosshair on the stage - "
+                + "drag that to compose with the subject off-centre or at the edge; "
+                + "the paragraph then says where in the frame the subject falls.";
+    lockB.onclick = () => {
+      cam.lock = cam.lock === false;
+      if (cam.lock === false && (!Array.isArray(cam.aim) || (cam.aim[0] === 0
+          && cam.aim[2] === 0 && st.subjects[cam.target]))) {
+        // seed the aim beside the subject so unlocking visibly changes something
+        const s = st.subjects[cam.target] || st.subjects[0];
+        cam.aim = [s.pos[0] + 1.5, 0, s.pos[2]];
+      }
+      write(); render();
+    };
+    lrow.append(lk, lockB);
+    if (cam.lock === false) {
+      const ah = document.createElement("input");
+      ah.type = "number";
+      ah.step = "0.1"; ah.min = "0"; ah.max = "6";
+      ah.value = (cam.aim[1] ?? 0).toFixed(1);
+      ah.title = "Height of the aim point in metres (0 = the ground).";
+      ah.onchange = () => { cam.aim[1] = Math.max(0, parseFloat(ah.value) || 0); write(); render(); };
+      const ak = document.createElement("span");
+      ak.className = "k";
+      ak.style.width = "auto";
+      ak.textContent = "aim height";
+      lrow.append(ak, ah);
+    }
+    camCard.appendChild(lrow);
     // target
     const trow = document.createElement("div");
     trow.className = "row";
