@@ -146,6 +146,7 @@ const STYLE = `
 .rn-pf-sublabel { font-size: 11px; font-weight: 700; letter-spacing: .05em;
   color: #8f97a3; text-transform: uppercase; margin-top: 4px; }
 .rn-pf-studio { grid-column: 1 / -1; width: 100%; }
+.rn-pf-btn.on { background: #a855f7; border-color: #a855f7; color: #fff; }
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 10px; align-items: start; }
 .rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -621,21 +622,49 @@ export function buildFrameEditor(wrap, F) {
     studioSet(state);
     if (studio) studio.refresh();
   };
+  // A TOGGLE THAT SURVIVES A RE-RENDER (the user's report: switching tabs
+  // hid the studio every time). Shown-ness is a fold key in the host's fold
+  // store, exactly like the section folds, so it comes back on the next
+  // render; and it follows the rule: studio active -> shown by default,
+  // no studio -> hidden. Turning it OFF also clears the studio state, so
+  // "shown" and "active" mean the same thing.
+  const ARROW_OPEN = "\u25BE", ARROW_SHUT = "\u25B8";
+  const mountStudio = () => {
+    if (studio) return;
+    if (!studioGet()) seedStudioFromChips();
+    studio = buildStudio(studioHost, {
+      get: () => studioGet() || {},
+      set: (state) => studioSet(state),
+      onChange: () => { changed(); },
+      preview: F.studioPreview || (async () => ""),
+    });
+  };
+  const showStudio = (on) => {
+    studioHost.style.display = on ? "" : "none";
+    studioBtn.textContent = (on ? ARROW_OPEN : ARROW_SHUT) + " Camera studio (advanced)";
+    studioBtn.classList.toggle("on", !!on);
+    foldSet("studio_open", !!on);
+    if (on) mountStudio();
+  };
   const openStudio = () => {
     const shown = studioHost.style.display !== "none";
-    studioHost.style.display = shown ? "none" : "";
-    studioBtn.textContent = (shown ? "\u25B8" : "\u25BE") + " Camera studio (advanced)";
-    if (!shown && !studio) {
-      if (!studioGet()) seedStudioFromChips();
-      studio = buildStudio(studioHost, {
-        get: () => studioGet() || {},
-        set: (state) => studioSet(state),
-        onChange: () => { changed(); },
-        preview: F.studioPreview || (async () => ""),
-      });
+    if (shown) {
+      // off means OFF: the studio stops driving the camera too
+      studioSet(null);
+      showStudio(false);
+      changed();
+    } else {
+      showStudio(true);
     }
   };
   studioBtn.addEventListener("click", openStudio);
+  // on (re)build: restore the remembered state, or follow the rule
+  {
+    const remembered = foldGet("studio_open");
+    const on = (remembered === undefined || remembered === null) ? !!studioGet() : !!remembered;
+    if (on && studioGet()) showStudio(true);
+    else studioBtn.textContent = ARROW_SHUT + " Camera studio (advanced)";
+  }
   // WHICH ONE IS IN CHARGE, made visible: with the studio live its paragraph
   // REPLACES the simple stops entirely (one engine, never both), so the
   // simple rows dim and say so; clear the studio to get them back. The chips
@@ -647,7 +676,7 @@ export function buildFrameEditor(wrap, F) {
   clearBtn.style.display = "none";
   clearBtn.addEventListener("click", () => {
     studioSet(null);
-    if (studioHost.style.display !== "none") openStudio();   // fold it away
+    showStudio(false);
     changed();
   });
   studioBar.appendChild(clearBtn);
