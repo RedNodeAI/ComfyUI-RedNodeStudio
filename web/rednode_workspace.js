@@ -7742,7 +7742,8 @@ function paintBody(node, body) {
     box.placeholder = key === "prompt" ? "leave empty to use the main prompt" : "";
     box.title = hint;
     box.oninput = () => { P[key] = box.value; writeCfg(node); };
-    row.append(lab, box);
+    row.append(lab, expandable(box, "Paint \u00b7 " + label,
+                               (v) => { P[key] = v; writeCfg(node); }));
     promptBox.appendChild(row);
   }
 
@@ -9069,7 +9070,8 @@ function promptsBody(node, body) {
                          + "border:1px solid #2a2e34;border-radius:5px;color:#e2e5ea;"
                          + "font-size:13px;padding:6px 8px;resize:vertical";
       text.addEventListener("change", () => { row.text = text.value; writeCfg(node); });
-      box.appendChild(text);
+      box.appendChild(expandable(text, (row.name || "Prompt") + " \u00b7 prompt",
+                                 (v) => { row.text = v; writeCfg(node); }));
     }
 
     const neg = document.createElement("textarea");
@@ -9080,7 +9082,8 @@ function promptsBody(node, body) {
                       + "border:1px solid #2a2e34;border-radius:5px;color:#b08a8a;"
                       + "font-size:12px;padding:6px 8px;resize:vertical";
     neg.addEventListener("change", () => { row.negative = neg.value; writeCfg(node); });
-    box.appendChild(neg);
+    box.appendChild(expandable(neg, (row.name || "Prompt") + " \u00b7 negative",
+                               (v) => { row.negative = v; writeCfg(node); }));
     body.appendChild(box);
   });
 
@@ -9094,6 +9097,80 @@ function promptsBody(node, body) {
     writeCfg(node); render(node);
   };
   body.appendChild(add);
+}
+
+// THE BIG PROMPT EDITOR, the Sick Ollie interaction the user asked for: a
+// small box grows into a proper fullscreen writing surface. Esc cancels,
+// Ctrl+Enter saves, Save commits through the same change path the inline box
+// uses, so config writing stays in one place.
+function openBigEdit(title, value, onSave) {
+  document.querySelector(".rn-ws-bigedit")?.remove();
+  const ov = document.createElement("div");
+  ov.className = "rn-ws-bigedit";
+  ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
+    + "display:flex;align-items:center;justify-content:center";
+  const panel = document.createElement("div");
+  panel.style.cssText = "display:flex;flex-direction:column;gap:10px;"
+    + "width:min(920px,94vw);height:min(72vh,760px);background:#16181c;"
+    + "border:1px solid #3a3f47;border-radius:8px;padding:14px;"
+    + "box-shadow:0 10px 40px rgba(0,0,0,.6)";
+  const h = document.createElement("div");
+  h.style.cssText = "font:600 14px system-ui,sans-serif;color:#e8ecf1";
+  h.textContent = title;
+  const ta = document.createElement("textarea");
+  ta.value = value || "";
+  ta.style.cssText = "flex:1;min-height:0;background:#101216;border:1px solid "
+    + "#2a2e34;border-radius:6px;color:#e2e5ea;font-size:14px;line-height:1.5;"
+    + "padding:10px 12px;resize:none";
+  const foot = document.createElement("div");
+  foot.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
+  const mk = (label, primary, fn) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText = "padding:7px 18px;border-radius:5px;font-size:13px;"
+      + "cursor:pointer;border:1px solid " + (primary
+        ? "#2e7d4f;background:#2e7d4f;color:#fff"
+        : "#33373d;background:#15171b;color:#c8ccd2");
+    b.onclick = fn;
+    return b;
+  };
+  const closeIt = () => ov.remove();
+  const saveIt = () => { onSave(ta.value); closeIt(); };
+  foot.append(mk("Cancel", false, closeIt), mk("Save", true, saveIt));
+  ta.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.stopPropagation(); closeIt(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveIt();
+  });
+  ov.addEventListener("pointerdown", (e) => { if (e.target === ov) closeIt(); });
+  panel.addEventListener("pointerdown", (e) => e.stopPropagation());
+  panel.append(h, ta, foot);
+  ov.appendChild(panel);
+  document.body.appendChild(ov);
+  ta.focus();
+  const end = ta.value.length;
+  ta.setSelectionRange(end, end);
+}
+
+// Wraps a textarea so it can grow: an expand glyph in the corner, and a
+// double-click anywhere in the box, both open the big editor.
+function expandable(ta, title, onSave) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "position:relative;width:100%";
+  const btn = document.createElement("button");
+  btn.textContent = "\u26F6";
+  btn.title = "Open the fullscreen editor. Double-clicking the box does the "
+            + "same; Esc cancels, Ctrl+Enter saves.";
+  btn.style.cssText = "position:absolute;top:3px;right:6px;z-index:2;"
+    + "background:#15171bcc;border:1px solid #33373d;border-radius:4px;"
+    + "color:#9aa0a8;cursor:pointer;font-size:11px;padding:1px 5px";
+  const open = () => openBigEdit(title, ta.value, (v) => {
+    ta.value = v;
+    onSave(v);
+  });
+  btn.onclick = open;
+  ta.addEventListener("dblclick", open);
+  wrap.append(ta, btn);
+  return wrap;
 }
 
 function latentBody(node, body) {
