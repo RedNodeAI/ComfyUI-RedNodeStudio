@@ -382,6 +382,9 @@ export function buildFrameEditor(wrap, F) {
   camRange.value = String(Math.max(0, heights.indexOf(F.get("camera_height") || "Eye level")));
   const camVal = el("div", "rn-pf-val", F.get("camera_height") || "Eye level");
   camWrap.appendChild(camRange); camWrap.appendChild(camVal);
+  const shotLabel = el("div", "rn-pf-sublabel", "Shot size");
+  shotLabel.title = "How much of the subject fills the frame, tight to wide - the "
+                  + "camera's distance and lens. Portrait is close, Roomscale is far.";
   const camLabel = el("div", "rn-pf-sublabel", "Camera height");
   const drawCamChips = () => {
     camChips.replaceChildren();
@@ -575,7 +578,8 @@ export function buildFrameEditor(wrap, F) {
   studioBar.appendChild(studioBtn);
   studioBar.appendChild(studioState);
   group("framing", "Camera", "framing, height, and the studio",
-        [frameChips, frameWrap, camLabel, camChips, camWrap, studioBar, placementRow]);
+        [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap, studioBar,
+         placementRow]);
   const studioHost = el("div", "rn-pf-studio");
   studioHost.style.display = "none";
   wrap.appendChild(studioHost);            // full width, under the columns
@@ -588,10 +592,11 @@ export function buildFrameEditor(wrap, F) {
     }
     return null;
   };
+  let syncSimpleRef = () => {};
   const studioSet = (state) => {
     F.set("camera", state ? JSON.stringify(state) : "");
     F.dirty?.();
-    studioState.textContent = state ? "studio active" : "";
+    syncSimpleRef();
   };
   const seedStudioFromChips = () => {
     // the simple chips REGENERATE the studio camera; the scene (people,
@@ -631,7 +636,31 @@ export function buildFrameEditor(wrap, F) {
     }
   };
   studioBtn.addEventListener("click", openStudio);
-  studioState.textContent = studioGet() ? "studio active" : "";
+  // WHICH ONE IS IN CHARGE, made visible: with the studio live its paragraph
+  // REPLACES the simple stops entirely (one engine, never both), so the
+  // simple rows dim and say so; clear the studio to get them back. The chips
+  // stay clickable as presets that regenerate the studio.
+  const simpleRows = [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap];
+  const clearBtn = el("button", "rn-pf-btn", "Clear studio");
+  clearBtn.title = "Drop the studio state: the simple Shot size and Camera height "
+                 + "chips write the camera words again.";
+  clearBtn.style.display = "none";
+  clearBtn.addEventListener("click", () => {
+    studioSet(null);
+    if (studioHost.style.display !== "none") openStudio();   // fold it away
+    changed();
+  });
+  studioBar.appendChild(clearBtn);
+  const syncSimple = () => {
+    const live = !!studioGet();
+    for (const elx of simpleRows) elx.style.opacity = live ? ".45" : "";
+    studioState.textContent = live
+      ? "studio drives the camera; the chips above are presets that reset it"
+      : "";
+    clearBtn.style.display = live ? "" : "none";
+  };
+  syncSimpleRef = syncSimple;
+  syncSimple();
   // the chips regenerate the studio camera whenever the studio is live
   frameRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
   camRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
