@@ -619,6 +619,7 @@ from .text_combine import RedNodeTextCombine  # noqa: E402
 from .prompt_box import RedNodePromptBox  # noqa: E402
 from .prompt_frame import RedNodePromptFrame  # noqa: E402
 from . import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers the sort route)
+from .camera_studio import RedNodeCameraStudio  # noqa: E402
 from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
 from .rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
@@ -670,6 +671,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeStudioAdvanced": RedNodeStudioAdvanced,
     "RedNodeRigOut": RedNodeRigOut,
     "RedNodeRigIn": RedNodeRigIn,
+    "RedNodeCameraStudio": RedNodeCameraStudio,
     "RedNodeSelector": RedNodeSelector,
     "RedNodeComboControl": RedNodeComboControl,
     "RedNodeControlPanel": RedNodeControlPanel,
@@ -717,6 +719,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeStudioAdvanced": "RedNode Studio Advanced",
     "RedNodeRigOut": "RedNode Rig Out",
     "RedNodeRigIn": "RedNode Rig In",
+    "RedNodeCameraStudio": "RedNode Camera Studio",
     "RedNodeSelector": "RedNode Selector",
     "RedNodeComboControl": "RedNode Combo Control",
     "RedNodeControlPanel": "RedNode Control Panel",
