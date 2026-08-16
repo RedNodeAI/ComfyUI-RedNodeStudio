@@ -186,7 +186,7 @@ css.textContent = `
 .rn-ls-chk.on{background:#b8283c;border-color:#b8283c}
 .rn-ls-slot.sel,.rn-ls-title.sel{outline:2px solid #b8283c}
 .rn-ls-selbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#2e333b;border:1px solid #b8283c;
-  border-radius:5px;padding:6px 8px;flex:none}
+  border-radius:5px;padding:6px 8px;flex:none;position:sticky;top:0;z-index:4}
 .rn-ls-selbar span.cnt{font-size:11.5px;font-weight:700;color:#e58a97;margin-right:2px}
 .rn-ls-selbar button{background:#15171b;border:1px solid #33373d;color:#ddd;border-radius:4px;padding:4px 9px;
   cursor:pointer;font-size:11px;height:26px;box-sizing:border-box;line-height:16px}
@@ -1521,7 +1521,10 @@ export function render(node) {
   });
   const wrap = node._rnWidget?.element;
   wrap?.querySelector(".rn-ls-selbar")?.remove();
-  if (inSelMode(node) && wrap) wrap.insertBefore(buildSelBar(node), wrap.querySelector(".rn-ls-head"));
+  // the bar goes at the TOP and sticks there: inserted above the footer it
+  // sat below a long stack, off screen, and select mode looked like it had
+  // no actions at all - the user's report
+  if (inSelMode(node) && wrap) wrap.insertBefore(buildSelBar(node), wrap.firstChild);
   if (node._rnWidget?.options) node._rnWidget.options.getMinHeight = () => MIN_PANEL_H;
   // Size the node ONCE, when it is first created, then leave it alone. Pinning the height
   // to the slot count meant a long stack could not be shrunk, and scrolling the list beats
