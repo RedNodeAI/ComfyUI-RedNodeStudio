@@ -9164,15 +9164,59 @@ async function fetchFrameDef() {
 function promptsBody(node, body) {
   const cfg = node._rnCfg;
   const R = cfg.prompts.rows;
+  const M = cfg.models;
 
-
+  // the mock's masthead: title, subtitle, and the RIG bar so the prompt you
+  // are writing is visibly the active rig's
+  {
+    const head = document.createElement("div");
+    head.style.cssText = "display:flex;flex-direction:column;gap:2px";
+    const h1 = document.createElement("div");
+    h1.style.cssText = "font-size:19px;font-weight:700;color:#e8ecf1";
+    h1.textContent = "Prompts";
+    const sub = document.createElement("div");
+    sub.className = "rn-ws-note";
+    sub.textContent = "Write prompts that live with the model they were written for.";
+    head.append(h1, sub);
+    body.appendChild(head);
+    if (M.rigs.length) {
+      const bar = document.createElement("div");
+      bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"
+        + "background:#1a1d22;border:1px solid #2a2e34;border-radius:7px;padding:9px";
+      const bt = document.createElement("span");
+      bt.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
+        + "color:#b8283c;flex:none";
+      bt.textContent = "RIG";
+      bar.appendChild(bt);
+      M.rigs.forEach((r, i) => {
+        const chip = document.createElement("button");
+        const on = M.active === i;
+        chip.style.cssText = "display:flex;align-items:center;gap:7px;padding:8px 14px;"
+          + "border-radius:7px;cursor:pointer;font-size:13px;font-weight:600;"
+          + "background:" + (on ? "#a855f71a" : "#15171b") + ";border:1px solid "
+          + (on ? "#a855f7" : "#2a2e34") + ";color:#e8ecf1";
+        const nm = document.createElement("span");
+        nm.textContent = r.name || ("Rig " + (i + 1));
+        chip.appendChild(nm);
+        if (on) {
+          const badge = document.createElement("span");
+          badge.textContent = "ACTIVE";
+          badge.style.cssText = "font-size:9px;font-weight:700;padding:2px 7px;"
+            + "border-radius:8px;background:#1e5233;color:#a7f3c0";
+          chip.appendChild(badge);
+        }
+        chip.title = "Make this rig active; prompts link to rigs by name.";
+        chip.onclick = () => { M.active = i; writeCfg(node); render(node); };
+        bar.appendChild(chip);
+      });
+      body.appendChild(bar);
+    }
+  }
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = R.length
-    ? "Prompts live with the model they were written for. Link each one to a rig "
-      + "from the Models tab."
-    : "No prompts yet. Add one, name it, and link it to a rig from the Models tab.";
-  body.appendChild(note);
+    ? "" : "No prompts yet. Add one, name it, and link it to a rig from the Models tab.";
+  if (note.textContent) body.appendChild(note);
 
   R.forEach((row, i) => {
     const box = document.createElement("div");
@@ -9266,9 +9310,18 @@ function promptsBody(node, body) {
             if (row.text !== assembled) { row.text = assembled; writeCfg(node); }
           },
         };
+        // the mock's two columns: the frame on the left, the assembled prompt
+        // in a PROMPT PREVIEW card on the right, side by side when wide
+        const cols = document.createElement("div");
+        cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) "
+          + "minmax(0,1fr);gap:10px";
+        const pv = sectionCard("PROMPT PREVIEW", "#a855f7");
+        pv.style.alignSelf = "start";
+        F.previewHost = pv;
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
-        box.appendChild(host);
+        cols.append(host, pv);
+        box.appendChild(cols);
 
 
       }

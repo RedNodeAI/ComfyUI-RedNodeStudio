@@ -126,16 +126,37 @@ const STYLE = `
   resize: vertical;              /* drag it taller when a prompt gets long */
 }
 /* collapsible groups: caret first, title, hint trailing, per the house convention */
-.rn-pf-box { border: 1px solid var(--rn-line); border-radius: 6px;
-  background: rgba(0,0,0,0.10); }
-.rn-pf-box > .head { display: flex; align-items: center; gap: 6px;
-  padding: 5px 8px; cursor: pointer; user-select: none; }
-.rn-pf-box > .head .car { width: 12px; color: #9aa0a8; font-size: 11px; }
-.rn-pf-box > .head b { font-size: 12px; }
-.rn-pf-box > .head .hint2 { margin-left: auto; font-size: 11px; color: #7f8792; }
+/* the 2026-08-16 skin, from the user's mock: each section a dark card with
+   an accent icon, the title, and its hint inline; the caret is quiet */
+.rn-pf-box { border: 1px solid #2a2e34; border-radius: 8px;
+  background: #16181c; }
+.rn-pf-box > .head { display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer; user-select: none; }
+.rn-pf-box > .head .car { width: 12px; color: #4a5058; font-size: 11px; order: 9;
+  margin-left: auto; }
+.rn-pf-box > .head .ico { font-size: 14px; color: #a855f7; flex: none; width: 18px;
+  text-align: center; }
+.rn-pf-box > .head b { font-size: 13.5px; color: #e8ecf1; }
+.rn-pf-box > .head .hint2 { font-size: 12px; color: #7f8792; }
 .rn-pf-box > .head:hover .car { color: #fff; }
 .rn-pf-box > .body { display: flex; flex-direction: column; gap: 8px;
-  padding: 2px 8px 8px; }
+  padding: 2px 12px 12px; }
+/* the character counter under a text field, right-aligned and dim */
+.rn-pf-count { text-align: right; font-size: 10.5px; color: #6b7280; margin-top: -4px; }
+/* the framing chips, the mock's Portrait / Landscape / Square row */
+.rn-pf-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rn-pf-chip { flex: 1 1 90px; display: flex; flex-direction: column; align-items: center;
+  gap: 1px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  background: #101216; border: 1px solid #2a2e34; color: #c8ccd2; font-size: 12px; }
+.rn-pf-chip small { font-size: 10.5px; color: #7f8792; }
+.rn-pf-chip.on { border-color: #a855f7; background: #a855f71a; color: #fff; }
+/* the preview panel: the mock's right column */
+.rn-pf-out { min-height: 120px; }
+.rn-pf-outwrap { display: flex; flex-direction: column; gap: 6px; }
+.rn-pf-outbar { display: flex; gap: 6px; justify-content: flex-end; }
+.rn-pf-outbar button { background: #15171b; border: 1px solid #33373d; color: #c8ccd2;
+  border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
+.rn-pf-outbar button:hover { border-color: #a855f7; color: #fff; }
 
 /* highlighting for the pipeline the Prompt Box also speaks */
 .rn-pf-wc { color: #8ab4ff; }
@@ -259,6 +280,26 @@ export function buildFrameEditor(wrap, F) {
   frameRange.value = String(Math.max(0, framings.indexOf(F.get("framing"))));
   const frameVal = el("div", "rn-pf-val", F.get("framing"));
   frameWrap.appendChild(frameRange); frameWrap.appendChild(frameVal);
+  // the mock's chip row: every framing as a button, the slider kept beneath
+  // for fine steps; both write the same field
+  const frameChips = el("div", "rn-pf-chips");
+  const drawChips = () => {
+    frameChips.replaceChildren();
+    framings.forEach((f, i) => {
+      const c = el("div", "rn-pf-chip" + (F.get("framing") === f ? " on" : ""));
+      c.appendChild(el("span", null, f));
+      c.title = "Set the framing to " + f + ".";
+      c.addEventListener("click", () => {
+        frameRange.value = String(i);
+        frameRange.dispatchEvent(new Event("input", { bubbles: true }));
+        frameRange.dispatchEvent(new Event("change", { bubbles: true }));
+        drawChips();
+      });
+      frameChips.appendChild(c);
+    });
+  };
+  drawChips();
+  frameRange.addEventListener("input", drawChips);
 
 
   // Directly under the slider, because it does nothing except make that slider louder.
@@ -316,13 +357,16 @@ export function buildFrameEditor(wrap, F) {
   const localFolds = {};
   const foldGet = (k) => (F.folds?.get ? F.folds.get(k) : localFolds[k]);
   const foldSet = (k, v) => { if (F.folds?.set) F.folds.set(k, v); else localFolds[k] = v; };
+  const ICONS = { style: "\u2728", subject: "\U0001F464", surroundings: "\u26F0",
+                  framing: "\u2316", light: "\u2600" };
   const group = (key, title, hint, els) => {
     const gbox = el("div", "rn-pf-box");
     const gh = el("div", "head");
     const car = el("span", "car", "\u25be");
-    gh.appendChild(car);
+    gh.appendChild(el("span", "ico", ICONS[key] || "\u25a0"));
     gh.appendChild(el("b", null, title));
     if (hint) gh.appendChild(el("span", "hint2", hint));
+    gh.appendChild(car);
     const bd = el("div", "body");
     for (const e of els) bd.appendChild(e);
     const isOpen = () => foldGet(key) !== false;
@@ -335,18 +379,54 @@ export function buildFrameEditor(wrap, F) {
     gbox.appendChild(gh); gbox.appendChild(bd);
     wrap.appendChild(gbox);
   };
-  group("style", "Style", "how the picture is made", [styleRow, styleExtra]);
-  group("subject", "Subject", "who or what, and how it looks", [subject]);
-  group("surroundings", "Surroundings", "where it is", [surroundings]);
-  group("framing", "Framing & placement", "tight to wide",
-        [frameWrap, pushRow, placeRow, placementRow]);
-  group("light", "Light & colour", "", [lightRow, brightRow, lac]);
+  const counted = (ta, max) => {
+    const wrapC = el("div", null);
+    wrapC.style.cssText = "display:flex;flex-direction:column";
+    const cnt = el("div", "rn-pf-count", "");
+    const upd = () => { cnt.textContent = (ta.value || "").length + " / " + max; };
+    ta.addEventListener("input", upd);
+    upd();
+    wrapC.appendChild(ta); wrapC.appendChild(cnt);
+    ta._rnCount = upd;
+    return wrapC;
+  };
+  group("style", "Style", "the overall look and feel.", [styleRow, counted(styleExtra, 200)]);
+  group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600)]);
+  group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300)]);
+  group("framing", "Framing & placement", "how it's framed and positioned",
+        [frameChips, frameWrap, pushRow, placeRow, placementRow]);
+  group("light", "Light & colour", "lighting mood and colours.",
+        [lightRow, brightRow, counted(lac, 200)]);
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
   const out = el("div", "rn-pf-out", "");
-  wrap.appendChild(note);
-  wrap.appendChild(out);
+  const outWrap = el("div", "rn-pf-outwrap");
+  const outBar = el("div", "rn-pf-outbar");
+  const copyB = el("button", null, "\u29C9 Copy");
+  copyB.title = "Copy the assembled prompt.";
+  copyB.addEventListener("click", () => {
+    navigator.clipboard?.writeText(out.textContent || "");
+  });
+  const bigB = el("button", null, "\u26F6 Expand");
+  bigB.title = "Read the assembled prompt full size.";
+  bigB.addEventListener("click", () => {
+    const ov = el("div", null);
+    ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
+      + "display:flex;align-items:center;justify-content:center";
+    const panel = el("div", null);
+    panel.style.cssText = "width:min(920px,94vw);max-height:80vh;overflow:auto;"
+      + "background:#16181c;border:1px solid #3a3f47;border-radius:8px;"
+      + "padding:18px 22px;color:#e2e5ea;font-size:15px;line-height:1.6;"
+      + "white-space:pre-wrap";
+    panel.textContent = out.textContent || "";
+    ov.appendChild(panel);
+    ov.addEventListener("pointerdown", (e) => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+  });
+  outBar.appendChild(copyB); outBar.appendChild(bigB);
+  outWrap.appendChild(note); outWrap.appendChild(out); outWrap.appendChild(outBar);
+  (F.previewHost || wrap).appendChild(outWrap);
 
   // ---- wiring ---------------------------------------------------------------------------
   const brightLabel = (v) => (v === 0 ? "neutral" : (v > 0 ? "+" : "") + v);
@@ -384,6 +464,8 @@ export function buildFrameEditor(wrap, F) {
     lac.value = F.get("light_and_colour") || "";
     frameVal.textContent = F.get("framing");
     brightVal.textContent = brightLabel(Number(brightRange.value));
+    for (const t of [styleExtra, subject, surroundings, lac]) t._rnCount?.();
+    drawChips();
   }
 
   let timer = null;
