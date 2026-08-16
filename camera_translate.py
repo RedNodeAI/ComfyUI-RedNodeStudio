@@ -375,3 +375,63 @@ def preset_camera(stop, distance=3.0, focal_mm=None):
     ground = max(0.05 if abs(pitch_deg) >= 85 else 0.35, min(12.0, ground))
     return {"pos": [0.0, y, ground], "target": 0,
             "focal_mm": focal_mm if focal_mm is not None else f, "roll_deg": 0}
+
+
+# ---------------------------------------------------------------- auto latent
+# The frame's ASPECT is part of the camera language: a steep low or high shot
+# with a wide lens wants a TALL frame (the figure towers, sky above; or the
+# ground stretches away), a wide blocking of several subjects wants a WIDE
+# one, a tight portrait sits near square. A latent that fights the geometry
+# makes the model compromise, and the angle softens - the user's finding.
+# suggest_aspect() returns (w_ratio, h_ratio, why) from the camera state and
+# the scene; auto_latent_size() shapes it into a pixel budget on 64s.
+def suggest_aspect(camera, subjects):
+    if not subjects:
+        subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
+                     "facing_deg": 0}]
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    cpos = [float(x) for x in camera.get("pos", [0, face[1], 3.0])]
+    focal = float(camera.get("focal_mm", 35))
+    geo = camera_geometry(cpos, face)
+    steep = abs(geo["pitch"])
+    fov = fov_deg(focal)
+    # the scene's horizontal spread as seen from the camera, in degrees
+    spread = 0.0
+    if len(subjects) > 1:
+        yaws = []
+        for s in subjects:
+            p = [float(x) for x in s.get("pos", [0, 0, 0])]
+            yaws.append(camera_geometry(cpos, [p[0], face[1], p[2]])["yaw"])
+        spread = max(yaws) - min(yaws)
+    # decision
+    if len(subjects) > 1 and spread > fov * 0.45:
+        return (16, 9, "several subjects spread across the view: wide")
+    if len(subjects) > 1 and spread > fov * 0.25:
+        return (3, 2, "two or more subjects side by side: landscape")
+    if steep >= 55 and geo["pitch"] > 0:
+        return (2, 3, "steep low angle: tall, the figure towers and the sky reads")
+    if steep >= 55 and geo["pitch"] < 0:
+        return (3, 4, "steep high angle: portrait, the ground stretches below")
+    if steep >= 25 and fov >= 60:
+        return (2, 3, "an angled wide-lens shot: tall to hold the perspective")
+    if _distance_words(geo["distance"], focal) in ("a tight close-up of the face",
+                                                    "a head-and-shoulders portrait"):
+        return (4, 5, "a close portrait: near square")
+    if _distance_words(geo["distance"], focal).startswith("a wide view"):
+        return (3, 2, "a wide view: landscape")
+    return (3, 4, "the default portrait frame")
+
+
+def auto_latent_size(camera, subjects, megapixels=1.0, multiple=64):
+    """(width, height, why) for the suggested aspect at a pixel budget."""
+    wr, hr, why = suggest_aspect(camera, subjects)
+    total = max(0.05, float(megapixels)) * 1_000_000.0
+    w = math.sqrt(total * wr / hr)
+    h = w * hr / wr
+    r = lambda v: max(multiple, int(round(v / multiple)) * multiple)
+    return r(w), r(h), "%d:%d, %s" % (wr, hr, why)

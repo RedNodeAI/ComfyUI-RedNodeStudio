@@ -20,6 +20,16 @@ import json
 from . import camera_translate as _ct
 
 
+def _ws_blocked():
+    """A blocked output when the auto latent is off, so a wired sampler skips
+    cleanly instead of receiving None (the workspace's own pattern)."""
+    try:
+        from . import workspace as _ws
+        return _ws.blocked()
+    except Exception:
+        return None
+
+
 def parse_state(config_json):
     """The panel's state, normalised. Junk never reaches the translator."""
     try:
@@ -74,7 +84,14 @@ def parse_state(config_json):
         camera["target"] = 0
     return {"camera": camera, "subjects": subjects,
             "output": str(d.get("output") or "krea2"),
-            "join": str(d.get("join") or "lead")}
+            "join": str(d.get("join") or "lead"),
+            # AUTO LATENT, the user's ask: an empty latent shaped by the camera's
+            # angle, lens and the scene's spread, at a pixel budget. Off by
+            # default (the house rule); on, wire the latent output into the
+            # sampler instead of an Empty Latent and the frame follows the shot.
+            "auto_latent": bool(d.get("auto_latent")),
+            "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
+            "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
 
 
 class RedNodeCameraStudio:
@@ -84,8 +101,8 @@ class RedNodeCameraStudio:
                    "physical-camera paragraph Krea 2 obeys - where the camera is, "
                    "its tilt, what it sees, the lens - plus scene blocking for "
                    "several subjects. Wire prompt_in to lead your prompt with it.")
-    RETURN_TYPES = ("STRING", "STRING", "IMAGE")
-    RETURN_NAMES = ("prompt", "camera_json", "image")
+    RETURN_TYPES = ("STRING", "STRING", "IMAGE", "LATENT", "INT", "INT")
+    RETURN_NAMES = ("prompt", "camera_json", "image", "latent", "width", "height")
     FUNCTION = "run"
 
     @classmethod
@@ -120,10 +137,21 @@ class RedNodeCameraStudio:
                                      + st["subjects"][st["camera"]["target"]]["height"] * 0.92,
                                      st["subjects"][st["camera"]["target"]]["pos"][2]]),
                                 "fov_deg": _ct.fov_deg(st["camera"]["focal_mm"])})
-        print("[RedNode Camera Studio] %d subject(s), lens %dmm, %s"
+        # the auto latent: always COMPUTED (width/height come out either way,
+        # so a graph can read the suggestion), only ALLOCATED when the toggle
+        # is on - an empty 16-channel latent for Krea 2 at the suggested shape
+        w, h, why = _ct.auto_latent_size(st["camera"], st["subjects"], st["latent_mp"])
+        latent = None
+        if st["auto_latent"]:
+            import torch
+            latent = {"samples": torch.zeros([st["latent_batch"], 16, h // 8, w // 8])}
+        print("[RedNode Camera Studio] %d subject(s), lens %dmm, %s; auto latent %s: "
+              "%d x %d (%s)"
               % (len(st["subjects"]), int(st["camera"]["focal_mm"]),
-                 cam_text.split(".")[0]), flush=True)
-        return (out, state_out, image)
+                 cam_text.split(".")[0], "ON" if st["auto_latent"] else "off",
+                 w, h, why), flush=True)
+        return (out, state_out, image,
+                latent if latent is not None else _ws_blocked(), w, h)
 
 
 try:

@@ -67,6 +67,7 @@ const DEFAULT = () => ({
             lock: true, aim: [0, 0, 0] },
   subjects: [{ name: "the subject", pos: [0, 0, 0], height: 1.7, facing_deg: 0 }],
   output: "krea2", join: "lead",
+  auto_latent: false, latent_mp: 1.0, latent_batch: 1,
 });
 
 function normalise(d) {
@@ -92,6 +93,9 @@ function normalise(d) {
     }
     if (typeof d.output === "string") o.output = d.output;
     if (d.join === "trail") o.join = "trail";
+    if (d.auto_latent === true) o.auto_latent = true;
+    if (typeof d.latent_mp === "number") o.latent_mp = d.latent_mp;
+    if (typeof d.latent_batch === "number") o.latent_batch = d.latent_batch;
   }
   if (o.camera.target >= o.subjects.length) o.camera.target = 0;
   return o;
@@ -111,6 +115,39 @@ function geometry(cam, subj) {
     yaw: ground ? Math.atan2(dx, -dz) * 180 / Math.PI : 0,
     tgt,
   };
+}
+
+// the auto-latent aspect rule, mirrored from camera_translate.suggest_aspect
+// for the live readout; the backend's copy is the one that allocates
+function suggestAspect(st) {
+  const cam = st.camera;
+  const prime = st.subjects[cam.target] || st.subjects[0];
+  const geo = geometry({ ...cam, lock: true, target_height: null }, prime);
+  const steep = Math.abs(geo.pitch), fov = fovDeg(cam.focal_mm);
+  let spread = 0;
+  if (st.subjects.length > 1) {
+    const yaws = st.subjects.map((s) => {
+      const dx = s.pos[0] - cam.pos[0], dz = s.pos[2] - cam.pos[2];
+      return Math.atan2(dx, -dz) * 180 / Math.PI;
+    });
+    spread = Math.max(...yaws) - Math.min(...yaws);
+  }
+  const widthM = 2 * geo.distance * Math.tan((fov / 2) * Math.PI / 180);
+  if (st.subjects.length > 1 && spread > fov * 0.45) return [16, 9, "several subjects spread across the view: wide"];
+  if (st.subjects.length > 1 && spread > fov * 0.25) return [3, 2, "two or more subjects side by side: landscape"];
+  if (steep >= 55 && geo.pitch > 0) return [2, 3, "steep low angle: tall, the figure towers"];
+  if (steep >= 55 && geo.pitch < 0) return [3, 4, "steep high angle: portrait, the ground stretches"];
+  if (steep >= 25 && fov >= 60) return [2, 3, "an angled wide-lens shot: tall"];
+  if (widthM < 1.6) return [4, 5, "a close portrait: near square"];
+  if (widthM >= 4.5) return [3, 2, "a wide view: landscape"];
+  return [3, 4, "the default portrait frame"];
+}
+function autoLatentSize(st) {
+  const [wr, hr, why] = suggestAspect(st);
+  const total = Math.max(0.05, st.latent_mp || 1) * 1e6;
+  const w = Math.sqrt(total * wr / hr), h = w * hr / wr;
+  const r = (v) => Math.max(64, Math.round(v / 64) * 64);
+  return [r(w), r(h), wr + ":" + hr + ", " + why];
 }
 
 // ---- the panel ---------------------------------------------------------------
@@ -173,6 +210,20 @@ export function buildStudio(host, S) {
   sTtl.textContent = "SUBJECTS";
   subjCard.appendChild(sTtl);
   right.appendChild(subjCard);
+
+  // AUTO LATENT, the user's ask: the frame's aspect is part of the camera
+  // language, so an empty latent shaped by the angle, lens and scene spread
+  // comes out of the node; wire it into the sampler and the frame follows
+  const latCard = document.createElement("div");
+  latCard.className = "card";
+  const lTtl = document.createElement("div");
+  lTtl.className = "ttl";
+  lTtl.textContent = "AUTO LATENT";
+  const lSum = document.createElement("span");
+  lSum.className = "sum";
+  lTtl.appendChild(lSum);
+  latCard.appendChild(lTtl);
+  right.appendChild(latCard);
 
   const outCard = document.createElement("div");
   outCard.className = "card";
@@ -562,6 +613,43 @@ export function buildStudio(host, S) {
     subjCard.appendChild(add);
   }
 
+  function renderLatent() {
+    [...latCard.children].slice(1).forEach((c) => c.remove());
+    const row = document.createElement("div");
+    row.className = "row";
+    const b = document.createElement("button");
+    b.className = st.auto_latent ? "on" : "";
+    b.textContent = st.auto_latent ? "▦ Auto latent on" : "▦ Auto latent off";
+    b.title = "On: the latent output is an empty latent shaped to suit this "
+            + "camera - tall for steep low or high shots, wide for spread-out "
+            + "blocking, near square for close portraits - at the pixel budget "
+            + "below. Wire it into your sampler instead of an Empty Latent. Off: "
+            + "the latent output blocks and width/height still report the "
+            + "suggestion.";
+    b.onclick = () => { st.auto_latent = !st.auto_latent; write(); render(); };
+    row.appendChild(b);
+    latCard.appendChild(row);
+    latCard.appendChild(slider("Budget", 0.25, 4, 0.05, () => st.latent_mp,
+      (v) => { st.latent_mp = v; }, (v) => v.toFixed(2) + " MP"));
+    const brow = document.createElement("div");
+    brow.className = "row";
+    const bk = document.createElement("span");
+    bk.className = "k";
+    bk.textContent = "Batch";
+    const bi = document.createElement("input");
+    bi.type = "number"; bi.min = "1"; bi.max = "64"; bi.step = "1";
+    bi.value = String(st.latent_batch || 1);
+    bi.onchange = () => { st.latent_batch = Math.max(1, Math.min(64, parseInt(bi.value, 10) || 1)); write(); };
+    brow.append(bk, bi);
+    latCard.appendChild(brow);
+    const why = document.createElement("div");
+    why.className = "note";
+    const [w, h, reason] = autoLatentSize(st);
+    why.textContent = "Suggests " + w + " × " + h + " (" + reason + ")";
+    latCard.appendChild(why);
+    lSum.textContent = w + " × " + h;
+  }
+
   let previewTimer = null;
   function readout() {
     const cam = st.camera;
@@ -570,6 +658,7 @@ export function buildStudio(host, S) {
     camSum.textContent = "pitch " + Math.round(-geo.pitch) + "° · "
       + geo.distance.toFixed(1) + " m · " + Math.round(fovDeg(cam.focal_mm)) + "° fov";
     joinB.textContent = st.join === "lead" ? "Leads the prompt" : "Trails the prompt";
+    { const [w, h] = autoLatentSize(st); lSum.textContent = w + " × " + h; }
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
       try {
@@ -584,6 +673,7 @@ export function buildStudio(host, S) {
     st = normalise(st);
     renderCamera();
     renderSubjects();
+    renderLatent();
     draw();
     readout();
   }
