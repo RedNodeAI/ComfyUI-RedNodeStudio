@@ -9334,16 +9334,12 @@ function promptsBody(node, body) {
         };
         // the mock's two columns: the frame on the left, the assembled prompt
         // in a PROMPT PREVIEW card on the right, side by side when wide
-        const cols = document.createElement("div");
-        cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) "
-          + "minmax(0,1fr);gap:10px";
-        const pv = sectionCard("PROMPT PREVIEW", "#a855f7");
-        pv.style.alignSelf = "start";
-        F.previewHost = pv;
+        // the frame lays itself out in two columns now (writing left,
+        // dials and preview right), the arrangement the user drew
+        F.twoColumn = true;
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
-        cols.append(host, pv);
-        box.appendChild(cols);
+        box.appendChild(host);
 
 
       }

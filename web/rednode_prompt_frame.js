@@ -141,6 +141,13 @@ const STYLE = `
 .rn-pf-box > .head:hover .car { color: #fff; }
 .rn-pf-box > .body { display: flex; flex-direction: column; gap: 8px;
   padding: 2px 12px 12px; }
+.rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: 10px; align-items: start; }
+.rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rn-pf-expand { position: absolute; top: 4px; right: 6px; z-index: 2;
+  background: #15171bcc; border: 1px solid #33373d; border-radius: 4px;
+  color: #9aa0a8; cursor: pointer; font-size: 11px; padding: 1px 5px; }
+.rn-pf-expand:hover { border-color: #a855f7; color: #fff; }
 /* the character counter under a text field, right-aligned and dim */
 .rn-pf-count { text-align: right; font-size: 10.5px; color: #6b7280; margin-top: -4px; }
 /* the framing chips, the mock's Portrait / Landscape / Square row */
@@ -359,6 +366,18 @@ export function buildFrameEditor(wrap, F) {
   const foldSet = (k, v) => { if (F.folds?.set) F.folds.set(k, v); else localFolds[k] = v; };
   const ICONS = { style: "✨", subject: "👤", surroundings: "⛰",
                   framing: "\u2316", light: "\u2600" };
+  // TWO COLUMNS when the host is wide (the Workspace's Prompts tab): the
+  // writing sections stack on the left, the dials and the preview on the
+  // right - the arrangement the user drew. A narrow host keeps one column.
+  let colL = null, colR = null;
+  if (F.twoColumn) {
+    const cols = el("div", "rn-pf-cols");
+    colL = el("div", "rn-pf-col");
+    colR = el("div", "rn-pf-col");
+    cols.appendChild(colL); cols.appendChild(colR);
+    wrap.appendChild(cols);
+  }
+  const RIGHT = new Set(["light", "framing"]);
   const group = (key, title, hint, els) => {
     const gbox = el("div", "rn-pf-box");
     const gh = el("div", "head");
@@ -377,26 +396,83 @@ export function buildFrameEditor(wrap, F) {
     gh.addEventListener("click", () => { foldSet(key, !isOpen()); apply(); });
     apply();
     gbox.appendChild(gh); gbox.appendChild(bd);
-    wrap.appendChild(gbox);
+    (colL ? (RIGHT.has(key) ? colR : colL) : wrap).appendChild(gbox);
   };
-  const counted = (ta, max) => {
+  const bigEdit = (title, ta) => {
+    document.querySelector(".rn-pf-bigedit")?.remove();
+    const ov = el("div", "rn-pf-bigedit");
+    ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
+      + "display:flex;align-items:center;justify-content:center";
+    const panel = el("div", null);
+    panel.style.cssText = "display:flex;flex-direction:column;gap:10px;"
+      + "width:min(920px,94vw);height:min(72vh,760px);background:#16181c;"
+      + "border:1px solid #3a3f47;border-radius:8px;padding:14px;"
+      + "box-shadow:0 10px 40px rgba(0,0,0,.6)";
+    const h = el("div", null, title);
+    h.style.cssText = "font:600 14px system-ui,sans-serif;color:#e8ecf1";
+    const big = document.createElement("textarea");
+    big.value = ta.value || "";
+    big.style.cssText = "flex:1;min-height:0;background:#101216;border:1px solid "
+      + "#2a2e34;border-radius:6px;color:#e2e5ea;font-size:14px;line-height:1.5;"
+      + "padding:10px 12px;resize:none";
+    const foot = el("div", null);
+    foot.style.cssText = "display:flex;gap:8px;justify-content:flex-end";
+    const mk = (label, primary, fn) => {
+      const b = el("button", null, label);
+      b.style.cssText = "padding:7px 18px;border-radius:5px;font-size:13px;"
+        + "cursor:pointer;border:1px solid " + (primary
+          ? "#2e7d4f;background:#2e7d4f;color:#fff"
+          : "#33373d;background:#15171b;color:#c8ccd2");
+      b.addEventListener("click", fn);
+      return b;
+    };
+    const closeIt = () => ov.remove();
+    const saveIt = () => {
+      ta.value = big.value;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      ta.dispatchEvent(new Event("change", { bubbles: true }));
+      closeIt();
+    };
+    foot.appendChild(mk("Cancel", false, closeIt));
+    foot.appendChild(mk("Save", true, saveIt));
+    big.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.stopPropagation(); closeIt(); }
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) saveIt();
+    });
+    ov.addEventListener("pointerdown", (e) => { if (e.target === ov) closeIt(); });
+    panel.addEventListener("pointerdown", (e) => e.stopPropagation());
+    panel.appendChild(h); panel.appendChild(big); panel.appendChild(foot);
+    ov.appendChild(panel);
+    document.body.appendChild(ov);
+    big.focus();
+    big.setSelectionRange(big.value.length, big.value.length);
+  };
+  const counted = (ta, max, title) => {
     const wrapC = el("div", null);
-    wrapC.style.cssText = "display:flex;flex-direction:column";
+    wrapC.style.cssText = "display:flex;flex-direction:column;position:relative";
     const cnt = el("div", "rn-pf-count", "");
     const upd = () => { cnt.textContent = (ta.value || "").length + " / " + max; };
     ta.addEventListener("input", upd);
     upd();
-    wrapC.appendChild(ta); wrapC.appendChild(cnt);
+    // the expand glyph, same gesture as every prompt box in the pack:
+    // click it or double-click the field to write full size
+    const ex = el("button", "rn-pf-expand", "⛶");
+    ex.title = "Open the fullscreen editor. Double-clicking the box does the "
+             + "same; Esc cancels, Ctrl+Enter saves.";
+    const open = () => bigEdit(title || "Prompt", ta);
+    ex.addEventListener("click", open);
+    ta.addEventListener("dblclick", open);
+    wrapC.appendChild(ta); wrapC.appendChild(ex); wrapC.appendChild(cnt);
     ta._rnCount = upd;
     return wrapC;
   };
-  group("style", "Style", "the overall look and feel.", [styleRow, counted(styleExtra, 200)]);
-  group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600)]);
-  group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300)]);
+  group("style", "Style", "the overall look and feel.", [styleRow, counted(styleExtra, 200, "Style wording")]);
+  group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600, "Subject")]);
+  group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300, "Surroundings")]);
   group("framing", "Framing & placement", "how it's framed and positioned",
         [frameChips, frameWrap, pushRow, placeRow, placementRow]);
   group("light", "Light & colour", "lighting mood and colours.",
-        [lightRow, brightRow, counted(lac, 200)]);
+        [lightRow, brightRow, counted(lac, 200, "Light and colour")]);
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
@@ -426,7 +502,19 @@ export function buildFrameEditor(wrap, F) {
   });
   outBar.appendChild(copyB); outBar.appendChild(bigB);
   outWrap.appendChild(note); outWrap.appendChild(out); outWrap.appendChild(outBar);
-  (F.previewHost || wrap).appendChild(outWrap);
+  if (F.previewHost) F.previewHost.appendChild(outWrap);
+  else if (colR) {
+    const pvBox = el("div", "rn-pf-box");
+    const pvHead = el("div", "head");
+    pvHead.style.cursor = "default";
+    pvHead.appendChild(el("span", "ico", "✎"));
+    pvHead.appendChild(el("b", null, "Prompt preview"));
+    pvBox.appendChild(pvHead);
+    const pvBody = el("div", "body");
+    pvBody.appendChild(outWrap);
+    pvBox.appendChild(pvBody);
+    colR.appendChild(pvBox);
+  } else wrap.appendChild(outWrap);
 
   // ---- wiring ---------------------------------------------------------------------------
   const brightLabel = (v) => (v === 0 ? "neutral" : (v > 0 ? "+" : "") + v);
