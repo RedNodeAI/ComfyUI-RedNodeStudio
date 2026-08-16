@@ -9321,6 +9321,34 @@ function latentBody(node, body) {
 
   vrow.append(stage, chips);
   body.appendChild(vrow);
+  // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
+  // for beside the visual chips: squares for the eye, names for the click
+  {
+    const arow = document.createElement("div");
+    arow.className = "rn-ws-row";
+    const alab = document.createElement("span");
+    alab.className = "rn-ws-note";
+    alab.style.cssText = "flex:none;width:62px";
+    alab.textContent = "Aspect";
+    const asel = document.createElement("select");
+    asel.className = "rn-ws-res";
+    const current = ASPECTS.find((x) => x[0] === L.aspect
+      || Math.abs(L.w / L.h - x[1] / x[2]) < 0.02);
+    const opts = [["", "(custom " + L.w + " x " + L.h + ")"]].concat(
+      ASPECTS.map((a) => [a[0], a[0] + " (" + a[3] + ")"]));
+    for (const [value, label] of opts) {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = label;
+      o.selected = value === (current ? current[0] : "");
+      asel.appendChild(o);
+    }
+    asel.title = "The canvas ratio by name; the Scale below is the pixel "
+               + "budget it shapes. Same presets as the chips above.";
+    asel.onchange = () => { if (asel.value) applyAspect(asel.value); };
+    arow.append(alab, asel);
+    body.appendChild(arow);
+  }
   if (L.random && node._rnPicks?.latent) {
     const rolled = document.createElement("div");
     rolled.className = "rn-ws-note";
