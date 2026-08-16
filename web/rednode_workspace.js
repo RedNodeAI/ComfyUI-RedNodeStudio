@@ -612,18 +612,23 @@ css.textContent = `
 .rn-ws-vram.med{background:#241d12;color:#f0c58a;border:1px solid #6b4a1d}
 .rn-ws-vram.low{background:#16241c;color:#86d3a1;border:1px solid #2f7a4d}
 .rn-ws-vram.off{background:#1b1e23;color:#6b7280;border:1px solid #33373d}
-.rn-ws-latstage{position:relative;width:200px;height:150px;background:#111316;border:1px solid #33373d;
-  border-radius:6px;display:flex;align-items:center;justify-content:center;flex:none}
+.rn-ws-latstage{position:relative;width:100%;height:300px;background:#0f1114;
+  border:1px solid #2a2e34;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;flex:none;
+  background-image:linear-gradient(#1a1d22 1px,transparent 1px),
+    linear-gradient(90deg,#1a1d22 1px,transparent 1px);background-size:24px 24px}
 .rn-ws-latrect{background:#1d2a3a;border:2px solid #4a8fe0;border-radius:3px;display:flex;
   align-items:center;justify-content:center;color:#9dc0ff;font-size:11px;font-weight:700;
   cursor:move;user-select:none;box-shadow:0 0 10px #4a8fe044}
 .rn-ws-latrect.rolling{border-color:#f0c58a;color:#f0c58a;border-style:dashed;box-shadow:0 0 10px #f0c58a44}
-.rn-ws-latchips{display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;flex:1}
-.rn-ws-latchip{width:34px;height:30px;background:#15171b;border:1px solid #33373d;border-radius:4px;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
-.rn-ws-latchip:hover{border-color:#b8283c}
-.rn-ws-latchip.cur{border-color:#4a8fe0;background:#161d29}
-.rn-ws-latchip i{display:block;background:#3a4b61;border:1px solid #6b93c4;border-radius:2px}
+.rn-ws-latchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;flex:none}
+.rn-ws-latchip{min-width:58px;height:54px;background:#15171b;border:1px solid #2a2e34;
+  border-radius:7px;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:4px;cursor:pointer;flex:none;padding:0 8px;
+  color:#c8ccd2;font-size:11.5px;font-weight:600}
+.rn-ws-latchip:hover{border-color:#4a8fe0}
+.rn-ws-latchip.cur{border-color:#4a8fe0;background:#4a8fe01a;color:#fff}
+.rn-ws-latchip i{display:block;background:transparent;border:2px solid #9dc0ff;border-radius:2px}
 .rn-ws-lookgrid{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}
 .rn-ws-look{position:relative;border-radius:5px;overflow:hidden;
   border:2px solid #2a2e35;background:#111316;cursor:pointer;flex:none;display:flex;
@@ -9517,10 +9522,29 @@ function latentBody(node, body) {
   stage.className = "rn-ws-latstage";
   const rect = document.createElement("div");
   rect.className = "rn-ws-latrect" + (L.random ? " rolling" : "");
-  const fit = 140 / Math.max(L.w, L.h);
-  rect.style.width = Math.max(28, Math.round(L.w * fit)) + "px";
-  rect.style.height = Math.max(24, Math.round(L.h * fit)) + "px";
-  rect.textContent = L.random ? "?" : `${eff(L.w)} × ${eff(L.h)}`;
+  const fit = 250 / Math.max(L.w, L.h);
+  rect.style.width = Math.max(40, Math.round(L.w * fit)) + "px";
+  rect.style.height = Math.max(32, Math.round(L.h * fit)) + "px";
+  rect.style.flexDirection = "column";
+  rect.style.fontSize = "16px";
+  const ASPECT_LIST = [
+    ["1:1", 1, 1, "Square"], ["2:3", 2, 3, "Portrait"],
+    ["3:4", 3, 4, "Portrait Standard"], ["4:5", 4, 5, "Portrait Tall"],
+    ["9:16", 9, 16, "Portrait Phone"], ["4:3", 4, 3, "Landscape Standard"],
+    ["3:2", 3, 2, "Landscape"], ["16:9", 16, 9, "Widescreen"],
+  ];
+  const rectLabel = () => {
+    if (L.random) { rect.textContent = "?"; return; }
+    const a = ASPECT_LIST.find((x) => Math.abs(L.w / L.h - x[1] / x[2]) < 0.02);
+    rect.replaceChildren();
+    const big = document.createElement("span");
+    big.textContent = eff(L.w) + " × " + eff(L.h);
+    const smallL = document.createElement("span");
+    smallL.style.cssText = "font-size:11px;font-weight:600;opacity:.75";
+    smallL.textContent = a ? a[0] + " · " + a[3] : "custom";
+    rect.append(big, smallL);
+  };
+  rectLabel();
   rect.title = L.random
     ? "Random is on: a preset size is rolled each queue."
     : "Drag to reshape: sideways for width, up and down for height. Snaps to 64.";
@@ -9534,10 +9558,10 @@ function latentBody(node, body) {
         const h1 = Math.abs(dy) < 6 ? h0 : h0 + dy * 6;
         L.w = Math.max(256, Math.min(4096, Math.round(w1 / 64) * 64));
         L.h = Math.max(256, Math.min(4096, Math.round(h1 / 64) * 64));
-        const f = 140 / Math.max(L.w, L.h);
-        rect.style.width = Math.max(28, Math.round(L.w * f)) + "px";
-        rect.style.height = Math.max(24, Math.round(L.h * f)) + "px";
-        rect.textContent = `${eff(L.w)} × ${eff(L.h)}`;
+        const f = 250 / Math.max(L.w, L.h);
+        rect.style.width = Math.max(40, Math.round(L.w * f)) + "px";
+        rect.style.height = Math.max(32, Math.round(L.h * f)) + "px";
+        rectLabel();
       };
       const up = () => {
         window.removeEventListener("pointermove", move);
@@ -9555,12 +9579,7 @@ function latentBody(node, body) {
   // ASPECT presets, the Sick Ollie canvas system the user preferred: a ratio
   // shapes the pixel budget (the Scale number below) into a canvas, floored
   // to 64s. w/h stay the stored truth, so nothing downstream changes.
-  const ASPECTS = [
-    ["1:1", 1, 1, "Square"], ["2:3", 2, 3, "Portrait"],
-    ["3:4", 3, 4, "Portrait Standard"], ["4:5", 4, 5, "Portrait Tall"],
-    ["9:16", 9, 16, "Portrait Phone"], ["4:3", 4, 3, "Landscape Standard"],
-    ["3:2", 3, 2, "Landscape"], ["16:9", 16, 9, "Widescreen"],
-  ];
+  const ASPECTS = ASPECT_LIST;
   const mpOf = () => (typeof L.mp === "number" && L.mp > 0)
     ? L.mp
     : Math.max(0.25, Math.round((L.w * L.h * (L.scale || 1) * (L.scale || 1)) / 1e6 * 20) / 20);
@@ -9589,29 +9608,74 @@ function latentBody(node, body) {
     chip.className = "rn-ws-latchip" + (cur ? " cur" : "");
     chip.title = key + " (" + name + ")";
     const mini = document.createElement("i");
-    const mfit = 22 / Math.max(wr, hr);
+    const mfit = 18 / Math.max(wr, hr);
     mini.style.width = Math.max(6, Math.round(wr * mfit)) + "px";
     mini.style.height = Math.max(6, Math.round(hr * mfit)) + "px";
     chip.appendChild(mini);
+    const cl = document.createElement("span");
+    cl.textContent = key;
+    chip.appendChild(cl);
     chip.onclick = () => applyAspect(key);
     chips.appendChild(chip);
   }
   const dice = document.createElement("div");
-  dice.className = "rn-ws-latchip" + (L.random ? " cur" : "");
+  dice.className = "rn-ws-latchip rn-ws-latdice" + (L.random ? " cur" : "");
   dice.title = L.random
     ? "Random is on: one of these presets is rolled fresh each queue. Click to stop."
     : "Roll a random preset size on every queue.";
-  dice.textContent = "🎲";
+  const dIco = document.createElement("span");
+  dIco.textContent = "🎲";
+  dIco.style.fontSize = "16px";
+  const dLab = document.createElement("span");
+  dLab.textContent = "Random";
+  dice.append(dIco, dLab);
   dice.onclick = () => { L.random = !L.random; writeCfg(node); render(node); };
   chips.appendChild(dice);
 
   // the whole canvas cluster lives in ONE card, the user's call: slightly
   // darker ground and a border, so size controls read as a single place
-  const canvasCard = sectionCard("CANVAS", "#4a8fe0",
+  const cols = document.createElement("div");
+  cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1.6fr) "
+    + "minmax(260px,1fr);gap:10px;align-items:start";
+  const previewCard = sectionCard("CANVAS PREVIEW", "#4a8fe0");
+  const canvasCard = sectionCard("DIMENSIONS", "#4a8fe0",
     (L.random ? "random preset" : L.w + " × " + L.h)
     + " · batch " + L.batch);
-  vrow.append(stage, chips);
-  canvasCard.appendChild(vrow);
+  vrow.style.flexDirection = "column";
+  vrow.style.alignItems = "stretch";
+  vrow.append(chips, stage);
+  previewCard.appendChild(vrow);
+  {
+    const strip = document.createElement("div");
+    strip.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px";
+    const cell = (icon, k, v) => {
+      const c = document.createElement("div");
+      c.style.cssText = "display:flex;align-items:center;gap:8px;background:#101216;"
+        + "border:1px solid #2a2e34;border-radius:7px;padding:8px 10px";
+      const ic = document.createElement("span");
+      ic.textContent = icon;
+      ic.style.cssText = "font-size:14px;color:#8fa8c8";
+      const t = document.createElement("div");
+      t.style.cssText = "display:flex;flex-direction:column;min-width:0";
+      const kk = document.createElement("span");
+      kk.className = "rn-ws-note";
+      kk.textContent = k;
+      const vv = document.createElement("span");
+      vv.style.cssText = "font-size:12.5px;font-weight:600;color:#e8ecf1";
+      vv.textContent = v;
+      t.append(kk, vv);
+      c.append(ic, t);
+      return c;
+    };
+    const w0 = eff(L.w), h0 = eff(L.h);
+    const gb = (w0 * h0 * (L.batch || 1) * 3.2) / 1e9;
+    strip.append(
+      cell("▦", "Canvas", L.random ? "random" : w0 + " × " + h0),
+      cell("⬚", "Latent grid", L.random ? "—" : (w0 / 8) + " × " + (h0 / 8)),
+      cell("∿", "VRAM (estimate)", L.random ? "—" : "~" + gb.toFixed(2) + " GB"));
+    previewCard.appendChild(strip);
+  }
+  cols.appendChild(previewCard);
   // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
   // for beside the visual chips: squares for the eye, names for the click
   {
@@ -9637,7 +9701,13 @@ function latentBody(node, body) {
     asel.title = "The canvas ratio by name; the Scale below is the pixel "
                + "budget it shapes. Same presets as the chips above.";
     asel.onchange = () => { if (asel.value) applyAspect(asel.value); };
-    arow.append(alab, asel);
+    const swapTop = document.createElement("button");
+    swapTop.className = "rn-ws-btn";
+    swapTop.style.cssText = "width:auto;padding:0 12px";
+    swapTop.textContent = "⇄ Swap";
+    swapTop.title = "Swap width and height.";
+    swapTop.onclick = () => { const w = L.w; L.w = L.h; L.h = w; writeCfg(node); render(node); };
+    arow.append(alab, asel, swapTop);
     canvasCard.appendChild(arow);
   }
   if (L.random && node._rnPicks?.latent) {
@@ -9673,7 +9743,7 @@ function latentBody(node, body) {
     L.w = wh[0]; L.h = wh[1];
     L.scale = 1;
     sv.textContent = svText();
-    rect.textContent = L.random ? "?" : eff(L.w) + " × " + eff(L.h);
+    rectLabel();
     writeCfg(node);
   });
   sr.addEventListener("change", () => render(node));
@@ -9681,33 +9751,49 @@ function latentBody(node, body) {
   canvasCard.appendChild(srow);
 
   const drow = document.createElement("div");
-  drow.className = "rn-ws-row";
-  const num = (label, key, min, max) => {
+  drow.style.cssText = "display:flex;flex-direction:column;gap:6px";
+  const num = (label, key, min, max, step, unit) => {
+    const r = document.createElement("div");
+    r.style.cssText = "display:flex;align-items:center;gap:6px";
     const wl = document.createElement("span");
     wl.className = "rn-ws-note";
+    wl.style.cssText = "flex:none;width:64px";
     wl.textContent = label;
     const i = document.createElement("input");
     i.type = "number";
-    i.min = min; i.max = max; i.step = 64;
+    i.min = min; i.max = max; i.step = step;
     i.value = L[key];
-    i.style.cssText = "width:82px;background:#15171b;border:1px solid #33373d;border-radius:4px;"
-                    + "color:#e8ecf1;font-size:12px;padding:4px 6px";
-    i.addEventListener("change", () => {
-      const v = Math.max(min, Math.min(max, Math.round((parseInt(i.value, 10) || min) / 8) * 8));
-      L[key] = v; i.value = v;
+    i.style.cssText = "flex:1;min-width:0;background:#101216;border:1px solid #2f333a;"
+      + "border-radius:6px;color:#e8ecf1;font-size:13px;font-weight:600;padding:7px 9px";
+    const commit = (v) => {
+      const snapped = key === "batch" ? Math.round(v) : Math.round(v / 8) * 8;
+      L[key] = Math.max(min, Math.min(max, snapped));
+      i.value = L[key];
+      if (key !== "batch") L.aspect = "";
       writeCfg(node); render(node);
-    });
-    return [wl, i];
+    };
+    i.addEventListener("change", () => commit(parseInt(i.value, 10) || min));
+    const un = document.createElement("span");
+    un.className = "rn-ws-note";
+    un.style.cssText = "flex:none;width:18px";
+    un.textContent = unit || "";
+    const mk = (t, d) => {
+      const b = document.createElement("button");
+      b.className = "rn-ws-btn";
+      b.style.cssText = "width:30px;padding:0";
+      b.textContent = t;
+      b.onclick = () => commit((parseInt(i.value, 10) || min) + d);
+      return b;
+    };
+    r.append(wl, i, un, mk("−", -step), mk("+", step));
+    return r;
   };
-  const swap = document.createElement("button");
-  swap.className = "rn-ws-btn";
-  swap.textContent = "⇄";
-  swap.title = "Swap width and height.";
-  swap.onclick = () => { const w = L.w; L.w = L.h; L.h = w; writeCfg(node); render(node); };
-  drow.append(...num("Width", "w", 256, 4096), ...num("Height", "h", 256, 4096), swap,
-              ...num("Batch", "batch", 1, 64));
+  drow.append(num("Width", "w", 256, 4096, 64, "px"),
+              num("Height", "h", 256, 4096, 64, "px"),
+              num("Batch", "batch", 1, 64, 1, ""));
   canvasCard.appendChild(drow);
-  body.appendChild(canvasCard);
+  cols.appendChild(canvasCard);
+  body.appendChild(cols);
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
