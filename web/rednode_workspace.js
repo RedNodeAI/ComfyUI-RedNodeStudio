@@ -9553,23 +9553,73 @@ function latentBody(node, body) {
   rectLabel();
   rect.title = L.random
     ? "Random is on: a preset size is rolled each queue."
-    : "Drag to reshape: sideways for width, up and down for height. Snaps to 64.";
+    : "Drag an EDGE to reshape: top or bottom changes height, left or right "
+      + "changes width. The pixel budget stays locked, so this changes the "
+      + "ratio, not the scale. Snaps to 64.";
   if (!L.random) {
+    // EDGE-HANDLE RESIZE, the user's spec: grab the top or bottom edge and
+    // only height moves; grab left or right and only width moves; the edge
+    // you hold lights up; the pixel BUDGET is locked, so a drag trades one
+    // dimension for the other and the total pixels stay where the Scale
+    // slider put them - reshaping the ratio, never the scale.
+    const EDGE = 14;               // px from an edge that counts as that edge
+    const edgeAt = (ev) => {
+      const r = rect.getBoundingClientRect();
+      const x = ev.clientX - r.left, y = ev.clientY - r.top;
+      const dl = x, dr = r.width - x, dt = y, db = r.height - y;
+      const m = Math.min(dl, dr, dt, db);
+      if (m > EDGE) return null;
+      if (m === dt) return "top";
+      if (m === db) return "bottom";
+      if (m === dl) return "left";
+      return "right";
+    };
+    const cursorFor = (edge) => (edge === "top" || edge === "bottom") ? "ns-resize"
+                              : edge ? "ew-resize" : "default";
+    const glow = (edge) => {
+      // the held edge in blue at 3px, the rest at their resting 2px
+      const on = "3px solid #9dc0ff", off = "2px solid #4a8fe0";
+      rect.style.borderTop = edge === "top" ? on : off;
+      rect.style.borderBottom = edge === "bottom" ? on : off;
+      rect.style.borderLeft = edge === "left" ? on : off;
+      rect.style.borderRight = edge === "right" ? on : off;
+    };
+    rect.addEventListener("pointermove", (ev) => {
+      if (rect._rnDrag) return;
+      const edge = edgeAt(ev);
+      rect.style.cursor = cursorFor(edge);
+      glow(edge);
+    });
+    rect.addEventListener("pointerleave", () => { if (!rect._rnDrag) glow(null); });
     rect.addEventListener("pointerdown", (e) => {
+      const edge = edgeAt(e);
+      if (!edge) return;           // the middle is not a handle
       // OWN THE GESTURE: without capture, the moment the pointer leaves the
-      // panel LiteGraph takes the drag and pans the canvas (the user's
-      // "bugs out and drags when the mouse leaves the node") - and the
-      // events stop reaching us, so the box freezes half-resized
+      // panel LiteGraph takes the drag and pans the canvas, and the events
+      // stop reaching us, so the box freezes half-resized
       e.stopPropagation();
       e.preventDefault();
       try { rect.setPointerCapture(e.pointerId); } catch (err) { /* older hosts */ }
+      rect._rnDrag = edge;
+      glow(edge);
       const startX = e.clientX, startY = e.clientY, w0 = L.w, h0 = L.h;
+      const budget = w0 * h0;      // locked for the whole drag
+      const snap = (v) => Math.max(256, Math.min(4096, Math.round(v / 64) * 64));
+      // 3 px of pointer per 8 canvas px: a full sweep of the stage covers a
+      // sensible range instead of the old x6, which the user found twitchy
+      const GAIN = 8 / 3;
       const move = (ev) => {
-        const dx = ev.clientX - startX, dy = ev.clientY - startY;
-        const w1 = Math.abs(dx) < 6 ? w0 : w0 + dx * 6;
-        const h1 = Math.abs(dy) < 6 ? h0 : h0 + dy * 6;
-        L.w = Math.max(256, Math.min(4096, Math.round(w1 / 64) * 64));
-        L.h = Math.max(256, Math.min(4096, Math.round(h1 / 64) * 64));
+        let w = w0, h = h0;
+        if (edge === "left" || edge === "right") {
+          const dx = ev.clientX - startX;
+          w = snap(w0 + (edge === "right" ? dx : -dx) * GAIN);
+          h = snap(budget / w);
+        } else {
+          const dy = ev.clientY - startY;
+          h = snap(h0 + (edge === "bottom" ? dy : -dy) * GAIN);
+          w = snap(budget / h);
+        }
+        L.w = w; L.h = h;
         const f = 360 / Math.max(L.w, L.h);
         rect.style.width = Math.max(48, Math.round(L.w * f)) + "px";
         rect.style.height = Math.max(40, Math.round(L.h * f)) + "px";
@@ -9580,8 +9630,12 @@ function latentBody(node, body) {
         rect.removeEventListener("pointerup", up);
         rect.removeEventListener("pointercancel", up);
         try { rect.releasePointerCapture(ev.pointerId); } catch (err) { /* ok */ }
-        L.aspect = "";                     // hand-shaped: no ratio chip owns it
-        L.mp = Math.round((L.w * L.h) / 1e6 * 20) / 20;
+        rect._rnDrag = null;
+        glow(null);
+        // hand-shaped: the tag goes unless the new ratio IS a preset; the
+        // budget stays the budget, that is the whole point of the lock
+        const hit = ASPECT_LIST.find((x) => Math.abs(L.w / L.h - x[1] / x[2]) < 0.02);
+        L.aspect = hit ? hit[0] : "";
         writeCfg(node); render(node);
       };
       // listeners on the CAPTURING element: with capture set, every move and
