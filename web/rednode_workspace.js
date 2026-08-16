@@ -9174,6 +9174,8 @@ function latentBody(node, body) {
       const up = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
+        L.aspect = "";                     // hand-shaped: no ratio chip owns it
+        L.mp = Math.round((L.w * L.h) / 1e6 * 20) / 20;
         writeCfg(node); render(node);
       };
       window.addEventListener("pointermove", move);
@@ -9182,21 +9184,48 @@ function latentBody(node, body) {
   }
   stage.appendChild(rect);
 
+  // ASPECT presets, the Sick Ollie canvas system the user preferred: a ratio
+  // shapes the pixel budget (the Scale number below) into a canvas, floored
+  // to 64s. w/h stay the stored truth, so nothing downstream changes.
+  const ASPECTS = [
+    ["1:1", 1, 1, "Square"], ["2:3", 2, 3, "Portrait"],
+    ["3:4", 3, 4, "Portrait Standard"], ["4:5", 4, 5, "Portrait Tall"],
+    ["9:16", 9, 16, "Portrait Phone"], ["4:3", 4, 3, "Landscape Standard"],
+    ["3:2", 3, 2, "Landscape"], ["16:9", 16, 9, "Widescreen"],
+  ];
+  const mpOf = () => (typeof L.mp === "number" && L.mp > 0)
+    ? L.mp
+    : Math.max(0.25, Math.round((L.w * L.h * (L.scale || 1) * (L.scale || 1)) / 1e6 * 20) / 20);
+  const mpCalc = (wr, hr, mp) => {
+    const total = Math.max(0.05, mp) * 1e6;
+    const w = Math.sqrt(total * wr / hr);
+    const r64 = (v) => Math.max(256, Math.round(v / 64) * 64);
+    return [r64(w), r64(w * hr / wr)];
+  };
+  const applyAspect = (key) => {
+    const a = ASPECTS.find((x) => x[0] === key) || ASPECTS[2];
+    L.aspect = a[0];
+    L.mp = mpOf();
+    const wh = mpCalc(a[1], a[2], L.mp);
+    L.w = wh[0]; L.h = wh[1];
+    L.scale = 1;                     // mp IS the budget now; no double scaling
+    L.random = false;
+    writeCfg(node); render(node);
+  };
   const chips = document.createElement("div");
   chips.className = "rn-ws-latchips";
-  for (const [label, w, h] of LATENT_PRESETS) {
+  for (const [key, wr, hr, name] of ASPECTS) {
     const chip = document.createElement("div");
-    chip.className = "rn-ws-latchip" + (!L.random && L.w === w && L.h === h ? " cur" : "");
-    chip.title = label;
+    const cur = !L.random && (L.aspect === key
+      || Math.abs(L.w / L.h - wr / hr) < 0.02);
+    chip.className = "rn-ws-latchip" + (cur ? " cur" : "");
+    chip.title = key + " (" + name + ")";
     const mini = document.createElement("i");
-    const mfit = 22 / Math.max(w, h);
-    mini.style.width = Math.max(6, Math.round(w * mfit)) + "px";
-    mini.style.height = Math.max(6, Math.round(h * mfit)) + "px";
+    const mfit = 22 / Math.max(wr, hr);
+    mini.style.width = Math.max(6, Math.round(wr * mfit)) + "px";
+    mini.style.height = Math.max(6, Math.round(hr * mfit)) + "px";
     chip.appendChild(mini);
-    chip.onclick = () => {
-      L.w = w; L.h = h; L.random = false;
-      writeCfg(node); render(node);
-    };
+    chip.onclick = () => applyAspect(key);
     chips.appendChild(chip);
   }
   const dice = document.createElement("div");
@@ -9224,21 +9253,29 @@ function latentBody(node, body) {
   slab.textContent = "Scale";
   const sr = document.createElement("input");
   sr.type = "range";
-  sr.min = 1; sr.max = 2; sr.step = 0.05;
-  sr.value = L.scale;
-  sr.style.cssText = "width:140px;accent-color:#4a8fe0";
+  sr.min = 0.25; sr.max = 4; sr.step = 0.05;
+  sr.value = mpOf();
+  sr.style.cssText = "width:160px;height:20px;accent-color:#4a8fe0";
   const sv = document.createElement("span");
   sv.className = "rn-ws-note";
-  const svText = () => `${Number(L.scale).toFixed(2)}x = ${eff(L.w)} x ${eff(L.h)}`;
+  const svText = () => mpOf().toFixed(2) + " = " + eff(L.w) + " x " + eff(L.h);
   sv.textContent = svText();
-  sr.title = "Multiplies the canvas. 1 is the base size, 2 doubles both edges, which is "
-           + "four times the pixels (and the VRAM to match). Snaps to 8.";
+  sr.title = "The pixel budget, in millions of pixels, shaped by the aspect "
+           + "chip above (the Sick Ollie numbers, our name). 1.00 is Krea 2's "
+           + "native training size, 2.00 is twice the pixels and the VRAM to "
+           + "match. Snaps to 64s.";
   sr.addEventListener("input", () => {
-    L.scale = parseFloat(sr.value);
+    L.mp = parseFloat(sr.value);
+    const a = ASPECTS.find((x) => x[0] === L.aspect);
+    const wr = a ? a[1] : L.w, hr = a ? a[2] : L.h;
+    const wh = mpCalc(wr, hr, L.mp);
+    L.w = wh[0]; L.h = wh[1];
+    L.scale = 1;
     sv.textContent = svText();
-    rect.textContent = L.random ? "?" : `${eff(L.w)} × ${eff(L.h)}`;
+    rect.textContent = L.random ? "?" : eff(L.w) + " × " + eff(L.h);
     writeCfg(node);
   });
+  sr.addEventListener("change", () => render(node));
   srow.append(slab, sr, sv);
   body.appendChild(srow);
 
