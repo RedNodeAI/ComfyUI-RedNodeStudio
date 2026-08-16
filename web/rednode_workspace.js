@@ -266,7 +266,11 @@ css.textContent = `
   flex-wrap:wrap}
 .rn-ws-zrail{flex-direction:column;align-items:stretch;align-self:stretch;
   background:#16181c;border:1px solid #2f333a;border-radius:6px;padding:8px 7px;
-  gap:7px;flex-wrap:nowrap}
+  gap:7px;flex-wrap:nowrap;width:140px;box-sizing:border-box;flex:none}
+/* the colour swatches wrap to four a row inside the rail, so the widest child
+   stops deciding the rail's width; everywhere else they stay one strip */
+.rn-ws-zrail .rn-ws-swrow{flex-wrap:wrap;justify-content:center;
+  max-width:96px;margin:0 auto}
 .rn-ws-zrail .rn-ws-zb{width:100%;min-width:50px;min-height:38px;font-size:15px}
 .rn-ws-zrail .rn-ws-zpct{min-width:0;text-align:center}
 .rn-ws-zrail .sp{flex:1}
@@ -4374,6 +4378,7 @@ function workspacePrefs(node, body) {
     repaintPanes();
   });
   const swatches = document.createElement("span");
+  swatches.className = "rn-ws-swrow";
   swatches.style.cssText = "display:flex;gap:4px;flex:none;align-items:center";
   const swBtns = [];
   const syncSwatches = () => {
