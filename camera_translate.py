@@ -249,9 +249,14 @@ def describe(camera, subjects, output="krea2"):
     """camera: {pos:[x,y,z], target: index|None, target_height: m|None,
                 focal_mm, roll_deg}
     subjects: [{name, pos:[x,y,z], height, facing_deg, primary?}]
-    Returns the model-facing paragraph (str). output modes beyond krea2 come
-    later; today every mode returns the Krea 2 paragraph.
+    Returns the model-facing text (str). output: "krea2" (the physical-camera
+    paragraph, the tuned default), "short" (the same facts in a few plain
+    words, for encoders that choke on meters and degrees), "tags" (booru-style
+    tags for Pony / Illustrious / tag-trained XL). short and tags are UNTUNED
+    on XL as of 2026-08-17: built from the same geometry, wording unproven.
     """
+    if output in ("tags", "short"):
+        return _describe_compact(camera, subjects, output)
     if not subjects:
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
                      "facing_deg": 0}]
@@ -644,3 +649,135 @@ def auto_camera_loras(camera, subjects):
             "height": auto_height_strength(camera, subjects),
             "orbit": auto_orbit_strength(camera, subjects),
             "back": auto_back_strength(camera, subjects)}
+
+
+# ---------------------------------------------------------------- other outputs
+OUTPUT_MODES = ("krea2", "short", "tags")
+
+
+def _shot_facts(camera, subjects):
+    """The geometry every output mode is written from: pitch band, bearing
+    band, framing band, lens band, roll, lock. One place, three wordings."""
+    if not subjects:
+        subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
+                     "facing_deg": 0}]
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    sname = str(prime.get("name") or "the subject")
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face_y = spos[1] + float(prime.get("height", 1.7)) * 0.92
+    cpos = [float(x) for x in camera.get("pos", [0, face_y, 3.0])]
+    focal = float(camera.get("focal_mm", 35))
+    geo = camera_geometry(cpos, [spos[0], face_y, spos[2]])
+    rel = (geo["yaw"] - float(prime.get("facing_deg", 0)) + 180) % 360 - 180
+    width_m = 2.0 * geo["distance"] * math.tan(math.radians(fov_deg(focal) / 2.0))
+    p = geo["pitch"]          # > 0: camera below the face, looking up
+    if p >= 55:
+        pitch = "worm"
+    elif p >= 20:
+        pitch = "low"
+    elif p >= 6:
+        pitch = "slightly_low"
+    elif p > -6:
+        pitch = "eye"
+    elif p > -20:
+        pitch = "slightly_high"
+    elif p > -55:
+        pitch = "high"
+    elif p > -80:
+        pitch = "bird"
+    else:
+        pitch = "overhead"
+    a = abs(rel)
+    side = "left" if rel < 0 else "right"
+    if a < 20:
+        bearing = "front"
+    elif a < 65:
+        bearing = "three_quarter"
+    elif a < 115:
+        bearing = "profile"
+    elif a < 160:
+        bearing = "rear_three_quarter"
+    else:
+        bearing = "back"
+    if width_m < 0.9:
+        framing = "closeup"
+    elif width_m < 1.6:
+        framing = "portrait"
+    elif width_m < 2.6:
+        framing = "cowboy"
+    elif width_m < 4.5:
+        framing = "full"
+    else:
+        framing = "wide"
+    fov = fov_deg(focal)
+    lens = "ultra_wide" if fov > 85 else "wide" if fov > 60 else "normal" if fov > 30 else "tele"
+    roll = float(camera.get("roll_deg", 0) or 0)
+    return {"name": sname, "pitch": pitch, "pitch_deg": p, "bearing": bearing, "side": side,
+            "framing": framing, "lens": lens, "focal": focal, "roll": roll,
+            "locked": camera.get("lock", True) is not False,
+            "others": [str(o.get("name") or "another person") for k, o in enumerate(subjects) if k != ti]}
+
+
+_TAGS = {
+    "pitch": {"worm": "from below, worm's-eye view, extreme low angle",
+              "low": "from below, low angle", "slightly_low": "slightly from below",
+              "eye": "eye level", "slightly_high": "slightly from above",
+              "high": "from above, high angle", "bird": "from above, bird's-eye view",
+              "overhead": "from above, top-down view, overhead"},
+    "bearing": {"front": "facing viewer, looking at viewer", "three_quarter": "three-quarter view",
+                "profile": "from side, profile", "rear_three_quarter": "from behind, looking back",
+                "back": "from behind, back turned"},
+    "framing": {"closeup": "close-up, face focus", "portrait": "portrait, upper body",
+                "cowboy": "cowboy shot", "full": "full body", "wide": "wide shot, full body, scenery"},
+    "lens": {"ultra_wide": "fisheye, wide-angle lens", "wide": "wide-angle lens",
+             "normal": "", "tele": "telephoto lens, compressed perspective"},
+}
+
+_SHORT = {
+    "pitch": {"worm": "extreme low-angle shot from ground level looking straight up at %s",
+              "low": "low-angle shot from below, looking up at %s",
+              "slightly_low": "shot from slightly below %s's eye level",
+              "eye": "eye-level shot of %s",
+              "slightly_high": "shot from slightly above %s's eye level",
+              "high": "high-angle shot from above, looking down at %s",
+              "bird": "steep high-angle shot from well above, looking down on %s",
+              "overhead": "top-down overhead shot, looking straight down on %s"},
+    "bearing": {"front": "facing the camera", "three_quarter": "in a three-quarter view",
+                "profile": "in profile", "rear_three_quarter": "seen from behind and to the side",
+                "back": "seen from behind"},
+    "framing": {"closeup": "close-up of the face", "portrait": "head and shoulders",
+                "cowboy": "three-quarter figure", "full": "full figure",
+                "wide": "wide shot with the figure small in the frame"},
+    "lens": {"ultra_wide": "ultra-wide lens", "wide": "wide-angle lens", "normal": "",
+             "tele": "telephoto lens"},
+}
+
+
+def _describe_compact(camera, subjects, output):
+    f = _shot_facts(camera, subjects)
+    if output == "tags":
+        parts = [_TAGS["pitch"][f["pitch"]], _TAGS["bearing"][f["bearing"]],
+                 _TAGS["framing"][f["framing"]], _TAGS["lens"][f["lens"]]]
+        if abs(f["roll"]) >= 5:
+            parts.append("dutch angle")
+        if not f["locked"]:
+            parts.append("off-center composition")
+        if f["others"]:
+            parts.append("multiple subjects")
+        return ", ".join(p for p in parts if p)
+    # short: a sentence or two, no numbers
+    bits = [_SHORT["pitch"][f["pitch"]] % f["name"], _SHORT["bearing"][f["bearing"]],
+            _SHORT["framing"][f["framing"]]]
+    if abs(f["roll"]) >= 5:
+        bits.append("dutch tilt")
+    if _SHORT["lens"][f["lens"]]:
+        bits.append(_SHORT["lens"][f["lens"]])
+    if not f["locked"]:
+        bits.append("the subject off-center")
+    text = ", ".join(bits) + "."
+    if f["others"]:
+        text += " Also in the scene: %s." % ", ".join(f["others"])
+    return _cap(text)

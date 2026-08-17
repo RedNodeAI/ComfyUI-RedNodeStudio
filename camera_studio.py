@@ -97,7 +97,7 @@ def parse_state(config_json):
         people = [i for i, x in enumerate(subjects) if x["kind"] == "person"]
         camera["target"] = people[0] if people else 0
     return {"camera": camera, "subjects": subjects,
-            "output": str(d.get("output") or "krea2"),
+            "output": (d.get("output") if d.get("output") in _ct.OUTPUT_MODES else "krea2"),
             "join": str(d.get("join") or "lead"),
             # AUTO LATENT, the user's ask: an empty latent shaped by the camera's
             # angle, lens and the scene's spread, at a pixel budget. Off by

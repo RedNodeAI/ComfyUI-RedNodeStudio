@@ -126,9 +126,9 @@ function normalise(d) {
           ? { kind: String(s.rel.kind || ""), to: s.rel.to } : null,
       }));
     }
-    if (typeof d.output === "string") o.output = d.output;
     if (d.join === "trail") o.join = "trail";
     if (d.auto_latent === true) o.auto_latent = true;
+    if (["krea2", "short", "tags"].includes(d.output)) o.output = d.output;
     if (typeof d.zoom_lora === "string") o.zoom_lora = d.zoom_lora;
     if (["off", "auto", "manual"].includes(d.zoom_mode)) o.zoom_mode = d.zoom_mode;
     if (typeof d.zoom_strength === "number") o.zoom_strength = d.zoom_strength;
@@ -370,7 +370,21 @@ export function buildStudio(host, S) {
   joinB.title = "Where the camera paragraph goes when prompt_in is wired: leading "
     + "the prompt (the research's finding) or trailing it.";
   joinB.onclick = () => { st.join = st.join === "lead" ? "trail" : "lead"; write(); render(); };
-  outRow.append(copyB, joinB);
+  // OUTPUT STYLE (the user's ask: the studio for other models too). krea2 is
+  // the tuned paragraph; short and tags are the same geometry in plain words
+  // or booru tags, for XL-class encoders. Untuned there as of 2026-08-17.
+  const styleSel = document.createElement("select");
+  for (const [v, l] of [["krea2", "Krea 2 paragraph"], ["short", "Short (plain words)"],
+                        ["tags", "Tags (booru)"]]) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = l;
+    styleSel.appendChild(o);
+  }
+  styleSel.title = "Prompt style. Krea 2 paragraph is the tuned default; Short and Tags "
+    + "say the same camera in plain words or booru tags for XL / Pony / Illustrious "
+    + "(untuned there yet).";
+  styleSel.onchange = () => { st.output = styleSel.value; write(); render(); };
+  outRow.append(copyB, joinB, styleSel);
   outCard.appendChild(outRow);
   host.appendChild(outCard);
 
@@ -1071,6 +1085,7 @@ export function buildStudio(host, S) {
     camSum.textContent = "pitch " + Math.round(-geo.pitch) + "° · "
       + geo.distance.toFixed(1) + " m · " + Math.round(fovDeg(cam.focal_mm)) + "° fov";
     joinB.textContent = st.join === "lead" ? "Leads the prompt" : "Trails the prompt";
+    styleSel.value = ["krea2", "short", "tags"].includes(st.output) ? st.output : "krea2";
     { const [w, h] = autoLatentSize(st); lSum.textContent = w + " × " + h; }
     clearTimeout(previewTimer);
     previewTimer = setTimeout(async () => {
