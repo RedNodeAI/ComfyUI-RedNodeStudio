@@ -781,3 +781,78 @@ def _describe_compact(camera, subjects, output):
     if f["others"]:
         text += " Also in the scene: %s." % ", ".join(f["others"])
     return _cap(text)
+
+
+# ---------------------------------------------------------------- camera paths
+# BATCH ANGLES (the user's ask, 2026-08-17): one scene, the camera moving, N
+# shots. Two paths: A -> B (straight line between two camera states, lens and
+# roll blended too) and ORBIT (a circle round the target at the current
+# distance and height, from one bearing to another). Everything else - the
+# subjects, relations, lock - stays as it is; only the camera differs per shot.
+PATH_MODES = ("off", "ab", "orbit")
+
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def interpolate_camera(cam_a, cam_b, t):
+    """The camera t of the way (0..1) from A to B: position, lens, roll and
+    the free-aim point blend; lock/target come from A."""
+    pa = [float(x) for x in cam_a.get("pos", [0, 1.56, 3.0])]
+    pb = [float(x) for x in cam_b.get("pos", pa)]
+    out = dict(cam_a)
+    out["pos"] = [round(_lerp(pa[i], pb[i], t), 3) for i in range(3)]
+    out["focal_mm"] = round(_lerp(float(cam_a.get("focal_mm", 35)),
+                                  float(cam_b.get("focal_mm", cam_a.get("focal_mm", 35))), t), 1)
+    out["roll_deg"] = round(_lerp(float(cam_a.get("roll_deg", 0) or 0),
+                                  float(cam_b.get("roll_deg", cam_a.get("roll_deg", 0)) or 0), t), 1)
+    aa, ab = cam_a.get("aim"), cam_b.get("aim")
+    if isinstance(aa, (list, tuple)) and isinstance(ab, (list, tuple)) and len(aa) == 3 and len(ab) == 3:
+        out["aim"] = [round(_lerp(float(aa[i]), float(ab[i]), t), 3) for i in range(3)]
+    return out
+
+
+def orbit_camera(cam, subjects, bearing_deg):
+    """The camera moved round the target to bearing_deg (relative to the way
+    the subject faces: 0 = in front, -90 = the subject's left side, 180 =
+    behind), keeping the current ground distance and height."""
+    if not subjects:
+        subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
+                     "facing_deg": 0}]
+    ti = cam.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    cpos = [float(x) for x in cam.get("pos", [0, 1.56, 3.0])]
+    ground = math.hypot(cpos[0] - spos[0], cpos[2] - spos[2]) or 3.0
+    facing = float(prime.get("facing_deg", 0))
+    # a camera at bearing 0 sits on the facing direction: yaw (cam->subject)
+    # equals facing, i.e. the camera is at subject + ground * (sin f, cos f)
+    # ... rel = yaw - facing, and yaw = atan2(dx, -dz) of (subject - cam), so
+    # camera = subject - ground * (sin(yaw), 0, -cos(yaw)) with yaw = facing + rel
+    yaw = math.radians(facing + bearing_deg)
+    out = dict(cam)
+    out["pos"] = [round(spos[0] - ground * math.sin(yaw), 3), cpos[1],
+                  round(spos[2] + ground * math.cos(yaw), 3)]
+    return out
+
+
+def camera_path(camera, subjects, path):
+    """[camera, ...] for the batch. path: {mode: off|ab|orbit, shots: N,
+    b: camera-state, orbit_from: deg, orbit_to: deg}. off -> [camera]."""
+    mode = (path or {}).get("mode", "off")
+    n = int((path or {}).get("shots", 1) or 1)
+    n = max(1, min(64, n))
+    if mode == "ab" and isinstance((path or {}).get("b"), dict):
+        if n == 1:
+            return [dict(camera)]
+        return [interpolate_camera(camera, path["b"], i / (n - 1.0)) for i in range(n)]
+    if mode == "orbit":
+        a0 = float((path or {}).get("orbit_from", 0.0) or 0.0)
+        a1 = float((path or {}).get("orbit_to", 180.0) or 0.0)
+        if n == 1:
+            return [orbit_camera(camera, subjects, a0)]
+        return [orbit_camera(camera, subjects, _lerp(a0, a1, i / (n - 1.0))) for i in range(n)]
+    return [dict(camera)]

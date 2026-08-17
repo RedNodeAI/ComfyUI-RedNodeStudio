@@ -72,6 +72,7 @@ const DEFAULT = () => ({
   auto_latent: false, latent_mp: 1.0, latent_batch: 1,
   zoom_lora: "", zoom_mode: "off", zoom_strength: 0,
   cam_loras: {},
+  path: { mode: "off", shots: 10, b: null, orbit_from: 0, orbit_to: 180 },
 });
 const CAM_LORA_KEYS = ["zoom", "height", "orbit", "back"];
 const CAM_LORA_RANGE = { zoom: [-10, 12], height: [-10, 12], orbit: [-8, 8], back: [0, 8] };
@@ -132,6 +133,16 @@ function normalise(d) {
     if (typeof d.zoom_lora === "string") o.zoom_lora = d.zoom_lora;
     if (["off", "auto", "manual"].includes(d.zoom_mode)) o.zoom_mode = d.zoom_mode;
     if (typeof d.zoom_strength === "number") o.zoom_strength = d.zoom_strength;
+    if (d.path && typeof d.path === "object") {
+      const p = d.path;
+      o.path = {
+        mode: ["off", "ab", "orbit"].includes(p.mode) ? p.mode : "off",
+        shots: Math.max(1, Math.min(64, Math.round(Number(p.shots) || 10))),
+        b: (p.b && typeof p.b === "object" && Array.isArray(p.b.pos)) ? JSON.parse(JSON.stringify(p.b)) : null,
+        orbit_from: Number.isFinite(Number(p.orbit_from)) ? Number(p.orbit_from) : 0,
+        orbit_to: Number.isFinite(Number(p.orbit_to)) ? Number(p.orbit_to) : 180,
+      };
+    }
     if (d.cam_loras && typeof d.cam_loras === "object") {
       o.cam_loras = {};
       for (const k of CAM_LORA_KEYS) {
@@ -228,6 +239,33 @@ function autoOrbitStrength(st) { return clampKey("orbit", -8 * Math.sin(primeGeo
 function autoBackStrength(st) { return clampKey("back", BACK_AUTO_MAX * Math.max(0, -Math.cos(primeGeo(st).rel * Math.PI / 180))); }
 const AUTO_FN = { zoom: autoZoomStrength, height: autoHeightStrength,
                   orbit: autoOrbitStrength, back: autoBackStrength };
+// camera path (mirror of camera_translate.camera_path) for the stage dots
+function lerp(a, b, t) { return a + (b - a) * t; }
+function orbitCamera(st, bearing) {
+  const cam = st.camera;
+  const prime = st.subjects[cam.target] || st.subjects[0];
+  const ground = Math.hypot(cam.pos[0] - prime.pos[0], cam.pos[2] - prime.pos[2]) || 3;
+  const yaw = ((prime.facing_deg || 0) + bearing) * Math.PI / 180;
+  return { ...cam, pos: [prime.pos[0] - ground * Math.sin(yaw), cam.pos[1], prime.pos[2] + ground * Math.cos(yaw)] };
+}
+function pathCameras(st) {
+  const p = st.path || { mode: "off" };
+  const n = Math.max(1, Math.min(64, p.shots || 1));
+  const cam = st.camera;
+  if (p.mode === "ab" && p.b && Array.isArray(p.b.pos)) {
+    if (n === 1) return [cam];
+    return Array.from({ length: n }, (_, i) => {
+      const t = i / (n - 1);
+      return { ...cam, pos: [0, 1, 2].map((k) => lerp(cam.pos[k], p.b.pos[k], t)),
+               focal_mm: lerp(cam.focal_mm, p.b.focal_mm ?? cam.focal_mm, t) };
+    });
+  }
+  if (p.mode === "orbit") {
+    if (n === 1) return [orbitCamera(st, p.orbit_from || 0)];
+    return Array.from({ length: n }, (_, i) => orbitCamera(st, lerp(p.orbit_from || 0, p.orbit_to ?? 180, i / (n - 1))));
+  }
+  return [cam];
+}
 let LORA_LIST = null;
 async function fetchLoras() {
   if (LORA_LIST) return LORA_LIST;
@@ -348,6 +386,21 @@ export function buildStudio(host, S) {
   latCard.appendChild(lTtl);
   right.appendChild(latCard);
 
+  // CAMERA PATH (batch angles, the user's ask): A -> B in N shots, or an
+  // orbit round the subject. The node then emits N prompts / latents /
+  // camera_json as lists, so one Queue renders the whole path. The dots on
+  // the stage show where each shot's camera stands.
+  const pathCard = document.createElement("div");
+  pathCard.className = "card";
+  const pTtl = document.createElement("div");
+  pTtl.className = "ttl";
+  pTtl.textContent = "CAMERA PATH";
+  const pSum = document.createElement("span");
+  pSum.className = "sum";
+  pTtl.appendChild(pSum);
+  pathCard.appendChild(pTtl);
+  right.appendChild(pathCard);
+
   const outCard = document.createElement("div");
   outCard.className = "card";
   outCard.style.gridColumn = "1 / -1";
@@ -455,6 +508,25 @@ export function buildStudio(host, S) {
     g.strokeStyle = "#9dc0ff";
     g.beginPath(); g.moveTo(cx, cy); g.lineTo(tx, ty); g.stroke();
     g.setLineDash([]);
+
+    // the camera path: a dot per shot, numbered at the ends
+    if (st.path && st.path.mode !== "off") {
+      const cams = pathCameras(st);
+      g.fillStyle = "rgba(240,197,138,.9)";
+      g.strokeStyle = "rgba(240,197,138,.5)";
+      g.lineWidth = 1;
+      g.beginPath();
+      cams.forEach((c, i) => { const [px, py] = worldToPx(c.pos[0], c.pos[2]); if (i) g.lineTo(px, py); else g.moveTo(px, py); });
+      g.stroke();
+      cams.forEach((c, i) => {
+        const [px, py] = worldToPx(c.pos[0], c.pos[2]);
+        g.beginPath(); g.arc(px, py, i === 0 || i === cams.length - 1 ? 4 : 2.5, 0, Math.PI * 2); g.fill();
+      });
+      g.font = "10px system-ui"; g.textAlign = "center";
+      const [ax, ay] = worldToPx(cams[0].pos[0], cams[0].pos[2]);
+      const [bx, by] = worldToPx(cams[cams.length - 1].pos[0], cams[cams.length - 1].pos[2]);
+      g.fillText("1", ax, ay - 7); g.fillText(String(cams.length), bx, by - 7);
+    }
 
     // the free aim point, when unlocked: a crosshair on the ground the lens
     // looks at; drag it to compose off-centre
@@ -1040,6 +1112,64 @@ export function buildStudio(host, S) {
     subjCard.appendChild(addRow);
   }
 
+  function renderPath() {
+    [...pathCard.children].slice(1).forEach((c) => c.remove());
+    const p = st.path;
+    const modes = document.createElement("div");
+    modes.className = "chips";
+    for (const [v, l, tip] of [["off", "Off", "One shot: the camera as placed."],
+                               ["ab", "A → B", "N shots on a straight line from this camera (A) to a second camera (B). Lens and roll blend too."],
+                               ["orbit", "Orbit", "N shots round the subject at this distance and height, from one bearing to another (0 = in front, -90 = their left side, 180 = behind)."]]) {
+      const c = document.createElement("div");
+      c.className = "chip" + (p.mode === v ? " on" : "");
+      c.textContent = l; c.title = tip;
+      c.onclick = () => { p.mode = v; write(); render(); };
+      modes.appendChild(c);
+    }
+    pathCard.appendChild(modes);
+    if (p.mode === "off") { pSum.textContent = "1 shot"; return; }
+    pathCard.appendChild(slider("Shots", 2, 24, 1, () => p.shots, (v) => { p.shots = Math.round(v); }, (v) => String(Math.round(v))));
+    if (p.mode === "ab") {
+      const row = document.createElement("div");
+      row.className = "row";
+      const setB = document.createElement("button");
+      setB.textContent = p.b ? "B ← this camera" : "Set B = this camera";
+      setB.title = "Capture the current camera as B. Then move the camera to where A should be.";
+      setB.onclick = () => { p.b = JSON.parse(JSON.stringify(st.camera)); write(); render(); };
+      const swap = document.createElement("button");
+      swap.textContent = "Swap A ↔ B";
+      swap.title = "The current camera becomes B and B becomes the current camera.";
+      swap.disabled = !p.b;
+      swap.onclick = () => { if (!p.b) return; const a = JSON.parse(JSON.stringify(st.camera)); st.camera = normalise({ camera: p.b }).camera; p.b = a; write(); render(); };
+      const goB = document.createElement("button");
+      goB.textContent = "Look at B";
+      goB.title = "Move the camera to B (A is lost unless you Swap first).";
+      goB.disabled = !p.b;
+      goB.onclick = () => { if (!p.b) return; st.camera = normalise({ camera: p.b }).camera; write(); render(); };
+      row.append(setB, swap, goB);
+      pathCard.appendChild(row);
+      const n = document.createElement("div");
+      n.className = "note";
+      n.textContent = p.b
+        ? "B is set: " + p.b.pos.map((v) => v.toFixed(1)).join(", ") + " m, " + Math.round(p.b.focal_mm) + "mm. This camera is A."
+        : "Set B first, then place this camera where the path starts.";
+      pathCard.appendChild(n);
+    } else {
+      pathCard.appendChild(slider("From °", -180, 180, 5, () => p.orbit_from, (v) => { p.orbit_from = v; }, (v) => (v > 0 ? "+" : "") + Math.round(v) + "°"));
+      pathCard.appendChild(slider("To °", -180, 180, 5, () => p.orbit_to, (v) => { p.orbit_to = v; }, (v) => (v > 0 ? "+" : "") + Math.round(v) + "°"));
+      const n = document.createElement("div");
+      n.className = "note";
+      n.textContent = "Bearing is relative to the way the subject faces: 0 in front, -90 their left side, 180 behind. Distance and height are this camera's.";
+      pathCard.appendChild(n);
+    }
+    pSum.textContent = p.shots + " shots";
+    const nn = document.createElement("div");
+    nn.className = "note";
+    nn.textContent = "The node emits every shot as a list: prompt, camera_json, latent, width and height each become "
+      + p.shots + " entries, and the nodes after it run once per shot in one Queue. In the workspace only the placed camera is used.";
+    pathCard.appendChild(nn);
+  }
+
   function renderLatent() {
     [...latCard.children].slice(1).forEach((c) => c.remove());
     const row = document.createElement("div");
@@ -1102,6 +1232,7 @@ export function buildStudio(host, S) {
     renderCamera();
     renderSubjects();
     renderLatent();
+    renderPath();
     draw();
     readout();
   }

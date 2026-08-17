@@ -113,9 +113,34 @@ def parse_state(config_json):
             # orbit / back. The zoom_* fields above are the legacy single-LoRA
             # form; _camera_loras() merges both, the newer dict winning.
             "cam_loras": _camera_loras(d),
+            # CAMERA PATH (batch angles): off | ab (A -> B, N shots) | orbit
+            "path": _camera_path(d),
             "auto_latent": bool(d.get("auto_latent")),
             "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
             "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
+
+
+def _camera_path(d):
+    raw = d.get("path") if isinstance(d.get("path"), dict) else {}
+    mode = raw.get("mode") if raw.get("mode") in _ct.PATH_MODES else "off"
+    try:
+        shots = int(raw.get("shots", 10) or 10)
+    except (TypeError, ValueError):
+        shots = 10
+    shots = max(1, min(64, shots))
+    b = raw.get("b") if isinstance(raw.get("b"), dict) else None
+    if b is not None:
+        # normalise B like a camera: reuse parse_state on a wrapper
+        b = parse_state(json.dumps({"camera": b}))["camera"]
+
+    def _deg(k, dv):
+        try:
+            v = float(raw.get(k, dv))
+        except (TypeError, ValueError):
+            v = dv
+        return max(-360.0, min(360.0, v))
+    return {"mode": mode, "shots": shots, "b": b,
+            "orbit_from": _deg("orbit_from", 0.0), "orbit_to": _deg("orbit_to", 180.0)}
 
 
 def _camera_loras(d):
@@ -187,6 +212,12 @@ class RedNodeCameraStudio:
                    "several subjects. Wire prompt_in to lead your prompt with it.")
     RETURN_TYPES = ("STRING", "STRING", "IMAGE", "LATENT", "INT", "INT")
     RETURN_NAMES = ("prompt", "camera_json", "image", "latent", "width", "height")
+    # BATCH ANGLES: with a camera path set, every output is a LIST of N shots
+    # (prompt, camera_json, latent, width, height per shot; the image is
+    # passed through once). ComfyUI runs the downstream nodes once per item,
+    # so one Queue renders the whole path. With the path off the lists have
+    # one entry and the graph behaves as before.
+    OUTPUT_IS_LIST = (True, True, False, True, True, True)
     FUNCTION = "run"
 
     @classmethod
@@ -207,38 +238,52 @@ class RedNodeCameraStudio:
 
     def run(self, config="{}", prompt_in=None, image=None):
         st = parse_state(config)
-        cam_text = _ct.describe(st["camera"], st["subjects"], output=st["output"])
+        cams = _ct.camera_path(st["camera"], st["subjects"], st["path"])
+        prompts, jsons, latents, ws, hs = [], [], [], [], []
+        for i, cam in enumerate(cams):
+            shot = self._shot(st, cam, prompt_in, i, len(cams))
+            prompts.append(shot[0]); jsons.append(shot[1]); latents.append(shot[2])
+            ws.append(shot[3]); hs.append(shot[4])
+        if len(cams) > 1:
+            print("[RedNode Camera Studio] camera path %s: %d shots" % (st["path"]["mode"], len(cams)),
+                  flush=True)
+        return (prompts, jsons, image, latents, ws, hs)
+
+    def _shot(self, st, cam, prompt_in, index, count):
+        """One shot's outputs for one camera state."""
+        cam_text = _ct.describe(cam, st["subjects"], output=st["output"])
         if prompt_in and str(prompt_in).strip():
             body = str(prompt_in).strip()
             out = (cam_text + " " + body) if st["join"] == "lead" else (body + " " + cam_text)
         else:
             out = cam_text
-        zoom = resolve_zoom(st)
-        state_out = json.dumps({"camera": st["camera"], "subjects": st["subjects"],
+        st_i = dict(st, camera=cam)
+        zoom = resolve_zoom(st_i)
+        prime = st["subjects"][cam["target"]]
+        state_out = json.dumps({"camera": cam, "subjects": st["subjects"],
                                 "zoom": zoom,
-                                "camera_loras": resolve_camera_loras(st),
+                                "camera_loras": resolve_camera_loras(st_i),
+                                "shot": {"index": index, "count": count},
                                 "geometry": _ct.camera_geometry(
-                                    st["camera"]["pos"],
-                                    [st["subjects"][st["camera"]["target"]]["pos"][0],
-                                     st["subjects"][st["camera"]["target"]]["pos"][1]
-                                     + st["subjects"][st["camera"]["target"]]["height"] * 0.92,
-                                     st["subjects"][st["camera"]["target"]]["pos"][2]]),
-                                "fov_deg": _ct.fov_deg(st["camera"]["focal_mm"])})
+                                    cam["pos"],
+                                    [prime["pos"][0], prime["pos"][1] + prime["height"] * 0.92,
+                                     prime["pos"][2]]),
+                                "fov_deg": _ct.fov_deg(cam["focal_mm"])})
         # the auto latent: always COMPUTED (width/height come out either way,
         # so a graph can read the suggestion), only ALLOCATED when the toggle
         # is on - an empty 16-channel latent for Krea 2 at the suggested shape
-        w, h, why = _ct.auto_latent_size(st["camera"], st["subjects"], st["latent_mp"])
+        w, h, why = _ct.auto_latent_size(cam, st["subjects"], st["latent_mp"])
         latent = None
         if st["auto_latent"]:
             import torch
             latent = {"samples": torch.zeros([st["latent_batch"], 16, h // 8, w // 8])}
-        print("[RedNode Camera Studio] %d subject(s), lens %dmm, %s; auto latent %s: "
-              "%d x %d (%s)"
-              % (len(st["subjects"]), int(st["camera"]["focal_mm"]),
-                 cam_text.split(".")[0], "ON" if st["auto_latent"] else "off",
-                 w, h, why), flush=True)
-        return (out, state_out, image,
-                latent if latent is not None else _ws_blocked(), w, h)
+        if count == 1:
+            print("[RedNode Camera Studio] %d subject(s), lens %dmm, %s; auto latent %s: "
+                  "%d x %d (%s)"
+                  % (len(st["subjects"]), int(cam["focal_mm"]),
+                     cam_text.split(".")[0], "ON" if st["auto_latent"] else "off",
+                     w, h, why), flush=True)
+        return (out, state_out, latent if latent is not None else _ws_blocked(), w, h)
 
 
 try:
