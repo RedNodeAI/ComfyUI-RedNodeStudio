@@ -601,12 +601,25 @@ def _clamp_key(key, v):
     return round(max(lo, min(hi, v)), 1) + 0.0   # + 0.0: no '-0.0'
 
 
+# AUTO CAPS, tuned on the end-to-end strip (words + LoRAs together, 2026-08-17):
+# the paragraph already carries height strongly, so the height slider is a
+# gentle assist (factor 0.15, -5..+6); orbit is the big win and runs to +-8;
+# back changes the person past raw 2, so dead behind is 5. Manual still runs
+# the full public range.
+HEIGHT_AUTO_FACTOR = 0.08
+HEIGHT_AUTO_MIN, HEIGHT_AUTO_MAX = -2.5, 3.0
+BACK_AUTO_MAX = 3.0
+
+
 def auto_height_strength(camera, subjects):
-    """Pitch to the height slider: -30 deg (a low angle) is about -8, +30 deg
-    (a strong high angle) about +8; the extremes saturate at the safe ends."""
+    """Pitch to the height slider, as an ASSIST to the words: -30 deg (a low
+    angle) is -4.5, +40 deg about +6, saturating at -5 / +6. Stronger than
+    that on top of the paragraph overshoots (blown-out worm's eye) and the low
+    side starts changing the person. Manual still runs -10..+12."""
     geo, _ = _prime_geo(camera, subjects)
     # pitch < 0 means the camera looks DOWN (it is above the face) = plus
-    return _clamp_key("height", -geo["pitch"] * 0.27)
+    v = _clamp_key("height", -geo["pitch"] * HEIGHT_AUTO_FACTOR)
+    return round(max(HEIGHT_AUTO_MIN, min(HEIGHT_AUTO_MAX, v)), 1) + 0.0
 
 
 def auto_orbit_strength(camera, subjects):
@@ -619,9 +632,10 @@ def auto_orbit_strength(camera, subjects):
 
 def auto_back_strength(camera, subjects):
     """Bearing to the back slider: 0 until the camera passes the subject's
-    shoulder line, then rising to +8 dead behind (rear three-quarter ~ +5.7)."""
+    shoulder line, then rising to +5 dead behind (rear three-quarter ~ +3.5).
+    More than that changes the person (short hair, darker) on top of the words."""
     _, rel = _prime_geo(camera, subjects)
-    return _clamp_key("back", 8.0 * max(0.0, -math.cos(math.radians(rel))))
+    return _clamp_key("back", BACK_AUTO_MAX * max(0.0, -math.cos(math.radians(rel))))
 
 
 def auto_camera_loras(camera, subjects):

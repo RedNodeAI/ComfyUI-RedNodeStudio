@@ -218,9 +218,14 @@ function clampKey(key, v) {
   const [lo, hi] = CAM_LORA_RANGE[key];
   return Math.round(Math.max(lo, Math.min(hi, v)) * 10) / 10;
 }
-function autoHeightStrength(st) { return clampKey("height", -primeGeo(st).pitch * 0.27); }
+// auto caps mirror camera_translate (tuned on the words+LoRAs strip)
+const HEIGHT_AUTO_FACTOR = 0.08, HEIGHT_AUTO_MIN = -2.5, HEIGHT_AUTO_MAX = 3, BACK_AUTO_MAX = 3;
+function autoHeightStrength(st) {
+  const v = clampKey("height", -primeGeo(st).pitch * HEIGHT_AUTO_FACTOR);
+  return Math.round(Math.max(HEIGHT_AUTO_MIN, Math.min(HEIGHT_AUTO_MAX, v)) * 10) / 10;
+}
 function autoOrbitStrength(st) { return clampKey("orbit", -8 * Math.sin(primeGeo(st).rel * Math.PI / 180)); }
-function autoBackStrength(st) { return clampKey("back", 8 * Math.max(0, -Math.cos(primeGeo(st).rel * Math.PI / 180))); }
+function autoBackStrength(st) { return clampKey("back", BACK_AUTO_MAX * Math.max(0, -Math.cos(primeGeo(st).rel * Math.PI / 180))); }
 const AUTO_FN = { zoom: autoZoomStrength, height: autoHeightStrength,
                   orbit: autoOrbitStrength, back: autoBackStrength };
 let LORA_LIST = null;
