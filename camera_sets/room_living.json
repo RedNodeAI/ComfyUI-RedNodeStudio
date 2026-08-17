@@ -1,0 +1,214 @@
+{
+ "name": "Room: living room",
+ "group": "Rooms",
+ "description": "A 7 x 6 m living room: sofa facing the TV, coffee table, armchair, bookshelf, big window. One person on the sofa.",
+ "order": 11,
+ "text": "A man in a blue shirt on the sofa of a warm living room, wooden floor, big window, evening light, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the living room's back wall",
+    "pos": [
+     0.0,
+     0,
+     -3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     7.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room's front wall",
+    "pos": [
+     0.0,
+     0,
+     3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     7.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room's left wall",
+    "pos": [
+     -3.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the sofa",
+    "pos": [
+     0.0,
+     0,
+     2.0
+    ],
+    "height": 0.85,
+    "facing_deg": 180,
+    "kind": "object",
+    "size": [
+     2.2,
+     0.9
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the coffee table",
+    "pos": [
+     0.0,
+     0,
+     0.8999999999999999
+    ],
+    "height": 0.45,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.0,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the television on its stand",
+    "pos": [
+     0.0,
+     0,
+     -2.7
+    ],
+    "height": 1.1,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.3,
+     0.4
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the armchair",
+    "pos": [
+     2.5,
+     0,
+     0.0
+    ],
+    "height": 0.85,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.9,
+     0.9
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bookshelf",
+    "pos": [
+     -3.25,
+     0,
+     -1.8
+    ],
+    "height": 2.0,
+    "facing_deg": 90,
+    "kind": "object",
+    "size": [
+     0.4,
+     1.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room window",
+    "pos": [
+     0.0,
+     0,
+     3.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     2.4,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room door",
+    "pos": [
+     3.5,
+     0,
+     0.0
+    ],
+    "height": 2.1,
+    "facing_deg": 90,
+    "kind": "door",
+    "size": [
+     0.9,
+     0.1
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the man",
+    "pos": [
+     0.3,
+     0,
+     2.0
+    ],
+    "height": 1.72,
+    "facing_deg": 180,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    -2.4,
+    1.4,
+    -1.6
+   ],
+   "target": 10,
+   "focal_mm": 28,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

@@ -1,0 +1,66 @@
+{
+ "name": "Conversation: two-shot (profiles)",
+ "group": "Scenes",
+ "description": "Two people face each other 1.4 m apart; the camera stands side-on at 3 m and sees both in profile. The classic establishing two-shot.",
+ "order": 20,
+ "text": "A man in a dark jacket and a woman in a green dress talking in a bright kitchen, natural daylight, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the man",
+    "pos": [
+     -0.7,
+     0,
+     0.0
+    ],
+    "height": 1.8,
+    "facing_deg": 90,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     0.7,
+     0,
+     0.0
+    ],
+    "height": 1.66,
+    "facing_deg": 270,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    0.0,
+    1.5,
+    3.2
+   ],
+   "target": 0,
+   "focal_mm": 40,
+   "roll_deg": 0,
+   "lock": false,
+   "aim": [
+    0.0,
+    1.5,
+    0.0
+   ]
+  }
+ }
+}

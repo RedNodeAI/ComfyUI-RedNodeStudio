@@ -1,0 +1,134 @@
+{
+ "name": "Boxing: side view from ringside",
+ "group": "Scenes",
+ "description": "Two boxers squared up in the ring, gloves raised; the camera at ringside, low, just outside the ropes, seeing both in profile.",
+ "order": 30,
+ "text": "Two boxers mid-fight in a boxing ring under bright arena lights, gloves up, sweat, crowd in darkness beyond the ropes, sports photo.",
+ "state": {
+  "stage_zoom": "wide",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the ring ropes, far side",
+    "pos": [
+     0.0,
+     0,
+     -3.0
+    ],
+    "height": 1.3,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the ring ropes, near side",
+    "pos": [
+     0.0,
+     0,
+     3.0
+    ],
+    "height": 1.3,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the ring ropes, left side",
+    "pos": [
+     -3.0,
+     0,
+     0.0
+    ],
+    "height": 1.3,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the ring ropes, right side",
+    "pos": [
+     3.0,
+     0,
+     0.0
+    ],
+    "height": 1.3,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the boxer in red trunks",
+    "pos": [
+     -0.55,
+     0,
+     0.0
+    ],
+    "height": 1.85,
+    "facing_deg": 90,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the boxer in blue trunks",
+    "pos": [
+     0.55,
+     0,
+     0.0
+    ],
+    "height": 1.8,
+    "facing_deg": 270,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    0.0,
+    1.0,
+    5.6
+   ],
+   "target": 4,
+   "focal_mm": 50,
+   "roll_deg": 0,
+   "lock": false,
+   "aim": [
+    0.0,
+    1.3,
+    0.0
+   ]
+  }
+ }
+}

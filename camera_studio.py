@@ -16,6 +16,7 @@ Standalone first, by the user's call; the panel is host-agnostic so the
 Workspace can mount it later.
 """
 import json
+import os
 
 from . import camera_translate as _ct
 
@@ -88,6 +89,9 @@ def parse_state(config_json):
             # objects have a footprint; people are points
             "size": [num((s.get("size") or [0.6, 0.6])[0], 0.6, 0.05, 20),
                      num((s.get("size") or [0.6, 0.6])[-1], 0.6, 0.05, 20)],
+            # LOCKED (the user's ask): a placed thing the stage will not drag
+            # (walls, doors, furniture of a room set). Only the panel honours it.
+            "locked": bool(s.get("locked", False)),
         })
     if not subjects:
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
@@ -115,6 +119,10 @@ def parse_state(config_json):
             "cam_loras": _camera_loras(d),
             # CAMERA PATH (batch angles): off | ab (A -> B, N shots) | orbit
             "path": _camera_path(d),
+            # STAGE ZOOM: normal (12 x 9 m), wide (24 x 19 m) or huge (48 x 38 m):
+            # an apartment, a pitch, a street need room. Display only.
+            "stage_zoom": (d.get("stage_zoom") if d.get("stage_zoom") in ("normal", "wide", "huge")
+                           else "normal"),
             "auto_latent": bool(d.get("auto_latent")),
             "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
             "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
@@ -286,9 +294,119 @@ class RedNodeCameraStudio:
         return (out, state_out, latent if latent is not None else _ws_blocked(), w, h)
 
 
+# ---------------------------------------------------------------- sets
+# SETS (the user's ask, "save / load presets for the studio"): a named scene +
+# camera state. Built-in sets ship in the pack's camera_sets/ folder (rooms
+# built from objects, two-person scenes); the user's own live in the ComfyUI
+# user dir like the LoRA presets. Loading a set replaces subjects, camera,
+# path and stage zoom; the panel keeps the LoRA picks and output settings.
+_SETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_sets")
+_SET_KEYS = ("camera", "subjects", "path", "stage_zoom")
+
+
+def _user_sets_path(make=False):
+    override = os.environ.get("KREA2RN_CAMERA_SETS")
+    if override:
+        return override
+    try:
+        import folder_paths
+        base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
+    except Exception:
+        base = os.path.join(os.path.dirname(__file__), "user_data")
+    if make:
+        os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "camera_sets.json")
+
+
+def _set_state(raw):
+    """Only the scene keys of a set, normalised through parse_state."""
+    st = parse_state(json.dumps(raw if isinstance(raw, dict) else {}))
+    return {k: st[k] for k in _SET_KEYS}
+
+
+def builtin_sets():
+    """[{name, group, description, state}] from camera_sets/*.json, sorted by
+    the file's order field then name. Bad files are skipped, not fatal."""
+    out = []
+    try:
+        names = sorted(os.listdir(_SETS_DIR))
+    except OSError:
+        return out
+    for fn in names:
+        if not fn.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(_SETS_DIR, fn), encoding="utf-8") as f:
+                d = json.load(f)
+            out.append({"name": str(d.get("name") or fn[:-5]), "group": str(d.get("group") or "Sets"),
+                        "description": str(d.get("description") or ""),
+                        "text": str(d.get("text") or ""),
+                        "order": int(d.get("order", 100)), "state": _set_state(d.get("state") or {})})
+        except (OSError, ValueError, TypeError) as e:
+            print("[RedNode Camera Studio] set %s skipped: %s" % (fn, e), flush=True)
+    out.sort(key=lambda x: (x["order"], x["group"], x["name"]))
+    return out
+
+
+def load_user_sets():
+    try:
+        with open(_user_sets_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        return {str(k): _set_state(v) for k, v in (data.get("sets") or {}).items()
+                if isinstance(v, dict)}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_user_set(name, state):
+    sets = load_user_sets()
+    sets[name] = _set_state(state)
+    path = _user_sets_path(make=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"sets": sets}, f, indent=1)
+    os.replace(tmp, path)
+    return sets
+
+
+def delete_user_set(name):
+    sets = load_user_sets()
+    sets.pop(name, None)
+    path = _user_sets_path(make=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"sets": sets}, f, indent=1)
+    os.replace(tmp, path)
+    return sets
+
+
 try:
     from server import PromptServer
     from aiohttp import web
+
+    @PromptServer.instance.routes.get("/rednode/camera_sets")
+    async def _rn_camera_sets(request):
+        return web.json_response({"builtin": builtin_sets(),
+                                  "mine": [{"name": k, "state": v}
+                                           for k, v in sorted(load_user_sets().items())]})
+
+    @PromptServer.instance.routes.post("/rednode/camera_sets")
+    async def _rn_camera_sets_post(request):
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        name = str(data.get("name", "")).strip()[:80]
+        if not name:
+            return web.json_response({"error": "give the set a name"}, status=400)
+        try:
+            if data.get("action") == "delete":
+                sets = delete_user_set(name)
+            else:
+                sets = save_user_set(name, data.get("state") or {})
+        except OSError as e:
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response({"mine": [{"name": k, "state": v} for k, v in sorted(sets.items())]})
 
     @PromptServer.instance.routes.post("/rednode/camera_studio_preview")
     async def _rn_camera_studio_preview(request):

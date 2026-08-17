@@ -1,0 +1,217 @@
+{
+ "name": "Room: bedroom",
+ "group": "Rooms",
+ "description": "A 5 x 4 m bedroom: bed with the headboard at the window wall, nightstand, wardrobe, door in the front wall. One person sitting on the bed.",
+ "order": 13,
+ "text": "A woman in a linen shirt sitting on the edge of the bed in a calm bedroom, white bedding, morning light, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the bedroom's back wall",
+    "pos": [
+     0.0,
+     0,
+     -2.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     5.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom's left wall",
+    "pos": [
+     -2.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     4.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom's right wall",
+    "pos": [
+     2.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     4.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom's front wall, left part",
+    "pos": [
+     -1.2,
+     0,
+     2.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     2.6,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom's front wall, right part",
+    "pos": [
+     1.7,
+     0,
+     2.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     1.6,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom door",
+    "pos": [
+     0.4500000000000002,
+     0,
+     2.0
+    ],
+    "height": 2.1,
+    "facing_deg": 180,
+    "kind": "door",
+    "size": [
+     0.9,
+     0.1
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bed",
+    "pos": [
+     -0.5,
+     0,
+     -0.8999999999999999
+    ],
+    "height": 0.55,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.6,
+     2.0
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the nightstand with a lamp",
+    "pos": [
+     -2.15,
+     0,
+     -1.6
+    ],
+    "height": 0.6,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     0.5,
+     0.4
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the wardrobe",
+    "pos": [
+     2.15,
+     0,
+     -0.5
+    ],
+    "height": 2.1,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.6,
+     1.8
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bedroom window",
+    "pos": [
+     0.0,
+     0,
+     -2.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     1.6,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     -0.5,
+     0,
+     -0.4
+    ],
+    "height": 1.72,
+    "facing_deg": 0,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": {
+     "kind": "sitting on",
+     "to": 6
+    },
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    1.6,
+    1.4,
+    1.5
+   ],
+   "target": 10,
+   "focal_mm": 28,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

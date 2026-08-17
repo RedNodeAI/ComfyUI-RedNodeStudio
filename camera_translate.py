@@ -209,15 +209,26 @@ def _cap(t):
 
 
 # ---------------------------------------------------------------- horizontal
-def _facing_relation(yaw_cam_to_subject, subject_facing_deg):
-    """Where the camera sits relative to the way the subject FACES.
+def bearing_from(subject_pos, cam_pos):
+    """The direction from a subject to the camera, in FACING degrees
+    (0 = +z, 90 = +x, the same convention as facing_deg)."""
+    return math.degrees(math.atan2(float(cam_pos[0]) - float(subject_pos[0]),
+                                   float(cam_pos[2]) - float(subject_pos[2])))
 
-    Both in degrees around y, 0 = +z (toward the default camera). The
-    difference says front / three-quarter / profile / rear three-quarter / rear.
-    """
-    rel = (yaw_cam_to_subject - subject_facing_deg + 180) % 360 - 180   # -180..180
+
+def rel_bearing(subject_pos, cam_pos, facing_deg):
+    """Where the camera sits relative to the way the subject faces, -180..180:
+    0 in front, +90 on the subject's LEFT, -90 on their RIGHT, +-180 behind.
+    (Fixed 2026-08-17: the old form used the look yaw with a sign that only
+    held for facing 0; a subject facing +x got its sides swapped.)"""
+    return (bearing_from(subject_pos, cam_pos) - float(facing_deg) + 180) % 360 - 180
+
+
+def _facing_relation(rel):
+    """Front / three-quarter / profile / rear three-quarter / rear, from a
+    rel_bearing() value; the side named is the one nearer the camera."""
     a = abs(rel)
-    side = "left" if rel < 0 else "right"
+    side = "left" if rel > 0 else "right"
     if a < 20:
         return "square on to the camera, facing it directly"
     if a < 65:
@@ -294,7 +305,7 @@ def describe(camera, subjects, output="krea2"):
         # the subject - the aim sentence says where it really points
         parts = [_height_only_block(geo, cpos[1], spos[1] + sh, sname)]
     # horizontal relation and distance
-    rel = _facing_relation(geo["yaw"], float(prime.get("facing_deg", 0)))
+    rel = _facing_relation(rel_bearing(spos, cpos, prime.get("facing_deg", 0)))
     if locked:
         parts.append(_cap("%s is %s, %s from the camera, centered in the frame, "
                           "framed as %s."
@@ -355,9 +366,53 @@ def describe(camera, subjects, output="krea2"):
     # related pair's member skips its geometry line against the primary when
     # the relation already said where it is (on the bed says enough).
     others = [s for k, s in enumerate(subjects) if k != ti]
+    # OVER THE SHOULDER (two-person scenes, the user's ask): a person standing
+    # close in front of the lens, on the look line, nearer than the target, is
+    # the foreground shoulder. Say it as the shot it is - the model knows the
+    # grammar of an OTS far better than "1 m from the camera, in line with" -
+    # and skip that person's ordinary blocking line.
+    ots = _ots_person(cpos, look_at, geo, subjects, ti)
+    if ots is not None:
+        oname = str(subjects[ots].get("name") or "the other person")
+        which = _ots_side(cpos, look_at, [float(x) for x in subjects[ots]["pos"]])
+        # they face away from us, so the shoulder at the frame's left edge is
+        # their RIGHT shoulder
+        parts.append(_cap("An over-the-shoulder shot: the back of %s's head and %s shoulder "
+                          "are in the near foreground at the %s edge of the frame, close to "
+                          "the lens and softly out of focus, and %s is seen past them, "
+                          "sharp, %s."
+                          % (oname, "right" if which == "left" else "left", which, sname,
+                             "looking toward %s" % oname if _faces_each_other(prime, subjects[ots])
+                             else "looking past them")))
+    # WHAT IS IN THE FRAME (room sets, the user's ask): only things the lens
+    # can see get a line - inside the horizontal field of view plus a margin,
+    # not behind the camera, not beyond 14 m - nearest first, at most eight.
+    # Walls never get their own line: a room's walls are the room, and the
+    # Subject / Surroundings text says what the room looks like.
+    look_dir = _norm((look_at[0] - cpos[0], 0.0, look_at[2] - cpos[2]))
+    half_fov = fov_deg(focal) / 2.0 + 12.0
+    visible = []
+    for o in others:
+        ok = subjects.index(o)
+        if str(o.get("kind") or "person") == "wall":
+            continue
+        opos = [float(x) for x in o.get("pos", [0, 0, 0])]
+        d_flat = math.hypot(opos[0] - cpos[0], opos[2] - cpos[2])
+        if d_flat > 14.0:
+            continue
+        if d_flat > 0.05:
+            v = _norm((opos[0] - cpos[0], 0.0, opos[2] - cpos[2]))
+            ang = math.degrees(math.acos(max(-1.0, min(1.0, v[0] * look_dir[0] + v[2] * look_dir[2]))))
+            if ang > half_fov and ok != ots:
+                continue
+        visible.append((d_flat, ok, o))
+    visible.sort(key=lambda t: t[0])
+    others = [o for _, _, o in visible[:8]]
     for o in others:
         ok = subjects.index(o)
         if (ti, ok) in related_pairs or (ok, ti) in related_pairs:
+            continue
+        if ok == ots:
             continue
         opos = [float(x) for x in o.get("pos", [0, 0, 0])]
         d_cam = _len(_v(cpos, opos))
@@ -382,14 +437,82 @@ def describe(camera, subjects, output="krea2"):
                                       else "an object"))
         verb = ("stands" if kind == "person" else "is"
                 if kind in ("wall", "window", "door") else "sits")
-        parts.append(_cap("%s %s %s, %s %s, %s from the camera."
-                          % (oname, verb, depth, side, sname, _metres(d_cam))))
+        # FACING (the user's ask: a better sense of which way things face):
+        # a person's or an object's front, relative to the camera; a door is
+        # said as a doorway; walls have no front
+        facing_words = ""
+        if kind in ("person", "object", "door"):
+            o_rel = rel_bearing(opos, cpos, o.get("facing_deg", 0))
+            facing_words = _facing_words(kind, o_rel, prime, o, oname, sname)
+        parts.append(_cap("%s %s %s, %s %s, %s from the camera%s."
+                          % (oname, verb, depth, side, sname, _metres(d_cam),
+                             (", " + facing_words) if facing_words else "")))
     roll = float(camera.get("roll_deg", 0) or 0)
     if abs(roll) >= 5:
         parts.append("The camera is rolled %d degrees to the %s, a Dutch tilt."
                      % (int(round(abs(roll))), "left" if roll < 0 else "right"))
     parts.append(lens_phrase(focal) + ".")
     return " ".join(p if p.endswith(".") else p + "." for p in parts)
+
+
+def _ots_person(cpos, look_at, geo, subjects, ti):
+    """Index of a person who is the foreground shoulder of an OTS, or None:
+    a person (not the target) within 1.6 m of the camera, nearer than the
+    target, and within 35 degrees of the look direction."""
+    best, best_d = None, 9e9
+    look = _norm((look_at[0] - cpos[0], 0.0, look_at[2] - cpos[2]))
+    for k, s_ in enumerate(subjects):
+        if k == ti or str(s_.get("kind") or "person") != "person":
+            continue
+        opos = [float(x) for x in s_.get("pos", [0, 0, 0])]
+        d = math.hypot(opos[0] - cpos[0], opos[2] - cpos[2])
+        if d > 1.6 or d >= geo["ground"] - 0.3 or d < 0.15:
+            continue
+        v = _norm((opos[0] - cpos[0], 0.0, opos[2] - cpos[2]))
+        cosang = look[0] * v[0] + look[2] * v[2]
+        if cosang < math.cos(math.radians(35)):
+            continue
+        if d < best_d:
+            best, best_d = k, d
+    return best
+
+
+def _ots_side(cpos, look_at, opos):
+    """left / right: which edge of the frame the foreground shoulder sits at."""
+    look = _norm((look_at[0] - cpos[0], 0.0, look_at[2] - cpos[2]))
+    right = (-look[2], 0.0, look[0])
+    dot = (opos[0] - cpos[0]) * right[0] + (opos[2] - cpos[2]) * right[2]
+    return "right" if dot >= 0 else "left"
+
+
+def _faces_each_other(a, b):
+    """True when a's facing points roughly at b (within 60 degrees)."""
+    apos = [float(x) for x in a.get("pos", [0, 0, 0])]
+    bpos = [float(x) for x in b.get("pos", [0, 0, 0])]
+    to_b = math.degrees(math.atan2(bpos[0] - apos[0], bpos[2] - apos[2]))   # 0 = +z
+    d = (to_b - float(a.get("facing_deg", 0)) + 180) % 360 - 180
+    return abs(d) < 60
+
+
+def _facing_words(kind, o_rel, prime, o, oname, sname):
+    """Which way a person / object / door faces, as the camera sees it."""
+    a = abs(o_rel)
+    if kind == "person":
+        if _faces_each_other(o, prime):
+            return "facing %s" % sname
+        if a < 35:
+            return "facing the camera"
+        if a < 110:
+            return "turned side-on to the camera"
+        return "with their back to the camera"
+    if kind == "door":
+        return "an open doorway"
+    # an object: its front
+    if a < 45:
+        return "its front toward the camera"
+    if a < 135:
+        return "seen from its side"
+    return "its back to the camera"
 
 
 # ---------------------------------------------------------------- presets
@@ -601,7 +724,7 @@ def _prime_geo(camera, subjects):
     face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
     cpos = [float(x) for x in camera.get("pos", [0, face[1], 3.0])]
     geo = camera_geometry(cpos, face)
-    rel = (geo["yaw"] - float(prime.get("facing_deg", 0)) + 180) % 360 - 180
+    rel = rel_bearing(spos, cpos, prime.get("facing_deg", 0))
     return geo, rel
 
 
@@ -632,11 +755,11 @@ def auto_height_strength(camera, subjects):
 
 
 def auto_orbit_strength(camera, subjects):
-    """Bearing to the orbit slider: camera at the subject's left side (rel -90,
+    """Bearing to the orbit slider: camera at the subject's left side (rel +90,
     the translator's 'left profile') is +8, at their right side -8, front 0.
     Behind (180) is 0 too: that is the back slider's job."""
     _, rel = _prime_geo(camera, subjects)
-    return _clamp_key("orbit", -8.0 * math.sin(math.radians(rel)))
+    return _clamp_key("orbit", 8.0 * math.sin(math.radians(rel)))
 
 
 def auto_back_strength(camera, subjects):
@@ -675,7 +798,7 @@ def _shot_facts(camera, subjects):
     cpos = [float(x) for x in camera.get("pos", [0, face_y, 3.0])]
     focal = float(camera.get("focal_mm", 35))
     geo = camera_geometry(cpos, [spos[0], face_y, spos[2]])
-    rel = (geo["yaw"] - float(prime.get("facing_deg", 0)) + 180) % 360 - 180
+    rel = rel_bearing(spos, cpos, prime.get("facing_deg", 0))
     width_m = 2.0 * geo["distance"] * math.tan(math.radians(fov_deg(focal) / 2.0))
     p = geo["pitch"]          # > 0: camera below the face, looking up
     if p >= 55:
@@ -695,7 +818,7 @@ def _shot_facts(camera, subjects):
     else:
         pitch = "overhead"
     a = abs(rel)
-    side = "left" if rel < 0 else "right"
+    side = "left" if rel > 0 else "right"
     if a < 20:
         bearing = "front"
     elif a < 65:
@@ -819,8 +942,8 @@ def interpolate_camera(cam_a, cam_b, t):
 
 def orbit_camera(cam, subjects, bearing_deg):
     """The camera moved round the target to bearing_deg (relative to the way
-    the subject faces: 0 = in front, -90 = the subject's left side, 180 =
-    behind), keeping the current ground distance and height."""
+    the subject faces: 0 = in front, +90 = the subject's LEFT side, -90 their
+    right, 180 = behind), keeping the current ground distance and height."""
     if not subjects:
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
                      "facing_deg": 0}]
@@ -832,20 +955,18 @@ def orbit_camera(cam, subjects, bearing_deg):
     cpos = [float(x) for x in cam.get("pos", [0, 1.56, 3.0])]
     ground = math.hypot(cpos[0] - spos[0], cpos[2] - spos[2]) or 3.0
     facing = float(prime.get("facing_deg", 0))
-    # a camera at bearing 0 sits on the facing direction: yaw (cam->subject)
-    # equals facing, i.e. the camera is at subject + ground * (sin f, cos f)
-    # ... rel = yaw - facing, and yaw = atan2(dx, -dz) of (subject - cam), so
-    # camera = subject - ground * (sin(yaw), 0, -cos(yaw)) with yaw = facing + rel
-    yaw = math.radians(facing + bearing_deg)
+    # facing degrees: 0 = +z, 90 = +x. The camera sits at facing + bearing.
+    b = math.radians(facing + bearing_deg)
     out = dict(cam)
-    out["pos"] = [round(spos[0] - ground * math.sin(yaw), 3), cpos[1],
-                  round(spos[2] + ground * math.cos(yaw), 3)]
+    out["pos"] = [round(spos[0] + ground * math.sin(b), 3), cpos[1],
+                  round(spos[2] + ground * math.cos(b), 3)]
     return out
 
 
 def camera_path(camera, subjects, path):
     """[camera, ...] for the batch. path: {mode: off|ab|orbit, shots: N,
-    b: camera-state, orbit_from: deg, orbit_to: deg}. off -> [camera]."""
+    b: camera-state, orbit_from: deg, orbit_to: deg (+90 = the subject's
+    left)}. off -> [camera]."""
     mode = (path or {}).get("mode", "off")
     n = int((path or {}).get("shots", 1) or 1)
     n = max(1, min(64, n))

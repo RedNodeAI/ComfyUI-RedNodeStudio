@@ -17,7 +17,7 @@ import { app } from "../../scripts/app.js";
 // node-specific.
 
 const NODE_NAME = "RedNodeCameraStudio";
-const PX_PER_M = 44;               // stage scale
+const PX_PER_M = 44;               // stage scale at "normal"; see pxm() (wide 22, huge 11)
 const STAGE_W = 520, STAGE_H = 420;
 
 const css = document.createElement("style");
@@ -73,6 +73,7 @@ const DEFAULT = () => ({
   zoom_lora: "", zoom_mode: "off", zoom_strength: 0,
   cam_loras: {},
   path: { mode: "off", shots: 10, b: null, orbit_from: 0, orbit_to: 180 },
+  stage_zoom: "normal",
 });
 const CAM_LORA_KEYS = ["zoom", "height", "orbit", "back"];
 const CAM_LORA_RANGE = { zoom: [-10, 12], height: [-10, 12], orbit: [-8, 8], back: [0, 8] };
@@ -123,6 +124,7 @@ function normalise(d) {
         facing_deg: typeof s.facing_deg === "number" ? s.facing_deg : 0,
         kind: ["person", "object", "wall", "window", "door"].includes(s.kind) ? s.kind : "person",
         size: Array.isArray(s.size) && s.size.length === 2 ? s.size.map(Number) : [0.6, 0.6],
+        locked: s.locked === true,
         rel: (s.rel && typeof s.rel === "object" && typeof s.rel.to === "number")
           ? { kind: String(s.rel.kind || ""), to: s.rel.to } : null,
       }));
@@ -133,6 +135,7 @@ function normalise(d) {
     if (typeof d.zoom_lora === "string") o.zoom_lora = d.zoom_lora;
     if (["off", "auto", "manual"].includes(d.zoom_mode)) o.zoom_mode = d.zoom_mode;
     if (typeof d.zoom_strength === "number") o.zoom_strength = d.zoom_strength;
+    if (["normal", "wide", "huge"].includes(d.stage_zoom)) o.stage_zoom = d.stage_zoom;
     if (d.path && typeof d.path === "object") {
       const p = d.path;
       o.path = {
@@ -224,7 +227,10 @@ function primeGeo(st) {
   const pitch = (ground || d[1]) ? Math.atan2(d[1], ground) * 180 / Math.PI : 0;
   const yaw = ground ? Math.atan2(d[0], -d[2]) * 180 / Math.PI : 0;
   const facing = prime.facing_deg || 0;
-  const rel = ((yaw - facing + 180) % 360 + 360) % 360 - 180;
+  // bearing of the camera from the subject in FACING degrees (0 = +z, 90 = +x);
+  // rel +90 = camera on the subject's LEFT (mirrors camera_translate.rel_bearing)
+  const bearing = Math.atan2(cam.pos[0] - face[0], cam.pos[2] - face[2]) * 180 / Math.PI;
+  const rel = ((bearing - facing + 180) % 360 + 360) % 360 - 180;
   return { pitch, yaw, rel };
 }
 function clampKey(key, v) {
@@ -237,7 +243,7 @@ function autoHeightStrength(st) {
   const v = clampKey("height", -primeGeo(st).pitch * HEIGHT_AUTO_FACTOR);
   return Math.round(Math.max(HEIGHT_AUTO_MIN, Math.min(HEIGHT_AUTO_MAX, v)) * 10) / 10;
 }
-function autoOrbitStrength(st) { return clampKey("orbit", -8 * Math.sin(primeGeo(st).rel * Math.PI / 180)); }
+function autoOrbitStrength(st) { return clampKey("orbit", 8 * Math.sin(primeGeo(st).rel * Math.PI / 180)); }
 function autoBackStrength(st) { return clampKey("back", BACK_AUTO_MAX * Math.max(0, -Math.cos(primeGeo(st).rel * Math.PI / 180))); }
 const AUTO_FN = { zoom: autoZoomStrength, height: autoHeightStrength,
                   orbit: autoOrbitStrength, back: autoBackStrength };
@@ -247,8 +253,8 @@ function orbitCamera(st, bearing) {
   const cam = st.camera;
   const prime = st.subjects[cam.target] || st.subjects[0];
   const ground = Math.hypot(cam.pos[0] - prime.pos[0], cam.pos[2] - prime.pos[2]) || 3;
-  const yaw = ((prime.facing_deg || 0) + bearing) * Math.PI / 180;
-  return { ...cam, pos: [prime.pos[0] - ground * Math.sin(yaw), cam.pos[1], prime.pos[2] + ground * Math.cos(yaw)] };
+  const b = ((prime.facing_deg || 0) + bearing) * Math.PI / 180;   // +90 = the subject's left
+  return { ...cam, pos: [prime.pos[0] + ground * Math.sin(b), cam.pos[1], prime.pos[2] + ground * Math.cos(b)] };
 }
 function pathCameras(st) {
   const p = st.path || { mode: "off" };
@@ -321,6 +327,9 @@ export function buildStudio(host, S) {
   let st = normalise(S.get());
   let sel = 0;                       // selected subject index
   let dragging = null;               // {kind: "cam"|"subj"|"face", i}
+  // STAGE SCALE (the user's ask: bigger rooms, outdoors): normal 12 x 9 m,
+  // wide 24 x 19 m, huge 48 x 38 m. Same canvas, more metres per pixel.
+  const pxm = () => (st.stage_zoom === "huge" ? 11 : st.stage_zoom === "wide" ? 22 : 44);
   const write = () => { S.set(st); S.onChange?.(); };
 
   const cols = document.createElement("div");
@@ -344,9 +353,25 @@ export function buildStudio(host, S) {
   stageCard.appendChild(canvas);
   const legend = document.createElement("div");
   legend.className = "note";
-  legend.textContent = "Drag a subject to move it, its arrow to turn it, the camera "
-    + "to move it. Wheel over the stage changes the lens. Right-click the stage to "
-    + "reset the camera or bring everything back into view.";
+  legend.style.cssText = "display:flex;align-items:center;gap:6px;flex-wrap:wrap";
+  const legendTxt = document.createElement("span");
+  legendTxt.textContent = "Drag a thing to move it, its arrow (or an object's front edge) to turn it, "
+    + "the camera to move it. Wheel = lens. Right-click = reset / fit. Locked things stay put.";
+  legend.appendChild(legendTxt);
+  const scaleChips = document.createElement("span");
+  scaleChips.className = "chips";
+  scaleChips.style.marginLeft = "auto";
+  for (const [v, l, tip] of [["normal", "12 m", "Stage 12 x 9 m: a room."],
+                             ["wide", "24 m", "Stage 24 x 19 m: an apartment, a ring, a yard."],
+                             ["huge", "48 m", "Stage 48 x 38 m: a pitch, a street, outdoors."]]) {
+    const c = document.createElement("span");
+    c.className = "chip";
+    c.dataset.zoom = v;
+    c.textContent = l; c.title = tip;
+    c.onclick = () => { st.stage_zoom = v; write(); render(); };
+    scaleChips.appendChild(c);
+  }
+  legend.appendChild(scaleChips);
   stageCard.appendChild(legend);
   cols.appendChild(stageCard);
 
@@ -354,6 +379,124 @@ export function buildStudio(host, S) {
   const right = document.createElement("div");
   right.style.cssText = "display:flex;flex-direction:column;gap:10px;min-width:0";
   cols.appendChild(right);
+
+  // SETS (the user's ask): named scene + camera states. Built-in sets ship
+  // with the pack (rooms built from objects, two-person scenes); yours are
+  // saved server-side like the LoRA presets. Loading replaces subjects,
+  // camera, path and stage scale and keeps your LoRA picks and output style.
+  const setsCard = document.createElement("div");
+  setsCard.className = "card";
+  const setsTtl = document.createElement("div");
+  setsTtl.className = "ttl";
+  setsTtl.textContent = "SETS";
+  const setsSum = document.createElement("span");
+  setsSum.className = "sum";
+  setsTtl.appendChild(setsSum);
+  setsCard.appendChild(setsTtl);
+  const setsRow = document.createElement("div");
+  setsRow.className = "row";
+  const setsSel = document.createElement("select");
+  setsSel.style.cssText = "flex:1;min-width:0";
+  const loadB = document.createElement("button");
+  loadB.textContent = "Load";
+  loadB.title = "Replace the stage with this set (subjects, camera, path, stage scale).";
+  const saveB = document.createElement("button");
+  saveB.textContent = "Save as…";
+  saveB.title = "Save the current stage as one of your sets.";
+  const delB = document.createElement("button");
+  delB.textContent = "✕";
+  delB.title = "Delete this set of yours (built-in sets cannot be deleted).";
+  setsRow.append(setsSel, loadB, saveB, delB);
+  setsCard.appendChild(setsRow);
+  const setsNote = document.createElement("div");
+  setsNote.className = "note";
+  setsNote.textContent = "Pick a set and Load. Rooms are built from locked walls, doors and furniture; scenes place two people and the camera.";
+  setsCard.appendChild(setsNote);
+  right.appendChild(setsCard);
+  let SETS = { builtin: [], mine: [] };
+  const fillSets = () => {
+    const cur = setsSel.value;
+    setsSel.replaceChildren();
+    const o0 = document.createElement("option");
+    o0.value = ""; o0.textContent = "(pick a set)";
+    setsSel.appendChild(o0);
+    const groups = {};
+    for (const b of SETS.builtin) (groups[b.group] = groups[b.group] || []).push(b);
+    for (const [gname, items] of Object.entries(groups)) {
+      const og = document.createElement("optgroup");
+      og.label = gname;
+      for (const b of items) {
+        const o = document.createElement("option");
+        o.value = "b:" + b.name; o.textContent = b.name; o.title = b.description || "";
+        og.appendChild(o);
+      }
+      setsSel.appendChild(og);
+    }
+    if (SETS.mine.length) {
+      const og = document.createElement("optgroup");
+      og.label = "Mine";
+      for (const m of SETS.mine) {
+        const o = document.createElement("option");
+        o.value = "m:" + m.name; o.textContent = m.name;
+        og.appendChild(o);
+      }
+      setsSel.appendChild(og);
+    }
+    setsSel.value = [...setsSel.options].some((o) => o.value === cur) ? cur : "";
+    setsSum.textContent = SETS.builtin.length + " built-in · " + SETS.mine.length + " mine";
+    const opt = setsSel.selectedOptions[0];
+    const chosen = findSet();
+    setsNote.textContent = (opt && opt.title) || "Pick a set and Load. Rooms are built from locked walls, doors and furniture; scenes place two people and the camera.";
+    if (chosen && chosen.text) setsNote.textContent += "  Example text: " + chosen.text;
+    delB.disabled = !setsSel.value.startsWith("m:");
+  };
+  const fetchSets = async () => {
+    try {
+      const r = await fetch("/rednode/camera_sets");
+      SETS = await r.json();
+    } catch (e) { SETS = { builtin: [], mine: [] }; }
+    fillSets();
+  };
+  fetchSets();
+  setsSel.onchange = fillSets;
+  function findSet() {
+    const v = setsSel.value;
+    if (v.startsWith("b:")) return SETS.builtin.find((b) => b.name === v.slice(2));
+    if (v.startsWith("m:")) return SETS.mine.find((m) => m.name === v.slice(2));
+    return null;
+  }
+  loadB.onclick = () => {
+    const set = findSet();
+    if (!set) return;
+    const keep = { cam_loras: st.cam_loras, output: st.output, join: st.join,
+                   auto_latent: st.auto_latent, latent_mp: st.latent_mp, latent_batch: st.latent_batch,
+                   zoom_lora: st.zoom_lora, zoom_mode: st.zoom_mode, zoom_strength: st.zoom_strength };
+    st = normalise({ ...JSON.parse(JSON.stringify(set.state)), ...keep });
+    sel = 0;
+    write(); render();
+  };
+  saveB.onclick = async () => {
+    const cur = setsSel.value.startsWith("m:") ? setsSel.value.slice(2) : "";
+    const name = (window.prompt("Save this stage as a set named:", cur) || "").trim();
+    if (!name) return;
+    try {
+      const r = await fetch("/rednode/camera_sets", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", name, state: st }) });
+      const d = await r.json();
+      if (d.mine) { SETS.mine = d.mine; fillSets(); setsSel.value = "m:" + name; fillSets(); }
+    } catch (e) { /* server not up */ }
+  };
+  delB.onclick = async () => {
+    if (!setsSel.value.startsWith("m:")) return;
+    const name = setsSel.value.slice(2);
+    if (!window.confirm("Delete your set '" + name + "'?")) return;
+    try {
+      const r = await fetch("/rednode/camera_sets", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", name }) });
+      const d = await r.json();
+      if (d.mine) { SETS.mine = d.mine; fillSets(); }
+    } catch (e) { /* server not up */ }
+  };
 
   const camCard = document.createElement("div");
   camCard.className = "card";
@@ -467,8 +610,8 @@ export function buildStudio(host, S) {
     return row;
   };
 
-  const worldToPx = (x, z) => [STAGE_W / 2 + x * PX_PER_M, STAGE_H / 2 + z * PX_PER_M];
-  const pxToWorld = (px, py) => [(px - STAGE_W / 2) / PX_PER_M, (py - STAGE_H / 2) / PX_PER_M];
+  const worldToPx = (x, z) => [STAGE_W / 2 + x * pxm(), STAGE_H / 2 + z * pxm()];
+  const pxToWorld = (px, py) => [(px - STAGE_W / 2) / pxm(), (py - STAGE_H / 2) / pxm()];
 
   // ---- draw the stage
   function draw() {
@@ -477,10 +620,10 @@ export function buildStudio(host, S) {
     // grid, 1m
     g.strokeStyle = "#1a1d22";
     g.lineWidth = 1;
-    for (let x = STAGE_W / 2 % PX_PER_M; x < STAGE_W; x += PX_PER_M) {
+    for (let x = STAGE_W / 2 % pxm(); x < STAGE_W; x += pxm()) {
       g.beginPath(); g.moveTo(x, 0); g.lineTo(x, STAGE_H); g.stroke();
     }
-    for (let y = STAGE_H / 2 % PX_PER_M; y < STAGE_H; y += PX_PER_M) {
+    for (let y = STAGE_H / 2 % pxm(); y < STAGE_H; y += pxm()) {
       g.beginPath(); g.moveTo(0, y); g.lineTo(STAGE_W, y); g.stroke();
     }
     // origin cross
@@ -564,7 +707,7 @@ export function buildStudio(host, S) {
     st.subjects.forEach((s, i) => {
       if (s.kind === "person") return;
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
-      const w = Math.max(10, s.size[0] * PX_PER_M), d = Math.max(10, s.size[1] * PX_PER_M);
+      const w = Math.max(10, s.size[0] * pxm()), d = Math.max(10, s.size[1] * pxm());
       g.save();
       g.translate(sx, sy);
       g.rotate(-(s.facing_deg * Math.PI) / 180);
@@ -575,7 +718,25 @@ export function buildStudio(host, S) {
       if (s.kind === "object") g.rect(-w / 2, -d / 2, w, d);
       else g.rect(-w / 2, -3, w, 6);
       g.fill(); g.stroke();
+      // the FRONT edge (facing 0 = +z = down on screen): a bright edge and a
+      // small arrow, so a sofa, a door, a TV read which way they face
+      if (s.kind === "object" || s.kind === "door") {
+        const fy = s.kind === "object" ? d / 2 : 3;
+        g.strokeStyle = "#e8ecf1";
+        g.lineWidth = 3;
+        g.beginPath(); g.moveTo(-w / 2, fy); g.lineTo(w / 2, fy); g.stroke();
+        g.lineWidth = 1.5;
+        g.beginPath(); g.moveTo(0, fy); g.lineTo(0, fy + 10); g.stroke();
+        g.fillStyle = "#e8ecf1";
+        g.beginPath(); g.arc(0, fy + 12, 3.5, 0, Math.PI * 2); g.fill();
+      }
       g.restore();
+      if (s.locked) {
+        g.fillStyle = "#9aa0a8";
+        g.font = "10px system-ui";
+        g.textAlign = "center"; g.textBaseline = "middle";
+        g.fillText("\uD83D\uDD12", sx + Math.max(w, 10) / 2 - 2, sy - Math.max(d, 8) / 2 - 2);
+      }
       g.fillStyle = "#e8ecf1";
       g.font = "bold 10px system-ui";
       g.textAlign = "center"; g.textBaseline = "middle";
@@ -601,6 +762,12 @@ export function buildStudio(host, S) {
       g.beginPath(); g.moveTo(sx, sy); g.lineTo(ax, ay); g.stroke();
       g.fillStyle = "#e8ecf1";
       g.beginPath(); g.arc(ax, ay, 4, 0, Math.PI * 2); g.fill();
+      if (s.locked) {
+        g.fillStyle = "#9aa0a8";
+        g.font = "10px system-ui";
+        g.textAlign = "center"; g.textBaseline = "middle";
+        g.fillText("\uD83D\uDD12", sx + r + 4, sy - r - 4);
+      }
       g.fillStyle = "#101216";
       g.font = "bold 10px system-ui";
       g.textAlign = "center"; g.textBaseline = "middle";
@@ -620,7 +787,8 @@ export function buildStudio(host, S) {
     g.textAlign = "center";
     g.fillText("h " + cam.pos[1].toFixed(2) + " m", cx, cy - 16);
     g.fillText(Math.round(cam.focal_mm) + "mm", cx, cy + 20);
-    stSum.textContent = "1 square = 1 m";
+    stSum.textContent = "1 square = 1 m · " + (st.stage_zoom === "huge" ? "48 x 38 m" : st.stage_zoom === "wide" ? "24 x 19 m" : "12 x 9 m");
+    scaleChips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.zoom === (st.stage_zoom || "normal")));
   }
 
   // ---- hit testing and drag
@@ -636,19 +804,23 @@ export function buildStudio(host, S) {
       const s = st.subjects[i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
       if (s.kind !== "person") {
-        const w = Math.max(10, s.size[0] * PX_PER_M), d = Math.max(10, s.size[1] * PX_PER_M);
+        const w = Math.max(10, s.size[0] * pxm()), d = Math.max(10, s.size[1] * pxm());
         const a = (s.facing_deg * Math.PI) / 180;
         const lx = (px - sx) * Math.cos(a) - (py - sy) * Math.sin(a);
         const ly = (px - sx) * Math.sin(a) + (py - sy) * Math.cos(a);
         const hh = s.kind === "object" ? d / 2 : 6;
-        if (Math.abs(lx) <= w / 2 + 3 && Math.abs(ly) <= hh + 3) return { kind: "subj", i };
+        // the front-edge handle turns an object / door
+        if ((s.kind === "object" || s.kind === "door") && Math.abs(lx) < 8 && Math.abs(ly - (hh + 12)) < 8) {
+          return { kind: "face", i, locked: !!s.locked };
+        }
+        if (Math.abs(lx) <= w / 2 + 3 && Math.abs(ly) <= hh + 3) return { kind: "subj", i, locked: !!s.locked };
         continue;
       }
       const r = 9 + s.height * 2;
       const fa = (s.facing_deg * Math.PI) / 180;
       const ax = sx + Math.sin(fa) * (r + 16), ay = sy + Math.cos(fa) * (r + 16);
-      if (Math.hypot(px - ax, py - ay) < 9) return { kind: "face", i };
-      if (Math.hypot(px - sx, py - sy) < r + 3) return { kind: "subj", i };
+      if (Math.hypot(px - ax, py - ay) < 9) return { kind: "face", i, locked: !!s.locked };
+      if (Math.hypot(px - sx, py - sy) < r + 3) return { kind: "subj", i, locked: !!s.locked };
     }
     return null;
   };
@@ -663,21 +835,23 @@ export function buildStudio(host, S) {
     if (!h) return;
     e.preventDefault(); e.stopPropagation();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* older hosts */ }
-    dragging = h;
     if (h.kind === "subj" || h.kind === "face") { sel = h.i; renderSubjects(); }
+    if (h.locked) { draw(); return; }        // select, never move: it is locked
+    dragging = h;
     canvas.style.cursor = "grabbing";
   });
   canvas.addEventListener("pointermove", (e) => {
     const [px, py] = evPos(e);
     if (!dragging) {
-      canvas.style.cursor = hit(px, py) ? "grab" : "crosshair";
+      const hv = hit(px, py);
+      canvas.style.cursor = hv ? (hv.locked ? "not-allowed" : "grab") : "crosshair";
       return;
     }
     e.preventDefault(); e.stopPropagation();
     const [wx, wz] = pxToWorld(px, py);
     // snap to 5 cm and CLAMP inside the stage: a thing dragged off the edge
     // was gone for good (the user's report), so the edge is a wall now
-    const maxX = STAGE_W / 2 / PX_PER_M - 0.4, maxZ = STAGE_H / 2 / PX_PER_M - 0.4;
+    const maxX = STAGE_W / 2 / pxm() - 0.4, maxZ = STAGE_H / 2 / pxm() - 0.4;
     const snap = (v) => Math.round(v * 20) / 20;
     const cx_ = (v) => Math.max(-maxX, Math.min(maxX, snap(v)));
     const cz_ = (v) => Math.max(-maxZ, Math.min(maxZ, snap(v)));
@@ -758,8 +932,8 @@ export function buildStudio(host, S) {
     };
     setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
   });
-  const maxXv = () => STAGE_W / 2 / PX_PER_M - 0.4;
-  const maxZv = () => STAGE_H / 2 / PX_PER_M - 0.4;
+  const maxXv = () => STAGE_W / 2 / pxm() - 0.4;
+  const maxZv = () => STAGE_H / 2 / pxm() - 0.4;
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault(); e.stopPropagation();
     const f = st.camera.focal_mm;
@@ -1003,6 +1177,11 @@ export function buildStudio(host, S) {
       nm.placeholder = "the subject";
       nm.title = "How the paragraph names this subject: 'the woman', 'a man in a coat'.";
       nm.onchange = () => { s.name = nm.value.trim() || "the subject"; write(); render(); };
+      const lockB = document.createElement("button");
+      lockB.textContent = s.locked ? "\uD83D\uDD12" : "\uD83D\uDD13";
+      lockB.title = s.locked ? "Locked: the stage will not move or turn it. Click to unlock."
+                             : "Unlocked. Click to lock it in place (walls, doors, furniture).";
+      lockB.onclick = (e) => { e.stopPropagation(); s.locked = !s.locked; write(); render(); };
       const del = document.createElement("button");
       del.textContent = "✕";
       del.title = "Remove this subject.";
@@ -1031,7 +1210,7 @@ export function buildStudio(host, S) {
         }
         write(); render();
       };
-      head.append(tag, kindB, nm, del);
+      head.append(tag, kindB, nm, lockB, del);
       box.appendChild(head);
       if (s.kind === "person") {
         box.appendChild(slider("Height", 0.5, 2.5, 0.01, () => s.height,
@@ -1048,6 +1227,49 @@ export function buildStudio(host, S) {
       }
       box.appendChild(slider("Facing", 0, 359, 1, () => s.facing_deg,
         (v) => { s.facing_deg = v; }, (v) => Math.round(v) + "°"));
+      // FACING helpers (the user's ask): what "facing" means per kind, and two
+      // one-click turns - toward the camera, toward another entry
+      const frow = document.createElement("div");
+      frow.className = "row";
+      const fnote = document.createElement("span");
+      fnote.className = "note";
+      fnote.style.flex = "1";
+      fnote.textContent = s.kind === "person" ? "Facing = where they look (arrow)."
+        : s.kind === "door" ? "Facing = the way through the doorway (bright edge)."
+        : s.kind === "object" ? "Facing = the object's front (bright edge)."
+        : "Walls and windows have no front.";
+      frow.appendChild(fnote);
+      if (s.kind !== "wall" && s.kind !== "window") {
+        const faceCam = document.createElement("button");
+        faceCam.textContent = "Face camera";
+        faceCam.onclick = () => {
+          const c = st.camera.pos;
+          s.facing_deg = ((Math.atan2(c[0] - s.pos[0], c[2] - s.pos[2]) * 180) / Math.PI + 360) % 360;
+          write(); render();
+        };
+        frow.appendChild(faceCam);
+        if (st.subjects.length > 1) {
+          const faceSel = document.createElement("select");
+          const o0 = document.createElement("option");
+          o0.value = ""; o0.textContent = "Face…";
+          faceSel.appendChild(o0);
+          st.subjects.forEach((o2, j) => {
+            if (j === i) return;
+            const o = document.createElement("option");
+            o.value = String(j); o.textContent = String.fromCharCode(65 + j) + " · " + o2.name.slice(0, 14);
+            faceSel.appendChild(o);
+          });
+          faceSel.onchange = () => {
+            const j = parseInt(faceSel.value, 10);
+            if (Number.isNaN(j)) return;
+            const t = st.subjects[j].pos;
+            s.facing_deg = ((Math.atan2(t[0] - s.pos[0], t[2] - s.pos[2]) * 180) / Math.PI + 360) % 360;
+            write(); render();
+          };
+          frow.appendChild(faceSel);
+        }
+      }
+      box.appendChild(frow);
       // RELATION: "is [sitting on] [the bed]" - the words the model reads best;
       // the geometry then covers what the relation leaves unsaid
       if (st.subjects.length > 1) {
@@ -1121,7 +1343,7 @@ export function buildStudio(host, S) {
     modes.className = "chips";
     for (const [v, l, tip] of [["off", "Off", "One shot: the camera as placed."],
                                ["ab", "A → B", "N shots on a straight line from this camera (A) to a second camera (B). Lens and roll blend too."],
-                               ["orbit", "Orbit", "N shots round the subject at this distance and height, from one bearing to another (0 = in front, -90 = their left side, 180 = behind)."]]) {
+                               ["orbit", "Orbit", "N shots round the subject at this distance and height, from one bearing to another (0 = in front, +90 = their left side, 180 = behind)."]]) {
       const c = document.createElement("div");
       c.className = "chip" + (p.mode === v ? " on" : "");
       c.textContent = l; c.title = tip;
@@ -1161,7 +1383,7 @@ export function buildStudio(host, S) {
       pathCard.appendChild(slider("To °", -180, 180, 5, () => p.orbit_to, (v) => { p.orbit_to = v; }, (v) => (v > 0 ? "+" : "") + Math.round(v) + "°"));
       const n = document.createElement("div");
       n.className = "note";
-      n.textContent = "Bearing is relative to the way the subject faces: 0 in front, -90 their left side, 180 behind. Distance and height are this camera's.";
+      n.textContent = "Bearing is relative to the way the subject faces: 0 in front, +90 their left side, 180 behind. Distance and height are this camera's.";
       pathCard.appendChild(n);
     }
     pSum.textContent = p.shots + " shots";

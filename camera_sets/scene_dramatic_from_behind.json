@@ -1,0 +1,78 @@
+{
+ "name": "Dramatic: from behind, into the room",
+ "group": "Scenes",
+ "description": "The camera stands behind the man as he faces the woman across the room; his back fills the near frame, she is small and far, lit by the window.",
+ "order": 24,
+ "text": "A man in a dark coat and a woman in a white dress in a large empty room, she stands by the tall window, cinematic still, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the man",
+    "pos": [
+     0.0,
+     0,
+     0.0
+    ],
+    "height": 1.8,
+    "facing_deg": 0,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     0.4,
+     0,
+     4.2
+    ],
+    "height": 1.66,
+    "facing_deg": 180,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the window behind her",
+    "pos": [
+     0.0,
+     0,
+     5.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     2.4,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   }
+  ],
+  "camera": {
+   "pos": [
+    0.0,
+    1.55,
+    -1.5
+   ],
+   "target": 1,
+   "focal_mm": 35,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

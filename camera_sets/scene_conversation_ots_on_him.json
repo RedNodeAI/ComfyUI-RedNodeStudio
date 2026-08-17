@@ -1,0 +1,61 @@
+{
+ "name": "Conversation: over her shoulder, on him",
+ "group": "Scenes",
+ "description": "The reverse: behind the woman's left shoulder, looking at the man.",
+ "order": 22,
+ "text": "A man in a dark jacket and a woman in a green dress talking in a bright kitchen, natural daylight, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the man",
+    "pos": [
+     -0.7,
+     0,
+     0.0
+    ],
+    "height": 1.8,
+    "facing_deg": 90,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     0.7,
+     0,
+     0.0
+    ],
+    "height": 1.66,
+    "facing_deg": 270,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    1.35,
+    1.55,
+    -0.42
+   ],
+   "target": 0,
+   "focal_mm": 65,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

@@ -1,0 +1,197 @@
+{
+ "name": "Room: kitchen",
+ "group": "Rooms",
+ "description": "A 5 x 4 m kitchen: counter with sink under the window, fridge, cooker, table. Door on the right. One person at the counter.",
+ "order": 10,
+ "text": "A woman in a grey sweater at the counter of a bright modern kitchen, white cabinets, wooden worktop, morning light, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the kitchen's back wall",
+    "pos": [
+     0.0,
+     0,
+     -2.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     5.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen's front wall",
+    "pos": [
+     0.0,
+     0,
+     2.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     5.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen's left wall",
+    "pos": [
+     -2.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     4.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen counter with the sink",
+    "pos": [
+     0.0,
+     0,
+     -1.65
+    ],
+    "height": 0.9,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     4.4,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the fridge",
+    "pos": [
+     -2.05,
+     0,
+     -1.55
+    ],
+    "height": 1.8,
+    "facing_deg": 90,
+    "kind": "object",
+    "size": [
+     0.7,
+     0.7
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen table",
+    "pos": [
+     0.0,
+     0,
+     0.3
+    ],
+    "height": 0.75,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.4,
+     0.8
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the cooker",
+    "pos": [
+     2.1,
+     0,
+     -1.65
+    ],
+    "height": 0.9,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen window",
+    "pos": [
+     0.0,
+     0,
+     -2.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     1.4,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen door",
+    "pos": [
+     2.5,
+     0,
+     0.8
+    ],
+    "height": 2.1,
+    "facing_deg": 90,
+    "kind": "door",
+    "size": [
+     0.9,
+     0.1
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     -0.3,
+     0,
+     -0.9
+    ],
+    "height": 1.72,
+    "facing_deg": 180,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    0.6,
+    1.5,
+    1.7
+   ],
+   "target": 9,
+   "focal_mm": 28,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

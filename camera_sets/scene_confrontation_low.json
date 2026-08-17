@@ -1,0 +1,66 @@
+{
+ "name": "Dramatic: confrontation, low two-shot",
+ "group": "Scenes",
+ "description": "Two people nose to nose, 0.6 m apart; the camera low and close from the side with a wide lens - a tense, dramatic frame.",
+ "order": 23,
+ "text": "A man in a dark jacket and a woman in a red coat arguing in a dim hallway, hard side light, tense, cinematic still, realistic photo.",
+ "state": {
+  "stage_zoom": "normal",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the man",
+    "pos": [
+     -0.3,
+     0,
+     0.0
+    ],
+    "height": 1.82,
+    "facing_deg": 90,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     0.3,
+     0,
+     0.0
+    ],
+    "height": 1.68,
+    "facing_deg": 270,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    0.0,
+    0.75,
+    1.9
+   ],
+   "target": 0,
+   "focal_mm": 24,
+   "roll_deg": 0,
+   "lock": false,
+   "aim": [
+    0.0,
+    1.45,
+    0.0
+   ]
+  }
+ }
+}

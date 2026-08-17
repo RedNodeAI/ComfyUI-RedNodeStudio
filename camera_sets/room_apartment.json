@@ -1,0 +1,554 @@
+{
+ "name": "Rooms: apartment (kitchen, living room, bathroom)",
+ "group": "Rooms",
+ "description": "Three rooms in a row joined by doorways: kitchen on the left, living room in the middle, bathroom on the right. Wide stage. Two people; the camera in the living room looks toward the kitchen doorway.",
+ "order": 1,
+ "text": "A woman in a green dress in a bright open-plan apartment, wooden floors, white walls, a man in a dark jacket in the kitchen beyond, daylight, realistic photo.",
+ "state": {
+  "stage_zoom": "wide",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the kitchen's back wall",
+    "pos": [
+     -7.0,
+     0,
+     -3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     5.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen's front wall",
+    "pos": [
+     -7.0,
+     0,
+     3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     5.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen's left wall",
+    "pos": [
+     -9.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen counter with the sink",
+    "pos": [
+     -7.0,
+     0,
+     -2.65
+    ],
+    "height": 0.9,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     4.4,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the fridge",
+    "pos": [
+     -9.05,
+     0,
+     -2.55
+    ],
+    "height": 1.8,
+    "facing_deg": 90,
+    "kind": "object",
+    "size": [
+     0.7,
+     0.7
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen table",
+    "pos": [
+     -7.0,
+     0,
+     0.3
+    ],
+    "height": 0.75,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.4,
+     0.8
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the cooker",
+    "pos": [
+     -4.9,
+     0,
+     -2.65
+    ],
+    "height": 0.9,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the kitchen window",
+    "pos": [
+     -7.0,
+     0,
+     -3.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     1.4,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the wall between kitchen and living room, back part",
+    "pos": [
+     -4.5,
+     0,
+     -1.75
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     2.5,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the wall between kitchen and living room, front part",
+    "pos": [
+     -4.5,
+     0,
+     1.75
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     2.5,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the doorway from the kitchen into the living room",
+    "pos": [
+     -4.5,
+     0,
+     0.0
+    ],
+    "height": 2.1,
+    "facing_deg": 90,
+    "kind": "door",
+    "size": [
+     0.9,
+     0.1
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room's back wall",
+    "pos": [
+     0.0,
+     0,
+     -3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     9.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room's front wall",
+    "pos": [
+     0.0,
+     0,
+     3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     9.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the sofa",
+    "pos": [
+     0.0,
+     0,
+     2.0
+    ],
+    "height": 0.85,
+    "facing_deg": 180,
+    "kind": "object",
+    "size": [
+     2.2,
+     0.9
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the coffee table",
+    "pos": [
+     0.0,
+     0,
+     0.8999999999999999
+    ],
+    "height": 0.45,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.0,
+     0.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the television on its stand",
+    "pos": [
+     0.0,
+     0,
+     -2.7
+    ],
+    "height": 1.1,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.3,
+     0.4
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the armchair",
+    "pos": [
+     3.5,
+     0,
+     0.0
+    ],
+    "height": 0.85,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.9,
+     0.9
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bookshelf",
+    "pos": [
+     -4.25,
+     0,
+     -1.8
+    ],
+    "height": 2.0,
+    "facing_deg": 90,
+    "kind": "object",
+    "size": [
+     0.4,
+     1.6
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the living room window",
+    "pos": [
+     0.0,
+     0,
+     3.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     2.4,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the wall between living room and bathroom, back part",
+    "pos": [
+     4.5,
+     0,
+     -1.6
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     2.8,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the wall between living room and bathroom, front part",
+    "pos": [
+     4.5,
+     0,
+     1.9
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     2.2,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bathroom door",
+    "pos": [
+     4.5,
+     0,
+     0.35
+    ],
+    "height": 2.1,
+    "facing_deg": 90,
+    "kind": "door",
+    "size": [
+     0.9,
+     0.1
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bathroom's back wall",
+    "pos": [
+     6.0,
+     0,
+     -3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     3.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bathroom's front wall",
+    "pos": [
+     6.0,
+     0,
+     3.0
+    ],
+    "height": 2.6,
+    "facing_deg": 0,
+    "kind": "wall",
+    "size": [
+     3.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bathroom's right wall",
+    "pos": [
+     7.5,
+     0,
+     0.0
+    ],
+    "height": 2.6,
+    "facing_deg": 90,
+    "kind": "wall",
+    "size": [
+     6.0,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the bathtub",
+    "pos": [
+     6.0,
+     0,
+     -2.55
+    ],
+    "height": 0.55,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     1.7,
+     0.75
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the washbasin",
+    "pos": [
+     7.15,
+     0,
+     0.3
+    ],
+    "height": 0.85,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.6,
+     0.45
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the toilet",
+    "pos": [
+     7.15,
+     0,
+     2.5
+    ],
+    "height": 0.45,
+    "facing_deg": 270,
+    "kind": "object",
+    "size": [
+     0.4,
+     0.65
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the small bathroom window",
+    "pos": [
+     6.0,
+     0,
+     -3.0
+    ],
+    "height": 1.4,
+    "facing_deg": 0,
+    "kind": "window",
+    "size": [
+     0.7,
+     0.2
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the woman",
+    "pos": [
+     -1.0,
+     0,
+     1.0
+    ],
+    "height": 1.72,
+    "facing_deg": 60,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the man",
+    "pos": [
+     -6.5,
+     0,
+     0.4
+    ],
+    "height": 1.72,
+    "facing_deg": 90,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    2.6,
+    1.5,
+    1.4
+   ],
+   "target": 29,
+   "focal_mm": 24,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

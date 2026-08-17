@@ -1,0 +1,95 @@
+{
+ "name": "Baseball: the batter, low and close",
+ "group": "Scenes",
+ "description": "Low and close on the batter from the first-base side, the pitcher small and far behind - the swing about to happen.",
+ "order": 41,
+ "text": "A baseball batter at the plate, bat raised, about to swing, catcher's mitt at the edge of frame, sunny stadium, sports photo.",
+ "state": {
+  "stage_zoom": "huge",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the pitcher's mound",
+    "pos": [
+     0.0,
+     0,
+     6.4
+    ],
+    "height": 0.25,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     5.5,
+     5.5
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "home plate",
+    "pos": [
+     0.0,
+     0,
+     -12.0
+    ],
+    "height": 0.02,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     0.45,
+     0.45
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the batter",
+    "pos": [
+     0.0,
+     0,
+     -12.0
+    ],
+    "height": 1.85,
+    "facing_deg": 0,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the pitcher",
+    "pos": [
+     0.0,
+     0,
+     6.4
+    ],
+    "height": 1.88,
+    "facing_deg": 180,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    2.4,
+    0.7,
+    -13.6
+   ],
+   "target": 2,
+   "focal_mm": 35,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}

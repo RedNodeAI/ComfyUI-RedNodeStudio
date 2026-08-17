@@ -1,0 +1,95 @@
+{
+ "name": "Baseball: from centre field, over the pitcher",
+ "group": "Scenes",
+ "description": "The TV angle: a long lens from centre field, over the pitcher's shoulder, the batter at the plate 18 m beyond. Huge stage. Say the poses in your text (bat raised, mid wind-up).",
+ "order": 40,
+ "text": "A baseball game in a big stadium on a sunny afternoon, the pitcher mid wind-up, the batter at the plate with the bat raised, crowd in the stands, sports photo.",
+ "state": {
+  "stage_zoom": "huge",
+  "path": {
+   "mode": "off",
+   "shots": 10
+  },
+  "subjects": [
+   {
+    "name": "the pitcher's mound",
+    "pos": [
+     0.0,
+     0,
+     6.4
+    ],
+    "height": 0.25,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     5.5,
+     5.5
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "home plate",
+    "pos": [
+     0.0,
+     0,
+     -12.0
+    ],
+    "height": 0.02,
+    "facing_deg": 0,
+    "kind": "object",
+    "size": [
+     0.45,
+     0.45
+    ],
+    "rel": null,
+    "locked": true
+   },
+   {
+    "name": "the batter",
+    "pos": [
+     0.0,
+     0,
+     -12.0
+    ],
+    "height": 1.85,
+    "facing_deg": 0,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   },
+   {
+    "name": "the pitcher",
+    "pos": [
+     0.0,
+     0,
+     6.4
+    ],
+    "height": 1.88,
+    "facing_deg": 180,
+    "kind": "person",
+    "size": [
+     0.6,
+     0.6
+    ],
+    "rel": null,
+    "locked": false
+   }
+  ],
+  "camera": {
+   "pos": [
+    1.2,
+    2.8,
+    17.5
+   ],
+   "target": 2,
+   "focal_mm": 300,
+   "roll_deg": 0,
+   "lock": true
+  }
+ }
+}
