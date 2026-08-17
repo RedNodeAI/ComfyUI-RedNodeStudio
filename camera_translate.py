@@ -374,16 +374,27 @@ def describe(camera, subjects, output="krea2"):
     ots = _ots_person(cpos, look_at, geo, subjects, ti)
     if ots is not None:
         oname = str(subjects[ots].get("name") or "the other person")
-        which = _ots_side(cpos, look_at, [float(x) for x in subjects[ots]["pos"]])
-        # they face away from us, so the shoulder at the frame's left edge is
-        # their RIGHT shoulder
-        parts.append(_cap("An over-the-shoulder shot: the back of %s's head and %s shoulder "
-                          "are in the near foreground at the %s edge of the frame, close to "
-                          "the lens and softly out of focus, and %s is seen past them, "
-                          "sharp, %s."
-                          % (oname, "right" if which == "left" else "left", which, sname,
-                             "looking toward %s" % oname if _faces_each_other(prime, subjects[ots])
-                             else "looking past them")))
+        opos_o = [float(x) for x in subjects[ots]["pos"]]
+        which, lateral = _ots_side(cpos, look_at, opos_o)
+        gaze = ("looking toward %s" % oname if _faces_each_other(prime, subjects[ots])
+                else "looking past them")
+        if lateral < 0.28:
+            # dead ahead of the lens: not a shoulder at an edge but a back in
+            # the middle of the frame (a "from behind" foreground). Said so, or
+            # the model draws the person twice - once as the shoulder, once as
+            # the person the text mentions.
+            parts.append(_cap("%s stands between the camera and %s with %s back to the lens, "
+                              "filling the lower middle of the near foreground, softly out of "
+                              "focus; %s is seen past %s, sharp, %s."
+                              % (oname, sname, "their", sname, "them", gaze)))
+        else:
+            # they face away from us, so the shoulder at the frame's left edge is
+            # their RIGHT shoulder
+            parts.append(_cap("An over-the-shoulder shot: the back of %s's head and %s shoulder "
+                              "are in the near foreground at the %s edge of the frame, close to "
+                              "the lens and softly out of focus, and %s is seen past them, "
+                              "sharp, %s."
+                              % (oname, "right" if which == "left" else "left", which, sname, gaze)))
     # WHAT IS IN THE FRAME (room sets, the user's ask): only things the lens
     # can see get a line - inside the horizontal field of view plus a margin,
     # not behind the camera, not beyond 14 m - nearest first, at most eight.
@@ -391,6 +402,7 @@ def describe(camera, subjects, output="krea2"):
     # Subject / Surroundings text says what the room looks like.
     look_dir = _norm((look_at[0] - cpos[0], 0.0, look_at[2] - cpos[2]))
     half_fov = fov_deg(focal) / 2.0 + 12.0
+    walls = _wall_segments(subjects)
     visible = []
     for o in others:
         ok = subjects.index(o)
@@ -399,6 +411,10 @@ def describe(camera, subjects, output="krea2"):
         opos = [float(x) for x in o.get("pos", [0, 0, 0])]
         d_flat = math.hypot(opos[0] - cpos[0], opos[2] - cpos[2])
         if d_flat > 14.0:
+            continue
+        # behind a wall from where the camera stands: not in the picture (a
+        # doorway is a gap between two wall parts, so it stays open)
+        if _occluded((cpos[0], cpos[2]), (opos[0], opos[2]), walls):
             continue
         if d_flat > 0.05:
             v = _norm((opos[0] - cpos[0], 0.0, opos[2] - cpos[2]))
@@ -455,6 +471,38 @@ def describe(camera, subjects, output="krea2"):
     return " ".join(p if p.endswith(".") else p + "." for p in parts)
 
 
+def _wall_segments(subjects):
+    """[(x1, z1, x2, z2)] for every wall entry: it runs along its facing
+    (facing 0 = along x, 90 = along z), size[0] long."""
+    segs = []
+    for s_ in subjects:
+        if str(s_.get("kind") or "") != "wall":
+            continue
+        p = [float(x) for x in s_.get("pos", [0, 0, 0])]
+        length = float((s_.get("size") or [1.0, 0.2])[0])
+        f = math.radians(float(s_.get("facing_deg", 0)))
+        dx, dz = math.cos(f) * length / 2.0, math.sin(f) * length / 2.0
+        segs.append((p[0] - dx, p[2] - dz, p[0] + dx, p[2] + dz))
+    return segs
+
+
+def _occluded(a, b, walls):
+    """True when the segment a->b (camera to thing, ground plan) crosses a
+    wall segment strictly between them (the thing itself may sit ON a wall:
+    a window or a door, hence the 0.97 cut)."""
+    ax, az = a
+    bx, bz = b
+    for (x1, z1, x2, z2) in walls:
+        d = (bx - ax) * (z2 - z1) - (bz - az) * (x2 - x1)
+        if abs(d) < 1e-9:
+            continue
+        t = ((x1 - ax) * (z2 - z1) - (z1 - az) * (x2 - x1)) / d     # along a->b
+        u = ((x1 - ax) * (bz - az) - (z1 - az) * (bx - ax)) / d     # along the wall
+        if 0.02 < t < 0.97 and 0.0 <= u <= 1.0:
+            return True
+    return False
+
+
 def _ots_person(cpos, look_at, geo, subjects, ti):
     """Index of a person who is the foreground shoulder of an OTS, or None:
     a person (not the target) within 1.6 m of the camera, nearer than the
@@ -478,11 +526,12 @@ def _ots_person(cpos, look_at, geo, subjects, ti):
 
 
 def _ots_side(cpos, look_at, opos):
-    """left / right: which edge of the frame the foreground shoulder sits at."""
+    """(left|right, lateral metres): which edge of the frame the foreground
+    person sits at, and how far off the look line they are."""
     look = _norm((look_at[0] - cpos[0], 0.0, look_at[2] - cpos[2]))
     right = (-look[2], 0.0, look[0])
     dot = (opos[0] - cpos[0]) * right[0] + (opos[2] - cpos[2]) * right[2]
-    return "right" if dot >= 0 else "left"
+    return ("right" if dot >= 0 else "left"), abs(dot)
 
 
 def _faces_each_other(a, b):
