@@ -1,0 +1,1254 @@
+{
+ "id": "ad18abd3-bdee-4f80-8fae-d15d4f845b9d",
+ "revision": 0,
+ "last_node_id": 113,
+ "last_link_id": 300,
+ "nodes": [
+  {
+   "id": 94,
+   "type": "ModelSamplingAuraFlow",
+   "pos": [
+    -223.70782588053316,
+    -456.0388345242205
+   ],
+   "size": [
+    270,
+    68.33333333333334
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 228
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      231
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "ModelSamplingAuraFlow",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    3.1
+   ]
+  },
+  {
+   "id": 96,
+   "type": "FluxKontextMultiReferenceLatentMethod",
+   "pos": [
+    -233.70782588053316,
+    -86.03883452422048
+   ],
+   "size": [
+    309.6734375,
+    70
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 229
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      241
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "FluxKontextMultiReferenceLatentMethod",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "index_timestep_zero"
+   ],
+   "color": "#222",
+   "bgcolor": "#000"
+  },
+  {
+   "id": 97,
+   "type": "FluxKontextMultiReferenceLatentMethod",
+   "pos": [
+    -233.70782588053316,
+    -216.03883452422048
+   ],
+   "size": [
+    309.6734375,
+    70
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 256
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      240
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "FluxKontextMultiReferenceLatentMethod",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "index_timestep_zero"
+   ],
+   "color": "#222",
+   "bgcolor": "#000"
+  },
+  {
+   "id": 98,
+   "type": "CFGNorm",
+   "pos": [
+    -223.70782588053316,
+    -346.0388345242205
+   ],
+   "size": [
+    270,
+    68.33333333333334
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 231
+    }
+   ],
+   "outputs": [
+    {
+     "name": "patched_model",
+     "type": "MODEL",
+     "links": [
+      239
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "CFGNorm",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    1
+   ]
+  },
+  {
+   "id": 100,
+   "type": "TextEncodeQwenImageEditPlus",
+   "pos": [
+    -713.7078258805332,
+    -96.03883452422048
+   ],
+   "size": [
+    420,
+    220
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 232
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": 233
+    },
+    {
+     "name": "image1",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 234
+    },
+    {
+     "name": "image2",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image3",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      229
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "TextEncodeQwenImageEditPlus",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    ""
+   ],
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 101,
+   "type": "Note",
+   "pos": [
+    -213.70782588053316,
+    33.961165475779524
+   ],
+   "size": [
+    280,
+    90
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "The \"Edit Model Reference Method\" nodes above are not needed if you use Comfy files, but may be needed if you use repackaged ones from other people."
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 103,
+   "type": "VAEDecode",
+   "pos": [
+    416.29217411946684,
+    -446.0388345242205
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 17,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 244
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 245
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "slot_index": 0,
+     "links": [
+      246
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "VAEDecode",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 105,
+   "type": "VAEEncode",
+   "pos": [
+    -503.70782588053316,
+    243.96116547577952
+   ],
+   "size": [
+    187.5,
+    60
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 235
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 236
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      242
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "VAEEncode",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 107,
+   "type": "FluxKontextImageScale",
+   "pos": [
+    -1183.7078258805332,
+    253.96116547577952
+   ],
+   "size": [
+    194.9458984375,
+    26
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 247
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      234,
+      235,
+      255
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "FluxKontextImageScale",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 9,
+   "type": "SaveImage",
+   "pos": [
+    641.8552155119597,
+    -448.5662471902763
+   ],
+   "size": [
+    580,
+    480
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 246
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "SaveImage",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "Qwen_Edit_2511"
+   ]
+  },
+  {
+   "id": 93,
+   "type": "CLIPLoader",
+   "pos": [
+    -1189.7074741626125,
+    -117.053489726485
+   ],
+   "size": [
+    396.1328125,
+    125
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      232,
+      253
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "CLIPLoader",
+    "models": [
+     {
+      "name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/HunyuanVideo_1.5_repackaged/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "directory": "text_encoders"
+     }
+    ],
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    "qwen_image",
+    "default"
+   ]
+  },
+  {
+   "id": 95,
+   "type": "VAELoader",
+   "pos": [
+    -1189.7074741626125,
+    60.946394967360106
+   ],
+   "size": [
+    396.1328125,
+    68.33333333333334
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "slot_index": 0,
+     "links": [
+      233,
+      236,
+      245,
+      254
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "qwen_image_vae.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
+      "directory": "vae"
+     }
+    ],
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "qwen_image_vae.safetensors"
+   ]
+  },
+  {
+   "id": 110,
+   "type": "Note",
+   "pos": [
+    -1916.2124333835154,
+    -614.5278522893398
+   ],
+   "size": [
+    676.5535657940301,
+    1186.1840394227077
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "All prompt possible for the Lora Qwen image edit multiple angles",
+   "properties": {},
+   "widgets_values": [
+    "RedNode: the prompt now comes from the RedNode Camera Multi-Angle node (left). Pick azimuth / elevation / distance there, or wire a Camera Studio's camera_json into it and place the camera on the stage instead. With a camera path on the studio you get one re-angle per shot from one Queue.\n\nOriginal band list:\n<sks> front view low-angle shot close-up\n<sks> front-right quarter view low-angle shot close-up\n<sks> right side view low-angle shot close-up\n<sks> back-right quarter view low-angle shot close-up\n<sks> back view low-angle shot close-up\n<sks> back-left quarter view low-angle shot close-up\n<sks> left side view low-angle shot close-up\n<sks> front-left quarter view low-angle shot close-up\n<sks> front view eye-level shot close-up\n<sks> front-right quarter view eye-level shot close-up\n<sks> right side view eye-level shot close-up\n<sks> back-right quarter view eye-level shot close-up\n<sks> back view eye-level shot close-up\n<sks> back-left quarter view eye-level shot close-up\n<sks> left side view eye-level shot close-up\n<sks> front-left quarter view eye-level shot close-up\n<sks> front view elevated shot close-up\n<sks> front-right quarter view elevated shot close-up\n<sks> right side view elevated shot close-up\n<sks> back-right quarter view elevated shot close-up\n<sks> back view elevated shot close-up\n<sks> back-left quarter view elevated shot close-up\n<sks> left side view elevated shot close-up\n<sks> front-left quarter view elevated shot close-up\n<sks> front view high-angle shot close-up\n<sks> front-right quarter view high-angle shot close-up\n<sks> right side view high-angle shot close-up\n<sks> back-right quarter view high-angle shot close-up\n<sks> back view high-angle shot close-up\n<sks> back-left quarter view high-angle shot close-up\n<sks> left side view high-angle shot close-up\n<sks> front-left quarter view high-angle shot close-up\n<sks> front view low-angle shot medium shot\n<sks> front-right quarter view low-angle shot medium shot\n<sks> right side view low-angle shot medium shot\n<sks> back-right quarter view low-angle shot medium shot\n<sks> back view low-angle shot medium shot\n<sks> back-left quarter view low-angle shot medium shot\n<sks> left side view low-angle shot medium shot\n<sks> front-left quarter view low-angle shot medium shot\n<sks> front view eye-level shot medium shot\n<sks> front-right quarter view eye-level shot medium shot\n<sks> right side view eye-level shot medium shot\n<sks> back-right quarter view eye-level shot medium shot\n<sks> back view eye-level shot medium shot\n<sks> back-left quarter view eye-level shot medium shot\n<sks> left side view eye-level shot medium shot\n<sks> front-left quarter view eye-level shot medium shot\n<sks> front view elevated shot medium shot\n<sks> front-right quarter view elevated shot medium shot\n<sks> right side view elevated shot medium shot\n<sks> back-right quarter view elevated shot medium shot\n<sks> back view elevated shot medium shot\n<sks> back-left quarter view elevated shot medium shot\n<sks> left side view elevated shot medium shot\n<sks> front-left quarter view elevated shot medium shot\n<sks> front view high-angle shot medium shot\n<sks> front-right quarter view high-angle shot medium shot\n<sks> right side view high-angle shot medium shot\n<sks> back-right quarter view high-angle shot medium shot\n<sks> back view high-angle shot medium shot\n<sks> back-left quarter view high-angle shot medium shot\n<sks> left side view high-angle shot medium shot\n<sks> front-left quarter view high-angle shot medium shot\n<sks> front view low-angle shot wide shot\n<sks> front-right quarter view low-angle shot wide shot\n<sks> right side view low-angle shot wide shot\n<sks> back-right quarter view low-angle shot wide shot\n<sks> back view low-angle shot wide shot\n<sks> back-left quarter view low-angle shot wide shot\n<sks> left side view low-angle shot wide shot\n<sks> front-left quarter view low-angle shot wide shot\n<sks> front view eye-level shot wide shot\n<sks> front-right quarter view eye-level shot wide shot\n<sks> right side view eye-level shot wide shot\n<sks> back-right quarter view eye-level shot wide shot\n<sks> back view eye-level shot wide shot\n<sks> back-left quarter view eye-level shot wide shot\n<sks> left side view eye-level shot wide shot\n<sks> front-left quarter view eye-level shot wide shot\n<sks> front view elevated shot wide shot\n<sks> front-right quarter view elevated shot wide shot\n<sks> right side view elevated shot wide shot\n<sks> back-right quarter view elevated shot wide shot\n<sks> back view elevated shot wide shot\n<sks> back-left quarter view elevated shot wide shot\n<sks> left side view elevated shot wide shot\n<sks> front-left quarter view elevated shot wide shot\n<sks> front view high-angle shot wide shot\n<sks> front-right quarter view high-angle shot wide shot\n<sks> right side view high-angle shot wide shot\n<sks> back-right quarter view high-angle shot wide shot\n<sks> back view high-angle shot wide shot\n<sks> back-left quarter view high-angle shot wide shot\n<sks> left side view high-angle shot wide shot\n<sks> front-left quarter view high-angle shot wide shot"
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 112,
+   "type": "TextEncodeQwenImageEditPlus",
+   "pos": [
+    -713.7078258805332,
+    -416.0388345242205
+   ],
+   "size": [
+    426.6276041666667,
+    265.55989583333337
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 253
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": 254
+    },
+    {
+     "name": "image1",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 255
+    },
+    {
+     "name": "image2",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image3",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "widget": {
+      "name": "prompt"
+     },
+     "link": 300
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      256
+     ]
+    }
+   ],
+   "title": "TextEncodeQwenImageEditPlus (Positive)",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "TextEncodeQwenImageEditPlus",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "<sks> front-right quarter view eye-level shot medium shot"
+   ],
+   "color": "#232",
+   "bgcolor": "#353"
+  },
+  {
+   "id": 41,
+   "type": "LoadImage",
+   "pos": [
+    -2242.321326660545,
+    -580.3768674747334
+   ],
+   "size": [
+    274.07552083333337,
+    314.00000000000006
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      247
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": null
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "LoadImage",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "example.png",
+    "image"
+   ]
+  },
+  {
+   "id": 102,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    -1187.4393937538296,
+    -274.0945766023107
+   ],
+   "size": [
+    396.1328125,
+    96.66666666666667
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 258
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      228
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "LoraLoaderModelOnly",
+    "models": [
+     {
+      "name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "directory": "loras"
+     }
+    ],
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+    1
+   ]
+  },
+  {
+   "id": 106,
+   "type": "KSampler",
+   "pos": [
+    86.29217411946684,
+    -456.0388345242205
+   ],
+   "size": [
+    280,
+    560
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 239
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 240
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 241
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 242
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      244
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "KSampler",
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    767732881993831,
+    "randomize",
+    4,
+    1,
+    "euler",
+    "simple",
+    1
+   ]
+  },
+  {
+   "id": 108,
+   "type": "UNETLoader",
+   "pos": [
+    -1197.6063400295723,
+    -614.2492712957221
+   ],
+   "size": [
+    396.1328125,
+    96.66666666666667
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "slot_index": 0,
+     "links": [
+      257
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "UNETLoader",
+    "models": [
+     {
+      "name": "qwen_image_edit_2511_bf16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_bf16.safetensors",
+      "directory": "diffusion_models"
+     }
+    ],
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "qwen_image_edit_2511_fp8mixed.safetensors",
+    "default"
+   ]
+  },
+  {
+   "id": 109,
+   "type": "LoraLoaderModelOnly",
+   "pos": [
+    -1198.2105531198645,
+    -429.09958403078633
+   ],
+   "size": [
+    396.1328125,
+    96.66666666666667
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 257
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      258
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.5.1",
+    "Node name for S&R": "LoraLoaderModelOnly",
+    "models": [
+     {
+      "name": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "url": "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "directory": "loras"
+     }
+    ],
+    "enableTabs": false,
+    "tabWidth": 65,
+    "tabXOffset": 10,
+    "hasSecondTab": false,
+    "secondTabText": "Send Back",
+    "secondTabOffset": 80,
+    "secondTabWidth": 65
+   },
+   "widgets_values": [
+    "qwen-image-edit-2511-multiple-angles-lora.safetensors",
+    1
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 113,
+   "type": "RedNodeCameraMultiAngle",
+   "pos": [
+    -1200,
+    -420
+   ],
+   "size": [
+    420,
+    260
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "camera_json",
+     "shape": 7,
+     "type": "STRING",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "links": [
+      300
+     ]
+    },
+    {
+     "name": "azimuth",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "name": "elevation",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "name": "distance",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "name": "azimuth_deg",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "name": "elevation_deg",
+     "type": "INT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "RedNodeCameraMultiAngle"
+   },
+   "widgets_values": [
+    "front-right quarter view",
+    "eye-level shot",
+    "medium shot",
+    "<sks>",
+    "the subject's right",
+    ""
+   ]
+  }
+ ],
+ "links": [
+  [
+   228,
+   102,
+   0,
+   94,
+   0,
+   "MODEL"
+  ],
+  [
+   229,
+   100,
+   0,
+   96,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   231,
+   94,
+   0,
+   98,
+   0,
+   "MODEL"
+  ],
+  [
+   232,
+   93,
+   0,
+   100,
+   0,
+   "CLIP"
+  ],
+  [
+   233,
+   95,
+   0,
+   100,
+   1,
+   "VAE"
+  ],
+  [
+   234,
+   107,
+   0,
+   100,
+   2,
+   "IMAGE"
+  ],
+  [
+   235,
+   107,
+   0,
+   105,
+   0,
+   "IMAGE"
+  ],
+  [
+   236,
+   95,
+   0,
+   105,
+   1,
+   "VAE"
+  ],
+  [
+   239,
+   98,
+   0,
+   106,
+   0,
+   "MODEL"
+  ],
+  [
+   240,
+   97,
+   0,
+   106,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   241,
+   96,
+   0,
+   106,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   242,
+   105,
+   0,
+   106,
+   3,
+   "LATENT"
+  ],
+  [
+   244,
+   106,
+   0,
+   103,
+   0,
+   "LATENT"
+  ],
+  [
+   245,
+   95,
+   0,
+   103,
+   1,
+   "VAE"
+  ],
+  [
+   246,
+   103,
+   0,
+   9,
+   0,
+   "IMAGE"
+  ],
+  [
+   247,
+   41,
+   0,
+   107,
+   0,
+   "IMAGE"
+  ],
+  [
+   253,
+   93,
+   0,
+   112,
+   0,
+   "CLIP"
+  ],
+  [
+   254,
+   95,
+   0,
+   112,
+   1,
+   "VAE"
+  ],
+  [
+   255,
+   107,
+   0,
+   112,
+   2,
+   "IMAGE"
+  ],
+  [
+   256,
+   112,
+   0,
+   97,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   257,
+   108,
+   0,
+   109,
+   0,
+   "MODEL"
+  ],
+  [
+   258,
+   109,
+   0,
+   102,
+   0,
+   "MODEL"
+  ],
+  [
+   300,
+   113,
+   0,
+   112,
+   5,
+   "STRING"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "Models",
+   "bounding": [
+    -1203.7078258805332,
+    -496.0388345242205,
+    416.1419982910156,
+    630.0299011230469
+   ],
+   "color": "#3f789e",
+   "font_size": 24,
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "Prompt",
+   "bounding": [
+    -763.7078258805332,
+    -496.0388345242205,
+    510,
+    630
+   ],
+   "color": "#3f789e",
+   "font_size": 24,
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.47422135900301676,
+   "offset": [
+    2382.0232185069312,
+    913.1301992641097
+   ]
+  },
+  "frontendVersion": "1.35.9",
+  "workflowRendererVersion": "LG",
+  "groupNodes": {},
+  "VHS_latentpreview": false,
+  "VHS_latentpreviewrate": 0,
+  "VHS_MetadataImage": true,
+  "VHS_KeepIntermediate": true
+ },
+ "version": 0.4
+}
