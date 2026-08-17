@@ -16,6 +16,7 @@ Standalone first, by the user's call; the panel is host-agnostic so the
 Workspace can mount it later.
 """
 import json
+import math
 import os
 
 from . import camera_translate as _ct
@@ -531,7 +532,101 @@ def _apply_loras(model, clip, wanted):
     return (model, clip, ", ".join(applied))
 
 
+# ---------------------------------------------------------------- multi-angle bridge
+# THE MULTI-ANGLE EDIT LORA (fal's Qwen-Image-Edit-2511-Multiple-Angles): give
+# it a photo and "<sks> <azimuth> <elevation> <distance>" and it re-renders the
+# same picture from that viewpoint. This node writes that prompt from the
+# studio's camera_json, so the same stage that plans a txt2img shot can steer
+# a re-angle of an existing image - and a camera path re-angles it N times.
+MA_AZIMUTHS = ["front view", "front-right quarter view", "right side view",
+               "back-right quarter view", "back view", "back-left quarter view",
+               "left side view", "front-left quarter view"]
+MA_ELEVATIONS = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle shot"]
+MA_DISTANCES = ["close-up", "medium shot", "wide shot"]
+
+
+def multi_angle_words(camera, subjects, side="subject"):
+    """(azimuth word, elevation word, distance word, azimuth_deg, elevation_deg)
+    for the camera against the target subject. side: whose right the LoRA's
+    "right side view" means - the subject's (default) or the viewer's."""
+    geo, rel = _ct._prime_geo(camera, subjects)
+    # rel: 0 front, +90 the subject's LEFT, -90 their right, 180 behind.
+    # The LoRA's azimuth runs front -> front-right -> right -> back-right ->
+    # back -> ... clockwise seen from above; "right" = the subject's right by
+    # default (rel -90), or the viewer's right (rel +90) when side == "viewer".
+    a = -rel if side == "subject" else rel          # degrees clockwise from front
+    a = (a + 360.0) % 360.0
+    idx = int(((a + 22.5) % 360.0) // 45.0)
+    az = MA_AZIMUTHS[idx]
+    p = geo["pitch"]                                 # > 0: camera below, looking up
+    if p > 15:
+        el, el_deg = MA_ELEVATIONS[0], -30
+    elif p > -15:
+        el, el_deg = MA_ELEVATIONS[1], 0
+    elif p > -45:
+        el, el_deg = MA_ELEVATIONS[2], 30
+    else:
+        el, el_deg = MA_ELEVATIONS[3], 60
+    focal = float(camera.get("focal_mm", 35))
+    width_m = 2.0 * geo["distance"] * math.tan(math.radians(_ct.fov_deg(focal) / 2.0))
+    di = MA_DISTANCES[0] if width_m < 1.3 else MA_DISTANCES[1] if width_m < 3.2 else MA_DISTANCES[2]
+    return az, el, di, int(round(a)), el_deg
+
+
+class RedNodeCameraMultiAngle:
+    """Studio camera -> the multi-angle edit LoRA's prompt. Wire camera_json
+    from the Camera Studio, or set the three bands by hand."""
+    CATEGORY = "RedNode/Prompt"
+    DESCRIPTION = ("Writes the prompt for fal's Qwen-Image-Edit-2511 Multiple-Angles "
+                   "LoRA (\"<sks> azimuth elevation distance\") from the Camera "
+                   "Studio's camera_json, so the stage steers a re-angle of an existing "
+                   "photo. With a camera path wired in you get one prompt per shot. "
+                   "No camera_json: the three pickers are used as set.")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "INT", "INT")
+    RETURN_NAMES = ("prompt", "azimuth", "elevation", "distance", "azimuth_deg", "elevation_deg")
+    FUNCTION = "run"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "azimuth": (MA_AZIMUTHS, {"default": "front view"}),
+                "elevation": (MA_ELEVATIONS, {"default": "eye-level shot"}),
+                "distance": (MA_DISTANCES, {"default": "medium shot"}),
+                "trigger": ("STRING", {"default": "<sks>", "tooltip": "The LoRA's trigger token; keep it."}),
+                "right_means": (["the subject's right", "the viewer's right"], {"default": "the subject's right",
+                                "tooltip": "Which right the LoRA's 'right side view' is. Flip if the "
+                                           "re-angles come out mirrored."}),
+                "extra": ("STRING", {"default": "", "multiline": True, "tooltip":
+                          "Optional words appended after the camera prompt."}),
+            },
+            "optional": {
+                "camera_json": ("STRING", {"forceInput": True, "tooltip":
+                                "From the Camera Studio: overrides the three pickers."}),
+            },
+        }
+
+    def run(self, azimuth, elevation, distance, trigger="<sks>", right_means="the subject's right",
+            extra="", camera_json=""):
+        az_deg, el_deg = MA_AZIMUTHS.index(azimuth) * 45, [-30, 0, 30, 60][MA_ELEVATIONS.index(elevation)]
+        if camera_json and str(camera_json).strip():
+            try:
+                d = json.loads(camera_json)
+            except (ValueError, TypeError):
+                d = None
+            if isinstance(d, dict) and d.get("camera"):
+                st = parse_state(json.dumps({"camera": d.get("camera") or {}, "subjects": d.get("subjects") or []}))
+                azimuth, elevation, distance, az_deg, el_deg = multi_angle_words(
+                    st["camera"], st["subjects"], "subject" if right_means.startswith("the subject") else "viewer")
+        prompt = " ".join(x for x in (trigger.strip(), azimuth, elevation, distance) if x)
+        if extra and extra.strip():
+            prompt += " " + extra.strip()
+        return (prompt, azimuth, elevation, distance, int(az_deg), int(el_deg))
+
+
 NODE_CLASS_MAPPINGS = {"RedNodeCameraStudio": RedNodeCameraStudio,
-                       "RedNodeCameraLoRAs": RedNodeCameraLoRAs}
+                       "RedNodeCameraLoRAs": RedNodeCameraLoRAs,
+                       "RedNodeCameraMultiAngle": RedNodeCameraMultiAngle}
 NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeCameraStudio": "RedNode Camera Studio",
-                              "RedNodeCameraLoRAs": "RedNode Camera LoRAs"}
+                              "RedNodeCameraLoRAs": "RedNode Camera LoRAs",
+                              "RedNodeCameraMultiAngle": "RedNode Camera Multi-Angle"}
