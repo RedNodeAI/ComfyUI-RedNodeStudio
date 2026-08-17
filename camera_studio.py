@@ -109,20 +109,73 @@ def parse_state(config_json):
             "zoom_mode": (d.get("zoom_mode") if d.get("zoom_mode") in ("off", "auto", "manual")
                           else "off"),
             "zoom_strength": num(d.get("zoom_strength"), 0.0, -20.0, 20.0),
+            # THE CAMERA LORAS: {key: {name, mode, strength}} for zoom / height /
+            # orbit / back. The zoom_* fields above are the legacy single-LoRA
+            # form; _camera_loras() merges both, the newer dict winning.
+            "cam_loras": _camera_loras(d),
             "auto_latent": bool(d.get("auto_latent")),
             "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
             "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
 
 
+def _camera_loras(d):
+    """Normalise the per-key LoRA controls; legacy zoom_* fields fold in."""
+    out = {}
+    raw = d.get("cam_loras") if isinstance(d.get("cam_loras"), dict) else {}
+    for key in _ct.CAMERA_LORA_KEYS:
+        e = raw.get(key) if isinstance(raw.get(key), dict) else {}
+        name = str(e.get("name") or "")
+        mode = e.get("mode") if e.get("mode") in ("off", "auto", "manual") else "off"
+        try:
+            strength = float(e.get("strength", 0.0))
+        except (TypeError, ValueError):
+            strength = 0.0
+        if key == "zoom" and not e:
+            # legacy single-zoom form
+            name = str(d.get("zoom_lora") or "")
+            mode = d.get("zoom_mode") if d.get("zoom_mode") in ("off", "auto", "manual") else "off"
+            try:
+                strength = float(d.get("zoom_strength", 0.0))
+            except (TypeError, ValueError):
+                strength = 0.0
+        lo, hi = _ct.CAMERA_LORA_RANGE[key]
+        out[key] = {"name": name, "mode": mode,
+                    "strength": max(lo - 4.0, min(hi + 4.0, strength))}
+    return out
+
+
+AUTO_FN = {"zoom": _ct.auto_zoom_strength, "height": _ct.auto_height_strength,
+           "orbit": _ct.auto_orbit_strength, "back": _ct.auto_back_strength}
+
+
+def resolve_camera_loras(st):
+    """[{key, name, strength}] for every camera LoRA this state switches on.
+
+    Auto strengths come from the geometry (the same numbers the words use);
+    manual ones are the user's. Off, or no file picked, means absent. A slot
+    at strength 0 is dropped too: nothing to apply."""
+    out = []
+    for key in _ct.CAMERA_LORA_KEYS:
+        e = (st.get("cam_loras") or {}).get(key) or {}
+        if e.get("mode", "off") == "off" or not e.get("name"):
+            continue
+        if e["mode"] == "auto":
+            strength = AUTO_FN[key](st["camera"], st["subjects"])
+        else:
+            strength = float(e.get("strength", 0.0))
+        if abs(strength) < 0.05:
+            continue
+        out.append({"key": key, "name": e["name"], "strength": round(strength, 2)})
+    return out
+
+
 def resolve_zoom(st):
-    """{name, strength} for the zoom LoRA this state asks for, or None."""
-    if st.get("zoom_mode", "off") == "off" or not st.get("zoom_lora"):
-        return None
-    if st["zoom_mode"] == "auto":
-        strength = _ct.auto_zoom_strength(st["camera"], st["subjects"])
-    else:
-        strength = float(st.get("zoom_strength", 0.0))
-    return {"name": st["zoom_lora"], "strength": strength}
+    """{name, strength} for the zoom LoRA this state asks for, or None.
+    Kept for the older callers; the workspace uses resolve_camera_loras."""
+    for e in resolve_camera_loras(st):
+        if e["key"] == "zoom":
+            return {"name": e["name"], "strength": e["strength"]}
+    return None
 
 
 class RedNodeCameraStudio:
@@ -163,6 +216,7 @@ class RedNodeCameraStudio:
         zoom = resolve_zoom(st)
         state_out = json.dumps({"camera": st["camera"], "subjects": st["subjects"],
                                 "zoom": zoom,
+                                "camera_loras": resolve_camera_loras(st),
                                 "geometry": _ct.camera_geometry(
                                     st["camera"]["pos"],
                                     [st["subjects"][st["camera"]["target"]]["pos"][0],

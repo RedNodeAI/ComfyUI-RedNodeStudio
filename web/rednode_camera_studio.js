@@ -71,7 +71,35 @@ const DEFAULT = () => ({
   output: "krea2", join: "lead",
   auto_latent: false, latent_mp: 1.0, latent_batch: 1,
   zoom_lora: "", zoom_mode: "off", zoom_strength: 0,
+  cam_loras: {},
 });
+const CAM_LORA_KEYS = ["zoom", "height", "orbit", "back"];
+const CAM_LORA_RANGE = { zoom: [-10, 12], height: [-10, 12], orbit: [-8, 8], back: [0, 8] };
+const CAM_LORA_LABEL = { zoom: "Zoom", height: "Height", orbit: "Orbit", back: "Back" };
+const CAM_LORA_HINT = {
+  zoom: "Push in / pull out. Auto follows the shot size: close pushes in, wide pulls out.",
+  height: "Camera height. Auto follows the tilt: below eye level pulls minus, above pushes plus.",
+  orbit: "Camera swung round the subject. Auto follows where the camera sits against the way they face.",
+  back: "Seen from behind. Auto rises once the camera passes their shoulder line; 0 in front.",
+};
+// which files count as the default pick for each key (RedNode's own sliders,
+// then the community zoom): first match wins, the user can pick any file
+const CAM_LORA_GUESS = {
+  zoom: [/zoom/i], height: [/camera_height/i, /cam(era)?[_ -]?height/i],
+  orbit: [/camera_orbit/i, /orbit/i], back: [/camera_back/i, /back_view/i],
+};
+function camLoraEntry(st, key) {
+  if (!st.cam_loras || typeof st.cam_loras !== "object") st.cam_loras = {};
+  let e = st.cam_loras[key];
+  if (!e || typeof e !== "object") {
+    e = { name: "", mode: "off", strength: 0 };
+    if (key === "zoom" && st.zoom_lora) {   // legacy single-zoom form folds in
+      e = { name: st.zoom_lora, mode: st.zoom_mode || "off", strength: st.zoom_strength || 0 };
+    }
+    st.cam_loras[key] = e;
+  }
+  return e;
+}
 
 function normalise(d) {
   const o = DEFAULT();
@@ -104,6 +132,18 @@ function normalise(d) {
     if (typeof d.zoom_lora === "string") o.zoom_lora = d.zoom_lora;
     if (["off", "auto", "manual"].includes(d.zoom_mode)) o.zoom_mode = d.zoom_mode;
     if (typeof d.zoom_strength === "number") o.zoom_strength = d.zoom_strength;
+    if (d.cam_loras && typeof d.cam_loras === "object") {
+      o.cam_loras = {};
+      for (const k of CAM_LORA_KEYS) {
+        const e = d.cam_loras[k];
+        if (!e || typeof e !== "object") continue;
+        o.cam_loras[k] = {
+          name: typeof e.name === "string" ? e.name : "",
+          mode: ["off", "auto", "manual"].includes(e.mode) ? e.mode : "off",
+          strength: typeof e.strength === "number" ? e.strength : 0,
+        };
+      }
+    }
     if (typeof d.latent_mp === "number") o.latent_mp = d.latent_mp;
     if (typeof d.latent_batch === "number") o.latent_batch = d.latent_batch;
   }
@@ -162,6 +202,27 @@ function autoZoomStrength(st) {
   const tt = (Math.log(Math.max(0.5, Math.min(8, widthM))) - lo) / (hi - lo);
   return Math.round((12 - tt * 22) * 0.85 * 10) / 10;
 }
+function primeGeo(st) {
+  const cam = st.camera;
+  const prime = st.subjects[cam.target] || st.subjects[0];
+  const face = [prime.pos[0], prime.pos[1] + prime.height * 0.92, prime.pos[2]];
+  const d = [face[0] - cam.pos[0], face[1] - cam.pos[1], face[2] - cam.pos[2]];
+  const ground = Math.hypot(d[0], d[2]);
+  const pitch = (ground || d[1]) ? Math.atan2(d[1], ground) * 180 / Math.PI : 0;
+  const yaw = ground ? Math.atan2(d[0], -d[2]) * 180 / Math.PI : 0;
+  const facing = prime.facing_deg || 0;
+  const rel = ((yaw - facing + 180) % 360 + 360) % 360 - 180;
+  return { pitch, yaw, rel };
+}
+function clampKey(key, v) {
+  const [lo, hi] = CAM_LORA_RANGE[key];
+  return Math.round(Math.max(lo, Math.min(hi, v)) * 10) / 10;
+}
+function autoHeightStrength(st) { return clampKey("height", -primeGeo(st).pitch * 0.27); }
+function autoOrbitStrength(st) { return clampKey("orbit", -8 * Math.sin(primeGeo(st).rel * Math.PI / 180)); }
+function autoBackStrength(st) { return clampKey("back", 8 * Math.max(0, -Math.cos(primeGeo(st).rel * Math.PI / 180))); }
+const AUTO_FN = { zoom: autoZoomStrength, height: autoHeightStrength,
+                  orbit: autoOrbitStrength, back: autoBackStrength };
 let LORA_LIST = null;
 async function fetchLoras() {
   if (LORA_LIST) return LORA_LIST;
@@ -732,67 +793,102 @@ export function buildStudio(host, S) {
       chips.appendChild(c);
     }
     camCard.appendChild(chips);
-    // ZOOM LORA, the user's ask: a zoom LoRA is a camera control in all but
-    // name (zoom_krea2_loraholic, about -10 wide to +12 tight), so it lives
-    // here. Off, Auto (strength from the shot size, so LoRA and words agree),
-    // or Manual with the slider. The workspace applies it as one extra slot
-    // on the rig's stack when this prompt is active.
+    // CAMERA LORAS, the user's ask: four slider LoRAs are camera controls in
+    // all but name (zoom, and RedNode's own height / orbit / back, trained from
+    // text pairs on 2026-08-17), so they live here. Each row: which file, then
+    // Off / Auto / Manual. Auto ties the strength to the geometry - the same
+    // numbers the words are written from - so LoRA and words push the same
+    // way. The workspace applies the active ones as extra slots on the rig's
+    // stack when this prompt is active. Off by default (house rule).
     const zk = document.createElement("div");
     zk.className = "note";
-    zk.textContent = "Zoom LoRA";
-    camCard.appendChild(zk);
-    const zrow = document.createElement("div");
-    zrow.className = "row";
-    const zsel = document.createElement("select");
-    zsel.style.cssText = "flex:1;min-width:0;max-width:260px";
-    const fillZ = (list) => {
-      zsel.replaceChildren();
-      const o0 = document.createElement("option");
-      o0.value = ""; o0.textContent = "(pick a zoom LoRA)";
-      zsel.appendChild(o0);
-      const names = [...new Set([...(list || []), ...(st.zoom_lora ? [st.zoom_lora] : [])])];
-      names.sort((a, b) => (/zoom/i.test(b) - /zoom/i.test(a)) || a.localeCompare(b));
-      for (const nme of names) {
-        const o = document.createElement("option");
-        o.value = nme; o.textContent = nme.replace(/\.safetensors$/i, "");
-        o.selected = nme === st.zoom_lora;
-        zsel.appendChild(o);
-      }
-    };
-    fillZ(LORA_LIST);
-    if (!LORA_LIST) fetchLoras().then((l) => fillZ(l));
-    zsel.title = "Which LoRA is the zoom. It joins the rig's LoRA stack for this "
-               + "prompt at the strength below, applied by the workspace.";
-    zsel.onchange = () => {
-      st.zoom_lora = zsel.value;
-      if (st.zoom_lora && st.zoom_mode === "off") st.zoom_mode = "auto";
+    zk.style.cssText = "display:flex;align-items:center;gap:8px";
+    zk.textContent = "Camera LoRAs";
+    const allAuto = document.createElement("span");
+    allAuto.className = "chip";
+    allAuto.textContent = "All auto";
+    allAuto.title = "Every row that has a file picked goes to Auto.";
+    allAuto.onclick = () => {
+      for (const k of CAM_LORA_KEYS) { const e = camLoraEntry(st, k); if (e.name) e.mode = "auto"; }
       write(); render();
     };
-    zrow.appendChild(zsel);
-    const modes = document.createElement("div");
-    modes.className = "chips";
-    for (const [v, l] of [["off", "Off"], ["auto", "Auto"], ["manual", "Manual"]]) {
-      const c = document.createElement("div");
-      c.className = "chip" + (st.zoom_mode === v ? " on" : "");
-      c.textContent = l;
-      c.title = v === "auto" ? "Strength follows the shot size: close pushes in, wide pulls out."
-              : v === "manual" ? "Set the strength yourself." : "The zoom LoRA is not applied.";
-      c.onclick = () => { st.zoom_mode = v; write(); render(); };
-      modes.appendChild(c);
-    }
-    zrow.appendChild(modes);
-    camCard.appendChild(zrow);
-    if (st.zoom_mode !== "off" && st.zoom_lora) {
-      if (st.zoom_mode === "manual") {
-        camCard.appendChild(slider("Strength", -10, 12, 0.1, () => st.zoom_strength,
-          (v) => { st.zoom_strength = v; }, (v) => (v > 0 ? "+" : "") + v.toFixed(1)));
-      } else {
-        const zn = document.createElement("div");
-        zn.className = "note";
-        const zs = autoZoomStrength(st);
-        zn.textContent = "Auto strength " + (zs > 0 ? "+" : "") + zs.toFixed(1)
-          + " for this shot (close pushes in, wide pulls out)";
-        camCard.appendChild(zn);
+    const allOff = document.createElement("span");
+    allOff.className = "chip";
+    allOff.textContent = "All off";
+    allOff.onclick = () => {
+      for (const k of CAM_LORA_KEYS) camLoraEntry(st, k).mode = "off";
+      write(); render();
+    };
+    zk.append(allAuto, allOff);
+    camCard.appendChild(zk);
+    const camLoraList = (list) => [...(list || [])];
+    const guessName = (key, list) => {
+      for (const rx of CAM_LORA_GUESS[key]) {
+        const hit = list.find((n) => rx.test(n));
+        if (hit) return hit;
+      }
+      return "";
+    };
+    for (const key of CAM_LORA_KEYS) {
+      const e = camLoraEntry(st, key);
+      const row = document.createElement("div");
+      row.className = "row";
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = CAM_LORA_LABEL[key];
+      k.title = CAM_LORA_HINT[key];
+      row.appendChild(k);
+      const sel = document.createElement("select");
+      sel.style.cssText = "flex:1;min-width:0;max-width:220px";
+      const fill = (list) => {
+        sel.replaceChildren();
+        const o0 = document.createElement("option");
+        o0.value = ""; o0.textContent = "(pick a LoRA)";
+        sel.appendChild(o0);
+        const names = [...new Set([...camLoraList(list), ...(e.name ? [e.name] : [])])];
+        const guess = guessName(key, names);
+        names.sort((x, y) => ((y === guess) - (x === guess)) || x.localeCompare(y));
+        for (const nme of names) {
+          const o = document.createElement("option");
+          o.value = nme; o.textContent = nme.replace(/\.safetensors$/i, "");
+          o.selected = nme === e.name;
+          sel.appendChild(o);
+        }
+        if (!e.name && guess) {
+          // remember the guess so Auto has a file the moment it is clicked;
+          // mode stays off until the user asks
+          e.name = guess;
+          sel.value = guess;
+        }
+      };
+      fill(LORA_LIST);
+      if (!LORA_LIST) fetchLoras().then((l) => fill(l));
+      sel.title = CAM_LORA_HINT[key];
+      sel.onchange = () => { e.name = sel.value; write(); render(); };
+      row.appendChild(sel);
+      const modes = document.createElement("div");
+      modes.className = "chips";
+      for (const [v, l] of [["off", "Off"], ["auto", "Auto"], ["manual", "Manual"]]) {
+        const c = document.createElement("div");
+        c.className = "chip" + (e.mode === v ? " on" : "");
+        c.textContent = l;
+        c.onclick = () => { e.mode = v; write(); render(); };
+        modes.appendChild(c);
+      }
+      row.appendChild(modes);
+      camCard.appendChild(row);
+      if (e.mode !== "off" && e.name) {
+        const [lo, hi] = CAM_LORA_RANGE[key];
+        if (e.mode === "manual") {
+          camCard.appendChild(slider("Strength", lo, hi, 0.1, () => e.strength,
+            (v) => { e.strength = v; }, (v) => (v > 0 ? "+" : "") + v.toFixed(1)));
+        } else {
+          const zn = document.createElement("div");
+          zn.className = "note";
+          const zs = AUTO_FN[key](st);
+          zn.textContent = "Auto " + (zs > 0 ? "+" : "") + zs.toFixed(1) + " for this shot";
+          camCard.appendChild(zn);
+        }
       }
     }
   }

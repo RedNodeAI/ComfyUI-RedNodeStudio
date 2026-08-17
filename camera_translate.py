@@ -558,3 +558,75 @@ def auto_zoom_strength(camera, subjects):
     strength = ZOOM_MAX - t * (ZOOM_MAX - ZOOM_MIN)
     # gentle around the middle: the balanced shot should not lean on the LoRA
     return round(strength * 0.85, 1)
+
+
+# ---------------------------------------------------------------- camera LoRAs
+# THE CAMERA'S OWN LORAS (the user's ask, 2026-08-17): four slider LoRAs the
+# studio drives from the geometry, so nobody dials them by hand - zoom (from
+# the shot size), height (from the pitch), orbit and back (from where the
+# camera sits relative to the way the subject faces). Public strengths: about
+# +-8 is a strong effect for the RedNode camera sliders (raw x0.375), and the
+# range the studio hands out is clamped to what stays clean on Krea 2:
+# height -10..+12, orbit -8..+8, back 0..+8. Sign conventions are the ones the
+# LoRAs were trained with:
+#   height: minus = camera low looking up, plus = camera high looking down
+#   orbit:  minus = camera swung to ITS left (subject faces frame-right),
+#           plus  = camera swung to ITS right (subject faces frame-left)
+#   back:   0 = as prompted, plus = seen from behind (one-sided)
+CAMERA_LORA_KEYS = ("zoom", "height", "orbit", "back")
+CAMERA_LORA_RANGE = {"zoom": (ZOOM_MIN, ZOOM_MAX), "height": (-10.0, 12.0),
+                     "orbit": (-8.0, 8.0), "back": (0.0, 8.0)}
+
+
+def _prime_geo(camera, subjects):
+    """(geo, rel) for the camera against the target subject's face - the same
+    numbers describe() builds its words from, so LoRA and words agree."""
+    if not subjects:
+        subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
+                     "facing_deg": 0}]
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    cpos = [float(x) for x in camera.get("pos", [0, face[1], 3.0])]
+    geo = camera_geometry(cpos, face)
+    rel = (geo["yaw"] - float(prime.get("facing_deg", 0)) + 180) % 360 - 180
+    return geo, rel
+
+
+def _clamp_key(key, v):
+    lo, hi = CAMERA_LORA_RANGE[key]
+    return round(max(lo, min(hi, v)), 1) + 0.0   # + 0.0: no '-0.0'
+
+
+def auto_height_strength(camera, subjects):
+    """Pitch to the height slider: -30 deg (a low angle) is about -8, +30 deg
+    (a strong high angle) about +8; the extremes saturate at the safe ends."""
+    geo, _ = _prime_geo(camera, subjects)
+    # pitch < 0 means the camera looks DOWN (it is above the face) = plus
+    return _clamp_key("height", -geo["pitch"] * 0.27)
+
+
+def auto_orbit_strength(camera, subjects):
+    """Bearing to the orbit slider: camera at the subject's left side (rel -90,
+    the translator's 'left profile') is +8, at their right side -8, front 0.
+    Behind (180) is 0 too: that is the back slider's job."""
+    _, rel = _prime_geo(camera, subjects)
+    return _clamp_key("orbit", -8.0 * math.sin(math.radians(rel)))
+
+
+def auto_back_strength(camera, subjects):
+    """Bearing to the back slider: 0 until the camera passes the subject's
+    shoulder line, then rising to +8 dead behind (rear three-quarter ~ +5.7)."""
+    _, rel = _prime_geo(camera, subjects)
+    return _clamp_key("back", 8.0 * max(0.0, -math.cos(math.radians(rel))))
+
+
+def auto_camera_loras(camera, subjects):
+    """All four auto strengths at once: {zoom, height, orbit, back}."""
+    return {"zoom": auto_zoom_strength(camera, subjects),
+            "height": auto_height_strength(camera, subjects),
+            "orbit": auto_orbit_strength(camera, subjects),
+            "back": auto_back_strength(camera, subjects)}
