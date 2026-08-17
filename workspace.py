@@ -607,6 +607,9 @@ def parse_config(config_json):
             except (TypeError, ValueError):
                 ips = 1
             tabs[name]["passes"] = max(1, min(PAINT_PASS_MAX, ips))
+            # RE-ANGLE: the viewpoint stage that runs before the i2i pass
+            from . import reangle as _re_parse
+            tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
         if name in CONVERTER_TABS:
             conv_in = t.get("conv") if isinstance(t.get("conv"), dict) else {}
             tabs[name]["conv"] = {
@@ -1663,6 +1666,39 @@ class RedNodeStudioWorkspace:
             else:
                 print("[RedNode Workspace] the i2i canvas is set to Wired latent "
                       "but nothing is wired into latent", flush=True)
+        # RE-ANGLE (the user's ask, 2026-08-17): image to image from a different
+        # angle. Before the i2i pass, the source is re-shot by the multi-angle edit
+        # model from the camera this tab asks for - the three bands here, or the
+        # active prompt row's Camera Studio (a path gives several views, one
+        # canvas each). The result IS the i2i source from here on: encode,
+        # denoise, passes, the i2i_image output, all unchanged.
+        _rg = it.get("reangle") or {}
+        if it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None:
+            try:
+                from . import reangle as _re
+                _cams = []
+                if _rg["camera"] == "studio":
+                    _rrow = prompt_row_for(cfg["models"], cfg["prompts"])
+                    _cj = ((_rrow or {}).get("frame") or {}).get("camera")
+                    if isinstance(_cj, str) and _cj.strip():
+                        from .camera_studio import parse_state as _cs_ps
+                        from . import camera_translate as _ct_re
+                        _cst = _cs_ps(_cj)
+                        for _c in _ct_re.camera_path(_cst["camera"], _cst["subjects"], _cst["path"]):
+                            _cams.append(json.dumps({"camera": _c, "subjects": _cst["subjects"]}))
+                    else:
+                        print("[RedNode Workspace] re-angle: camera from studio asked, but the "
+                              "active prompt row has no studio camera; using the bands", flush=True)
+                _prompts = _re.prompts_for(_rg, _cams)
+                _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
+                _before = tuple(i2i_img.shape)
+                i2i_img = _re.render(_rg, i2i_img, _prompts, _rseed)
+                print("[RedNode Workspace] re-angle: %d view(s) from %s -> the i2i source "
+                      "(%d x %d)" % (i2i_img.shape[0], "the studio" if _cams else "the bands",
+                                     i2i_img.shape[2], i2i_img.shape[1]), flush=True)
+            except Exception as exc:
+                print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
+                      % exc, flush=True)
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
         if latent is None and real_i2i:
             if vae is not None:

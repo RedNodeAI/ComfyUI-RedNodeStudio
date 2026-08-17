@@ -811,6 +811,32 @@ export function readCfg(node) {
     if (name === "i2i") {
       t.prompt_only = !!t.prompt_only;
       if (typeof t.denoise !== "number") t.denoise = 0.7;
+      // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
+      if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
+      const R = t.reangle;
+      if (typeof R.on !== "boolean") R.on = false;
+      if (R.camera !== "bands" && R.camera !== "studio") R.camera = "bands";
+      if (typeof R.azimuth !== "string") R.azimuth = "front-right quarter view";
+      if (typeof R.elevation !== "string") R.elevation = "eye-level shot";
+      if (typeof R.distance !== "string") R.distance = "medium shot";
+      if (typeof R.nudge !== "boolean") R.nudge = false;
+      if (typeof R.collapse !== "boolean") R.collapse = true;
+      if (typeof R.extra !== "string") R.extra = "";
+      if (typeof R.unet !== "string") R.unet = "";
+      if (typeof R.clip !== "string") R.clip = "";
+      if (typeof R.vae !== "string") R.vae = "";
+      if (typeof R.lora_angles !== "string") R.lora_angles = "";
+      if (typeof R.lora_light !== "string") R.lora_light = "";
+      if (typeof R.lora_angles_strength !== "number") R.lora_angles_strength = 1;
+      if (typeof R.lora_light_strength !== "number") R.lora_light_strength = 1;
+      if (typeof R.steps !== "number") R.steps = 4;
+      if (typeof R.cfg !== "number") R.cfg = 1;
+      if (typeof R.sampler !== "string") R.sampler = "euler";
+      if (typeof R.scheduler !== "string") R.scheduler = "simple";
+      if (typeof R.shift !== "number") R.shift = 3.1;
+      if (typeof R.cfg_norm !== "boolean") R.cfg_norm = true;
+      if (typeof R.seed !== "number") R.seed = 0;
+      if (typeof R.seed_random !== "boolean") R.seed_random = true;
       if (typeof t.scale !== "number") t.scale = 1;
       t.scale = Math.max(0.25, Math.min(3, t.scale));
     }
@@ -10052,6 +10078,202 @@ function i2iPassRow(node, body, tabName) {
   body.appendChild(pcard);
 }
 
+// RE-ANGLE: image to image from a different viewpoint. Runs BEFORE the i2i
+// pass: the source is re-shot by the multi-angle edit model (Qwen-Image-Edit
+// 2511 + fal's Multiple-Angles LoRA, the standalone example workflow's graph)
+// from the camera chosen here, and that picture becomes the i2i source - so the
+// Krea pass at a low denoise polishes it, and hi-res follows as usual. Several
+// views (a camera path on the studio) come back as a batch.
+const RA_AZ = ["front view", "front-right quarter view", "right side view", "back-right quarter view",
+               "back view", "back-left quarter view", "left side view", "front-left quarter view"];
+const RA_EL = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle shot"];
+const RA_DI = ["close-up", "medium shot", "wide shot"];
+const RA_DEFAULT = { unet: "qwen_image_edit_2511_fp8mixed.safetensors", clip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+                     vae: "qwen_image_vae.safetensors", lora_angles: "qwen-image-edit-2511-multiple-angles-lora.safetensors",
+                     lora_light: "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors" };
+function reangleSection(node, body, tabName) {
+  if (tabName !== "i2i") return;
+  const t = node._rnCfg.tabs.i2i;
+  if (t.prompt_only) return;
+  const R = t.reangle;
+  if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+  const L = MODEL_LISTS || {};
+  const open = (node._rnReangleOpen ||= { engine: false });
+  const card = sectionCard("RE-ANGLE", "#f0c58a",
+    !R.on ? "off"
+          : (R.camera === "studio" ? "camera from the studio" : R.azimuth + " · " + R.elevation + " · " + R.distance));
+  const row0 = document.createElement("div");
+  row0.className = "rn-ws-row";
+  const sw = document.createElement("div");
+  sw.className = "rn-ws-sw" + (R.on ? " on" : "");
+  sw.title = "On: before the image to image pass, the source is re-shot from another "
+           + "viewpoint by the multi-angle edit model, and THAT picture is the i2i source. "
+           + "Off: the source is used as it is.";
+  sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = R.on
+    ? "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above."
+    : "Image to image from a different angle: re-shoot the source first, then paint over it.";
+  row0.append(sw, lab);
+  card.appendChild(row0);
+  if (R.on) {
+    // camera source
+    const crow = document.createElement("div");
+    crow.className = "rn-ws-row";
+    const clab = document.createElement("span");
+    clab.className = "rn-ws-note";
+    clab.textContent = "Camera";
+    const cseg = document.createElement("div");
+    cseg.className = "rn-ws-seg";
+    for (const [v, l, tip] of [["bands", "Bands", "Pick the viewpoint from the model's bands: 8 directions, 4 heights, 3 distances."],
+                               ["studio", "Studio", "Take the camera from the active prompt's Camera Studio (Prompts tab). A camera path there gives one view per shot, as a batch."]]) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (R.camera === v ? " on" : "");
+      b.textContent = l; b.title = tip;
+      b.onclick = () => { R.camera = v; writeCfg(node); render(node); };
+      cseg.appendChild(b);
+    }
+    crow.append(clab, cseg);
+    if (R.camera === "bands") {
+      const mkSel = (opts, get, set, title) => {
+        const sel = document.createElement("select");
+        sel.className = "rn-ws-select";
+        for (const o of opts) {
+          const op = document.createElement("option");
+          op.value = o; op.textContent = o; op.selected = o === get();
+          sel.appendChild(op);
+        }
+        sel.title = title;
+        sel.onchange = () => { set(sel.value); writeCfg(node); render(node); };
+        return sel;
+      };
+      crow.append(mkSel(RA_AZ, () => R.azimuth, (v) => { R.azimuth = v; }, "Direction. 'right' = the camera moved to YOUR right."),
+                  mkSel(RA_EL, () => R.elevation, (v) => { R.elevation = v; }, "Height of the camera."),
+                  mkSel(RA_DI, () => R.distance, (v) => { R.distance = v; }, "Distance. Coarse: three steps; use the i2i denoise + Krea for exact framing."));
+    } else {
+      const nudge = document.createElement("div");
+      nudge.className = "rn-ws-sw" + (R.nudge ? " on" : "");
+      nudge.title = "Nudge between the bands from the studio's real geometry (a little more to the left/right, further back, much closer). Verified for direction and distance; heights do not nudge.";
+      nudge.onclick = () => { R.nudge = !R.nudge; writeCfg(node); render(node); };
+      const nl = document.createElement("span");
+      nl.className = "rn-ws-note";
+      nl.textContent = "Nudge between bands";
+      const col = document.createElement("div");
+      col.className = "rn-ws-sw" + (R.collapse ? " on" : "");
+      col.title = "A camera path: merge shots that land in the same bands, so the same viewpoint is not rendered twice.";
+      col.onclick = () => { R.collapse = !R.collapse; writeCfg(node); render(node); };
+      const cl = document.createElement("span");
+      cl.className = "rn-ws-note";
+      cl.textContent = "Collapse same views";
+      crow.append(nudge, nl, col, cl);
+    }
+    card.appendChild(crow);
+    // extra words
+    const erow = document.createElement("div");
+    erow.className = "rn-ws-row";
+    const el = document.createElement("span");
+    el.className = "rn-ws-note";
+    el.textContent = "Extra";
+    const ex = document.createElement("input");
+    ex.type = "text";
+    ex.value = R.extra;
+    ex.placeholder = "Words appended to the camera prompt (optional)";
+    ex.style.cssText = "flex:1;min-width:120px;background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+    ex.onchange = () => { R.extra = ex.value; writeCfg(node); };
+    erow.append(el, ex);
+    card.appendChild(erow);
+    // engine (folded)
+    const eh = document.createElement("button");
+    eh.className = "rn-ws-on";
+    eh.style.cssText = "width:auto;padding:0 10px";
+    eh.textContent = (open.engine ? "▾" : "▸") + " Engine: " + ((R.unet || RA_DEFAULT.unet).replace(/\.safetensors$/i, ""))
+      + " · " + R.steps + " steps · cfg " + R.cfg + " · " + (R.seed_random ? "random seed" : "seed " + R.seed);
+    eh.onclick = () => { open.engine = !open.engine; render(node); };
+    card.appendChild(eh);
+    if (open.engine) {
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center";
+      const pick = (label, list, key, dflt, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const sel = document.createElement("select"); sel.className = "rn-ws-select";
+        const names = [...new Set([...(list || []), ...(R[key] ? [R[key]] : []), ...(dflt ? [dflt] : [])])];
+        const cur = R[key] || dflt;
+        for (const n of names) {
+          const op = document.createElement("option"); op.value = n; op.textContent = n; op.selected = n === cur;
+          sel.appendChild(op);
+        }
+        if (key.startsWith("lora_")) { const op = document.createElement("option"); op.value = "None"; op.textContent = "(none)"; op.selected = R[key] === "None"; sel.appendChild(op); }
+        sel.title = tip;
+        sel.onchange = () => { R[key] = sel.value; writeCfg(node); render(node); };
+        grid.append(l, sel);
+      };
+      pick("Edit model", L.unets, "unet", RA_DEFAULT.unet, "Qwen-Image-Edit-2511 (diffusion_models). fp8 fits beside Krea 2 with Comfy swapping them.");
+      pick("Text encoder", L.clips, "clip", RA_DEFAULT.clip, "Qwen2.5-VL 7B (text_encoders).");
+      pick("VAE", L.vaes, "vae", RA_DEFAULT.vae, "The Qwen Image VAE.");
+      pick("Angles LoRA", L.loras, "lora_angles", RA_DEFAULT.lora_angles, "fal's Multiple-Angles LoRA: the viewpoint vocabulary.");
+      pick("Speed LoRA", L.loras, "lora_light", RA_DEFAULT.lora_light, "The Lightning 4-step LoRA: 4 steps, cfg 1. (none) = a plain 20+ step run at cfg 2.5-4.");
+      const num = (label, key, min, max, step, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;gap:6px;align-items:center";
+        const inp = document.createElement("input"); inp.type = "number"; inp.min = min; inp.max = max; inp.step = step;
+        inp.value = String(R[key]); inp.title = tip;
+        inp.style.cssText = "width:80px;background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+        inp.onchange = () => { const v = Number(inp.value); if (Number.isFinite(v)) R[key] = Math.max(min, Math.min(max, v)); writeCfg(node); render(node); };
+        inp.addEventListener("wheel", () => inp.blur(), { passive: true });
+        wrap.appendChild(inp);
+        grid.append(l, wrap);
+        return wrap;
+      };
+      num("Angles strength", "lora_angles_strength", 0, 2, 0.05, "0.8-1.0 recommended.");
+      num("Speed strength", "lora_light_strength", 0, 2, 0.05, "1.0 with the Lightning LoRA.");
+      num("Steps", "steps", 1, 60, 1, "4 with the Lightning LoRA; 20-30 without.");
+      num("CFG", "cfg", 0, 20, 0.1, "1.0 with the Lightning LoRA; 2.5-4 without.");
+      const sam = (label, list, key, fallback, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const sel = document.createElement("select"); sel.className = "rn-ws-select";
+        for (const n of (list && list.length ? list : fallback)) {
+          const op = document.createElement("option"); op.value = n; op.textContent = n; op.selected = n === R[key];
+          sel.appendChild(op);
+        }
+        sel.title = tip;
+        sel.onchange = () => { R[key] = sel.value; writeCfg(node); render(node); };
+        grid.append(l, sel);
+      };
+      sam("Sampler", L.samplers, "sampler", ["euler"], "euler / simple is what the LoRA card uses.");
+      sam("Scheduler", L.schedulers, "scheduler", ["simple"], "");
+      num("Shift", "shift", 0, 10, 0.1, "ModelSamplingAuraFlow shift; 3.1 per fal's workflow. 0 = off.");
+      const sl = document.createElement("span"); sl.className = "rn-ws-note"; sl.textContent = "Seed";
+      const srow = document.createElement("div"); srow.style.cssText = "display:flex;gap:6px;align-items:center";
+      const rsw = document.createElement("div"); rsw.className = "rn-ws-sw" + (R.seed_random ? " on" : "");
+      rsw.title = "Random: the run's seed (a re-queue re-shoots). Fixed: the number, and a re-queue that only changed the denoise reuses the cached view.";
+      rsw.onclick = () => { R.seed_random = !R.seed_random; writeCfg(node); render(node); };
+      const rl = document.createElement("span"); rl.className = "rn-ws-note"; rl.textContent = R.seed_random ? "random (the run's seed)" : "fixed";
+      srow.append(rsw, rl);
+      if (!R.seed_random) {
+        const si = document.createElement("input"); si.type = "number"; si.min = 0; si.step = 1; si.value = String(R.seed);
+        si.style.cssText = "width:120px;background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+        si.onchange = () => { const v = Math.floor(Number(si.value)); if (Number.isFinite(v) && v >= 0) R.seed = v; writeCfg(node); };
+        srow.appendChild(si);
+      }
+      grid.append(sl, srow);
+      const cn = document.createElement("span"); cn.className = "rn-ws-note"; cn.textContent = "CFG norm";
+      const cnsw = document.createElement("div"); cnsw.className = "rn-ws-sw" + (R.cfg_norm ? " on" : "");
+      cnsw.title = "CFGNorm as in fal's workflow. Cosmetic at cfg 1.";
+      cnsw.onclick = () => { R.cfg_norm = !R.cfg_norm; writeCfg(node); render(node); };
+      grid.append(cn, cnsw);
+      card.appendChild(grid);
+    }
+    const note = document.createElement("div");
+    note.className = "rn-ws-note";
+    note.textContent = "The edit model (about 20 GB) loads beside the rig; Comfy swaps them. The re-shot "
+      + "picture rides the i2i_image output too. Direction is exact, height is good, distance is "
+      + "coarse: leave framing to the denoise and the Krea pass.";
+    card.appendChild(note);
+  }
+  body.appendChild(card);
+}
+
 function converterSection(node, body, tabName) {
   if (!CONVERTER_TABS.includes(tabName)) return;
   const cfg = node._rnCfg;
@@ -10618,6 +10840,7 @@ export function render(node) {
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
   i2iPassRow(node, body, cur);                     // i2i: real pass or prompt only
+  reangleSection(node, body, cur);                 // i2i: re-shoot the source first
   dialSection(node, body, cur);                    // each tab carries its own dials
   if (cur !== "paint") {
     autoSection(node, body, cur);                  // captions for this tab's image
