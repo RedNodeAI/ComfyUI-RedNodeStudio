@@ -545,10 +545,12 @@ MA_ELEVATIONS = ["low-angle shot", "eye-level shot", "elevated shot", "high-angl
 MA_DISTANCES = ["close-up", "medium shot", "wide shot"]
 
 
-def multi_angle_words(camera, subjects, side="subject"):
+def multi_angle_words(camera, subjects, side="viewer"):
     """(azimuth word, elevation word, distance word, azimuth_deg, elevation_deg)
     for the camera against the target subject. side: whose right the LoRA's
-    "right side view" means - the subject's (default) or the viewer's."""
+    "right side view" means - the viewer's (default; verified on renders
+    2026-08-17: camera moved to our right, we see the subject's left side) or
+    the subject's."""
     geo, rel = _ct._prime_geo(camera, subjects)
     # rel: 0 front, +90 the subject's LEFT, -90 their right, 180 behind.
     # The LoRA's azimuth runs front -> front-right -> right -> back-right ->
@@ -594,9 +596,10 @@ class RedNodeCameraMultiAngle:
                 "elevation": (MA_ELEVATIONS, {"default": "eye-level shot"}),
                 "distance": (MA_DISTANCES, {"default": "medium shot"}),
                 "trigger": ("STRING", {"default": "<sks>", "tooltip": "The LoRA's trigger token; keep it."}),
-                "right_means": (["the subject's right", "the viewer's right"], {"default": "the subject's right",
-                                "tooltip": "Which right the LoRA's 'right side view' is. Flip if the "
-                                           "re-angles come out mirrored."}),
+                "right_means": (["the viewer's right", "the subject's right"], {"default": "the viewer's right",
+                                "tooltip": "Which right the LoRA's 'right side view' is. Verified on the "
+                                           "sandbox strip: the VIEWER's right (camera moved to our right, we "
+                                           "see the subject's left side). Flip only if yours come out mirrored."}),
                 "extra": ("STRING", {"default": "", "multiline": True, "tooltip":
                           "Optional words appended after the camera prompt."}),
             },
@@ -606,7 +609,7 @@ class RedNodeCameraMultiAngle:
             },
         }
 
-    def run(self, azimuth, elevation, distance, trigger="<sks>", right_means="the subject's right",
+    def run(self, azimuth, elevation, distance, trigger="<sks>", right_means="the viewer's right",
             extra="", camera_json=""):
         az_deg, el_deg = MA_AZIMUTHS.index(azimuth) * 45, [-30, 0, 30, 60][MA_ELEVATIONS.index(elevation)]
         if camera_json and str(camera_json).strip():
