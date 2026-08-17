@@ -211,8 +211,10 @@ function autoZoomStrength(st) {
   const widthM = 2 * dist * Math.tan((fovDeg(cam.focal_mm) / 2) * Math.PI / 180);
   const lo = Math.log(0.5), hi = Math.log(8.0);
   const tt = (Math.log(Math.max(0.5, Math.min(8, widthM))) - lo) / (hi - lo);
-  return Math.round((12 - tt * 22) * 0.85 * 10) / 10;
+  // mirrors camera_translate.auto_zoom_strength: an assist, half the raw curve, -4..+6
+  return Math.round(Math.max(ZOOM_AUTO_MIN, Math.min(ZOOM_AUTO_MAX, (12 - tt * 22) * ZOOM_AUTO_FACTOR)) * 10) / 10;
 }
+const ZOOM_AUTO_FACTOR = 0.5, ZOOM_AUTO_MIN = -4, ZOOM_AUTO_MAX = 6;
 function primeGeo(st) {
   const cam = st.camera;
   const prime = st.subjects[cam.target] || st.subjects[0];

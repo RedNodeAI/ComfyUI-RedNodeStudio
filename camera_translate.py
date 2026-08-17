@@ -539,6 +539,7 @@ def camera_from_frame(framing="Balanced", camera_height="Eye level",
 # a face close-up leans on the LoRA to push in, a wide view leans on it to
 # pull out, and the balanced middle leaves it near zero.
 ZOOM_MIN, ZOOM_MAX = -10.0, 12.0
+ZOOM_AUTO_FACTOR, ZOOM_AUTO_MIN, ZOOM_AUTO_MAX = 0.5, -4.0, 6.0
 
 
 def auto_zoom_strength(camera, subjects):
@@ -561,8 +562,11 @@ def auto_zoom_strength(camera, subjects):
     lo, hi = math.log(0.5), math.log(8.0)
     t = (math.log(max(0.5, min(8.0, width_m))) - lo) / (hi - lo)   # 0 tight .. 1 wide
     strength = ZOOM_MAX - t * (ZOOM_MAX - ZOOM_MIN)
-    # gentle around the middle: the balanced shot should not lean on the LoRA
-    return round(strength * 0.85, 1)
+    # an ASSIST to the words (which already carry the framing): half the raw
+    # curve, and never past -4 / +6 - at -6 the community zoom pulled a dolly's
+    # wide shots out into a field and shrank a high wide shot to a speck
+    # (camera path examples, 2026-08-17)
+    return round(max(ZOOM_AUTO_MIN, min(ZOOM_AUTO_MAX, strength * ZOOM_AUTO_FACTOR)), 1) + 0.0
 
 
 # ---------------------------------------------------------------- camera LoRAs
