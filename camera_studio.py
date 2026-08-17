@@ -572,7 +572,18 @@ def multi_angle_words(camera, subjects, side="viewer"):
     focal = float(camera.get("focal_mm", 35))
     width_m = 2.0 * geo["distance"] * math.tan(math.radians(_ct.fov_deg(focal) / 2.0))
     di = MA_DISTANCES[0] if width_m < 1.3 else MA_DISTANCES[1] if width_m < 3.2 else MA_DISTANCES[2]
-    return az, el, di, int(round(a)), el_deg
+    # NUDGES between the bands (sandbox strip 2026-08-17: the edit model obeys
+    # "rotate the camera a little more to the left/right", "move the camera a
+    # little further back" and "much closer"; small height nudges do nothing)
+    nudge = []
+    off = ((a - idx * 45.0) + 180.0) % 360.0 - 180.0          # degrees past the band centre
+    if abs(off) > 14.0:
+        nudge.append("rotate the camera a little more to the %s" % ("right" if off > 0 else "left"))
+    if di == MA_DISTANCES[1] and width_m > 2.4:
+        nudge.append("move the camera a little further back")
+    elif di == MA_DISTANCES[0] and width_m < 0.8:
+        nudge.append("move the camera much closer")
+    return az, el, di, int(round(a)), el_deg, ", ".join(nudge)
 
 
 class RedNodeCameraMultiAngle:
@@ -606,6 +617,11 @@ class RedNodeCameraMultiAngle:
                                 "tooltip": "Which right the LoRA's 'right side view' is. Verified on the "
                                            "sandbox strip: the VIEWER's right (camera moved to our right, we "
                                            "see the subject's left side). Flip only if yours come out mirrored."}),
+                "nudge": ("BOOLEAN", {"default": False, "tooltip":
+                          "Add a plain-language nudge when the studio camera sits between the "
+                          "LoRA's bands (a little more to the left/right, a little further back, "
+                          "much closer). Verified on renders for azimuth and distance; height "
+                          "nudges do nothing, so none are written."}),
                 "collapse_same": ("BOOLEAN", {"default": True, "tooltip":
                                   "With a camera path: merge consecutive shots that map to the same "
                                   "bands, so you do not render the same viewpoint twice. Off: one "
@@ -621,7 +637,7 @@ class RedNodeCameraMultiAngle:
         }
 
     def run(self, azimuth, elevation, distance, trigger=None, right_means=None,
-            collapse_same=None, extra=None, camera_json=None):
+            nudge=None, collapse_same=None, extra=None, camera_json=None):
         # INPUT_IS_LIST: every input arrives as a list
         def first(v, dv):
             if isinstance(v, list):
@@ -631,6 +647,7 @@ class RedNodeCameraMultiAngle:
         trig = str(first(trigger, "<sks>") or "").strip()
         side = "subject" if str(first(right_means, "the viewer's right")).startswith("the subject") else "viewer"
         collapse = bool(first(collapse_same, True))
+        use_nudge = bool(first(nudge, False))
         ext = str(first(extra, "") or "").strip()
         jsons = [j for j in (camera_json if isinstance(camera_json, list) else [camera_json])
                  if isinstance(j, str) and j.strip()]
@@ -646,17 +663,20 @@ class RedNodeCameraMultiAngle:
             shots.append(multi_angle_words(st["camera"], st["subjects"], side))
         if not shots:
             shots = [(az0, el0, di0, MA_AZIMUTHS.index(az0) * 45,
-                      [-30, 0, 30, 60][MA_ELEVATIONS.index(el0)])]
+                      [-30, 0, 30, 60][MA_ELEVATIONS.index(el0)], "")]
         n_in = len(shots)
         if collapse:
             kept = []
+            key = (lambda sh: (sh[0], sh[1], sh[2], sh[5])) if use_nudge else (lambda sh: sh[:3])
             for sh in shots:
-                if not kept or kept[-1][:3] != sh[:3]:
+                if not kept or key(kept[-1]) != key(sh):
                     kept.append(sh)
             shots = kept
         prompts = []
-        for az, el, di, _, _ in shots:
+        for az, el, di, _, _, nd in shots:
             ptxt = " ".join(x for x in (trig, az, el, di) if x)
+            if use_nudge and nd:
+                ptxt += ", " + nd
             prompts.append(ptxt + (" " + ext if ext else ""))
         report = ("%d shot%s -> %d distinct viewpoint%s"
                   % (n_in, "" if n_in == 1 else "s", len(shots), "" if len(shots) == 1 else "s"))
