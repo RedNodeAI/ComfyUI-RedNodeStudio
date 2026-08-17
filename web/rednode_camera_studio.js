@@ -670,7 +670,21 @@ export function buildStudio(host, S) {
       g.font = "10px system-ui"; g.textAlign = "center";
       const [ax, ay] = worldToPx(cams[0].pos[0], cams[0].pos[2]);
       const [bx, by] = worldToPx(cams[cams.length - 1].pos[0], cams[cams.length - 1].pos[2]);
-      g.fillText("1", ax, ay - 7); g.fillText(String(cams.length), bx, by - 7);
+      const ab = st.path.mode === "ab";
+      g.fillText(ab ? "A · 1" : "1", ax, ay - 7);
+      g.fillText(ab ? "B · " + cams.length : String(cams.length), bx, by - 7);
+    }
+    // B: a second, hollow camera icon you can drag (A -> B mode)
+    if (st.path && st.path.mode === "ab" && st.path.b && Array.isArray(st.path.b.pos)) {
+      const [bx, by] = worldToPx(st.path.b.pos[0], st.path.b.pos[2]);
+      g.strokeStyle = "#f0c58a";
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(bx, by, 8, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = "#f0c58a";
+      g.font = "bold 10px system-ui"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText("B", bx, by);
+      g.font = "10px system-ui";
+      g.fillText("h " + Number(st.path.b.pos[1]).toFixed(2) + " m · " + Math.round(st.path.b.focal_mm || st.camera.focal_mm) + "mm", bx, by + 20);
     }
 
     // the free aim point, when unlocked: a crosshair on the ground the lens
@@ -796,6 +810,10 @@ export function buildStudio(host, S) {
     const cam = st.camera;
     const [cx, cy] = worldToPx(cam.pos[0], cam.pos[2]);
     if (Math.hypot(px - cx, py - cy) < 14) return { kind: "cam" };
+    if (st.path && st.path.mode === "ab" && st.path.b && Array.isArray(st.path.b.pos)) {
+      const [bx, by] = worldToPx(st.path.b.pos[0], st.path.b.pos[2]);
+      if (Math.hypot(px - bx, py - by) < 14) return { kind: "pathB" };
+    }
     if (cam.lock === false) {
       const [ax, ay] = worldToPx(cam.aim[0], cam.aim[2]);
       if (Math.hypot(px - ax, py - ay) < 14) return { kind: "aim" };
@@ -857,6 +875,8 @@ export function buildStudio(host, S) {
     const cz_ = (v) => Math.max(-maxZ, Math.min(maxZ, snap(v)));
     if (dragging.kind === "cam") {
       st.camera.pos[0] = cx_(wx); st.camera.pos[2] = cz_(wz);
+    } else if (dragging.kind === "pathB") {
+      st.path.b.pos[0] = cx_(wx); st.path.b.pos[2] = cz_(wz);
     } else if (dragging.kind === "aim") {
       st.camera.aim[0] = cx_(wx); st.camera.aim[2] = cz_(wz);
     } else if (dragging.kind === "subj") {
@@ -902,6 +922,34 @@ export function buildStudio(host, S) {
       m.appendChild(b);
     };
     const prime = st.subjects[st.camera.target] || st.subjects[0];
+    // CAMERA PATH from the right-click (the user's ask: the buttons were
+    // confusing). A is always the camera; B is the second camera icon.
+    {
+      const [mx, my] = evPos(e);
+      const [wx, wz] = pxToWorld(mx, my);
+      const snap = (v) => Math.round(v * 20) / 20;
+      const px_ = Math.max(-maxXv(), Math.min(maxXv(), snap(wx)));
+      const pz_ = Math.max(-maxZv(), Math.min(maxZv(), snap(wz)));
+      mk("Path: put A (the camera) here", () => {
+        st.camera.pos[0] = px_; st.camera.pos[2] = pz_;
+        if (st.path.mode === "off") st.path.mode = "ab";
+        write(); render();
+      });
+      mk("Path: put B here (same height and lens)", () => {
+        st.path.b = JSON.parse(JSON.stringify(st.camera));
+        st.path.b.pos[0] = px_; st.path.b.pos[2] = pz_;
+        if (st.path.mode === "off") st.path.mode = "ab";
+        write(); render();
+      });
+      if (st.path.b) {
+        mk("Path: swap A ↔ B", () => {
+          const a = JSON.parse(JSON.stringify(st.camera));
+          st.camera = normalise({ camera: st.path.b }).camera; st.path.b = a;
+          write(); render();
+        });
+        mk("Path: clear B (path off)", () => { st.path.b = null; if (st.path.mode === "ab") st.path.mode = "off"; write(); render(); });
+      }
+    }
     mk("Reset camera (in front of subject)", () => {
       st.camera.pos = [prime.pos[0], prime.pos[1] + prime.height * 0.92,
                        prime.pos[2] + 3.0];
@@ -1358,7 +1406,7 @@ export function buildStudio(host, S) {
       row.className = "row";
       const setB = document.createElement("button");
       setB.textContent = p.b ? "B ← this camera" : "Set B = this camera";
-      setB.title = "Capture the current camera as B. Then move the camera to where A should be.";
+      setB.title = "Copy the current camera (position, height, lens) into B. Then move the camera to where A should be. Right-click the stage does the same in one step.";
       setB.onclick = () => { p.b = JSON.parse(JSON.stringify(st.camera)); write(); render(); };
       const swap = document.createElement("button");
       swap.textContent = "Swap A ↔ B";
@@ -1375,8 +1423,9 @@ export function buildStudio(host, S) {
       const n = document.createElement("div");
       n.className = "note";
       n.textContent = p.b
-        ? "B is set: " + p.b.pos.map((v) => v.toFixed(1)).join(", ") + " m, " + Math.round(p.b.focal_mm) + "mm. This camera is A."
-        : "Set B first, then place this camera where the path starts.";
+        ? "A is the camera; B is the hollow camera on the stage (drag it). B: " + p.b.pos.map((v) => v.toFixed(1)).join(", ")
+          + " m, " + Math.round(p.b.focal_mm) + "mm. Right-click the stage to move A or B, swap, or clear."
+        : "Right-click the stage where the path should end and choose \"Put B here\"; the camera is A. Or use the buttons.";
       pathCard.appendChild(n);
     } else {
       pathCard.appendChild(slider("From °", -180, 180, 5, () => p.orbit_from, (v) => { p.orbit_from = v; }, (v) => (v > 0 ? "+" : "") + Math.round(v) + "°"));
