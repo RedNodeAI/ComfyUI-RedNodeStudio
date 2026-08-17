@@ -959,7 +959,7 @@
    ],
    "size": [
     420,
-    260
+    300
    ],
    "flags": {},
    "order": 0,
@@ -1004,6 +1004,11 @@
      "name": "elevation_deg",
      "type": "INT",
      "links": null
+    },
+    {
+     "name": "report",
+     "type": "STRING",
+     "links": null
     }
    ],
    "properties": {
@@ -1015,6 +1020,7 @@
     "medium shot",
     "<sks>",
     "the viewer's right",
+    true,
     ""
    ]
   }

@@ -577,15 +577,21 @@ def multi_angle_words(camera, subjects, side="viewer"):
 
 class RedNodeCameraMultiAngle:
     """Studio camera -> the multi-angle edit LoRA's prompt. Wire camera_json
-    from the Camera Studio, or set the three bands by hand."""
+    from the Camera Studio, or set the three bands by hand. Takes the whole
+    camera path at once, so shots that land in the same bands can be
+    collapsed (the LoRA only knows 8 x 4 x 3 viewpoints)."""
     CATEGORY = "RedNode/Prompt"
     DESCRIPTION = ("Writes the prompt for fal's Qwen-Image-Edit-2511 Multiple-Angles "
                    "LoRA (\"<sks> azimuth elevation distance\") from the Camera "
                    "Studio's camera_json, so the stage steers a re-angle of an existing "
-                   "photo. With a camera path wired in you get one prompt per shot. "
-                   "No camera_json: the three pickers are used as set.")
-    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "INT", "INT")
-    RETURN_NAMES = ("prompt", "azimuth", "elevation", "distance", "azimuth_deg", "elevation_deg")
+                   "photo. A camera path gives one prompt per shot; with collapse on, "
+                   "shots that fall in the same bands are merged (the LoRA has only 96 "
+                   "viewpoints, so a fine path would repeat itself). No camera_json: the "
+                   "three pickers are used as set.")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "INT", "INT", "STRING")
+    RETURN_NAMES = ("prompt", "azimuth", "elevation", "distance", "azimuth_deg", "elevation_deg", "report")
+    INPUT_IS_LIST = True
+    OUTPUT_IS_LIST = (True, True, True, True, True, True, False)
     FUNCTION = "run"
 
     @classmethod
@@ -600,31 +606,66 @@ class RedNodeCameraMultiAngle:
                                 "tooltip": "Which right the LoRA's 'right side view' is. Verified on the "
                                            "sandbox strip: the VIEWER's right (camera moved to our right, we "
                                            "see the subject's left side). Flip only if yours come out mirrored."}),
+                "collapse_same": ("BOOLEAN", {"default": True, "tooltip":
+                                  "With a camera path: merge consecutive shots that map to the same "
+                                  "bands, so you do not render the same viewpoint twice. Off: one "
+                                  "prompt per shot regardless."}),
                 "extra": ("STRING", {"default": "", "multiline": True, "tooltip":
                           "Optional words appended after the camera prompt."}),
             },
             "optional": {
                 "camera_json": ("STRING", {"forceInput": True, "tooltip":
-                                "From the Camera Studio: overrides the three pickers."}),
+                                "From the Camera Studio: overrides the three pickers. A path's list is "
+                                "taken whole."}),
             },
         }
 
-    def run(self, azimuth, elevation, distance, trigger="<sks>", right_means="the viewer's right",
-            extra="", camera_json=""):
-        az_deg, el_deg = MA_AZIMUTHS.index(azimuth) * 45, [-30, 0, 30, 60][MA_ELEVATIONS.index(elevation)]
-        if camera_json and str(camera_json).strip():
+    def run(self, azimuth, elevation, distance, trigger=None, right_means=None,
+            collapse_same=None, extra=None, camera_json=None):
+        # INPUT_IS_LIST: every input arrives as a list
+        def first(v, dv):
+            if isinstance(v, list):
+                return v[0] if v else dv
+            return v if v is not None else dv
+        az0, el0, di0 = first(azimuth, "front view"), first(elevation, "eye-level shot"), first(distance, "medium shot")
+        trig = str(first(trigger, "<sks>") or "").strip()
+        side = "subject" if str(first(right_means, "the viewer's right")).startswith("the subject") else "viewer"
+        collapse = bool(first(collapse_same, True))
+        ext = str(first(extra, "") or "").strip()
+        jsons = [j for j in (camera_json if isinstance(camera_json, list) else [camera_json])
+                 if isinstance(j, str) and j.strip()]
+        shots = []
+        for j in jsons:
             try:
-                d = json.loads(camera_json)
+                d = json.loads(j)
             except (ValueError, TypeError):
                 d = None
-            if isinstance(d, dict) and d.get("camera"):
-                st = parse_state(json.dumps({"camera": d.get("camera") or {}, "subjects": d.get("subjects") or []}))
-                azimuth, elevation, distance, az_deg, el_deg = multi_angle_words(
-                    st["camera"], st["subjects"], "subject" if right_means.startswith("the subject") else "viewer")
-        prompt = " ".join(x for x in (trigger.strip(), azimuth, elevation, distance) if x)
-        if extra and extra.strip():
-            prompt += " " + extra.strip()
-        return (prompt, azimuth, elevation, distance, int(az_deg), int(el_deg))
+            if not (isinstance(d, dict) and d.get("camera")):
+                continue
+            st = parse_state(json.dumps({"camera": d.get("camera") or {}, "subjects": d.get("subjects") or []}))
+            shots.append(multi_angle_words(st["camera"], st["subjects"], side))
+        if not shots:
+            shots = [(az0, el0, di0, MA_AZIMUTHS.index(az0) * 45,
+                      [-30, 0, 30, 60][MA_ELEVATIONS.index(el0)])]
+        n_in = len(shots)
+        if collapse:
+            kept = []
+            for sh in shots:
+                if not kept or kept[-1][:3] != sh[:3]:
+                    kept.append(sh)
+            shots = kept
+        prompts = []
+        for az, el, di, _, _ in shots:
+            ptxt = " ".join(x for x in (trig, az, el, di) if x)
+            prompts.append(ptxt + (" " + ext if ext else ""))
+        report = ("%d shot%s -> %d distinct viewpoint%s"
+                  % (n_in, "" if n_in == 1 else "s", len(shots), "" if len(shots) == 1 else "s"))
+        if n_in > len(shots):
+            report += " (the LoRA knows 8 azimuths x 4 elevations x 3 distances; the rest fell in the same bands)"
+        if n_in > 1:
+            print("[RedNode Camera Multi-Angle] " + report, flush=True)
+        return (prompts, [x[0] for x in shots], [x[1] for x in shots], [x[2] for x in shots],
+                [int(x[3]) for x in shots], [int(x[4]) for x in shots], report)
 
 
 NODE_CLASS_MAPPINGS = {"RedNodeCameraStudio": RedNodeCameraStudio,
