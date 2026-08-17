@@ -259,5 +259,116 @@ except Exception as _e:
     print("[RedNode Camera Studio] preview route not registered: %s" % _e, flush=True)
 
 
-NODE_CLASS_MAPPINGS = {"RedNodeCameraStudio": RedNodeCameraStudio}
-NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeCameraStudio": "RedNode Camera Studio"}
+def _lora_choices():
+    """The LoRA files ComfyUI knows, with a None entry first. Offline (tests)
+    the list is just None."""
+    try:
+        import folder_paths
+        names = list(folder_paths.get_filename_list("loras"))
+    except Exception:
+        names = []
+    return ["None"] + names
+
+
+def _guess_lora(key, names):
+    """The default pick per key: RedNode's own camera sliders, then the
+    community zoom. First match wins; "None" when nothing fits."""
+    import re
+    pats = {"zoom": [r"zoom"], "height": [r"camera_height", r"cam(era)?[_ -]?height"],
+            "orbit": [r"camera_orbit", r"orbit"], "back": [r"camera_back", r"back_view"]}
+    for pat in pats[key]:
+        for n in names:
+            if n != "None" and re.search(pat, n, re.I):
+                return n
+    return "None"
+
+
+class RedNodeCameraLoRAs:
+    """The studio's camera LoRAs as a standalone node: model (+clip) in, the
+    four slider LoRAs applied at strengths that follow the camera_json from
+    the Camera Studio, model (+clip) out. Completes the standalone chain
+    (Studio.prompt -> your text encode, Studio.camera_json -> here -> sampler)
+    so the studio drives any Krea 2 graph without the workspace."""
+    CATEGORY = "RedNode/Prompt"
+    DESCRIPTION = ("Applies the camera slider LoRAs (zoom / height / orbit / back) "
+                   "at strengths set from the Camera Studio's camera_json - Auto "
+                   "follows the camera, Manual is your number, Off skips. Wire the "
+                   "studio's camera_json in and take model (and clip) out to the "
+                   "sampler. Works with the RedNode camera sliders for Krea 2; any "
+                   "slider LoRA can sit in a slot.")
+    RETURN_TYPES = ("MODEL", "CLIP", "STRING")
+    RETURN_NAMES = ("model", "clip", "applied")
+    FUNCTION = "run"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        names = _lora_choices()
+        req = {"model": ("MODEL",),
+               "camera_json": ("STRING", {"forceInput": True, "tooltip":
+                               "The Camera Studio's camera_json output. Auto strengths "
+                               "are computed from it; without it Auto reads 0."})}
+        for key in _ct.CAMERA_LORA_KEYS:
+            lo, hi = _ct.CAMERA_LORA_RANGE[key]
+            req[key + "_lora"] = (names, {"default": _guess_lora(key, names)})
+            req[key + "_mode"] = (["off", "auto", "manual"], {"default": "off", "tooltip":
+                                  "Auto: strength from the camera. Manual: the number below."})
+            req[key + "_strength"] = ("FLOAT", {"default": 0.0, "min": float(lo) - 4.0,
+                                     "max": float(hi) + 4.0, "step": 0.1,
+                                     "tooltip": "Used in Manual mode. About +-8 is a strong "
+                                                "effect for the RedNode sliders."})
+        return {"required": req, "optional": {"clip": ("CLIP",)}}
+
+    def run(self, model, camera_json="", clip=None, **kw):
+        try:
+            d = json.loads(camera_json or "{}")
+        except (ValueError, TypeError):
+            d = {}
+        if not isinstance(d, dict):
+            d = {}
+        # accept the studio's camera_json (camera + subjects) or a raw panel state
+        cam_state = {"camera": d.get("camera") or {}, "subjects": d.get("subjects") or []}
+        st = parse_state(json.dumps(cam_state))
+        wanted = []
+        for key in _ct.CAMERA_LORA_KEYS:
+            name = kw.get(key + "_lora", "None")
+            mode = kw.get(key + "_mode", "off")
+            if mode == "off" or not name or name == "None":
+                continue
+            if mode == "auto":
+                strength = AUTO_FN[key](st["camera"], st["subjects"]) if d else 0.0
+            else:
+                strength = float(kw.get(key + "_strength", 0.0))
+            if abs(strength) < 0.05:
+                continue
+            wanted.append((key, name, round(strength, 2)))
+        if not wanted:
+            return (model, clip, "")
+        return _apply_loras(model, clip, wanted)
+
+
+def _apply_loras(model, clip, wanted):
+    """Chain the LoRAs onto clones of model/clip (never the wired originals)."""
+    import comfy.sd
+    import comfy.utils
+    import folder_paths
+    applied, missing = [], []
+    for key, name, strength in wanted:
+        path = folder_paths.get_full_path("loras", name)
+        if path is None:
+            missing.append(name)
+            continue
+        lora = comfy.utils.load_torch_file(path, safe_load=True)
+        model, clip = comfy.sd.load_lora_for_models(model, clip, lora, strength,
+                                                    strength if clip is not None else 0.0)
+        applied.append("%s %+.1f (%s)" % (key, strength, name))
+    if missing:
+        print("[RedNode Camera LoRAs] not found, skipped: %s" % ", ".join(missing), flush=True)
+    if applied:
+        print("[RedNode Camera LoRAs] " + ", ".join(applied), flush=True)
+    return (model, clip, ", ".join(applied))
+
+
+NODE_CLASS_MAPPINGS = {"RedNodeCameraStudio": RedNodeCameraStudio,
+                       "RedNodeCameraLoRAs": RedNodeCameraLoRAs}
+NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeCameraStudio": "RedNode Camera Studio",
+                              "RedNodeCameraLoRAs": "RedNode Camera LoRAs"}
