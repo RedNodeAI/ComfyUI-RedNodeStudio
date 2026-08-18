@@ -2087,8 +2087,20 @@ class RedNodeStudioWorkspace:
                         _hit0.setdefault(_k, []).append(_v)
         for _row in cfg["prompts"]["rows"]:
             _hit = injections.get(_row["name"])
-            if not _hit:
+            # ALWAYS RE-ASSEMBLE A KREA 2 ROW WITH A FRAME AT QUEUE TIME. The
+            # row's text is the panel's last preview; with the studio on its own
+            # Camera tab, moving the camera there changed the studio state but
+            # not that text, so the queue rendered a stale paragraph (the user's
+            # "height changes nothing" and then "everything is overhead", both
+            # 2026-08-18). The frame + studio state are the truth; the text is a
+            # cache of them.
+            _fr0 = _row.get("frame") if isinstance(_row.get("frame"), dict) else {}
+            _has_frame = (_row["kind"] == "krea2"
+                          and any(str(_fr0.get(k) or "").strip()
+                                  for k in ("subject", "surroundings", "style", "light_and_colour", "placement")))
+            if not _hit and not _has_frame:
                 continue
+            _hit = _hit or {}
             _flat = ", ".join(c for k in ("style", "subject", "surroundings",
                                           "light_and_colour", "prompt")
                               for c in _hit.get(k, []))
@@ -2123,10 +2135,11 @@ class RedNodeStudioWorkspace:
                         light_and_colour_in=", ".join(
                             x for x in (_ins.get("light_and_colour", ""), _extra) if x),
                         seed=run_seed)
-                    print("[RedNode Workspace] auto prompt injected into %r"
-                          % (_row["name"] or "a prompt row"), flush=True)
+                    if _hit:
+                        print("[RedNode Workspace] auto prompt injected into %r"
+                              % (_row["name"] or "a prompt row"), flush=True)
                 except Exception as exc:
-                    print("[RedNode Workspace] could not inject into %r: %s"
+                    print("[RedNode Workspace] could not re-assemble %r: %s"
                           % (_row["name"], exc), flush=True)
             elif _flat:
                 _t = _row["text"].strip().rstrip(",")
