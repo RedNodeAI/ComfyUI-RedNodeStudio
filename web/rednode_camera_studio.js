@@ -32,6 +32,18 @@ css.textContent = `
 .rn-cs .under{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
 .rn-cs .full{grid-column:1 / -1}
 .rn-cs .subj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;align-items:start}
+/* FULL SCREEN (the user's ask): the stage fills the screen on the left, the
+   controls (camera, sets, subjects with add person / object) stack in a
+   scrolling column on the right; the prompt card hides. Esc or the button exits. */
+.rn-cs.full .cols{position:fixed;inset:0;z-index:10040;background:#0e1013;padding:12px;margin:0;
+  grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:1fr;overflow:hidden;box-sizing:border-box}
+.rn-cs.full .colL{grid-row:1;height:100%;min-height:0;overflow:auto}
+.rn-cs.full .colL .card:first-child{flex:none}
+.rn-cs.full canvas.stage{width:auto;max-width:100%;max-height:calc(100vh - 210px);margin:0 auto}
+.rn-cs.full .right{grid-row:1;height:100%;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.rn-cs.full .card.full{grid-column:2;display:none}
+.rn-cs.full .subj-grid{grid-template-columns:1fr}
+.rn-cs.full ~ .out, .rn-cs.full .card.out{display:none}
 .rn-cs .card{display:flex;flex-direction:column;gap:7px;background:#1b1e23;
   border:1px solid #2a2e34;border-radius:8px;padding:9px}
 .rn-cs .card>.ttl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
@@ -356,6 +368,11 @@ export function buildStudio(host, S) {
   const stSum = document.createElement("span");
   stSum.className = "sum";
   stTtl.appendChild(stSum);
+  const fullBtn = document.createElement("button");
+  fullBtn.textContent = "⛶ Full screen";
+  fullBtn.style.cssText = "margin-left:8px;font-size:11px;padding:2px 8px";
+  fullBtn.title = "Fill the screen with the stage; the controls stack on the right. Esc or the button again to leave.";
+  stTtl.appendChild(fullBtn);
   stageCard.appendChild(stTtl);
   const canvas = document.createElement("canvas");
   canvas.className = "stage";
@@ -388,6 +405,7 @@ export function buildStudio(host, S) {
 
   // ---- right: the controls
   const right = document.createElement("div");
+  right.className = "right";
   right.style.cssText = "display:flex;flex-direction:column;gap:10px;min-width:0";
   cols.appendChild(right);
 
@@ -530,6 +548,19 @@ export function buildStudio(host, S) {
   subjGrid.className = "subj-grid";
   subjCard.appendChild(subjGrid);
   cols.appendChild(subjCard);      // full width, under both columns
+  // full screen: the SUBJECTS card moves into the right column (add person /
+  // object on the right, the user's ask) and comes back on exit
+  let isFull = false;
+  const setFull = (on) => {
+    isFull = !!on;
+    host.classList.toggle("full", isFull);
+    if (isFull) { subjCard.classList.remove("full"); right.appendChild(subjCard); }
+    else { subjCard.classList.add("full"); cols.appendChild(subjCard); }
+    fullBtn.textContent = isFull ? "✖ Exit full screen" : "⛶ Full screen";
+    draw();
+  };
+  fullBtn.onclick = () => setFull(!isFull);
+  document.addEventListener("keydown", (e) => { if (isFull && e.key === "Escape") setFull(false); });
 
   // AUTO LATENT, the user's ask: the frame's aspect is part of the camera
   // language, so an empty latent shaped by the angle, lens and scene spread
@@ -1136,8 +1167,11 @@ export function buildStudio(host, S) {
     zk.className = "note";
     zk.style.cssText = "display:flex;align-items:center;gap:8px";
     zk.textContent = "Camera LoRAs";
+    const withFile = CAM_LORA_KEYS.filter((k) => camLoraEntry(st, k).name);
+    const allAutoOn = withFile.length > 0 && withFile.every((k) => camLoraEntry(st, k).mode === "auto");
+    const allOffOn = CAM_LORA_KEYS.every((k) => camLoraEntry(st, k).mode === "off");
     const allAuto = document.createElement("span");
-    allAuto.className = "chip";
+    allAuto.className = "chip" + (allAutoOn ? " on" : "");
     allAuto.textContent = "All auto";
     allAuto.title = "Every row that has a file picked goes to Auto.";
     allAuto.onclick = () => {
@@ -1145,7 +1179,7 @@ export function buildStudio(host, S) {
       write(); render();
     };
     const allOff = document.createElement("span");
-    allOff.className = "chip";
+    allOff.className = "chip" + (allOffOn ? " on" : "");
     allOff.textContent = "All off";
     allOff.onclick = () => {
       for (const k of CAM_LORA_KEYS) camLoraEntry(st, k).mode = "off";
