@@ -125,6 +125,11 @@ def prompts_for(rc, camera_jsons):
 
 
 # ---------------------------------------------------------------- the engine
+# Two caches. The BASE (unet + clip + vae, the 20 GB read) is shared by every
+# Qwen-Image-Edit stage in the pack (Re-angle, Swap); the PATCHED model (LoRAs,
+# shift, CFGNorm on a clone of the base) is kept per recipe, so switching from
+# a re-angle run to a swap run patches a clone and never re-reads the files.
+_BASE_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
 _MODEL_CACHE = {"key": None, "model": None, "clip": None, "vae": None}
 _RESULT_CACHE = []          # newest first: (key, images_cpu)
 _RESULT_KEEP = 4
@@ -152,30 +157,42 @@ def _call(name, **kw):
     return out[0] if isinstance(out, (tuple, list)) else out
 
 
-def _load_engine(rc):
-    key = (rc["unet"], rc["clip"], rc["vae"], rc["lora_angles"], rc["lora_angles_strength"],
-           rc["lora_light"], rc["lora_light_strength"], rc["shift"], rc["cfg_norm"])
+def load_engine(unet, clip_name, vae_name, loras, shift, cfg_norm, tag="Re-angle"):
+    """model, clip, vae for a Qwen-Image-Edit stage. `loras` is a list of
+    (name, strength) applied in order; "None", "" and strength 0 are skipped."""
+    loras = tuple((str(n), float(s)) for n, s in loras
+                  if n and n != "None" and float(s) > 0)
+    key = (unet, clip_name, vae_name, loras, float(shift), bool(cfg_norm))
     if _MODEL_CACHE["key"] == key and _MODEL_CACHE["model"] is not None:
         return _MODEL_CACHE["model"], _MODEL_CACHE["clip"], _MODEL_CACHE["vae"]
-    print("[RedNode Re-angle] loading %s + %s + %s" % (rc["unet"], rc["clip"], rc["vae"]), flush=True)
-    model = _call("UNETLoader", unet_name=rc["unet"], weight_dtype="default")
-    if rc["lora_light"] and rc["lora_light"] != "None" and rc["lora_light_strength"] > 0:
-        model = _call("LoraLoaderModelOnly", model=model, lora_name=rc["lora_light"],
-                      strength_model=float(rc["lora_light_strength"]))
-    if rc["lora_angles"] and rc["lora_angles"] != "None" and rc["lora_angles_strength"] > 0:
-        model = _call("LoraLoaderModelOnly", model=model, lora_name=rc["lora_angles"],
-                      strength_model=float(rc["lora_angles_strength"]))
-    if rc["shift"] > 0:
-        model = _call("ModelSamplingAuraFlow", model=model, shift=float(rc["shift"]))
-    if rc["cfg_norm"]:
+    bkey = (unet, clip_name, vae_name)
+    if _BASE_CACHE["key"] != bkey or _BASE_CACHE["model"] is None:
+        print("[RedNode %s] loading %s + %s + %s" % (tag, unet, clip_name, vae_name), flush=True)
+        _BASE_CACHE.update({"key": None, "model": None, "clip": None, "vae": None})
+        base = _call("UNETLoader", unet_name=unet, weight_dtype="default")
+        clip = _call("CLIPLoader", clip_name=clip_name, type="qwen_image", device="default")
+        vae = _call("VAELoader", vae_name=vae_name)
+        _BASE_CACHE.update({"key": bkey, "model": base, "clip": clip, "vae": vae})
+    model = _BASE_CACHE["model"]
+    for name, strength in loras:
+        model = _call("LoraLoaderModelOnly", model=model, lora_name=name, strength_model=strength)
+    if float(shift) > 0:
+        model = _call("ModelSamplingAuraFlow", model=model, shift=float(shift))
+    if cfg_norm:
         try:
             model = _call("CFGNorm", model=model, strength=1.0)
         except Exception as e:
-            print("[RedNode Re-angle] CFGNorm skipped: %s" % e, flush=True)
-    clip = _call("CLIPLoader", clip_name=rc["clip"], type="qwen_image", device="default")
-    vae = _call("VAELoader", vae_name=rc["vae"])
-    _MODEL_CACHE.update({"key": key, "model": model, "clip": clip, "vae": vae})
-    return model, clip, vae
+            print("[RedNode %s] CFGNorm skipped: %s" % (tag, e), flush=True)
+    _MODEL_CACHE.update({"key": key, "model": model, "clip": _BASE_CACHE["clip"],
+                         "vae": _BASE_CACHE["vae"]})
+    return model, _BASE_CACHE["clip"], _BASE_CACHE["vae"]
+
+
+def _load_engine(rc):
+    return load_engine(rc["unet"], rc["clip"], rc["vae"],
+                       [(rc["lora_light"], rc["lora_light_strength"]),
+                        (rc["lora_angles"], rc["lora_angles_strength"])],
+                       rc["shift"], rc["cfg_norm"])
 
 
 def _source_key(img):
@@ -233,3 +250,4 @@ def _render(rc, source, prompts, seed):
 def free():
     """Drop the cached engine (the Models tab's free / a rig switch may call it)."""
     _MODEL_CACHE.update({"key": None, "model": None, "clip": None, "vae": None})
+    _BASE_CACHE.update({"key": None, "model": None, "clip": None, "vae": None})

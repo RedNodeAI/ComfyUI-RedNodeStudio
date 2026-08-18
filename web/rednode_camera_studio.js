@@ -1016,7 +1016,7 @@ export function buildStudio(host, S) {
     document.querySelector(".rn-cs-menu")?.remove();
     const m = document.createElement("div");
     m.className = "rn-cs-menu";
-    m.style.cssText = "position:fixed;z-index:10000;display:flex;flex-direction:column;"
+    m.style.cssText = "position:fixed;z-index:10060;display:flex;flex-direction:column;"
       + "gap:5px;background:#1a1d22;border:1px solid #3a3f47;border-radius:6px;"
       + "padding:8px;min-width:190px;font:12px 'Segoe UI',system-ui,sans-serif;"
       + "color:#d6d9de;box-shadow:0 6px 20px rgba(0,0,0,.5);left:" + e.clientX
@@ -1555,12 +1555,22 @@ export function buildStudio(host, S) {
     });
     const addRow = document.createElement("div");
     addRow.className = "row";
+    // NEW THINGS LAND IN THE MIDDLE (the user's ask): the stage centre, nudged
+    // to the right in 0.7 m steps until the spot is free, never off the stage
+    const freeSpot = () => {
+      const taken = (x, z) => st.subjects.some((o) => Math.hypot(o.pos[0] - x, o.pos[2] - z) < 0.5);
+      for (let k = 0; k < 24; k++) {
+        const x = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 0.7, z = 0;
+        if (!taken(x, z)) return [x, 0, z];
+      }
+      return [0, 0, 0.7];
+    };
     const add = document.createElement("button");
     add.textContent = "＋ Person";
     add.onclick = () => {
       const n = st.subjects.length;
       st.subjects.push({ name: n === 1 ? "a second person" : "another person",
-                         pos: [n * 1.2 - 0.6, 0, -1.5 * n], height: 1.75, facing_deg: 0,
+                         pos: freeSpot(), height: 1.75, facing_deg: 0,
                          kind: "person", size: [0.6, 0.6], rel: null });
       sel = st.subjects.length - 1;
       write(); render();
@@ -1570,8 +1580,7 @@ export function buildStudio(host, S) {
     addObj.title = "A bed, a lamp, a table: placed and named here, described in your "
                  + "Subject or Surroundings text. The paragraph says WHERE it is.";
     addObj.onclick = () => {
-      const n = st.subjects.length;
-      st.subjects.push({ name: "the object", pos: [1.5, 0, -1.0 * n], height: 0.8,
+      st.subjects.push({ name: "the object", pos: freeSpot(), height: 0.8,
                          facing_deg: 0, kind: "object", size: [1.0, 0.8], rel: null });
       sel = st.subjects.length - 1;
       write(); render();
