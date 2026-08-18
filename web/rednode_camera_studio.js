@@ -35,18 +35,18 @@ css.textContent = `
 /* SCENE FOCUS (the user's ask, like the Paint tab's full screen): a room with
    just the stage, big, and the SUBJECTS panel on the right - place and move
    things, add a person or an object, nothing else on screen. Esc closes. */
-.rn-cs-focus{position:fixed;inset:0;z-index:10040;background:#0e1013;display:flex;flex-direction:column;
-  font:12px 'Segoe UI',system-ui,sans-serif;color:#d6d9de}
+.rn-cs.rn-cs-focus{position:fixed;inset:0;z-index:10040;background:#0e1013;display:flex;flex-direction:column;
+  gap:0;padding:0;border:0;border-radius:0;overflow:hidden;font-size:13px}
 .rn-cs-focus .fbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#15171b;
   border-bottom:1px solid #2a2e34;flex:none}
 .rn-cs-focus .fbar .ttl{font-weight:700;letter-spacing:.06em;color:#4a8fe0;font-size:12px}
 .rn-cs-focus .fbar .hint{opacity:.6;font-size:11px}
 .rn-cs-focus .fbar .fx{margin-left:auto;background:#1a1d22;border:1px solid #3a3f47;border-radius:5px;
   color:#e8ecf1;cursor:pointer;font-size:12px;padding:5px 12px}
-.rn-cs-focus .fbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 560px;gap:12px;padding:12px}
+.rn-cs-focus .fbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px}
 .rn-cs-focus .fstage{min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:8px;background:#111316;border:1px solid #2f333a;border-radius:8px;padding:10px}
-.rn-cs-focus .fstage canvas.stage{width:auto;height:auto;max-width:100%;max-height:calc(100vh - 150px)}
+.rn-cs-focus .fstage canvas.stage{width:min(100%, calc((100vh - 170px) * 1.238));height:auto;max-width:100%}
 .rn-cs-focus .fright{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px}
 .rn-cs-focus .fright .card{border-color:#2f333a}
 .rn-cs-focus .fright .subj-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -562,7 +562,7 @@ export function buildStudio(host, S) {
   const openFocus = () => {
     if (focusOv) return;
     focusOv = document.createElement("div");
-    focusOv.className = "rn-cs-focus";
+    focusOv.className = "rn-cs rn-cs-focus";   // rn-cs: the studio's styles reach the room
     for (const t of ["pointerdown", "pointermove", "pointerup", "wheel", "contextmenu", "dblclick"]) {
       focusOv.addEventListener(t, (e) => e.stopPropagation());
     }
