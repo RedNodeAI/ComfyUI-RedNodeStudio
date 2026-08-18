@@ -632,6 +632,10 @@ export function buildFrameEditor(wrap, F) {
   const mountStudio = () => {
     if (studio) return;
     if (!studioGet()) seedStudioFromChips();
+    // A HOST WITH A CAMERA TAB (the workspace): the studio lives there, not
+    // under the frame. Advanced here means "the studio drives the camera";
+    // editing it is one click away.
+    if (F.openCameraTab) { F.openCameraTab(); return; }
     studio = buildStudio(studioHost, {
       get: () => studioGet() || {},
       set: (state) => studioSet(state),
@@ -640,13 +644,23 @@ export function buildFrameEditor(wrap, F) {
     });
   };
   const showStudio = (on) => {
-    studioHost.style.display = on ? "" : "none";
-    studioBtn.textContent = (on ? ARROW_OPEN : ARROW_SHUT) + " Camera studio (advanced)";
+    const remote = !!F.openCameraTab;
+    studioHost.style.display = on && !remote ? "" : "none";
+    studioBtn.textContent = remote
+      ? (on ? "Advanced: open the Camera tab" : "Advanced (Camera tab)")
+      : (on ? ARROW_OPEN : ARROW_SHUT) + " Camera studio (advanced)";
     studioBtn.classList.toggle("on", !!on);
     foldSet("studio_open", !!on);
-    if (on) mountStudio();
+    if (on && !remote) mountStudio();
   };
   const openStudio = () => {
+    if (F.openCameraTab) {
+      // remote host: first click switches to Advanced (seeds the studio from
+      // the chips) and jumps to the Camera tab; later clicks just jump
+      if (!studioGet()) { seedStudioFromChips(); showStudio(true); changed(); }
+      F.openCameraTab();
+      return;
+    }
     const shown = studioHost.style.display !== "none";
     if (shown) {
       // off means OFF: the studio stops driving the camera too

@@ -444,7 +444,7 @@ export function buildStudio(host, S) {
     }
     setsSel.value = [...setsSel.options].some((o) => o.value === cur) ? cur : "";
     setsSum.textContent = SETS.builtin.length + " built-in · " + SETS.mine.length + " mine";
-    const opt = setsSel.selectedOptions[0];
+    const opt = (setsSel.selectedOptions && setsSel.selectedOptions[0]) || null;
     const chosen = findSet();
     setsNote.textContent = (opt && opt.title) || "Pick a set and Load. Rooms are built from locked walls, doors and furniture; scenes place two people and the camera.";
     if (chosen && chosen.text) setsNote.textContent += "  Example text: " + chosen.text;

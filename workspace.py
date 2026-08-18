@@ -794,9 +794,17 @@ def parse_config(config_json):
         if not isinstance(p, dict):
             continue
         fr = p.get("frame") if isinstance(p.get("frame"), dict) else {}
+        # ONE PROMPT, SEVERAL RIGS (the user's ask, 2026-08-17): a row lists the
+        # rigs it serves; the old single "rig" is read as a one-item list and
+        # written back as the first entry, so older configs keep working.
+        _rigs = [str(x).strip() for x in (p.get("rigs") if isinstance(p.get("rigs"), list) else [])
+                 if str(x).strip()]
+        if not _rigs and str(p.get("rig") or "").strip():
+            _rigs = [str(p.get("rig")).strip()]
         prompt_rows.append({
             "name": str(p.get("name") or ""),
-            "rig": str(p.get("rig") or ""),
+            "rig": _rigs[0] if _rigs else "",
+            "rigs": _rigs,
             "kind": "plain" if p.get("kind") == "plain" else "krea2",
             "text": str(p.get("text") or ""),
             "negative": str(p.get("negative") or ""),
@@ -1081,13 +1089,13 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
                                len(rigs) - 1))]["name"]
     rows = prompts_cfg.get("rows") or []
     for row in rows:
-        if row["rig"] == want and row["text"].strip():
+        if want in (row.get("rigs") or ([row["rig"]] if row.get("rig") else [])) and row["text"].strip():
             return row
     # An UNLINKED row serves any rig: with one rig on the tab, demanding the link
     # be typed before anything renders is a tax, and an unlinked row with text is
     # the obvious intent. An exact link still wins, so multi-rig stays exact.
     for row in rows:
-        if not row["rig"].strip() and row["text"].strip():
+        if not (row.get("rigs") or (row.get("rig") or "").strip()) and row["text"].strip():
             return row
     return None
 
@@ -1678,8 +1686,12 @@ class RedNodeStudioWorkspace:
                 from . import reangle as _re
                 _cams = []
                 if _rg["camera"] == "studio":
-                    _rrow = prompt_row_for(cfg["models"], cfg["prompts"])
-                    _cj = ((_rrow or {}).get("frame") or {}).get("camera")
+                    # the Camera tab's Img2Img studio (its own state); an empty
+                    # one falls back to the active prompt row's studio camera
+                    _cj = _rg.get("studio") or ""
+                    if not (isinstance(_cj, str) and _cj.strip()):
+                        _rrow = prompt_row_for(cfg["models"], cfg["prompts"])
+                        _cj = ((_rrow or {}).get("frame") or {}).get("camera")
                     if isinstance(_cj, str) and _cj.strip():
                         from .camera_studio import parse_state as _cs_ps
                         from . import camera_translate as _ct_re

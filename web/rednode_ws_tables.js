@@ -14,6 +14,7 @@
 export const TAB_ORDER = [
   { id: "models", label: "Models", group: "model" },
   { id: "prompts", label: "Prompts", group: "model" },
+  { id: "camera", label: "Camera", group: "model" },
   { id: "loras", label: "LoRAs", group: "model" },
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },

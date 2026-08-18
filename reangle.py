@@ -81,6 +81,10 @@ def parse(raw):
         "seed": num("seed", 0, 0, 2 ** 53, int),
         "seed_random": bool(r.get("seed_random", True)),
         "trigger": str(r.get("trigger") if r.get("trigger") is not None else "<sks>")[:40],
+        # the Camera tab's Img2Img studio: a Camera Studio state (JSON string),
+        # separate from the prompt's studio, so re-angle and the words can
+        # point their cameras differently
+        "studio": r.get("studio") if isinstance(r.get("studio"), str) else "",
     }
 
 

@@ -9,6 +9,7 @@ const ComfyApp = _appmod.ComfyApp || {};
 import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder } from "./rednode_ws_post.js";
+import { buildStudio } from "./rednode_camera_studio.js";
 import { TAB_ORDER, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
@@ -167,6 +168,7 @@ css.textContent = `
   transition:background .15s}
 .rn-ws-sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;
   height:16px;border-radius:50%;background:#c8ccd2;transition:left .15s}
+.rn-ws-card-folded > *:not(:first-child){display:none}
 .rn-ws-sw.on{background:#2e7d4f;border-color:#2e7d4f}
 .rn-ws-sw.on::after{left:20px;background:#fff}
 /* group colours: canvas blue, mood amber, edit-node red, settings grey */
@@ -2033,7 +2035,8 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
                      subject3: "#3f9e63" };
   const gcard = sectionCard(tabName === "i2i" ? "SOURCE" : "IMAGES",
     gAccents[tabName] || "#8fa8c8",
-    (t.images?.length || 0) + " image(s)");
+    (t.images?.length || 0) + " image(s)",
+    tabName === "i2i" ? { node, key: "i2i_source", open: true } : null);
   body.appendChild(gcard);
   gcard.appendChild(coll);
 
@@ -2184,6 +2187,106 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
         ? `${t.sel.length} of ${t.images.length} in the batch. Click to add or remove; numbers show batch order.`
         : `${t.images.length} remembered. The highlighted one is used.`;
   gcard.appendChild(note);
+}
+
+// ---------------------------------------------------------------- Camera tab
+// THE CAMERA TAB (the user's ask, 2026-08-17): the studio has its own tab, with
+// two sub-tabs. PROMPT is the studio that drives the words and the camera
+// LoRAs of a Prompts-tab row (the same state the Prompt Frame's chips seed;
+// the frame's Advanced button lands here). IMG2IMG is a SEPARATE studio whose
+// camera drives the Img2Img tab's re-angle, so the words and the re-shoot can
+// point their cameras differently. Both are the same Camera Studio panel.
+const CAMERA_PREVIEW = async (state) => {
+  const r = await fetch("/rednode/camera_studio_preview", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state),
+  });
+  const j = await r.json();
+  return j.prompt || "";
+};
+function cameraBody(node, body) {
+  const cfg = node._rnCfg;
+  const sub = node._rnCameraSub === "i2i" ? "i2i" : "prompt";
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-row";
+  const seg = document.createElement("div");
+  seg.className = "rn-ws-seg";
+  for (const [v, l, tip] of [["prompt", "Prompt", "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs."],
+                             ["i2i", "Img2Img", "A separate studio whose camera drives the Img2Img tab's RE-ANGLE (re-shooting the source from another viewpoint)."]]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (sub === v ? " on" : "");
+    b.textContent = l; b.title = tip;
+    b.onclick = () => { node._rnCameraSub = v; render(node); };
+    seg.appendChild(b);
+  }
+  bar.appendChild(seg);
+  const note = document.createElement("span");
+  note.className = "rn-ws-note";
+  bar.appendChild(note);
+  body.appendChild(bar);
+
+  let getState, setState, afterChange;
+  if (sub === "prompt") {
+    const rows = cfg.prompts?.rows || [];
+    if (!rows.length) {
+      note.textContent = "No prompts yet. Add one on the Prompts tab; its camera lives here.";
+      return;
+    }
+    if (typeof node._rnPromptSel !== "number" || node._rnPromptSel >= rows.length) node._rnPromptSel = 0;
+    // which prompt's studio: chips, the same as the Prompts tab
+    const chips = document.createElement("div");
+    chips.className = "rn-ws-seg";
+    rows.forEach((row, i) => {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (node._rnPromptSel === i ? " on" : "");
+      b.textContent = row.name || ("Prompt " + (i + 1));
+      b.onclick = () => { node._rnPromptSel = i; render(node); };
+      chips.appendChild(b);
+    });
+    bar.insertBefore(chips, note);
+    const row = rows[node._rnPromptSel];
+    row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
+    note.textContent = row.frame.camera && String(row.frame.camera).trim()
+      ? "This studio writes the camera paragraph for \"" + (row.name || "Prompt " + (node._rnPromptSel + 1)) + "\" (Advanced). Clear it on the Prompts tab to go back to the simple chips."
+      : "Simple mode: this prompt uses the Shot size / Camera height chips. Move the camera here to switch it to Advanced.";
+    getState = () => {
+      const raw = row.frame.camera;
+      if (typeof raw === "string" && raw.trim()) { try { return JSON.parse(raw); } catch (e) { return {}; } }
+      return raw && typeof raw === "object" ? raw : {};
+    };
+    setState = (st) => { row.frame.camera = st ? JSON.stringify(st) : ""; };
+    afterChange = () => { writeCfg(node); };
+  } else {
+    const t = cfg.tabs.i2i;
+    if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
+    const R = t.reangle;
+    note.textContent = R.on && R.camera === "studio"
+      ? "This camera drives the Img2Img tab's RE-ANGLE. A camera path gives one re-shot view per shot."
+      : "The Img2Img tab's RE-ANGLE uses this camera when it is on and set to Studio.";
+    const goI2i = document.createElement("button");
+    goI2i.className = "rn-ws-btn";
+    goI2i.style.cssText = "width:auto;padding:0 10px;margin-left:auto";
+    goI2i.textContent = "Img2Img tab ▸";
+    goI2i.onclick = () => { node._rnTab = "i2i"; (node.properties ||= {}).rn_tab = "i2i"; render(node); };
+    bar.appendChild(goI2i);
+    getState = () => {
+      const raw = R.studio;
+      if (typeof raw === "string" && raw.trim()) { try { return JSON.parse(raw); } catch (e) { return {}; } }
+      return {};
+    };
+    setState = (st) => { R.studio = st ? JSON.stringify(st) : ""; };
+    afterChange = () => { writeCfg(node); };
+  }
+  const host = document.createElement("div");
+  host.className = "rn-pf-studio";
+  host.style.width = "100%";
+  body.appendChild(host);
+  buildStudio(host, {
+    get: getState,
+    set: (st) => { setState(st); },
+    onChange: afterChange,
+    preview: CAMERA_PREVIEW,
+  });
 }
 
 function peopleBody(node, body) {
@@ -8625,6 +8728,57 @@ function modelsBody(node, page) {
     const spring = document.createElement("span");
     spring.style.flex = "1";
     bar.appendChild(spring);
+    // ACTIVE PROMPT (the user's ask): which Prompts-tab row this rig renders,
+    // right here, and a switcher. Choosing a row moves this rig into that
+    // row's rig list (and out of the others), so one rig has one prompt.
+    if (M.rigs.length && Array.isArray(cfg.prompts?.rows)) {
+      const rows = cfg.prompts.rows;
+      const rigName = M.rigs[M.active]?.name || ("Rig " + (M.active + 1));
+      const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
+      const curIdx = rows.findIndex((row) => rigsOf(row).includes(rigName) && String(row.text || "").trim());
+      const fallbackIdx = curIdx >= 0 ? -1 : rows.findIndex((row) => !rigsOf(row).length && String(row.text || "").trim());
+      const pwrap = document.createElement("div");
+      pwrap.style.cssText = "display:flex;align-items:center;gap:6px";
+      const pl = document.createElement("span");
+      pl.className = "rn-ws-note";
+      pl.textContent = "Active prompt";
+      const psel = document.createElement("select");
+      psel.className = "rn-ws-select";
+      psel.title = "The Prompts-tab row this rig renders. Pick another to move the rig onto it "
+                 + "(one rig, one prompt). Rows are edited on the Prompts tab.";
+      const o0 = document.createElement("option");
+      o0.value = "-1";
+      o0.textContent = fallbackIdx >= 0 ? "(unlinked: " + (rows[fallbackIdx].name || "Prompt " + (fallbackIdx + 1)) + ")" : "(none)";
+      psel.appendChild(o0);
+      rows.forEach((row, j) => {
+        const o = document.createElement("option");
+        o.value = String(j);
+        o.textContent = (row.name || "Prompt " + (j + 1)) + (rigsOf(row).length ? "  [" + rigsOf(row).join(", ") + "]" : "");
+        o.selected = j === curIdx;
+        psel.appendChild(o);
+      });
+      psel.onchange = () => {
+        const j = parseInt(psel.value, 10);
+        rows.forEach((row) => {
+          if (!Array.isArray(row.rigs)) row.rigs = row.rig ? [row.rig] : [];
+          row.rigs = row.rigs.filter((x) => x !== rigName);
+          row.rig = row.rigs[0] || "";
+        });
+        if (j >= 0 && rows[j]) { rows[j].rigs.push(rigName); rows[j].rig = rows[j].rigs[0]; }
+        writeCfg(node); render(node);
+      };
+      const goP = document.createElement("button");
+      goP.className = "rn-ws-btn";
+      goP.style.cssText = "width:auto;padding:0 10px";
+      goP.textContent = "Edit ▸";
+      goP.title = "Open the Prompts tab on this prompt.";
+      goP.onclick = () => {
+        if (curIdx >= 0) node._rnPromptSel = curIdx;
+        node._rnTab = "prompts"; (node.properties ||= {}).rn_tab = "prompts"; render(node);
+      };
+      pwrap.append(pl, psel, goP);
+      bar.appendChild(pwrap);
+    }
     const manage = document.createElement("button");
     manage.className = "rn-ws-btn";
     manage.style.cssText = "width:auto;padding:0 14px";
@@ -9267,11 +9421,14 @@ function promptsBody(node, body) {
         const nm = document.createElement("span");
         nm.textContent = row.name || ("Prompt " + (i + 1));
         chip.appendChild(nm);
-        if (row.rig) {
-          const rg = document.createElement("span");
-          rg.className = "rn-ws-note";
-          rg.textContent = row.rig;
-          chip.appendChild(rg);
+        {
+          const rigsOf = Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []);
+          if (rigsOf.length) {
+            const rg = document.createElement("span");
+            rg.className = "rn-ws-note";
+            rg.textContent = rigsOf.join(" · ");
+            chip.appendChild(rg);
+          }
         }
         if (on) {
           const badge = document.createElement("span");
@@ -9289,7 +9446,7 @@ function promptsBody(node, body) {
       addP.style.cssText = "width:auto;padding:0 14px";
       addP.textContent = "\uFF0B New Prompt";
       addP.onclick = () => {
-        R.push({ name: "", rig: "", kind: "krea2", text: "", negative: "" });
+        R.push({ name: "", rig: "", rigs: [], kind: "krea2", text: "", negative: "" });
         node._rnPromptSel = R.length - 1;
         writeCfg(node); render(node);
       };
@@ -9320,18 +9477,30 @@ function promptsBody(node, body) {
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
     name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
-    const rigPick = document.createElement("input");
-    rigPick.type = "text";
-    rigPick.value = row.rig;
-    rigPick.placeholder = "Link a rig";
-    rigPick.title = "Which Models-tab rig this prompt belongs to.";
-    rigPick.style.cssText = "width:150px;background:#15171b;border:1px solid #33373d;"
-                          + "border-radius:4px;color:#e8ecf1;font-size:12px;"
-                          + "padding:4px 7px";
-    makePicker(rigPick,
-               () => cfg.models.rigs.map((r, j) => r.name || "Rig " + (j + 1)),
-               (v) => { row.rig = v; writeCfg(node); },
-               { current: () => row.rig, emptyLabel: "none" });
+    // RIGS (the user's ask: one prompt, several models): a chip per rig on
+    // the Models tab, click to include or drop; row.rig mirrors the first for
+    // older readers. No chip lit = an unlinked row that serves any rig.
+    const rigPick = document.createElement("div");
+    rigPick.className = "rn-ws-seg";
+    rigPick.title = "Which Models-tab rigs this prompt serves. Click to add or remove; "
+                  + "none lit = it serves any rig that has no prompt of its own.";
+    if (!Array.isArray(row.rigs)) row.rigs = row.rig ? [row.rig] : [];
+    cfg.models.rigs.forEach((r, j) => {
+      const nm = r.name || "Rig " + (j + 1);
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (row.rigs.includes(nm) ? " on" : "");
+      b.textContent = nm;
+      b.onclick = () => {
+        row.rigs = row.rigs.includes(nm) ? row.rigs.filter((x) => x !== nm) : [...row.rigs, nm];
+        row.rig = row.rigs[0] || "";
+        writeCfg(node); render(node);
+      };
+      rigPick.appendChild(b);
+    });
+    if (!cfg.models.rigs.length) {
+      const e = document.createElement("span"); e.className = "rn-ws-note"; e.textContent = "No rigs yet (Models tab)";
+      rigPick.appendChild(e);
+    }
     const kind = document.createElement("button");
     kind.className = "rn-ws-segb" + (row.kind === "krea2" ? " on" : "");
     kind.textContent = row.kind === "krea2" ? "Krea 2 box" : "Plain box";
@@ -9395,6 +9564,11 @@ function promptsBody(node, body) {
         // the frame lays itself out in two columns now (writing left,
         // dials and preview right), the arrangement the user drew
         F.twoColumn = true;
+        // the studio has its own tab now: Advanced on the frame opens it there
+        F.openCameraTab = () => {
+          node._rnPromptSel = i; node._rnCameraSub = "prompt";
+          node._rnTab = "camera"; (node.properties ||= {}).rn_tab = "camera"; render(node);
+        };
         // the Auto sort button borrows the Auto Prompt's Ollama choice
         F.sortModel = () => cfg.auto?.model || "";
         F.sortUrl = () => cfg.auto?.url || "";
@@ -9451,7 +9625,11 @@ function promptsBody(node, body) {
 // ONE CARD STYLE for grouped controls, the user's box treatment: slightly
 // darker ground, a border, a small title. The Latent tab's CANVAS card set
 // the look; every tab's clusters use this same helper now.
-function sectionCard(title, accent, summary) {
+// fold: {node, key, open} makes the card a fold-down section (the user's ask:
+// SOURCE / PASS / RE-ANGLE like AUTO PROMPT). The head toggles it; the state
+// lives on node._rnCardFolds[key] so a re-render keeps it. Everything after the
+// head hides when folded.
+function sectionCard(title, accent, summary, fold) {
   const card = document.createElement("div");
   const a = accent || "#8fa8c8";
   card.style.cssText = "display:flex;flex-direction:column;gap:7px;"
@@ -9460,6 +9638,22 @@ function sectionCard(title, accent, summary) {
   if (title) {
     const head = document.createElement("div");
     head.style.cssText = "display:flex;align-items:baseline;gap:8px";
+    if (fold && fold.node) {
+      const folds = (fold.node._rnCardFolds ||= {});
+      const isOpen = folds[fold.key] === undefined ? fold.open !== false : !!folds[fold.key];
+      const arr = document.createElement("span");
+      arr.className = "arr";
+      arr.style.cssText = "color:" + a + ";cursor:pointer;font-size:12px";
+      arr.textContent = isOpen ? "▾" : "▸";
+      head.appendChild(arr);
+      head.style.cursor = "pointer";
+      head.onclick = (e) => {
+        if (e.target && e.target !== head && e.target !== arr && e.target.tagName !== "DIV") return;
+        folds[fold.key] = !isOpen;
+        render(fold.node);
+      };
+      if (!isOpen) card.classList.add("rn-ws-card-folded");
+    }
     const t = document.createElement("div");
     t.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
       + "color:" + a;
@@ -9994,7 +10188,8 @@ function i2iPassRow(node, body, tabName) {
   const pcard = sectionCard("PASS", "#4a8fe0",
     t.prompt_only ? "prompt only"
                   : "denoise " + Number(t.denoise).toFixed(2)
-                    + ((t.passes || 1) > 1 ? " · ×" + t.passes : ""));
+                    + ((t.passes || 1) > 1 ? " · ×" + t.passes : ""),
+    { node, key: "i2i_pass", open: true });
 
   if (!t.prompt_only) {
     const dlab = document.createElement("span");
@@ -10101,7 +10296,8 @@ function reangleSection(node, body, tabName) {
   const open = (node._rnReangleOpen ||= { engine: false });
   const card = sectionCard("RE-ANGLE", "#f0c58a",
     !R.on ? "off"
-          : (R.camera === "studio" ? "camera from the studio" : R.azimuth + " · " + R.elevation + " · " + R.distance));
+          : (R.camera === "studio" ? "camera from the Camera tab" : R.azimuth + " · " + R.elevation + " · " + R.distance),
+    { node, key: "i2i_reangle", open: !!R.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
@@ -10127,7 +10323,7 @@ function reangleSection(node, body, tabName) {
     const cseg = document.createElement("div");
     cseg.className = "rn-ws-seg";
     for (const [v, l, tip] of [["bands", "Bands", "Pick the viewpoint from the model's bands: 8 directions, 4 heights, 3 distances."],
-                               ["studio", "Studio", "Take the camera from the active prompt's Camera Studio (Prompts tab). A camera path there gives one view per shot, as a batch."]]) {
+                               ["studio", "Studio", "Take the camera from the Camera tab's Img2Img studio (its own stage, separate from the prompt's). A camera path there gives one view per shot, as a batch."]]) {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (R.camera === v ? " on" : "");
       b.textContent = l; b.title = tip;
@@ -10166,7 +10362,13 @@ function reangleSection(node, body, tabName) {
       const cl = document.createElement("span");
       cl.className = "rn-ws-note";
       cl.textContent = "Collapse same views";
-      crow.append(nudge, nl, col, cl);
+      const goCam = document.createElement("button");
+      goCam.className = "rn-ws-btn";
+      goCam.style.cssText = "width:auto;padding:0 10px";
+      goCam.textContent = "Open Camera tab ▸";
+      goCam.title = "The Img2Img studio lives on the Camera tab (Img2Img sub-tab). Place the camera there.";
+      goCam.onclick = () => { node._rnCameraSub = "i2i"; node._rnTab = "camera"; (node.properties ||= {}).rn_tab = "camera"; render(node); };
+      crow.append(nudge, nl, col, cl, goCam);
     }
     card.appendChild(crow);
     // extra words
@@ -10696,6 +10898,9 @@ const tabLit = (cfg, id) =>
   : id === "models" ? !!cfg.models?.rigs?.some?.((r) =>
       r.checkpoint || r.unet || r.clip || r.vae)
   : id === "prompts" ? !!cfg.prompts?.rows?.some?.((x) => x.text.trim())
+  // the Camera tab is lit when a prompt's studio is live or the re-angle studio has a camera
+  : id === "camera" ? !!(cfg.prompts?.rows?.some?.((x) => x.frame && String(x.frame.camera || "").trim())
+                         || String(cfg.tabs?.i2i?.reangle?.studio || "").trim())
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
@@ -10829,6 +11034,7 @@ export function render(node) {
   if (cur === "people") peopleBody(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
+  else if (cur === "camera") cameraBody(node, body);
   else if (cur === "latent") latentBody(node, body);
   else if (cur === "masks") masksBody(node, body);
   else if (cur === "post") postBody(node, body);
