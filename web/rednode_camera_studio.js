@@ -264,7 +264,7 @@ function clampKey(key, v) {
   return Math.round(Math.max(lo, Math.min(hi, v)) * 10) / 10;
 }
 // auto caps mirror camera_translate (tuned on the words+LoRAs strip)
-const HEIGHT_AUTO_FACTOR = 0.08, HEIGHT_AUTO_MIN = -2.5, HEIGHT_AUTO_MAX = 3, BACK_AUTO_MAX = 3;
+const HEIGHT_AUTO_FACTOR = 0.15, HEIGHT_AUTO_MIN = -5, HEIGHT_AUTO_MAX = 8, BACK_AUTO_MAX = 3;
 function autoHeightStrength(st) {
   const v = clampKey("height", -primeGeo(st).pitch * HEIGHT_AUTO_FACTOR);
   return Math.round(Math.max(HEIGHT_AUTO_MIN, Math.min(HEIGHT_AUTO_MAX, v)) * 10) / 10;

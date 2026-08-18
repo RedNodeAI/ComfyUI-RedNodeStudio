@@ -782,13 +782,15 @@ def _clamp_key(key, v):
     return round(max(lo, min(hi, v)), 1) + 0.0   # + 0.0: no '-0.0'
 
 
-# AUTO CAPS, tuned on the end-to-end strip (words + LoRAs together, 2026-08-17):
-# the paragraph already carries height strongly, so the height slider is a
-# gentle assist (factor 0.15, -5..+6); orbit is the big win and runs to +-8;
-# back changes the person past raw 2, so dead behind is 5. Manual still runs
-# the full public range.
-HEIGHT_AUTO_FACTOR = 0.08
-HEIGHT_AUTO_MIN, HEIGHT_AUTO_MAX = -2.5, 3.0
+# AUTO CAPS, tuned on the end-to-end strips (2026-08-17/18): height was first
+# made a light assist (words carried it on single-subject scenes), then raised
+# again after a two-boxer wide scene showed the words losing to the sports
+# prior with the LoRA at +3 (factor 0.15, -5..+8: raw +3 read as a clear high
+# angle, raw -1.9 stays inside v2's clean low side); orbit runs to +-8; back
+# changes the person past raw 2, so dead behind is 3. Manual still runs the
+# full public range.
+HEIGHT_AUTO_FACTOR = 0.15
+HEIGHT_AUTO_MIN, HEIGHT_AUTO_MAX = -5.0, 8.0
 BACK_AUTO_MAX = 3.0
 
 
