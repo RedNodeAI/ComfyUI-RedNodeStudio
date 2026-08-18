@@ -306,6 +306,13 @@ def describe(camera, subjects, output="krea2"):
         parts = [_height_only_block(geo, cpos[1], spos[1] + sh, sname)]
     # horizontal relation and distance
     rel = _facing_relation(rel_bearing(spos, cpos, prime.get("facing_deg", 0)))
+    # STRAIGHT DOWN OR UP the horizontal bearing means nothing: "rear
+    # three-quarter view, the camera behind" under "direct overhead" pulled the
+    # model to a three-quarter shot (the user's boxing report). Past 75 degrees
+    # of pitch the relation is simply the top (or underside) of the subject.
+    if abs(geo["pitch"]) >= 75:
+        rel = ("seen from directly above" if geo["pitch"] < 0
+               else "seen from directly below")
     if locked:
         parts.append(_cap("%s is %s, %s from the camera, centered in the frame, "
                           "framed as %s."
@@ -468,6 +475,13 @@ def describe(camera, subjects, output="krea2"):
         parts.append("The camera is rolled %d degrees to the %s, a Dutch tilt."
                      % (int(round(abs(roll))), "left" if roll < 0 else "right"))
     parts.append(lens_phrase(focal) + ".")
+    # DEPTH OF FIELD (the user's ask, "bokeh"): with an aperture set, the
+    # physics of lens, f-number and distance says what is sharp and what
+    # dissolves - and the stage knows how far every other thing is, so the
+    # words name who is soft. Off (no aperture) says nothing, as before.
+    dof = dof_words(camera, subjects, ti, cpos, geo, focal)
+    if dof:
+        parts.append(dof)
     return " ".join(p if p.endswith(".") else p + "." for p in parts)
 
 
@@ -1032,3 +1046,90 @@ def camera_path(camera, subjects, path):
             return [orbit_camera(camera, subjects, a0)]
         return [orbit_camera(camera, subjects, _lerp(a0, a1, i / (n - 1.0))) for i in range(n)]
     return [dict(camera)]
+
+
+# ---------------------------------------------------------------- depth of field
+COC_MM = 0.03            # circle of confusion, full-frame 35 mm
+APERTURES = [1.4, 2.0, 2.8, 4.0, 5.6, 8.0, 11.0, 16.0]
+
+
+def dof_limits(focal_mm, f_number, dist_m):
+    """(near_m, far_m or None for infinity, hyperfocal_m) for a full-frame lens."""
+    f = float(focal_mm)
+    N = max(0.7, float(f_number))
+    s = max(0.05, float(dist_m)) * 1000.0
+    H = f * f / (N * COC_MM) + f
+    near = H * s / (H + (s - f))
+    far = (H * s / (H - (s - f))) if s < H else None
+    return near / 1000.0, (far / 1000.0 if far is not None else None), H / 1000.0
+
+
+def blur_circle_mm(focal_mm, f_number, focus_m, other_m):
+    """Blur circle on the sensor for a thing at other_m when focus is at focus_m."""
+    f = float(focal_mm)
+    N = max(0.7, float(f_number))
+    s = max(0.05, float(focus_m)) * 1000.0
+    d = max(0.05, float(other_m)) * 1000.0
+    return (f * f / (N * max(1.0, s - f))) * abs(d - s) / d
+
+
+def _blur_word(b):
+    if b < COC_MM:
+        return "sharp"
+    if b < 3 * COC_MM:
+        return "just slightly soft"
+    if b < 8 * COC_MM:
+        return "softly out of focus"
+    return "dissolved into bokeh"
+
+
+def dof_words(camera, subjects, ti, cpos, geo, focal):
+    """The depth-of-field sentence, or "" when no aperture is set."""
+    try:
+        N = float(camera.get("aperture") or 0)
+    except (TypeError, ValueError):
+        N = 0.0
+    if N <= 0:
+        return ""
+    prime = subjects[ti]
+    sname = str(prime.get("name") or "the subject")
+    dist = geo["distance"]
+    near, far, hyper = dof_limits(focal, N, dist)
+    depth = (far - near) if far is not None else None
+    # background: the farthest visible non-wall thing, else 3 m past the subject
+    others = []
+    for k, o in enumerate(subjects):
+        if k == ti or str(o.get("kind") or "person") == "wall":
+            continue
+        op = [float(x) for x in o.get("pos", [0, 0, 0])]
+        d = _len(_v(cpos, [op[0], cpos[1], op[2]]))
+        others.append((d, str(o.get("name") or "an object"), str(o.get("kind") or "person")))
+    others.sort()
+    fstop = ("Shot at f/%g" % N)
+    if depth is None or depth > max(6.0, dist * 2.5):
+        # everything sharp
+        span = ("everything from %s to the far background" % sname) if not others else                ("everything from %s to %s" % (sname, others[-1][1]))
+        return _cap("%s: deep depth of field, %s is in focus, no background blur." % (fstop, span))
+    if depth < 0.25:
+        head = ("%s: razor-thin depth of field, only %s's face is truly sharp (about %d cm of focus)"
+                % (fstop, sname, max(1, int(round(depth * 100)))))
+    elif depth < 1.0:
+        head = ("%s: shallow depth of field, %s is sharp within about %d cm"
+                % (fstop, sname, int(round(depth * 100))))
+    else:
+        head = ("%s: moderate depth of field, %s is sharp within about %.1f meters"
+                % (fstop, sname, depth))
+    bits = []
+    for d, name, kind in others[:5]:
+        b = blur_circle_mm(focal, N, dist, d)
+        w = _blur_word(b)
+        if w == "sharp":
+            continue
+        where = "behind" if d > dist else "in front"
+        bits.append("%s, %.1f m %s, is %s" % (name, abs(d - dist), where, w))
+    bg = blur_circle_mm(focal, N, dist, dist + 3.0)
+    tail = ""
+    if _blur_word(bg) != "sharp":
+        tail = "; the background %s" % ("melts into soft creamy bokeh" if bg >= 8 * COC_MM
+                                          else "goes soft" if bg >= 3 * COC_MM else "is slightly soft")
+    return _cap(head + ("; " + "; ".join(bits) if bits else "") + tail + ".")

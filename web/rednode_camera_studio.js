@@ -88,7 +88,7 @@ css.textContent = `
 // ---- state -----------------------------------------------------------------
 const DEFAULT = () => ({
   camera: { pos: [0, 1.56, 3.0], target: 0, target_height: null, focal_mm: 35, roll_deg: 0,
-            lock: true, aim: [0, 0, 0] },
+            aperture: 0, lock: true, aim: [0, 0, 0] },
   subjects: [{ name: "the subject", pos: [0, 0, 0], height: 1.7, facing_deg: 0 }],
   output: "krea2", join: "lead",
   auto_latent: false, latent_mp: 1.0, latent_batch: 1,
@@ -139,6 +139,7 @@ function normalise(d) {
       if (typeof c.target_height === "number") o.camera.target_height = c.target_height;
       if (typeof c.focal_mm === "number") o.camera.focal_mm = c.focal_mm;
       if (typeof c.roll_deg === "number") o.camera.roll_deg = c.roll_deg;
+      if (typeof c.aperture === "number") o.camera.aperture = c.aperture;
       if (c.lock === false) o.camera.lock = false;
       if (Array.isArray(c.aim) && c.aim.length === 3) o.camera.aim = c.aim.map(Number);
     }
@@ -1095,6 +1096,49 @@ export function buildStudio(host, S) {
       (v) => { cam.focal_mm = v; }, (v) => Math.round(v) + "mm · " + Math.round(fovDeg(v)) + "°"));
     camCard.appendChild(slider("Roll", -45, 45, 1, () => cam.roll_deg,
       (v) => { cam.roll_deg = v; }, (v) => Math.round(v) + "°"));
+    // APERTURE / BOKEH (the user's ask): f-number chips; the depth of field is
+    // computed from lens, f-number and distance, and the paragraph says who is
+    // sharp and who dissolves. Longer lens + wider aperture + closer subject =
+    // more bokeh; a wide lens keeps most things sharp. Off = no words.
+    {
+      const arow = document.createElement("div");
+      arow.className = "row";
+      const ak = document.createElement("span");
+      ak.className = "k";
+      ak.textContent = "Aperture";
+      arow.appendChild(ak);
+      const achips = document.createElement("div");
+      achips.className = "chips";
+      const STOPS = [0, 1.4, 2, 2.8, 4, 5.6, 8, 11, 16];
+      for (const f of STOPS) {
+        const c = document.createElement("div");
+        const on = Math.abs((cam.aperture || 0) - f) < 0.01;
+        c.className = "chip" + (on ? " on" : "");
+        c.textContent = f ? "f/" + f : "Off";
+        c.title = f ? "Depth of field at f/" + f + ": the words say who is sharp and what dissolves into bokeh."
+                    : "No depth-of-field words.";
+        c.onclick = () => { cam.aperture = f; write(); render(); };
+        achips.appendChild(c);
+      }
+      arow.appendChild(achips);
+      camCard.appendChild(arow);
+      if (cam.aperture > 0) {
+        const s0 = st.subjects[cam.target] || st.subjects[0];
+        const g0 = geometry(cam, s0);
+        const f = cam.focal_mm, N = cam.aperture, sMm = Math.max(0.05, g0.distance) * 1000;
+        const H = f * f / (N * 0.03) + f;
+        const near = H * sMm / (H + (sMm - f)) / 1000;
+        const far = sMm < H ? H * sMm / (H - (sMm - f)) / 1000 : null;
+        const an = document.createElement("div");
+        an.className = "note";
+        an.textContent = far === null
+          ? "In focus from " + near.toFixed(1) + " m to infinity: deep, no bokeh."
+          : "In focus " + near.toFixed(2) + " m to " + far.toFixed(2) + " m ("
+            + ((far - near) < 1 ? Math.round((far - near) * 100) + " cm" : (far - near).toFixed(1) + " m")
+            + " deep)" + ((far - near) < 1 ? ": shallow, background bokeh." : (far - near) < 4 ? ": moderate." : ": deep.");
+        camCard.appendChild(an);
+      }
+    }
     // LOCK ON SUBJECT, the user's ask: on, the lens aims at the target and the
     // subject sits centre frame; off, the lens aims at a free point on the
     // stage (the amber crosshair, drag it) so the subject can sit off-centre

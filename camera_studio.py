@@ -61,6 +61,8 @@ def parse_state(config_json):
                           if cam.get("target_height") is not None else None),
         "focal_mm": num(cam.get("focal_mm"), 35, 8, 400),
         "roll_deg": num(cam.get("roll_deg"), 0, -90, 90),
+        # aperture (f-number) for the depth-of-field words; 0 = off
+        "aperture": num(cam.get("aperture"), 0, 0, 64),
         # lock on subject (default) or aim at a free point for off-centre frames
         "lock": cam.get("lock", True) is not False,
         "aim": ([num(cam["aim"][0], 0, -30, 30), num(cam["aim"][1], 0, 0, 30),

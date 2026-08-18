@@ -293,20 +293,30 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     # in the reader's head loses; in front, everything else is described from
     # that viewpoint. Eye level contributes nothing.
     cam = ""
+    studio_live = False
     if isinstance(camera, dict) and camera.get("camera"):
         try:
             cam = _ct.describe(camera["camera"], camera.get("subjects") or [])
+            studio_live = bool(cam)
         except Exception:
             cam = ""
     if not cam:
         cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
+    # ONE ENGINE FOR THE CAMERA: with the studio live its paragraph carries the
+    # framing too ("framed as ..."), so the simple shot-size wording steps out.
+    # Left in, "A three-quarter view of ..." after "Direct overhead photograph"
+    # read as an angle and pulled the render off the top-down view (the user's
+    # boxing report, 2026-08-18).
+    if studio_live:
+        camera_words = False
+        restate = False
     if cam and (subject or surroundings):
         parts.append(_cap(cam) if cam.endswith(".") else _cap(cam) + ".")
     if style:
         parts.append(_cap(style) + ".")
 
     if framing in SUBJECT_FIRST:
-        lead = LEAD_IN.get(framing, "")
+        lead = "" if studio_live else LEAD_IN.get(framing, "")
         if subject:
             parts.append(_cap(lead + subject if lead else subject) + ".")
             # the tight steps carry their framing in the lead-in, so the camera word goes
@@ -319,7 +329,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
         if surroundings:
             parts.append(_cap(surroundings) + ".")
         tail = []
-        join = JOIN.get(framing, "")
+        join = "" if studio_live else JOIN.get(framing, "")
         if placement:
             tail.append(placement.rstrip(",") + ",")
         elif join:
@@ -329,6 +339,8 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
         # the camera label replaces the descriptive cue rather than joining it: two
         # framing phrases in one clause read as two instructions, not a louder one
         cue = (CAMERA_CUE.get(framing) if camera_words else None) or SCALE_CUE.get(framing)
+        if studio_live:
+            cue = None
         if cue and subject:
             tail.append("," + " " + cue)
         if tail:
