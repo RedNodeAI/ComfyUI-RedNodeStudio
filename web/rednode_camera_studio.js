@@ -32,18 +32,24 @@ css.textContent = `
 .rn-cs .under{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
 .rn-cs .full{grid-column:1 / -1}
 .rn-cs .subj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;align-items:start}
-/* FULL SCREEN (the user's ask): the stage fills the screen on the left, the
-   controls (camera, sets, subjects with add person / object) stack in a
-   scrolling column on the right; the prompt card hides. Esc or the button exits. */
-.rn-cs.full .cols{position:fixed;inset:0;z-index:10040;background:#0e1013;padding:12px;margin:0;
-  grid-template-columns:minmax(0,1fr) 400px;grid-template-rows:1fr;overflow:hidden;box-sizing:border-box}
-.rn-cs.full .colL{grid-row:1;height:100%;min-height:0;overflow:auto}
-.rn-cs.full .colL .card:first-child{flex:none}
-.rn-cs.full canvas.stage{width:auto;max-width:100%;max-height:calc(100vh - 210px);margin:0 auto}
-.rn-cs.full .right{grid-row:1;height:100%;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px}
-.rn-cs.full .card.full{grid-column:2;display:none}
-.rn-cs.full .subj-grid{grid-template-columns:1fr}
-.rn-cs.full ~ .out, .rn-cs.full .card.out{display:none}
+/* SCENE FOCUS (the user's ask, like the Paint tab's full screen): a room with
+   just the stage, big, and the SUBJECTS panel on the right - place and move
+   things, add a person or an object, nothing else on screen. Esc closes. */
+.rn-cs-focus{position:fixed;inset:0;z-index:10040;background:#0e1013;display:flex;flex-direction:column;
+  font:12px 'Segoe UI',system-ui,sans-serif;color:#d6d9de}
+.rn-cs-focus .fbar{display:flex;align-items:center;gap:12px;padding:8px 14px;background:#15171b;
+  border-bottom:1px solid #2a2e34;flex:none}
+.rn-cs-focus .fbar .ttl{font-weight:700;letter-spacing:.06em;color:#4a8fe0;font-size:12px}
+.rn-cs-focus .fbar .hint{opacity:.6;font-size:11px}
+.rn-cs-focus .fbar .fx{margin-left:auto;background:#1a1d22;border:1px solid #3a3f47;border-radius:5px;
+  color:#e8ecf1;cursor:pointer;font-size:12px;padding:5px 12px}
+.rn-cs-focus .fbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 560px;gap:12px;padding:12px}
+.rn-cs-focus .fstage{min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:8px;background:#111316;border:1px solid #2f333a;border-radius:8px;padding:10px}
+.rn-cs-focus .fstage canvas.stage{width:auto;height:auto;max-width:100%;max-height:calc(100vh - 150px)}
+.rn-cs-focus .fright{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.rn-cs-focus .fright .card{border-color:#2f333a}
+.rn-cs-focus .fright .subj-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .rn-cs .card{display:flex;flex-direction:column;gap:7px;background:#1b1e23;
   border:1px solid #2a2e34;border-radius:8px;padding:9px}
 .rn-cs .card>.ttl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
@@ -369,9 +375,10 @@ export function buildStudio(host, S) {
   stSum.className = "sum";
   stTtl.appendChild(stSum);
   const fullBtn = document.createElement("button");
-  fullBtn.textContent = "⛶ Full screen";
+  fullBtn.textContent = "⛶ Scene focus";
   fullBtn.style.cssText = "margin-left:8px;font-size:11px;padding:2px 8px";
-  fullBtn.title = "Fill the screen with the stage; the controls stack on the right. Esc or the button again to leave.";
+  fullBtn.title = "Scene focus: a room with just the big stage and the subjects - place people "
+                + "and objects, add or turn them, nothing else on screen. Esc closes.";
   stTtl.appendChild(fullBtn);
   stageCard.appendChild(stTtl);
   const canvas = document.createElement("canvas");
@@ -548,19 +555,56 @@ export function buildStudio(host, S) {
   subjGrid.className = "subj-grid";
   subjCard.appendChild(subjGrid);
   cols.appendChild(subjCard);      // full width, under both columns
-  // full screen: the SUBJECTS card moves into the right column (add person /
-  // object on the right, the user's ask) and comes back on exit
-  let isFull = false;
-  const setFull = (on) => {
-    isFull = !!on;
-    host.classList.toggle("full", isFull);
-    if (isFull) { subjCard.classList.remove("full"); right.appendChild(subjCard); }
-    else { subjCard.classList.add("full"); cols.appendChild(subjCard); }
-    fullBtn.textContent = isFull ? "✖ Exit full screen" : "⛶ Full screen";
+  // SCENE FOCUS: the stage canvas and the SUBJECTS card move into an overlay
+  // room (the same elements, so every handler and the state stay live) and
+  // come back to their places on close.
+  let focusOv = null;
+  const openFocus = () => {
+    if (focusOv) return;
+    focusOv = document.createElement("div");
+    focusOv.className = "rn-cs-focus";
+    for (const t of ["pointerdown", "pointermove", "pointerup", "wheel", "contextmenu", "dblclick"]) {
+      focusOv.addEventListener(t, (e) => e.stopPropagation());
+    }
+    const fbar = document.createElement("div");
+    fbar.className = "fbar";
+    const ft = document.createElement("span"); ft.className = "ttl"; ft.textContent = "SCENE FOCUS";
+    const fh = document.createElement("span"); fh.className = "hint";
+    fh.textContent = "Drag things to place them, their arrow to turn them, the camera to move it. Wheel = lens. Right-click for A / B and resets. Esc closes.";
+    const fx = document.createElement("button"); fx.className = "fx"; fx.textContent = "Close  (Esc)";
+    fbar.append(ft, fh, fx);
+    const fbody = document.createElement("div"); fbody.className = "fbody";
+    const fstage = document.createElement("div"); fstage.className = "fstage";
+    const fright = document.createElement("div"); fright.className = "fright";
+    fbody.append(fstage, fright);
+    focusOv.append(fbar, fbody);
+    // move the live elements in
+    fstage.appendChild(canvas);
+    fstage.appendChild(legend);
+    fright.appendChild(subjCard);
+    subjCard.classList.remove("full");
+    document.body.appendChild(focusOv);
+    fullBtn.textContent = "✖ In scene focus";
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeFocus(); } };
+    fx.onclick = () => closeFocus();
+    document.addEventListener("keydown", onKey, true);
+    focusOv._onKey = onKey;
     draw();
   };
-  fullBtn.onclick = () => setFull(!isFull);
-  document.addEventListener("keydown", (e) => { if (isFull && e.key === "Escape") setFull(false); });
+  const closeFocus = () => {
+    if (!focusOv) return;
+    // put the elements back where they live
+    stageCard.insertBefore(canvas, stageCard.children[1] || null);
+    stageCard.appendChild(legend);
+    subjCard.classList.add("full");
+    cols.appendChild(subjCard);
+    document.removeEventListener("keydown", focusOv._onKey, true);
+    focusOv.remove();
+    focusOv = null;
+    fullBtn.textContent = "⛶ Scene focus";
+    draw();
+  };
+  fullBtn.onclick = () => (focusOv ? closeFocus() : openFocus());
 
   // AUTO LATENT, the user's ask: the frame's aspect is part of the camera
   // language, so an empty latent shaped by the angle, lens and scene spread
