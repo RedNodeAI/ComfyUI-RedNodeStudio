@@ -28,6 +28,10 @@ css.textContent = `
   border:1px solid rgba(255,255,255,.13);border-radius:6px;overflow:auto;color-scheme:dark}
 .rn-cs .cols{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr);gap:10px;
   align-items:start}
+.rn-cs .colL{display:flex;flex-direction:column;gap:10px;min-width:0}
+.rn-cs .under{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+.rn-cs .full{grid-column:1 / -1}
+.rn-cs .subj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;align-items:start}
 .rn-cs .card{display:flex;flex-direction:column;gap:7px;background:#1b1e23;
   border:1px solid #2a2e34;border-radius:8px;padding:9px}
 .rn-cs .card>.ttl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
@@ -335,6 +339,13 @@ export function buildStudio(host, S) {
   const cols = document.createElement("div");
   cols.className = "cols";
   host.appendChild(cols);
+  // THE LAYOUT (the user's sketch, 2026-08-18): stage top-left with AUTO
+  // LATENT and CAMERA PATH side by side under it; SETS and CAMERA on the
+  // right; SUBJECTS full width below, the boxes flowing left to right and
+  // wrapping; the CAMERA PROMPT full width at the bottom.
+  const colL = document.createElement("div");
+  colL.className = "colL";
+  cols.appendChild(colL);
 
   // ---- left: the stage card
   const stageCard = document.createElement("div");
@@ -373,7 +384,7 @@ export function buildStudio(host, S) {
   }
   legend.appendChild(scaleChips);
   stageCard.appendChild(legend);
-  cols.appendChild(stageCard);
+  colL.appendChild(stageCard);
 
   // ---- right: the controls
   const right = document.createElement("div");
@@ -510,12 +521,15 @@ export function buildStudio(host, S) {
   right.appendChild(camCard);
 
   const subjCard = document.createElement("div");
-  subjCard.className = "card";
+  subjCard.className = "card full";
   const sTtl = document.createElement("div");
   sTtl.className = "ttl";
   sTtl.textContent = "SUBJECTS";
   subjCard.appendChild(sTtl);
-  right.appendChild(subjCard);
+  const subjGrid = document.createElement("div");
+  subjGrid.className = "subj-grid";
+  subjCard.appendChild(subjGrid);
+  cols.appendChild(subjCard);      // full width, under both columns
 
   // AUTO LATENT, the user's ask: the frame's aspect is part of the camera
   // language, so an empty latent shaped by the angle, lens and scene spread
@@ -529,7 +543,10 @@ export function buildStudio(host, S) {
   lSum.className = "sum";
   lTtl.appendChild(lSum);
   latCard.appendChild(lTtl);
-  right.appendChild(latCard);
+  const under = document.createElement("div");
+  under.className = "under";
+  colL.appendChild(under);
+  under.appendChild(latCard);
 
   // CAMERA PATH (batch angles, the user's ask): A -> B in N shots, or an
   // orbit round the subject. The node then emits N prompts / latents /
@@ -544,7 +561,7 @@ export function buildStudio(host, S) {
   pSum.className = "sum";
   pTtl.appendChild(pSum);
   pathCard.appendChild(pTtl);
-  right.appendChild(pathCard);
+  under.appendChild(pathCard);
 
   const outCard = document.createElement("div");
   outCard.className = "card";
@@ -1209,7 +1226,8 @@ export function buildStudio(host, S) {
   }
 
   function renderSubjects() {
-    [...subjCard.children].slice(1).forEach((c) => c.remove());
+    subjGrid.replaceChildren();
+    [...subjCard.children].slice(2).forEach((c) => c.remove());
     st.subjects.forEach((s, i) => {
       const box = document.createElement("div");
       box.className = "subj" + (i === sel ? " sel" : "");
@@ -1355,7 +1373,7 @@ export function buildStudio(host, S) {
         rrow.append(rk, rkind, rto);
         box.appendChild(rrow);
       }
-      subjCard.appendChild(box);
+      subjGrid.appendChild(box);
     });
     const addRow = document.createElement("div");
     addRow.className = "row";

@@ -147,6 +147,9 @@ const STYLE = `
   color: #8f97a3; text-transform: uppercase; margin-top: 4px; }
 .rn-pf-studio { grid-column: 1 / -1; width: 100%; }
 .rn-pf-btn.on { background: #a855f7; border-color: #a855f7; color: #fff; }
+.rn-pf-seg { display: inline-flex; background: #15171b; border: 1px solid #33373d; border-radius: 6px; padding: 2px; gap: 2px; }
+.rn-pf-segb { background: none; border: 0; border-radius: 4px; color: #9aa0a8; cursor: pointer; font-size: 12px; padding: 4px 12px; }
+.rn-pf-segb.on { background: #a855f7; color: #fff; }
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
   gap: 10px; align-items: start; }
 .rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -472,7 +475,9 @@ export function buildFrameEditor(wrap, F) {
     cols.appendChild(colL); cols.appendChild(colR);
     wrap.appendChild(cols);
   }
-  const RIGHT = new Set(["light", "framing"]);
+  // writing on the left (style, subject, surroundings, light & colour); the
+  // camera and the prompt preview on the right - the user's arrangement
+  const RIGHT = new Set(["framing"]);
   const group = (key, title, hint, els) => {
     const gbox = el("div", "rn-pf-box");
     const gh = el("div", "head");
@@ -569,14 +574,22 @@ export function buildFrameEditor(wrap, F) {
   // disclosure, is the advanced view and mounts FULL WIDTH below the columns.
   // Push is retired (camera-first ordering IS the push); the placement
   // dropdowns fold into the studio's relations, the typed placement stays.
+  // SIMPLE / ADVANCED (the user's ask: two buttons, nothing else). Simple:
+  // the chips write the camera words. Advanced: the Camera Studio drives
+  // them - in the workspace it lives on the Camera tab (Advanced opens it),
+  // in the standalone node it unfolds below.
   const studioBar = el("div", "rn-pf-row");
-  const studioBtn = el("button", "rn-pf-btn", "\u25B8 Camera studio (advanced)");
-  studioBtn.title = "Open the Camera Studio: place people and objects on a top "
-                  + "view, aim the camera, set the lens. The chips above are "
-                  + "presets that reset it; anything you change in the studio "
-                  + "wins and writes the camera paragraph.";
+  const modeSeg = el("div", "rn-pf-seg");
+  const simpleBtn = el("button", "rn-pf-segb", "Simple");
+  simpleBtn.title = "The Shot size and Camera height chips write the camera words.";
+  const studioBtn = el("button", "rn-pf-segb", "Advanced");
+  studioBtn.title = "The Camera Studio drives the camera: place people and objects on a "
+                  + "top view, aim the camera, set the lens. The chips become presets "
+                  + "that reset it.";
+  modeSeg.appendChild(simpleBtn);
+  modeSeg.appendChild(studioBtn);
   const studioState = el("span", "hint2", "");
-  studioBar.appendChild(studioBtn);
+  studioBar.appendChild(modeSeg);
   studioBar.appendChild(studioState);
   group("framing", "Camera", "framing, height, and the studio",
         [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap, studioBar,
@@ -646,61 +659,48 @@ export function buildFrameEditor(wrap, F) {
   const showStudio = (on) => {
     const remote = !!F.openCameraTab;
     studioHost.style.display = on && !remote ? "" : "none";
-    studioBtn.textContent = remote
-      ? (on ? "Advanced: open the Camera tab" : "Advanced (Camera tab)")
-      : (on ? ARROW_OPEN : ARROW_SHUT) + " Camera studio (advanced)";
     studioBtn.classList.toggle("on", !!on);
+    simpleBtn.classList.toggle("on", !on);
     foldSet("studio_open", !!on);
     if (on && !remote) mountStudio();
   };
   const openStudio = () => {
-    if (F.openCameraTab) {
-      // remote host: first click switches to Advanced (seeds the studio from
-      // the chips) and jumps to the Camera tab; later clicks just jump
-      if (!studioGet()) { seedStudioFromChips(); showStudio(true); changed(); }
-      F.openCameraTab();
-      return;
-    }
-    const shown = studioHost.style.display !== "none";
-    if (shown) {
-      // off means OFF: the studio stops driving the camera too
-      studioSet(null);
-      showStudio(false);
-      changed();
-    } else {
-      showStudio(true);
-    }
+    // Advanced: seed the studio from the chips if it is not live yet, then
+    // show it (standalone) or jump to the Camera tab (workspace)
+    if (!studioGet()) { seedStudioFromChips(); }
+    showStudio(true);
+    changed();
+    if (F.openCameraTab) F.openCameraTab();
+  };
+  const goSimple = () => {
+    // Simple: the studio stops driving the camera; the chips write it again
+    studioSet(null);
+    showStudio(false);
+    changed();
   };
   studioBtn.addEventListener("click", openStudio);
+  simpleBtn.addEventListener("click", goSimple);
   // on (re)build: restore the remembered state, or follow the rule
   {
     const remembered = foldGet("studio_open");
     const on = (remembered === undefined || remembered === null) ? !!studioGet() : !!remembered;
     if (on && studioGet()) showStudio(true);
-    else studioBtn.textContent = ARROW_SHUT + " Camera studio (advanced)";
+    else showStudio(false);
   }
   // WHICH ONE IS IN CHARGE, made visible: with the studio live its paragraph
   // REPLACES the simple stops entirely (one engine, never both), so the
   // simple rows dim and say so; clear the studio to get them back. The chips
   // stay clickable as presets that regenerate the studio.
   const simpleRows = [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap];
-  const clearBtn = el("button", "rn-pf-btn", "Clear studio");
-  clearBtn.title = "Drop the studio state: the simple Shot size and Camera height "
-                 + "chips write the camera words again.";
-  clearBtn.style.display = "none";
-  clearBtn.addEventListener("click", () => {
-    studioSet(null);
-    showStudio(false);
-    changed();
-  });
-  studioBar.appendChild(clearBtn);
   const syncSimple = () => {
     const live = !!studioGet();
     for (const elx of simpleRows) elx.style.opacity = live ? ".45" : "";
     studioState.textContent = live
-      ? "studio drives the camera; the chips above are presets that reset it"
+      ? (F.openCameraTab ? "the Camera tab drives the camera; the chips are presets that reset it"
+                         : "the studio drives the camera; the chips are presets that reset it")
       : "";
-    clearBtn.style.display = live ? "" : "none";
+    studioBtn.classList.toggle("on", live);
+    simpleBtn.classList.toggle("on", !live);
   };
   syncSimpleRef = syncSimple;
   syncSimple();
