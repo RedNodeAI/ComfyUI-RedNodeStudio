@@ -354,6 +354,7 @@ export function buildStudio(host, S) {
   let st = normalise(S.get());
   let sel = 0;                       // selected subject index
   let dragging = null;               // {kind: "cam"|"subj"|"face", i}
+  let dragOff = [0, 0];              // grab offset (world m): drag from where you clicked, not the centre
   // STAGE SCALE (the user's ask: bigger rooms, outdoors): normal 12 x 9 m,
   // wide 24 x 19 m, huge 48 x 38 m. Same canvas, more metres per pixel.
   const pxm = () => (st.stage_zoom === "huge" ? 11 : st.stage_zoom === "wide" ? 22 : 44);
@@ -953,6 +954,17 @@ export function buildStudio(host, S) {
     if (h.kind === "subj" || h.kind === "face") { sel = h.i; renderSubjects(); }
     if (h.locked) { draw(); return; }        // select, never move: it is locked
     dragging = h;
+    // THE PIVOT IS WHERE YOU CLICKED (the user's ask): remember the offset
+    // between the pointer and the thing's centre, so a big object does not
+    // jump to put its centre under the cursor and small nudges are possible
+    {
+      const [wx0, wz0] = pxToWorld(px, py);
+      const ref = h.kind === "cam" ? st.camera.pos
+                : h.kind === "pathB" ? st.path.b.pos
+                : h.kind === "aim" ? st.camera.aim
+                : h.kind === "subj" ? st.subjects[h.i].pos : null;
+      dragOff = ref ? [wx0 - ref[0], wz0 - ref[2]] : [0, 0];
+    }
     canvas.style.cursor = "grabbing";
   });
   canvas.addEventListener("pointermove", (e) => {
@@ -970,15 +982,16 @@ export function buildStudio(host, S) {
     const snap = (v) => Math.round(v * 20) / 20;
     const cx_ = (v) => Math.max(-maxX, Math.min(maxX, snap(v)));
     const cz_ = (v) => Math.max(-maxZ, Math.min(maxZ, snap(v)));
+    const gx = wx - dragOff[0], gz = wz - dragOff[1];
     if (dragging.kind === "cam") {
-      st.camera.pos[0] = cx_(wx); st.camera.pos[2] = cz_(wz);
+      st.camera.pos[0] = cx_(gx); st.camera.pos[2] = cz_(gz);
     } else if (dragging.kind === "pathB") {
-      st.path.b.pos[0] = cx_(wx); st.path.b.pos[2] = cz_(wz);
+      st.path.b.pos[0] = cx_(gx); st.path.b.pos[2] = cz_(gz);
     } else if (dragging.kind === "aim") {
-      st.camera.aim[0] = cx_(wx); st.camera.aim[2] = cz_(wz);
+      st.camera.aim[0] = cx_(gx); st.camera.aim[2] = cz_(gz);
     } else if (dragging.kind === "subj") {
-      st.subjects[dragging.i].pos[0] = cx_(wx);
-      st.subjects[dragging.i].pos[2] = cz_(wz);
+      st.subjects[dragging.i].pos[0] = cx_(gx);
+      st.subjects[dragging.i].pos[2] = cz_(gz);
     } else {
       const s = st.subjects[dragging.i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
@@ -1079,8 +1092,33 @@ export function buildStudio(host, S) {
   });
   const maxXv = () => STAGE_W / 2 / pxm() - 0.4;
   const maxZv = () => STAGE_H / 2 / pxm() - 0.4;
+  // THE WHEEL (the user's ask): over a subject or object it turns it (5 deg a
+  // notch); with Shift it changes its height, with Ctrl its width (objects
+  // and walls). Held modifiers act on the SELECTED thing wherever the pointer
+  // is on the stage. Locked things do not move. Elsewhere the wheel is the lens.
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault(); e.stopPropagation();
+    const [px, py] = evPos(e);
+    const hv = hit(px, py);
+    const dir = e.deltaY > 0 ? -1 : 1;
+    let idx = (hv && (hv.kind === "subj" || hv.kind === "face")) ? hv.i
+            : ((e.shiftKey || e.ctrlKey) && st.subjects[sel]) ? sel : -1;
+    const sj = idx >= 0 ? st.subjects[idx] : null;
+    if (sj && sj.locked) { return; }           // locked: nothing turns, grows or moves
+    if (sj) {
+      if (e.shiftKey) {
+        const step = sj.kind === "person" ? 0.02 : 0.05;
+        const lo = sj.kind === "person" ? 0.5 : 0.05, hi = sj.kind === "person" ? 2.5 : 4;
+        sj.height = Math.round(Math.max(lo, Math.min(hi, sj.height + dir * step)) * 100) / 100;
+      } else if (e.ctrlKey && sj.kind !== "person") {
+        sj.size[0] = Math.round(Math.max(0.1, Math.min(8, sj.size[0] + dir * 0.1)) * 10) / 10;
+      } else if (!e.ctrlKey) {
+        sj.facing_deg = ((sj.facing_deg + dir * 5) % 360 + 360) % 360;
+      }
+      sel = idx;
+      write(); render();
+      return;
+    }
     const f = st.camera.focal_mm;
     st.camera.focal_mm = Math.max(12, Math.min(200, Math.round(f * (e.deltaY > 0 ? 0.92 : 1.08))));
     write(); render();
@@ -1404,20 +1442,26 @@ export function buildStudio(host, S) {
       };
       head.append(tag, kindB, nm, lockB, del);
       box.appendChild(head);
+      // LOCKED MEANS LOCKED (the user's ask): the geometry controls in the
+      // list are disabled as well as the stage drag; the name, the lock and
+      // the delete stay live. A wrapper collects the rows so one pass can
+      // disable them.
+      const geomRows = [];
+      const addGeom = (row) => { geomRows.push(row); box.appendChild(row); };
       if (s.kind === "person") {
-        box.appendChild(slider("Height", 0.5, 2.5, 0.01, () => s.height,
+        addGeom(slider("Height", 0.5, 2.5, 0.01, () => s.height,
           (v) => { s.height = v; }, (v) => v.toFixed(2) + " m"));
       } else {
-        box.appendChild(slider("Height", 0.05, 4, 0.05, () => s.height,
+        addGeom(slider("Height", 0.05, 4, 0.05, () => s.height,
           (v) => { s.height = v; }, (v) => v.toFixed(2) + " m"));
-        box.appendChild(slider("Width", 0.1, 8, 0.1, () => s.size[0],
+        addGeom(slider("Width", 0.1, 8, 0.1, () => s.size[0],
           (v) => { s.size[0] = v; }, (v) => v.toFixed(1) + " m"));
         if (s.kind === "object") {
-          box.appendChild(slider("Depth", 0.1, 8, 0.1, () => s.size[1],
+          addGeom(slider("Depth", 0.1, 8, 0.1, () => s.size[1],
             (v) => { s.size[1] = v; }, (v) => v.toFixed(1) + " m"));
         }
       }
-      box.appendChild(slider("Facing", 0, 359, 1, () => s.facing_deg,
+      addGeom(slider("Facing", 0, 359, 1, () => s.facing_deg,
         (v) => { s.facing_deg = v; }, (v) => Math.round(v) + "°"));
       // FACING helpers (the user's ask): what "facing" means per kind, and two
       // one-click turns - toward the camera, toward another entry
@@ -1461,7 +1505,14 @@ export function buildStudio(host, S) {
           frow.appendChild(faceSel);
         }
       }
-      box.appendChild(frow);
+      addGeom(frow);
+      kindB.disabled = !!s.locked;
+      if (s.locked) {
+        for (const row of geomRows) {
+          row.style.opacity = ".45";
+          row.querySelectorAll("input,select,button").forEach((elx) => { elx.disabled = true; });
+        }
+      }
       // RELATION: "is [sitting on] [the bed]" - the words the model reads best;
       // the geometry then covers what the relation leaves unsaid
       if (st.subjects.length > 1) {
@@ -1498,6 +1549,7 @@ export function buildStudio(host, S) {
         rto.onchange = commitRel;
         rrow.append(rk, rkind, rto);
         box.appendChild(rrow);
+        if (s.locked) { rrow.style.opacity = ".45"; rkind.disabled = true; rto.disabled = true; }
       }
       subjGrid.appendChild(box);
     });
