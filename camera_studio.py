@@ -438,8 +438,10 @@ def _guess_lora(key, names):
     """The default pick per key: RedNode's own camera sliders, then the
     community zoom. First match wins; "None" when nothing fits."""
     import re
-    pats = {"zoom": [r"zoom"], "height": [r"camera_height", r"cam(era)?[_ -]?height"],
-            "orbit": [r"camera_orbit", r"orbit"], "back": [r"camera_back", r"back_view"]}
+    pats = {"zoom": [r"zoom_krea2", r"zoom.*krea", r"krea.*zoom", r"zoom"],
+            "height": [r"camera_height_krea2", r"camera_height", r"cam(era)?[_ -]?height"],
+            "orbit": [r"camera_orbit_krea2", r"camera_orbit", r"orbit"],
+            "back": [r"camera_back_krea2", r"camera_back", r"back_view"]}
     for pat in pats[key]:
         for n in names:
             if n != "None" and re.search(pat, n, re.I):

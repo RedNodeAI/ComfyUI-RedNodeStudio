@@ -1507,6 +1507,66 @@ class RedNodeStudioWorkspace:
                     h.update(b"missing")
         return h.hexdigest()
 
+    def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
+                    rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
+                    positive_fallback, model_fallback):
+        """One camera-path shot: (positive conditioning, model) for that shot -
+        the row re-assembled with the shot's camera, encoded; the camera LoRAs
+        at the shot's strengths on the pre-camera model."""
+        from .camera_studio import resolve_camera_loras as _cs_loras
+        cam_json = json.dumps(shot_state)
+        text = row.get("text", "")
+        fr = row.get("frame") or {}
+        if row.get("kind") == "krea2" and fr:
+            from .prompt_frame import RedNodePromptFrame
+            text, _n = RedNodePromptFrame().run(
+                subject=str(fr.get("subject") or ""),
+                surroundings=str(fr.get("surroundings") or ""),
+                framing=str(fr.get("framing") or "Balanced"),
+                placement=str(fr.get("placement") or ""),
+                light_and_colour=str(fr.get("light_and_colour") or ""),
+                placement_where=str(fr.get("placement_where") or "None"),
+                placement_what=str(fr.get("placement_what") or "None"),
+                lighting=str(fr.get("lighting") or "None"),
+                brightness=int(fr.get("brightness") or 0),
+                style=str(fr.get("style") or "None"),
+                style_extra=str(fr.get("style_extra") or ""),
+                framing_push=str(fr.get("framing_push") or "Off"),
+                camera_height=str(fr.get("camera_height") or "Eye level"),
+                camera=cam_json,
+                seed=run_seed)
+        # encode
+        pos = positive_fallback
+        if enc_clip is not None:
+            if rig_is_krea2:
+                from .rednode import Krea2RedNode
+                pos, _neg = Krea2RedNode().encode(
+                    enc_clip, text, studio_preset or CUSTOM_SENTINEL,
+                    style_strength if style_strength is not None else 0.5,
+                    negative_prompt=str(row.get("negative") or ""),
+                    vae=vae, workspace=workspace)
+            else:
+                import nodes as _core_enc
+                pos = _core_enc.CLIPTextEncode().encode(enc_clip, text)[0]
+        # the shot's camera LoRAs on the pre-camera model
+        model_i = model_fallback
+        slots = [{"name": e["name"], "strength": float(e["strength"]), "enabled": True,
+                  "type": "lora", "label": "camera %s" % e["key"]}
+                 for e in _cs_loras(shot_state)]
+        if model_pre_camera is not None:
+            if slots:
+                model_i, _, _w, _a = _lora.apply_stack(
+                    model_pre_camera, None, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": lc["ui"], "slots": slots}), lc["seed"], unique_id,
+                    tag="Workspace camera LoRAs")
+            else:
+                model_i = model_pre_camera
+        print("[RedNode Workspace] shot %d: %s%s" % (
+            si + 1, text.split(".")[0][:70],
+            (" | LoRAs " + ", ".join("%s %+.1f" % (x["label"][7:], x["strength"]) for x in slots)) if slots else ""),
+            flush=True)
+        return pos, model_i
+
     def build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None,
               boost_mask_in=None, edit_mask_in=None,
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
@@ -2104,35 +2164,72 @@ class RedNodeStudioWorkspace:
         # and nobody touches the LoRA tab. Missing files are the stack's own
         # business (it reports and skips, like any slot).
         _cam_slots = []
+        # THE CAMERA PATH IN THE WORKSPACE (the user's report: "the path only
+        # makes one image here"): when the active prompt's studio has a path,
+        # the built-in sampler renders every shot - its own camera words and
+        # its own LoRA strengths per shot - and the image output is the batch.
+        # _shot_states holds one studio state per shot (the path removed);
+        # _cam_slots are the FIRST shot's, applied to the model output as
+        # before; the loop below re-applies per shot on the pre-camera model.
+        _shot_states = []
+        _cam_state_row = None
         try:
             _zrow = prompt_row_for(cfg["models"], cfg["prompts"])
             _zfr = (_zrow or {}).get("frame") or {}
             _zcam = _zfr.get("camera")
             if isinstance(_zcam, str) and _zcam.strip():
                 from .camera_studio import parse_state as _cs_parse, resolve_camera_loras as _cs_loras
-                for _e in _cs_loras(_cs_parse(_zcam)):
+                from . import camera_translate as _ct_path
+                _cst = _cs_parse(_zcam)
+                _cam_state_row = _zrow
+                _cams = _ct_path.camera_path(_cst["camera"], _cst["subjects"], _cst["path"])
+                for _c in _cams:
+                    _shot_states.append(dict(_cst, camera=_c, path={"mode": "off", "shots": 1}))
+                for _e in _cs_loras(_shot_states[0]):
                     _cam_slots.append({"name": _e["name"], "strength": float(_e["strength"]),
                                        "enabled": True, "type": "lora",
                                        "label": "camera %s" % _e["key"]})
                 if _cam_slots:
                     print("[RedNode Workspace] camera LoRAs: "
-                          + ", ".join("%s @ %+.1f" % (x["label"][7:], x["strength"]) for x in _cam_slots),
+                          + ", ".join("%s @ %+.1f" % (x["label"][7:], x["strength"]) for x in _cam_slots)
+                          + (" (shot 1 of %d)" % len(_shot_states) if len(_shot_states) > 1 else ""),
                           flush=True)
         except Exception as _ze:
             print("[RedNode Workspace] camera LoRAs skipped: %s" % _ze, flush=True)
+        _base_lc = lc                       # the tab's own stack, no camera slots
         if _cam_slots:
             lc = dict(lc, on=True, slots=list(lc["slots"]) + _cam_slots)
         n_lora = sum(1 for x in lc["slots"] if x.get("type") != "title")
+        _model_pre_camera = model
         if model is not None and lc["on"] and lc["slots"]:
             # the CLIP goes in too when it is wired: plenty of LoRAs carry text
             # encoder weights, and dropping them applies half the LoRA while
             # looking like it worked
             # pass OUR node id, so the rolls a random slot drew come back to this
             # panel: the tab hosts the same list and wants the same highlight
-            model, lora_clip, lora_words, _applied = _lora.apply_stack(
-                model, clip, _lora.CUSTOM_SENTINEL,
-                json.dumps({"ui": lc["ui"], "slots": lc["slots"]}),
-                lc["seed"], unique_id, tag="Workspace LoRAs")
+            if len(_shot_states) > 1 and _cam_slots and _base_lc["on"] and _base_lc["slots"]:
+                # a path: the tab's stack once, kept as the pre-camera model, and
+                # the first shot's camera slots on top of it for the model output
+                _model_pre_camera, lora_clip, lora_words, _applied = _lora.apply_stack(
+                    model, clip, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": _base_lc["ui"], "slots": _base_lc["slots"]}),
+                    _base_lc["seed"], unique_id, tag="Workspace LoRAs")
+                model, _, _cw, _ca = _lora.apply_stack(
+                    _model_pre_camera, None, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": lc["ui"], "slots": _cam_slots}),
+                    lc["seed"], unique_id, tag="Workspace camera LoRAs")
+            elif len(_shot_states) > 1 and _cam_slots:
+                # a path with the tab's stack off: the wired model is the pre-camera one
+                model, _, lora_words, _applied = _lora.apply_stack(
+                    model, None, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": lc["ui"], "slots": _cam_slots}),
+                    lc["seed"], unique_id, tag="Workspace camera LoRAs")
+                lora_clip = clip
+            else:
+                model, lora_clip, lora_words, _applied = _lora.apply_stack(
+                    model, clip, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": lc["ui"], "slots": lc["slots"]}),
+                    lc["seed"], unique_id, tag="Workspace LoRAs")
             if clip is None:
                 print("[RedNode Workspace] no clip is wired, so only the model half of "
                       "each LoRA is applied. Wire clip for the text encoder half.",
@@ -2380,25 +2477,56 @@ class RedNodeStudioWorkspace:
                                 and it["canvas"] == "latent"
                                 and latent_in is not None))
                 _npass = int(it.get("passes", 1)) if _i2i_run else 1
-                _out = _lat
-                for _p in range(max(1, _npass)):
-                    if _npass > 1:
-                        print("[RedNode Workspace] i2i pass %d of %d, denoise "
-                              "%.2f" % (_p + 1, _npass, _dn), flush=True)
-                    _out = _core.common_ksampler(
-                        model, _seed + _p, rig_steps, rig_cfg, rig_sampler,
-                        rig_scheduler, positive, negative, _out,
-                        denoise=_dn)[0]
-                result_latent_out = _out
                 _v = vae if vae is not None else rig_vae
+                # THE CAMERA PATH: one render per shot. Each shot re-assembles the
+                # prompt with ITS camera (words) and re-applies the camera LoRAs at
+                # ITS strengths on the pre-camera model, samples the same canvas
+                # with the same seed, and the images batch on the output.
+                _shot_list = [None]
+                if len(_shot_states) > 1 and _cam_state_row is not None:
+                    _shot_list = list(range(len(_shot_states)))
+                    print("[RedNode Workspace] camera path: %d shots, one render each"
+                          % len(_shot_states), flush=True)
+                _shot_images, _last_out = [], None
+                for _si in _shot_list:
+                    _pos_i, _model_i = positive, model
+                    if _si is not None:
+                        try:
+                            _pos_i, _model_i = self._shot_setup(
+                                _si, _shot_states[_si], _cam_state_row, cfg, run_seed,
+                                lora_clip if lora_clip is not None else clip, _model_pre_camera,
+                                _rig_is_krea2, studio_preset, style_strength, vae if vae is not None else rig_vae,
+                                workspace, lc, unique_id, positive, model)
+                        except Exception as _se:
+                            print("[RedNode Workspace] shot %d setup failed: %s; using the placed camera"
+                                  % (_si + 1, _se), flush=True)
+                    _out = _lat
+                    for _p in range(max(1, _npass)):
+                        if _npass > 1:
+                            print("[RedNode Workspace] i2i pass %d of %d, denoise "
+                                  "%.2f" % (_p + 1, _npass, _dn), flush=True)
+                        _out = _core.common_ksampler(
+                            _model_i, _seed + _p, rig_steps, rig_cfg, rig_sampler,
+                            rig_scheduler, _pos_i, negative, _out,
+                            denoise=_dn)[0]
+                    _last_out = _out
+                    if _v is not None:
+                        _img = _v.decode(_out["samples"])
+                        while _img.ndim > 4:
+                            _img = _img[0]
+                        _shot_images.append(_img)
+                result_latent_out = _last_out
                 if _v is None:
                     print("[RedNode Workspace] built-in sampler rendered, but no "
                           "VAE is wired or named on the rig, so there is no image "
                           "to decode.", flush=True)
-                else:
-                    rig_image = _v.decode(_out["samples"])
-                    while rig_image.ndim > 4:
-                        rig_image = rig_image[0]
+                elif _shot_images:
+                    if len(_shot_images) == 1:
+                        rig_image = _shot_images[0]
+                    else:
+                        _h = min(x.shape[1] for x in _shot_images)
+                        _w = min(x.shape[2] for x in _shot_images)
+                        rig_image = torch.cat([x[:, :_h, :_w, :] for x in _shot_images], dim=0)
             except Exception as exc:
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)

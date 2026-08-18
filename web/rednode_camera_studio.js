@@ -108,9 +108,13 @@ const CAM_LORA_HINT = {
 };
 // which files count as the default pick for each key (RedNode's own sliders,
 // then the community zoom): first match wins, the user can pick any file
+// Krea 2 files first: a plain /zoom/ once picked an SDXL zoom slider, which
+// loads nothing on Krea 2 and floods the console with "lora key not loaded"
 const CAM_LORA_GUESS = {
-  zoom: [/zoom/i], height: [/camera_height/i, /cam(era)?[_ -]?height/i],
-  orbit: [/camera_orbit/i, /orbit/i], back: [/camera_back/i, /back_view/i],
+  zoom: [/zoom_krea2/i, /zoom.*krea/i, /krea.*zoom/i, /zoom/i],
+  height: [/camera_height_krea2/i, /camera_height/i, /cam(era)?[_ -]?height/i],
+  orbit: [/camera_orbit_krea2/i, /camera_orbit/i, /orbit/i],
+  back: [/camera_back_krea2/i, /camera_back/i, /back_view/i],
 };
 function camLoraEntry(st, key) {
   if (!st.cam_loras || typeof st.cam_loras !== "object") st.cam_loras = {};
@@ -1535,7 +1539,7 @@ export function buildStudio(host, S) {
     const nn = document.createElement("div");
     nn.className = "note";
     nn.textContent = "The node emits every shot as a list: prompt, camera_json, latent, width and height each become "
-      + p.shots + " entries, and the nodes after it run once per shot in one Queue. In the workspace only the placed camera is used.";
+      + p.shots + " entries, and the nodes after it run once per shot in one Queue. In the workspace the built-in sampler renders one image per shot.";
     pathCard.appendChild(nn);
   }
 
