@@ -166,6 +166,41 @@ colour on separate outputs, with the raw reply on a fourth in case the split cam
 Ollama is the only engine verified so far. The vision model is released from VRAM as soon as the
 reply lands, so it does not sit on top of your checkpoint for the rest of the queue.
 
+## The camera stage
+
+RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
+size of the room, then move the camera. What comes out of it is not "wide shot": it is the physical
+camera language the model already answers to, a lens length, a height, a distance and an angle,
+worked out from where you actually put things. The tab has its own switch like the others, so the
+whole camera leaves the prompt in one click when you want the words to do the framing instead.
+
+Fifteen setups ship with it, and a set carries the whole stage at once: camera, subjects, room size,
+path and lights. Load one and adjust, rather than building a room from nothing every time. A camera
+path renders one image per shot, so an orbit from -60 to +60 is a single queue and one scene from
+six viewpoints.
+
+Lights sit on the same stage, each with a size and a distance, and both of those do work.
+Illuminance falls off with the square of the distance, and how hard a shadow reads is really the
+light's angular size from where the subject is standing, so a wide source close in and a small one
+across the room come out as different words. Those words describe light and never fixtures: name a
+lamp in a prompt and you get a lamp in the picture, so the wording stays on what the light is doing
+to the scene. Exposure runs in stops either side of a centred zero, darker one way and brighter the
+other, and colour runs in mireds either side of neutral daylight, warm one way and cool the other.
+
+RedNode Camera LoRAs turns that same geometry into slider strengths. Four camera sliders, zoom,
+height, orbit and back, each one off, auto or manual. On auto the slider follows the stage, so
+pushing the camera in moves zoom with it and there is no second number to keep in sync. The two
+lighting sliders work the same way off the exposure and colour dials. Every slot is empty until you
+pick a file, and the node is happy with none of them.
+
+Three of the sliders are mine, trained for Krea 2, and they are attached to the
+[v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0):
+`camera_height_krea2_rednode`, `camera_orbit_krea2_rednode` and `camera_back_krea2_rednode`. Free to
+use and share, just not to sell. The zoom slider and the colour temperature slider are Loraholic's,
+on Civitai: [zoom](https://civitai.com/models/2717832) and
+[colour temperature](https://civitai.com/models/2760910). The brightness slider is PornMaster Krea2
+Light Slider, also on Civitai. They all go in `models/loras`.
+
 ## The nodes
 
 Every node carries its own description and tooltips inside ComfyUI, so hover anything you
@@ -372,7 +407,8 @@ Apache-2.0, the per-layer rebalance mechanic and its RMS-renormalized variant.
 row-list UI that inspired RedNode LoRA Stack, implemented independently here.
 [skatardude10/ComfyUI-Optical-Realism](https://github.com/skatardude10/ComfyUI-Optical-Realism),
 which I read as a survey of which optical effects were worth having while building the grading
-chain. ethanfel and ostris for the Krea 2 vision-conditioning recipes. Krea.ai for Krea 2, under
+chain. Loraholic for the Krea 2 zoom and colour temperature sliders the Camera LoRAs card drives.
+ethanfel and ostris for the Krea 2 vision-conditioning recipes. Krea.ai for Krea 2, under
 the Krea Community License.
 
 Not affiliated with Krea.ai.
