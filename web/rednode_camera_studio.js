@@ -132,10 +132,12 @@ const LIGHT_LORA_RANGE = { brightness: [-10, 10], colour: [-4, 4] };
 const LIGHT_LORA_CLEAN = { brightness: [-5, 3], colour: [-2.5, 4] };
 const LIGHT_LORA_LABEL = { brightness: "Brightness", colour: "Colour temp" };
 const LIGHT_LORA_HINT = {
-  brightness: "Darkens the whole picture. Measured: -3 is a real clean darkening, "
-            + "-6 very dark, -10 destroys it; the PLUS side does not brighten, it "
-            + "blows highlights. So Auto only ever darkens, from the level your "
-            + "lights actually make.",
+  brightness: "Exposure, both ways, from the level your lights actually make. "
+            + "Measured: -3 is a clean darkening, -6 very dark, -10 destroys the "
+            + "frame. The plus side needs somewhere to go: on a dark scene it lifts "
+            + "cleanly (+3 more than doubled the exposure and recovered the crushed "
+            + "blacks), on an already-lit one it does little until +6 and then blows "
+            + "highlights.",
   colour: "Warm / cool tint, without changing exposure. Measured: + is warm and "
         + "gentle to +4, - is cool and turns violent past -2.5. Auto reads the key "
         + "light's Colour; a light with no colour set leaves this at 0.",
@@ -145,7 +147,7 @@ const LIGHT_LORA_GUESS = {
   brightness: [/light[_ -]?slider/i, /bright/i, /exposure/i],
   colour: [/color[_ -]?temp/i, /colour[_ -]?temp/i, /temperature/i, /white[_ -]?balance/i],
 };
-const LIGHT_AUTO_BY_STEP = { "-2": -3.5, "-1": -2, "0": 0, "1": 0, "2": 0 };
+const LIGHT_AUTO_BY_STEP = { "-2": -3.5, "-1": -2, "0": 0, "1": 2.5, "2": 5 };
 const COLOUR_NEUTRAL_K = 5200, COLOUR_WARM_PER_MIRED = 0.011,
       COLOUR_COOL_PER_MIRED = 0.027, COLOUR_MAX_WARM = 4, COLOUR_MAX_COOL = -2.5;
 
@@ -2085,8 +2087,10 @@ export function buildStudio(host, S) {
           rd.className = "note";
           const auto = autoLightStrength(st, key);
           rd.textContent = key === "brightness"
-            ? "Auto: " + auto.toFixed(2) + (auto ? "" : " - the rig is not dim, and this "
-              + "slider cannot brighten")
+            ? "Auto: " + auto.toFixed(2) + (auto ? (auto > 0
+                ? " - the rig is bright, so this lifts the exposure"
+                : " - the rig is dim, so this takes the picture down")
+              : " - an ordinary rig, so nothing is applied")
             : "Auto: " + auto.toFixed(2) + (auto ? "" : " - the key light states no colour");
           lightList.appendChild(rd);
         }

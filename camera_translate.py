@@ -914,10 +914,17 @@ LIGHT_LORA_RANGE = {"brightness": (-10.0, 10.0), "colour": (-4.0, 4.0)}
 # the part of each dial that is actually usable, for the panel to say so
 LIGHT_LORA_CLEAN = {"brightness": (-5.0, 3.0), "colour": (-2.5, 4.0)}
 
-# BRIGHTNESS: negative is dark, and the plus side is not a brightness control -
-# it blows highlights instead of lifting exposure (+6 clipped 11-37% of the
-# frame to white while the mean barely moved). So auto only ever darkens.
-LIGHT_AUTO_BY_STEP = {-2: -3.5, -1: -2.0, 0: 0.0, 1: 0.0, 2: 0.0}
+# BRIGHTNESS: negative darkens, positive brightens, and how well the plus side
+# works depends entirely on HEADROOM (measured twice, 2026-08-19 - the first
+# sweep only used well-exposed scenes and wrongly read the plus side as broken).
+#   on an already-lit scene: +1.5 and +3 do almost nothing, +6 lifts about 9%
+#   but blows 10-37% of the frame to white - it has nowhere to go;
+#   on a DARK scene, which is when anyone asks for it: 0.151 -> 0.219 at +1.5,
+#   0.343 at +3, 0.466 at +6, 0.495 at +10, with under 5% clipped and the
+#   crushed blacks recovered from 16.7% to 0.7%. A real, monotonic lift.
+# So auto works both ways, gently on the plus side because that is where the
+# clipping lives when a scene is already bright.
+LIGHT_AUTO_BY_STEP = {-2: -3.5, -1: -2.0, 0: 0.0, 1: 2.5, 2: 5.0}
 
 # COLOUR: positive is warm. Linear in MIREDS from a neutral, with a different
 # factor each way because the LoRA is not symmetric: the warm side is gentle
@@ -930,8 +937,8 @@ COLOUR_MAX_COOL = -2.5
 
 
 def auto_light_strength(camera, subjects, lights):
-    """Brightness-slider strength from the rig's own level. 0 when the scene
-    is ordinary or bright: this file cannot brighten."""
+    """Brightness-slider strength from the rig's own level: minus when the rig
+    is dim, plus when it is bright, 0 for an ordinary one."""
     return LIGHT_AUTO_BY_STEP.get(rig_level(camera, subjects, lights), 0.0)
 
 
