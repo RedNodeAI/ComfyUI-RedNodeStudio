@@ -808,7 +808,7 @@ LAST_ROLLS = {}
 
 # Depth of field and haze need to know what is near and what is far, and working
 # that out takes a neural net rather than maths on the pixels. Rather than make
-# the user wire a second node for it, drive whichever depth estimator they have
+# you wire a second node for it, drive whichever depth estimator you have
 # installed, exactly as the auto prompt drives WD14 and JoyCaption.
 DEPTH_NODES = ("DepthAnythingV2Preprocessor", "DepthAnythingPreprocessor",
                "MiDaS-DepthMapPreprocessor", "Zoe-DepthMapPreprocessor")

@@ -113,7 +113,7 @@ STYLES = {
         "falloff, tack-sharp detail through the plane of focus, neutral colour, smooth "
         "highlight rolloff, every texture legible without looking sharpened."),
 
-    # The user's own find (2026-08-18), from Krea's "Moody Nocturnal Elegance"
+    # Your own find (2026-08-18), from Krea's "Moody Nocturnal Elegance"
     # moodboard blurb: aesthetic + MATERIAL words push tones darker where
     # exposure words fail. "Velvety" is the load-bearing one - it makes the dark
     # a surface the model can render, not a level it has to obey. Repetition

@@ -82,7 +82,7 @@ app.registerExtension({
     // rewritten first, which meant typing a console command before every run, and a
     // node you have to run a command to use is not a feature.
     //
-    // Nothing here touches the user's graph, so nothing is left behind in the saved
+    // Nothing here touches your graph, so nothing is left behind in the saved
     // workflow and there is nothing to undo if it goes wrong.
     const orig = app.graphToPrompt;
     app.graphToPrompt = async function (...args) {

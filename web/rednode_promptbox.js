@@ -119,7 +119,7 @@ function highlight(text) {
 /**
  * The Prompt Box editing surface as a reusable piece: the transparent textarea over a
  * highlight backdrop, wildcards and @keywords coloured live, re-coloured when the
- * keyword library changes. Built for the Workspace's Prompts tab, which the user asked
+ * keyword library changes. Built for the Workspace's Prompts tab, which you asked
  * to LOOK like this box because "we designed that for a reason". Returns
  * { wrap, area, destroy }; the caller owns the value and the layout around it.
  */

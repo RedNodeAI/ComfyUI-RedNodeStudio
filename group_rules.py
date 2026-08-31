@@ -101,7 +101,7 @@ def parse_config(config_json):
         data = {}
     return {
         "rules": clean_rules(data.get("rules")),
-        # what the user set by hand, which is the starting position the rules move from
+        # what you set by hand, which is the starting position the rules move from
         "manual": {str(k): bool(v) for k, v in (data.get("manual") or {}).items()
                    if isinstance(data.get("manual"), dict)},
         "enabled": bool(data.get("enabled", True)),

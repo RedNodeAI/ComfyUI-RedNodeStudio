@@ -446,7 +446,7 @@ class Krea2RedNode:
         # SAY WHEN AN EXPERIMENTAL TOGGLE IS ON. These rewrite the reference path
         # itself, so a picture made with one on cannot be compared with anything
         # else - and until 2026-08-18 they were completely silent. ref_t0
-        # modulation cost the user an evening of hunting a "doubling / ghosting"
+        # modulation cost you an evening of hunting a "doubling / ghosting"
         # artifact through the LoRAs, the paint pass and the whole pack's git
         # history: it modulates the clean reference tokens at timestep 0 while
         # the frame runs at the live timestep, which the identity edit LoRA was

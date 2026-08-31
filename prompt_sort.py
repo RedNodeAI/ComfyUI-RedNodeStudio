@@ -1,6 +1,6 @@
 """Auto-sort: a prompt reorganised into the Prompt Frame's boxes, by Ollama.
 
-The user's ask (2026-08-17): the auto prompt already leans on the local Ollama
+Your ask (2026-08-17): the auto prompt already leans on the local Ollama
 server; the same engine can read what is written across Style, Subject,
 Surroundings and Light & colour, and put every phrase into the box it belongs
 in - one button that tidies a prompt somebody typed as a lump.

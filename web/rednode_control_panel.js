@@ -1218,7 +1218,7 @@ function render(node) {
   if (inSelMode(node) && wrap) wrap.insertBefore(buildSelBar(node), wrap.firstChild);
 
   if (node._rnWidget?.options) node._rnWidget.options.getMinHeight = () => MIN_PANEL_H;
-  // Size once on creation, then never fight the user: the list scrolls.
+  // Size once on creation, then never fight you: the list scrolls.
   if (!node._rnSized) {
     node._rnSized = true;
     node.setSize([Math.max(node.size[0], NODE_MIN_W),

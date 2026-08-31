@@ -290,7 +290,7 @@ class RedNodePaintOut:
             budget = int(region_size or 0)
             budget = int(pc.get("mask_size", 1024)) if budget <= 0 else max(512, budget)
             # the tab's "Never shrink" toggle, exactly as the internal renderer reads
-            # it: without the floor this path quietly shrank regions the user had
+            # it: without the floor this path quietly shrank regions you had
             # asked to keep, so the setting did nothing for external renderer chains
             floor = bool(pc.get("region_floor"))
             budget = min(budget, whole_frame_limit(tier))
@@ -368,12 +368,12 @@ class RedNodePaintOut:
                       "empty and nothing is wired into main_prompt", flush=True)
         auto_words = _active_auto_prompt(pc)
         if auto_words:
-            # The automatic layer sits before the user's Paint text or its wired-main
+            # The automatic layer sits before your Paint text or its wired-main
             # fallback. Replacing the box here would break the exact fallback this
             # bridge exists to preserve.
             words = ", ".join(x for x in (auto_words, words) if x)
         # Absent from an older config, in which case the renderer's own dials are the
-        # ones the user set and these carry that node's defaults rather than fighting it
+        # ones you set and these carry that node's defaults rather than fighting it
         cfg_scale = float(pc.get("cfg", 1.0))
         steps = int(pc.get("steps", 8))
         # The tab has had a Paint negative box since the beginning and this node never

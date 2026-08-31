@@ -1,6 +1,6 @@
 """Re-angle: the Img2Img tab's viewpoint stage.
 
-The user's ask (2026-08-17): "image to image, but from a different angle".
+Your ask (2026-08-17): "image to image, but from a different angle".
 Before the workspace's own i2i pass, the source picture is re-shot from the
 camera the tab asks for - Qwen-Image-Edit-2511 with fal's Multiple-Angles LoRA
 (and the Lightning 4-step LoRA), the same graph the standalone example

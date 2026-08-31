@@ -15,7 +15,7 @@
  *
  * By LABEL, not by node id. The reader lists the labels and its sockets have to line up
  * with that list. Node ids depend on the order things happened to be dropped on the
- * canvas, which the user cannot see and would never expect to matter.
+ * canvas, which you cannot see and would never expect to matter.
  */
 export function sortMembers(members) {
   members.sort((a, b) => String(a.label).localeCompare(String(b.label))
@@ -50,7 +50,7 @@ export function deriveLabel(src) {
  * Whether an auto-name should replace what a row currently holds. PURE.
  *
  * The rule: a name the panel wrote is the panel's to keep current, so rewiring the
- * socket renames the row; a name the user typed is theirs forever. Telling those apart
+ * socket renames the row; a name you typed is theirs forever. Telling those apart
  * needs the row to remember what the panel last wrote (previousAuto), because by the
  * time of the next look the two are just strings.
  *
@@ -70,7 +70,7 @@ export function nextAutoName(current, previousAuto, derived) {
  * Everything on one channel, in the order it was collected.
  *
  * Collection order is SEND order: each Send's rows in the order they sit on it, Sends
- * in the order they are walked. That is the order the user actually built, so it is
+ * in the order they are walked. That is the order you actually built, so it is
  * the default. Alphabetical is still one click away in the node's menu, and whichever
  * arrangement is chosen gets written into the stored order, which both the panel and
  * the queue-time splice follow.
@@ -186,7 +186,7 @@ export function autoGroups(rows, fromOf) {
 /**
  * The row name a publisher takes on its channel.
  *
- * The node TITLE, because that is the name the user already chose and already reads on
+ * The node TITLE, because that is the name you already chose and already reads on
  * the canvas: titling the node is how you name the value, with nothing extra to fill
  * in. An untitled node falls back to its kind, with the pack prefix dropped since every
  * row in the list would otherwise start with the same word.

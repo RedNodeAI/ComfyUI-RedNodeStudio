@@ -24,7 +24,7 @@ const COLORS = [
   { n: "purple", v: "#492a6b" }, { n: "pink", v: "#6b2450" }, { n: "grey", v: "#3a3f47" },
 ];
 
-// shipped layouts. The face identity chain is the user's own proven recipe
+// shipped layouts. The face identity chain is your own proven recipe
 // (2026-08-14, verified against a real reference; DOC_NOTES.md tells the story):
 // grow the frame, redraw the face with the Subject refs, then one gentle
 // whole-frame pass. Rigs stay unset because rig names are per-workspace: the
@@ -230,7 +230,7 @@ function loraSetNames() {
   return names;
 }
 
-// the user's own saved layouts, server-side like sampler profiles
+// your own saved layouts, server-side like sampler profiles
 let SAVED = null;
 async function fetchPresets() {
   try {
@@ -419,7 +419,7 @@ function buildPanel(node) {
       c.textContent = t;
       wrap.appendChild(c);
     };
-    // THE PRESET ROW: premade layouts (starred) and the user's saved ones.
+    // THE PRESET ROW: premade layouts (starred) and your saved ones.
     // Picking replaces the whole list; Save stores the list under a name,
     // server-side like sampler profiles, so it survives browsers.
     {
@@ -764,7 +764,7 @@ function buildPanel(node) {
               (v) => { s.scale = Math.max(0.25, Math.min(4, v)); writeCfg(node, d); }),
           lab("Denoise"),
           (() => {
-            // a drag bar, the user's call: denoise is the dial you ride while
+            // a drag bar: denoise is the dial you ride while
             // tuning a pass, and a slider reads at a glance where a box does not
             const box = document.createElement("span");
             box.style.cssText = "display:inline-flex;align-items:center;gap:4px;"

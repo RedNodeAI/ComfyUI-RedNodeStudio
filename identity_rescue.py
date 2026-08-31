@@ -13,7 +13,7 @@ full second model in memory); the difference is applied as a load-time patch,
 the same mechanism a difference LoRA uses. The mix keeps its look everywhere
 else, and the LoRA lands on weights it recognises.
 
-NOT A NODE, by the user's call: this is plumbing for the Studio Workspace's
+NOT A NODE, by : this is plumbing for the Studio Workspace's
 Models tab, where a rig carries a Rescue toggle instead of the graph carrying
 another node. `rescue_model` is the whole public surface. At strength 1.0 the
 touched layers ARE the base's; lower keeps more of the mix in them and trades
@@ -32,7 +32,7 @@ _LORA_SUFFIXES = (".lora_a.weight", ".lora_b.weight", ".lora_down.weight",
 
 # THE RAM CAP. An identity LoRA can touch essentially every core layer of a
 # 12B model, and holding fp16 diffs for all of them is 20+ GB on top of a
-# running ComfyUI - which took the user's whole machine down on 2026-08-14.
+# running ComfyUI - which took your whole machine down on 2026-08-14.
 # The rescue now prices the diffs from the file header BEFORE reading a single
 # tensor, and past this budget it refuses and points at the offline bake
 # (Comfy Development/tools/bake_rescue.py), which streams to disk instead.
@@ -172,7 +172,7 @@ def rescue_model(model, base_checkpoint, lora_name, strength,
 
             # PRICE FIRST, READ SECOND. Resolve every key and total what the
             # fp16 diffs would weigh, from header shapes alone. Refusing here
-            # costs nothing; agreeing blindly cost the user their machine.
+            # costs nothing; agreeing blindly cost them their machine.
             resolved = {}
             est_mb = 0.0
             for key in sorted(model_keys):

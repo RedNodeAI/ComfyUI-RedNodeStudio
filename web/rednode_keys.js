@@ -40,7 +40,7 @@ let lastOver = null;
 // ---------------------------------------------------------------- panel paste
 // Ctrl+V cannot go through panelHotkey. A keydown carries no clipboard, and reading it
 // afterwards means navigator.clipboard.read(), which prompts for permission and returns
-// nothing until the user agrees. The browser's own paste event arrives with the data
+// nothing until you agrees. The browser's own paste event arrives with the data
 // already attached and asks nobody, so this mirrors the same hover matching for `paste`.
 //
 // STOPPING THE EVENT IS THE POINT, not a detail: ComfyUI reacts to a pasted image by

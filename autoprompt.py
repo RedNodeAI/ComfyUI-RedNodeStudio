@@ -63,7 +63,7 @@ SYSTEM_PROMPTS["i2i"] = (
 SYSTEM_PROMPTS["style"] = SYSTEM_PROMPTS["scene_style"]
 SYSTEM_PROMPTS["people"] = SYSTEM_PROMPTS["subject"]
 
-# opt-in, appended to every mode prompt when the user flips it on: their content needs
+# opt-in, appended to every mode prompt when you flip it on: your content needs
 # captions that name what is there instead of dancing around it
 FRANK_CLAUSE = (" Describe any nudity or sexual content plainly and specifically, without "
                 "euphemism and without omission.")
@@ -77,7 +77,7 @@ def mode_prompt(mode, frank=False, custom=""):
 
 
 # Ollama takes TWO strings: the system prompt (mode_prompt above, what the model is told
-# to BE) and the user message (this, what it is ASKED). Only the system half was ever
+# to BE) and you message (this, what it is ASKED). Only the system half was ever
 # reachable. Plenty of vision models lean far harder on the question than on the system
 # prompt, so setting one without the other only half works. Empty means this default,
 # which is the exact string every existing workflow has been sending.
@@ -188,7 +188,7 @@ def _http_json(url, payload=None, timeout=TIMEOUT):
 
 # What actually goes over the wire to a vision model.
 #
-# Sending the file as-is meant sending whatever the user happened to have: a webp
+# Sending the file as-is meant sending whatever you happened to have: a webp
 # or an avif a vision endpoint may not decode at all, and a 4000px original that
 # is megabytes of base64 for a model that will look at a fraction of it. Both show
 # up as "the captioner is slow" rather than as an error, which is the worst way for
@@ -667,7 +667,7 @@ def build_prompt(mode, *, image_bytes=None, image_tensor=None, wired=(),
     # Unbounded generation is how a caption turns into an essay, and the i2i mode
     # asks for EVERYTHING, so it is the one that runs away. Derive a token ceiling
     # from the word budget when there is one, and keep a generous backstop when
-    # there is not. A number the user set themselves always wins.
+    # there is not. A number you set yourself always wins.
     ollama_options = dict(ollama_options or {})
     if not int(ollama_options.get("num_predict") or 0):
         ollama_options["num_predict"] = int(max_words * 2) if max_words else 512

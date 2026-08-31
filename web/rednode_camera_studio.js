@@ -261,7 +261,7 @@ const CAM_LORA_HINT = {
   back: "Seen from behind. Auto rises once the camera passes their shoulder line; 0 in front.",
 };
 // which files count as the default pick for each key (RedNode's own sliders,
-// then the community zoom): first match wins, the user can pick any file
+// then the community zoom): first match wins, you can pick any file
 // Krea 2 files first: a plain /zoom/ once picked an SDXL zoom slider, which
 // loads nothing on Krea 2 and floods the console with "lora key not loaded"
 const CAM_LORA_GUESS = {
@@ -534,7 +534,7 @@ export function buildStudio(host, S) {
   let lightSel = -1;                 // selected light index, -1 = none
   let dragging = null;               // {kind: "cam"|"subj"|"face", i}
   let dragOff = [0, 0];              // grab offset (world m): drag from where you clicked, not the centre
-  // STAGE SCALE (the user's ask: bigger rooms, outdoors): normal 12 x 9 m,
+  // STAGE SCALE: normal 12 x 9 m,
   // wide 24 x 19 m, huge 48 x 38 m. Same canvas, more metres per pixel.
   const pxm = () => (st.stage_zoom === "huge" ? 11 : st.stage_zoom === "wide" ? 22 : 44);
   const write = () => { S.set(st); S.onChange?.(); };
@@ -542,7 +542,7 @@ export function buildStudio(host, S) {
   const cols = document.createElement("div");
   cols.className = "cols";
   host.appendChild(cols);
-  // THE LAYOUT (the user's sketch, 2026-08-18): stage top-left with AUTO
+  // THE LAYOUT (your sketch, 2026-08-18): stage top-left with AUTO
   // LATENT and CAMERA PATH side by side under it; SETS and CAMERA on the
   // right; SUBJECTS full width below, the boxes flowing left to right and
   // wrapping; the CAMERA PROMPT full width at the bottom.
@@ -601,7 +601,7 @@ export function buildStudio(host, S) {
   right.style.cssText = "display:flex;flex-direction:column;gap:10px;min-width:0";
   cols.appendChild(right);
 
-  // SETS (the user's ask): named scene + camera states. Built-in sets ship
+  // SETS: named scene + camera states. Built-in sets ship
   // with the pack (rooms built from objects, two-person scenes); yours are
   // saved server-side like the LoRA presets. Loading replaces subjects,
   // camera, path and stage scale and keeps your LoRA picks and output style.
@@ -810,7 +810,7 @@ export function buildStudio(host, S) {
   };
   fullBtn.onclick = () => (focusOv ? closeFocus() : openFocus());
 
-  // AUTO LATENT, the user's ask: the frame's aspect is part of the camera
+  // AUTO LATENT: the frame's aspect is part of the camera
   // language, so an empty latent shaped by the angle, lens and scene spread
   // comes out of the node; wire it into the sampler and the frame follows
   const latCard = document.createElement("div");
@@ -827,7 +827,7 @@ export function buildStudio(host, S) {
   colL.appendChild(under);
   under.appendChild(latCard);
 
-  // CAMERA PATH (batch angles, the user's ask): A -> B in N shots, or an
+  // CAMERA PATH (batch angles,): A -> B in N shots, or an
   // orbit round the subject. The node then emits N prompts / latents /
   // camera_json as lists, so one Queue renders the whole path. The dots on
   // the stage show where each shot's camera stands.
@@ -864,7 +864,7 @@ export function buildStudio(host, S) {
   joinB.title = "Where the camera paragraph goes when prompt_in is wired: leading "
     + "the prompt (the research's finding) or trailing it.";
   joinB.onclick = () => { st.join = st.join === "lead" ? "trail" : "lead"; write(); render(); };
-  // OUTPUT STYLE (the user's ask: the studio for other models too). krea2 is
+  // OUTPUT STYLE. krea2 is
   // the tuned paragraph; short and tags are the same geometry in plain words
   // or booru tags, for XL-class encoders. Untuned there as of 2026-08-17.
   const styleSel = document.createElement("select");
@@ -1200,7 +1200,7 @@ export function buildStudio(host, S) {
     if (h.kind === "light") { lightSel = h.i; renderLights(); }
     if (h.locked) { draw(); return; }        // select, never move: it is locked
     dragging = h;
-    // THE PIVOT IS WHERE YOU CLICKED (the user's ask): remember the offset
+    // THE PIVOT IS WHERE YOU CLICKED: remember the offset
     // between the pointer and the thing's centre, so a big object does not
     // jump to put its centre under the cursor and small nudges are possible
     {
@@ -1224,7 +1224,7 @@ export function buildStudio(host, S) {
     e.preventDefault(); e.stopPropagation();
     const [wx, wz] = pxToWorld(px, py);
     // snap to 5 cm and CLAMP inside the stage: a thing dragged off the edge
-    // was gone for good (the user's report), so the edge is a wall now
+    // was gone for good, so the edge is a wall now
     const maxX = STAGE_W / 2 / pxm() - 0.4, maxZ = STAGE_H / 2 / pxm() - 0.4;
     const snap = (v) => Math.round(v * 20) / 20;
     const cx_ = (v) => Math.max(-maxX, Math.min(maxX, snap(v)));
@@ -1282,7 +1282,7 @@ export function buildStudio(host, S) {
       m.appendChild(b);
     };
     const prime = st.subjects[st.camera.target] || st.subjects[0];
-    // CAMERA PATH from the right-click (the user's ask: the buttons were
+    // CAMERA PATH from the right-click (the buttons were
     // confusing). A is always the camera; B is the second camera icon.
     {
       const [mx, my] = evPos(e);
@@ -1342,7 +1342,7 @@ export function buildStudio(host, S) {
   });
   const maxXv = () => STAGE_W / 2 / pxm() - 0.4;
   const maxZv = () => STAGE_H / 2 / pxm() - 0.4;
-  // THE WHEEL (the user's ask): over a subject or object it turns it (5 deg a
+  // THE WHEEL: over a subject or object it turns it (5 deg a
   // notch); with Shift it changes its height, with Ctrl its width (objects
   // and walls). Held modifiers act on the SELECTED thing wherever the pointer
   // is on the stage. Locked things do not move. Elsewhere the wheel is the lens.
@@ -1384,7 +1384,7 @@ export function buildStudio(host, S) {
       (v) => { cam.focal_mm = v; }, (v) => Math.round(v) + "mm · " + Math.round(fovDeg(v)) + "°"));
     camCard.appendChild(slider("Roll", -45, 45, 1, () => cam.roll_deg,
       (v) => { cam.roll_deg = v; }, (v) => Math.round(v) + "°"));
-    // APERTURE / BOKEH (the user's ask): f-number chips; the depth of field is
+    // APERTURE / BOKEH: f-number chips; the depth of field is
     // computed from lens, f-number and distance, and the paragraph says who is
     // sharp and who dissolves. Longer lens + wider aperture + closer subject =
     // more bokeh; a wide lens keeps most things sharp. Off = no words.
@@ -1427,7 +1427,7 @@ export function buildStudio(host, S) {
         camCard.appendChild(an);
       }
     }
-    // LOCK ON SUBJECT, the user's ask: on, the lens aims at the target and the
+    // LOCK ON SUBJECT: on, the lens aims at the target and the
     // subject sits centre frame; off, the lens aims at a free point on the
     // stage (the amber crosshair, drag it) so the subject can sit off-centre
     const lrow = document.createElement("div");
@@ -1536,7 +1536,7 @@ export function buildStudio(host, S) {
       chips.appendChild(c);
     }
     camCard.appendChild(chips);
-    // CAMERA LORAS, the user's ask: four slider LoRAs are camera controls in
+    // CAMERA LORAS: four slider LoRAs are camera controls in
     // all but name (zoom, and RedNode's own height / orbit / back, trained from
     // text pairs on 2026-08-17), so they live here. Each row: which file, then
     // Off / Auto / Manual. Auto ties the strength to the geometry - the same
@@ -1602,7 +1602,7 @@ export function buildStudio(host, S) {
         }
         if (!e.name && guess) {
           // remember the guess so Auto has a file the moment it is clicked;
-          // mode stays off until the user asks
+          // mode stays off until you ask
           e.name = guess;
           sel.value = guess;
         }
@@ -1692,7 +1692,7 @@ export function buildStudio(host, S) {
       };
       head.append(tag, kindB, nm, lockB, del);
       box.appendChild(head);
-      // LOCKED MEANS LOCKED (the user's ask): the geometry controls in the
+      // LOCKED MEANS LOCKED: the geometry controls in the
       // list are disabled as well as the stage drag; the name, the lock and
       // the delete stay live. A wrapper collects the rows so one pass can
       // disable them.
@@ -1713,7 +1713,7 @@ export function buildStudio(host, S) {
       }
       addGeom(slider("Facing", 0, 359, 1, () => s.facing_deg,
         (v) => { s.facing_deg = v; }, (v) => Math.round(v) + "°"));
-      // FACING helpers (the user's ask): what "facing" means per kind, and two
+      // FACING helpers: what "facing" means per kind, and two
       // one-click turns - toward the camera, toward another entry
       const frow = document.createElement("div");
       frow.className = "row";
@@ -1805,7 +1805,7 @@ export function buildStudio(host, S) {
     });
     const addRow = document.createElement("div");
     addRow.className = "row";
-    // NEW THINGS LAND IN THE MIDDLE (the user's ask): the stage centre, nudged
+    // NEW THINGS LAND IN THE MIDDLE: the stage centre, nudged
     // to the right in 0.7 m steps until the spot is free, never off the stage
     const freeSpot = () => {
       const taken = (x, z) => st.subjects.some((o) => Math.hypot(o.pos[0] - x, o.pos[2] - z) < 0.5);
@@ -1979,7 +1979,7 @@ export function buildStudio(host, S) {
         write(); render();
       };
       head.append(eye, nm, kind, del);
-      // SELECTING A ROW MUST NOT EAT ITS OWN BUTTONS (the user: "the X is
+      // SELECTING A ROW MUST NOT EAT ITS OWN BUTTONS (you: "the X is
       // broken, I cannot remove the lights"). This handler runs on POINTERDOWN
       // and re-renders the list, which removes the very element the pending
       // CLICK was going to land on - so the mute dot and the X did nothing.
@@ -2007,7 +2007,7 @@ export function buildStudio(host, S) {
         }));
       card.appendChild(slider("Height", 0, 6, 0.05, () => l.pos[1],
         (v) => { l.pos[1] = v; }, (v) => v.toFixed(2) + " m"));
-      // EXPOSURE, IN STOPS, CENTRED ON 0 (the user, 2026-08-19: "start at 0 in
+      // EXPOSURE, IN STOPS, CENTRED ON 0 ( "start at 0 in
       // the middle, light and dark each side"). Power was a raw 0..10
       // multiplier, so the whole dark half lived in the first 0.4 of the
       // slider and everything else read bright - unusable as a dial. A stop is

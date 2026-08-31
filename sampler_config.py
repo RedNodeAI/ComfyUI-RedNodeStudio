@@ -67,7 +67,7 @@ def is_turbo_name(filename):
 
 
 # ---- named profiles: user-authored dial sets, one JSON in the ComfyUI user dir -----
-# The turbo/full pair covers two kinds of model; the user runs four or five. A profile
+# The turbo/full pair covers two kinds of model; you run four or five. A profile
 # is a NAMED version of the same dial set, Z-Turbo, XL, NAI, FLUX, whatever, authored
 # from the node's right-click menu and picked from the appended profile widget. "auto"
 # keeps the detection behaviour exactly, so a workflow that never touches profiles
@@ -170,7 +170,7 @@ class RedNodeSamplerConfig:
     def IS_CHANGED(cls, prompt=None, unique_id=None, profile="auto", **kwargs):
         # Two things change this node's answer without any widget changing: the
         # UPSTREAM loader's filename, and the CONTENTS of the picked profile, which
-        # live in a file the user edits from the menu. Hash both, or a checkpoint
+        # live in a file you edits from the menu. Hash both, or a checkpoint
         # swap or a profile edit would serve stale settings.
         chosen = load_profiles().get(str(profile or "")) if profile != "auto" else None
         return f"{find_model_file(prompt, unique_id)}|{json.dumps(chosen, sort_keys=True)}"

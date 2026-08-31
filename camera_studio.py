@@ -12,7 +12,7 @@ that state and hands out:
   image         the optional image input, passed through untouched, so the
                 node can sit in a review chain and annotate what it sees
 
-Standalone first, by the user's call; the panel is host-agnostic so the
+Standalone first; the panel is host-agnostic so the
 Workspace can mount it later.
 """
 import json
@@ -92,7 +92,7 @@ def parse_state(config_json):
             # objects have a footprint; people are points
             "size": [num((s.get("size") or [0.6, 0.6])[0], 0.6, 0.05, 20),
                      num((s.get("size") or [0.6, 0.6])[-1], 0.6, 0.05, 20)],
-            # LOCKED (the user's ask): a placed thing the stage will not drag
+            # LOCKED: a placed thing the stage will not drag
             # (walls, doors, furniture of a room set). Only the panel honours it.
             "locked": bool(s.get("locked", False)),
         })
@@ -132,11 +132,11 @@ def parse_state(config_json):
     return {"camera": camera, "subjects": subjects, "lights": lights,
             "output": (d.get("output") if d.get("output") in _ct.OUTPUT_MODES else "krea2"),
             "join": str(d.get("join") or "lead"),
-            # AUTO LATENT, the user's ask: an empty latent shaped by the camera's
+            # AUTO LATENT: an empty latent shaped by the camera's
             # angle, lens and the scene's spread, at a pixel budget. Off by
             # default (the house rule); on, wire the latent output into the
             # sampler instead of an Empty Latent and the frame follows the shot.
-            # the zoom LoRA (the user's zoom_krea2_loraholic): controlled from
+            # the zoom LoRA (your zoom_krea2_loraholic): controlled from
             # the camera, not the LoRA tab. mode: off | auto (from shot size) | manual
             "zoom_lora": str(d.get("zoom_lora") or ""),
             "zoom_mode": (d.get("zoom_mode") if d.get("zoom_mode") in ("off", "auto", "manual")
@@ -257,7 +257,7 @@ def resolve_camera_loras(st):
     """[{key, name, strength}] for every camera LoRA this state switches on.
 
     Auto strengths come from the geometry (the same numbers the words use);
-    manual ones are the user's. Off, or no file picked, means absent. A slot
+    manual ones are your. Off, or no file picked, means absent. A slot
     at strength 0 is dropped too: nothing to apply."""
     out = []
     for key in _ct.CAMERA_LORA_KEYS:
@@ -367,11 +367,11 @@ class RedNodeCameraStudio:
 
 
 # ---------------------------------------------------------------- sets
-# SETS (the user's ask, "save / load presets for the studio"): a named scene +
+# SETS ("save / load presets for the studio"): a named scene +
 # camera state. Built-in sets ship in the pack's camera_sets/ folder (rooms
-# built from objects, two-person scenes); the user's own live in the ComfyUI
+# built from objects, two-person scenes); your own live in the ComfyUI
 # user dir like the LoRA presets. Loading a set replaces subjects, camera,
-# path, stage zoom AND LIGHTS (2026-08-19, the user's ask): a room with a
+# path, stage zoom AND LIGHTS: a room with a
 # window and no light on it is half a set, and the lighting is the part people
 # least want to place twice. The panel keeps the LoRA picks and output
 # settings, because a file name is a machine's business, not a scene's.

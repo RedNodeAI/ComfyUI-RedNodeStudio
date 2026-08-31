@@ -121,7 +121,7 @@ class RedNodePromptCombine:
         # The panel's own record, when there is one. It carries the row order, which
         # rows are off, and any text typed into the panel rather than the legacy
         # boxes, none of which the plain order field can express. It wins over `order`
-        # because it is what the user was looking at when they arranged it.
+        # because it is what was on screen when the order was chosen.
         from .text_combine import parse_config as _pc, join_parts as _jp
         panel = _pc(config)
         if panel["parts"]:

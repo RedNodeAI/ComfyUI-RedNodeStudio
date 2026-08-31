@@ -2,7 +2,7 @@
 
 Registers the "novelai" rig kind: a Models-tab rig that renders through the
 NovelAI API directly. The request construction is a one-for-one port of
-ComfyUI_NAIDGenerator's GenerateNAID (the user's call: don't reinvent, copy
+ComfyUI_NAIDGenerator's GenerateNAID (don't reinvent, copy
 what already works), including the v4 prompt structures, the Opus free-tier
 limiter, variety, decrisper, SMEA, noise schedules, cfg rescale, uncond
 scale, vibe transfer, character prompts, and the i2i strength/noise pair.
@@ -131,7 +131,7 @@ def _vibe_png(data_b64, w, h):
     """The vibe re-encoded the way NAID sends it: canvas-sized PNG pixels.
 
     The raw upload can be a 4K photo; base64 of the whole file times the
-    request out (the user hit exactly this). NAID resizes every vibe to the
+    request out (you hit exactly this). NAID resizes every vibe to the
     canvas before encoding, keeping the payload small. Bytes in, bytes out.
     """
     from PIL import Image
@@ -167,7 +167,7 @@ def _vibe_encoding(data_b64, model):
 
 
 # ------------------------------------------------------------- vibe encoding
-# THE ONE CALL IN THIS FILE THAT COSTS MONEY (the user's ask, 2026-08-18: "we
+# THE ONE CALL IN THIS FILE THAT COSTS MONEY ( "we
 # need to make sure we can spend the points to render the vibe, so when we load
 # the image we should have a button to render the vibe file for the 2 points").
 #

@@ -770,7 +770,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
 
 # The Krea 2 nodes, registered only when this ComfyUI can run them. Listing a node that
 # cannot work is worse than not listing it: it loads into a workflow, then fails at
-# queue time with an error about a text encoder the user has never heard of.
+# queue time with an error about a text encoder nobody has heard of.
 KREA2_ONLY_NODES = (
     "Krea2RedNode", "Krea2RedNodeSettings", "Krea2RedNodePresetSave",
     "Krea2RedNodePresetLoad", "Krea2Moodboard", "Krea2MoodboardEncode",
@@ -821,7 +821,7 @@ else:
 # ---- personal-only extensions ---------------------------------------------
 # The NovelAI rig: a Models-tab rig kind that renders through NovelAI's API
 # instead of a checkpoint. Public since 2026-08-19 (it was a local-only module
-# before). It needs the user's own NovelAI subscription and token; the pack
+# before). It needs your own NovelAI subscription and token; the pack
 # ships no credential and stores none in a workflow.
 try:
     from . import nai_rig as _nai_rig                          # noqa: F401

@@ -1527,7 +1527,7 @@ export function render(node) {
   // the bar's home is the LIST'S OWN CONTAINER: on the LoRA Stack node that is
   // the widget element, on the Workspace it is the LoRAs tab's host. Mounted
   // on node._rnWidget it landed at the top of the WHOLE workspace panel, above
-  // the tab strip, and select mode looked like it had no actions - the user's
+  // the tab strip, and select mode looked like it had no actions - your
   // report (2026-08-18), a repeat of the off-screen-below-the-footer bug.
   const wrap = node._rnListEl?.parentElement || node._rnWidget?.element;
   wrap?.querySelector(".rn-ls-selbar")?.remove();

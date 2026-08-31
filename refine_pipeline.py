@@ -2,7 +2,7 @@
 
 Start, then the passes in order, then End. Each pass names a RIG from the Models tab,
 so a face can be detailed by a different model from the one that rendered the frame.
-Two pass kinds, both taken from the shapes the user already runs as subgraphs:
+Two pass kinds, both taken from the shapes you already runs as subgraphs:
 
   sampler   whole-frame refine at a denoise, an img2img over the incoming picture
   detailer  SAM3 segments a target (face, hair, hands...), a low-denoise pass over
@@ -754,9 +754,9 @@ class RedNodeStudioDetailer:
         return out, lines
 
 
-# ---- named pass-list presets: the user's layouts, one JSON in the user dir ------
+# ---- named pass-list presets: your layouts, one JSON in you dir ------
 # The panel ships premade layouts client-side (the proven face-identity chain among
-# them); this store holds the user's OWN saved lists, server-side so they survive
+# them); this store holds your OWN saved lists, server-side so they survive
 # browsers and reinstalls the way sampler profiles do.
 
 _PASS_LORA_CACHE = {}       # name -> loaded state dict, the last two files
@@ -847,7 +847,7 @@ except Exception as _e:
     print(f"[RedNode Detailer] preset routes not registered: {_e}", flush=True)
 
 
-# The class carried "Advanced" for a few hours before the user named it properly.
+# The class carried "Advanced" for a few hours before you named it properly.
 # The alias keeps any node placed in that window loading; the display name is one.
 RedNodeStudioAdvanced = RedNodeStudioDetailer
 

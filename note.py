@@ -16,7 +16,7 @@ All the drawing is in web/rednode_note.js.
 """
 
 # Families actually present on a normal Windows, macOS or Linux box. Shipping a font file
-# means shipping its licence, so these are the safe ones, plus whatever the user names
+# means shipping its licence, so these are the safe ones, plus whatever you names
 # themselves in custom_font.
 FONTS = [
     "Consolas", "Courier New", "Lucida Console", "Impact", "Arial Black",

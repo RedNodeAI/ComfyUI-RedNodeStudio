@@ -353,7 +353,7 @@ app.registerExtension({
 
   async setup() {
     // The server owns the caption cache and the saved index, so it has to be told what
-    // the user chose. Sent once at startup and again whenever a value changes, rather
+    // you chose. Sent once at startup and again whenever a value changes, rather
     // than read per request, so a run never waits on the browser.
     const push = async () => {
       try {

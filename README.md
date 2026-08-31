@@ -276,20 +276,18 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_Ultima_V1.2.json` is the full rig: one workspace panel driving the
-  models, the prompts and the sampler, with painting, identity edit, the detailer
-  passes, the upscale and the grading chain around it. The rigs and the Prompts tab are
-  options rather than requirements, so a graph wired the old way keeps working.
-- `RedNode_MultiAngle_QwenEdit2511.json` re-shoots an existing photo from another
-  viewpoint: the Camera Studio's geometry becomes a Multiple-Angles prompt for
-  Qwen-Image-Edit-2511, and Krea 2 finishes the frame.
-
-- `RedNodeStudio_Ultima_V1.2.json`, my daily-driver pipeline with the whole rig wired up:
-  workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
-  other packs, and ComfyUI Manager offers them when you open it: SeedVR2 Video Upscaler,
-  pysssss custom-scripts, easy-use, comfyui-krea-moodboards and Krea2-BBOX-Prompter. Manager
-  cannot fetch model files, so the upscaler's two are on you:
-  `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and `ema_vae_fp16.safetensors`.
+- `RedNodeStudio_Ultima_V1.2.json` is the full rig and the one to start with: a single
+  workspace panel drives the models, the prompts and the sampler, with painting, identity
+  edit, the detailer passes, a SeedVR2 upscale and the grading chain around it. The rigs and
+  the Prompts tab are options rather than requirements, so a graph wired the old way keeps
+  working. It pulls in a few other packs and ComfyUI Manager offers them when you open it:
+  SeedVR2 Video Upscaler, pysssss custom-scripts, easy-use, comfyui-krea-moodboards and
+  Krea2-BBOX-Prompter. Manager installs packs but not models, so the upscaler's two files are
+  yours to fetch: `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and
+  `ema_vae_fp16.safetensors`.
+- `RedNode_MultiAngle_QwenEdit2511.json` re-shoots an existing photo from another viewpoint:
+  the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
+  Krea 2 finishes the frame.
 
 One optional pack matters to the STUDIO itself rather than to a workflow:
 **ComfyUI-Easy-Sam3** gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in

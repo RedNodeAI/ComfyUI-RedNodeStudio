@@ -4,7 +4,7 @@ const { app } = _appmod;
 // Finding nodes across subgraphs.
 //
 // app.graph only exposes the TOP level, so `app.graph._nodes.find(...)` quietly
-// misses anything the user has tucked inside a subgraph. Every wireless feature in
+// misses anything tucked inside a subgraph. Every wireless feature in
 // this pack depends on finding its partner node, so a flat scan turns "it works"
 // into "it silently does nothing" the moment somebody tidies their workflow into
 // subgraphs. Always go through here.

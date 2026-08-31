@@ -151,7 +151,7 @@ function pushEntry(node, images, promptId) {
   const began = runStarted.get(promptId);
   h.unshift({ files: images, prompt: promptId || null, ts: Date.now(),
               secs: began ? (Date.now() - began) / 1000 : null });
-  // this history rides in the workflow file, so its length is the user's call
+  // this history rides in the workflow file, so its length is 
   const keep = Math.max(1, parseInt(setting("RedNode.Review.HistoryLength", MAX_KEEP))
                           || MAX_KEEP);
   while (h.length > keep) h.pop();
@@ -598,7 +598,7 @@ function render(node) {
     root.appendChild(strip);
     strip.scrollLeft = grew ? 0 : keepScroll;
     // and keep the selected thumbnail visible when the view moved on its own
-    // (rerun, remove, keyboard), without fighting a scroll the user just made
+    // (rerun, remove, keyboard), without fighting a scroll you just made
     const cur = strip.children[view];
     const vis = Number(strip.clientWidth);
     if (cur && !grew && Number.isFinite(vis) && vis > 0) {

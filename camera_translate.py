@@ -77,7 +77,7 @@ def camera_geometry(cam_pos, target_pos):
 
 
 # ---------------------------------------------------------------- vertical stops
-# The pitch bands and what each says. Wordings are the user's researched
+# The pitch bands and what each says. Wordings are your researched
 # blocks (KNOWLEDGE.md), parameterised by the real numbers.
 def _height_words(cam_y, subj_top, dy_face):
     """How far the camera sits above/below the face, in plain metres."""
@@ -285,7 +285,7 @@ def describe(camera, subjects, output="krea2"):
     # LOCK ON SUBJECT (default): the camera aims at the target's face and the
     # subject sits centre frame. UNLOCKED: the camera aims at a free point
     # (aim: [x, y, z]), so the subject can sit off-centre or at the edge -
-    # the user's ask, for less centred compositions. The vertical block is
+    # for less centred compositions. The vertical block is
     # still measured to the subject (that is what "high angle" means); the
     # composition sentence says where in the frame the subject lands.
     locked = camera.get("lock", True) is not False
@@ -308,7 +308,7 @@ def describe(camera, subjects, output="krea2"):
     rel = _facing_relation(rel_bearing(spos, cpos, prime.get("facing_deg", 0)))
     # STRAIGHT DOWN OR UP the horizontal bearing means nothing: "rear
     # three-quarter view, the camera behind" under "direct overhead" pulled the
-    # model to a three-quarter shot (the user's boxing report). Past 75 degrees
+    # model to a three-quarter shot (your boxing report). Past 75 degrees
     # of pitch the relation is simply the top (or underside) of the subject.
     if abs(geo["pitch"]) >= 75:
         rel = ("seen from directly above" if geo["pitch"] < 0
@@ -343,7 +343,7 @@ def describe(camera, subjects, output="krea2"):
                           % (sname, _aim_words(aim_geo, look_at, cpos),
                              "ground" if look_at[1] < 0.6 else "space",
                              sname, where, rel, _metres(geo["distance"]))))
-    # RELATIONSHIPS, the user's ask: "the girl sits on the bed" is a relation,
+    # RELATIONSHIPS: "the girl sits on the bed" is a relation,
     # not two positions. An entry may declare rel = {kind, to}; the pair's
     # relation is stated in words FIRST (the model reads "on the bed" far
     # more reliably than "0.4 m above and level with"), and the geometry
@@ -373,7 +373,7 @@ def describe(camera, subjects, output="krea2"):
     # related pair's member skips its geometry line against the primary when
     # the relation already said where it is (on the bed says enough).
     others = [s for k, s in enumerate(subjects) if k != ti]
-    # OVER THE SHOULDER (two-person scenes, the user's ask): a person standing
+    # OVER THE SHOULDER (two-person scenes,): a person standing
     # close in front of the lens, on the look line, nearer than the target, is
     # the foreground shoulder. Say it as the shot it is - the model knows the
     # grammar of an OTS far better than "1 m from the camera, in line with" -
@@ -402,7 +402,7 @@ def describe(camera, subjects, output="krea2"):
                               "the lens and softly out of focus, and %s is seen past them, "
                               "sharp, %s."
                               % (oname, "right" if which == "left" else "left", which, sname, gaze)))
-    # WHAT IS IN THE FRAME (room sets, the user's ask): only things the lens
+    # WHAT IS IN THE FRAME (room sets,): only things the lens
     # can see get a line - inside the horizontal field of view plus a margin,
     # not behind the camera, not beyond 14 m - nearest first, at most eight.
     # Walls never get their own line: a room's walls are the room, and the
@@ -451,7 +451,7 @@ def describe(camera, subjects, output="krea2"):
         side_dot = (opos[0] - spos[0]) * right[0] + (opos[2] - spos[2]) * right[2]
         side = ("to the right of" if side_dot > 0.35 else "to the left of"
                 if side_dot < -0.35 else "in line with")
-        # OBJECTS share the stage with people (the user's ask: a bed, a lamp,
+        # OBJECTS share the stage with people (a bed, a lamp,
         # a window placed and named, and the words say where they are - the
         # Subject and Surroundings text still say what they LOOK like). A
         # person "stands"; an object "sits" (or "is" for a wall/window).
@@ -460,7 +460,7 @@ def describe(camera, subjects, output="krea2"):
                                       else "an object"))
         verb = ("stands" if kind == "person" else "is"
                 if kind in ("wall", "window", "door") else "sits")
-        # FACING (the user's ask: a better sense of which way things face):
+        # FACING:
         # a person's or an object's front, relative to the camera; a door is
         # said as a doorway; walls have no front
         facing_words = ""
@@ -475,7 +475,7 @@ def describe(camera, subjects, output="krea2"):
         parts.append("The camera is rolled %d degrees to the %s, a Dutch tilt."
                      % (int(round(abs(roll))), "left" if roll < 0 else "right"))
     parts.append(lens_phrase(focal) + ".")
-    # DEPTH OF FIELD (the user's ask, "bokeh"): with an aperture set, the
+    # DEPTH OF FIELD ("bokeh"): with an aperture set, the
     # physics of lens, f-number and distance says what is sharp and what
     # dissolves - and the stage knows how far every other thing is, so the
     # words name who is soft. Off (no aperture) says nothing, as before.
@@ -579,7 +579,7 @@ def _facing_words(kind, o_rel, prime, o, oname, sname):
 
 
 # ---------------------------------------------------------------- lights
-# THE LIGHT RIG (the user's ask, 2026-08-18: "add a light source like Unreal -
+# THE LIGHT RIG ( "add a light source like Unreal -
 # diameter, soft or hard, directional or orbital, colour tone - through
 # prompting"). Same contract as the camera translator and the depth-of-field
 # sentence: geometry and physics in, prose out, no renderer involved.
@@ -628,7 +628,7 @@ def angular_size_deg(diameter_m, distance_m):
 def colour_words(kelvin):
     """Colour of the light. 0 = don't mention it.
 
-    NAME THE COLOUR, NEVER THE THING THAT MAKES IT (the user, 2026-08-18):
+    NAME THE COLOUR, NEVER THE THING THAT MAKES IT:
     the first version said "candle-warm" under 2200 K and the model drew
     candles. A colour word is a description; a light-source noun is an object,
     and an object named in a prompt gets rendered. Same reason the source
@@ -656,7 +656,7 @@ def colour_words(kelvin):
 
 
 # HOW MUCH LIGHT LANDS, which is what makes a picture dark - NOT the colour
-# (the user, 2026-08-18: "when the colour is very low should it be quite dark?").
+#.
 # 1900 K is the colour of a candle flame, not its level: a warm scene can be
 # blazing and a blue one can be nearly black. Level is power over distance
 # squared, and the nominal is power 1.0 at 2 m, so a light dragged back really
@@ -677,7 +677,7 @@ def level_words(rel, sname="the subject"):
     """(sentence, step) for how lit the scene is, relative to the nominal.
     step: -2 very dark .. +2 blown, 0 = ordinary, which says nothing.
 
-    DARKNESS IS A THING, NOT AN EXPOSURE (the user, 2026-08-18: "I am still not
+    DARKNESS IS A THING, NOT AN EXPOSURE ( "I am still not
     getting the dark effect I want"). The corpus-validated entries in
     prompt_lists.LIGHTING never say "the frame is dark"; they name the lit POOL
     and then what lies BEYOND it - "deep shadow beyond a tight pool of orange
@@ -1029,7 +1029,7 @@ def preset_camera(stop, distance=3.0, focal_mm=None):
 # with a wide lens wants a TALL frame (the figure towers, sky above; or the
 # ground stretches away), a wide blocking of several subjects wants a WIDE
 # one, a tight portrait sits near square. A latent that fights the geometry
-# makes the model compromise, and the angle softens - the user's finding.
+# makes the model compromise, and the angle softens - ing.
 # suggest_aspect() returns (w_ratio, h_ratio, why) from the camera state and
 # the scene; auto_latent_size() shapes it into a pixel budget on 64s.
 def suggest_aspect(camera, subjects):
@@ -1086,7 +1086,7 @@ def auto_latent_size(camera, subjects, megapixels=1.0, multiple=64):
 
 # ---------------------------------------------------------------- frame presets
 # The Prompt Frame's simple controls become PRESETS over the studio state, the
-# user's design: a framing chip sets how close the camera is and the lens; a
+# a framing chip sets how close the camera is and the lens; a
 # camera-height stop sets its height and pitch; the two compose. One engine
 # writes every word, so "Portrait" and "Slight high" together mean exactly what
 # the studio would say for that camera.
@@ -1135,7 +1135,7 @@ def camera_from_frame(framing="Balanced", camera_height="Eye level",
 
 
 # ---------------------------------------------------------------- zoom LoRA
-# The user's zoom LoRA (zoom_krea2_loraholic) is a camera control in all but
+# Your zoom LoRA (zoom_krea2_loraholic) is a camera control in all but
 # name: positive strength pushes in, negative pulls out, and it is strong -
 # the useful range runs about -10 (wide) to +12 (tight). auto_zoom_strength
 # maps the camera's shot size onto that range so the LoRA and the words agree:
@@ -1173,7 +1173,7 @@ def auto_zoom_strength(camera, subjects):
 
 
 # ---------------------------------------------------------------- camera LoRAs
-# THE CAMERA'S OWN LORAS (the user's ask, 2026-08-17): four slider LoRAs the
+# THE CAMERA'S OWN LORAS: four slider LoRAs the
 # studio drives from the geometry, so nobody dials them by hand - zoom (from
 # the shot size), height (from the pitch), orbit and back (from where the
 # camera sits relative to the way the subject faces). Public strengths: about
@@ -1393,7 +1393,7 @@ def _describe_compact(camera, subjects, output):
 
 
 # ---------------------------------------------------------------- camera paths
-# BATCH ANGLES (the user's ask, 2026-08-17): one scene, the camera moving, N
+# BATCH ANGLES: one scene, the camera moving, N
 # shots. Two paths: A -> B (straight line between two camera states, lens and
 # roll blended too) and ORBIT (a circle round the target at the current
 # distance and height, from one bearing to another). Everything else - the

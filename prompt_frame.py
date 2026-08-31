@@ -61,7 +61,7 @@ SCALE_CUE = {
     "Roomscale": "small in the distance",
 }
 
-# CAMERA HEIGHT, the user's ask (2026-08-17), rewritten the same day from their
+# CAMERA HEIGHT, (2026-08-17), rewritten the same day from their
 # research into Krea's own Krea 2 prompting docs, June 2026 slider notes and
 # community testing. The findings that shape this table:
 #   - treat the camera as a PHYSICAL OBJECT: position -> direction -> the
@@ -77,7 +77,7 @@ SCALE_CUE = {
 #     everything, before the style block. Eye level says nothing.
 # Two knobs the research calls decisive live OUTSIDE the prompt and the tooltip
 # says so: Krea's Movement slider (+30-50 obeys angles far better than the
-# -10..0 the user runs), Creativity Raw/Low, and moodboard strength kept to
+# -10..0 you run), Creativity Raw/Low, and moodboard strength kept to
 # 20-40% while the geometry is being solved, since references carry composition.
 CAMERA_HEIGHTS = ["Worm's eye", "Low angle", "Slight low", "Eye level",
                   "Slight high", "High angle", "Bird's eye"]
@@ -97,7 +97,7 @@ def _camera_stop_text(stop):
     cam = _ct.preset_camera(stop)
     subj = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7, "facing_deg": 0}]
     # the frame wants only the vertical block and the lens: the subject's
-    # facing and distance sentence belongs to the studio, where the user placed
+    # facing and distance sentence belongs to the studio, where you placed
     # a real camera; here the stop is a viewpoint, not a blocking
     geo = _ct.camera_geometry(cam["pos"], [0, 1.7 * 0.92, 0])
     block = _ct.vertical_block(geo, cam["pos"][1], 1.7)
@@ -305,7 +305,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     # ONE ENGINE FOR THE CAMERA: with the studio live its paragraph carries the
     # framing too ("framed as ..."), so the simple shot-size wording steps out.
     # Left in, "A three-quarter view of ..." after "Direct overhead photograph"
-    # read as an angle and pulled the render off the top-down view (the user's
+    # read as an angle and pulled the render off the top-down view (your
     # boxing report, 2026-08-18).
     if studio_live:
         camera_words = False

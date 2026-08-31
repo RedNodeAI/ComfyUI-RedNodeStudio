@@ -48,7 +48,7 @@ def _loaded_for(mm, keep):
 
     Matched on clone_base_uuid, not identity: a model that has been through a LoRA or a
     sampling patch is a CLONE of the resident ModelPatcher, so `is` would miss it and we
-    would free the very thing the user asked to keep. Same test comfy's own
+    would free the very thing you asked to keep. Same test comfy's own
     unload_model_and_clones uses.
 
     `keep` takes anything, because plenty of useful models are not ComfyUI MODELs (SAM3,
@@ -81,7 +81,7 @@ def describe_loaded(mm):
     """['Krea2 6.1 GB', 'Qwen3VL 3.2 GB'] — what ComfyUI is holding, for the console.
 
     Printed when a `keep` wire matches nothing, because that is the one case where the
-    node does something the user did not want and has no way to see why.
+    node does something you did not want and has no way to see why.
     """
     out = []
     try:

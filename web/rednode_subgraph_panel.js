@@ -1754,7 +1754,7 @@ function sync(node, force = false) {
     // Fill in a name from whatever got wired in, so nobody types one unless they want
     // to. Each row remembers what the panel last wrote (s.auto), which is what lets a
     // REWIRE rename the row: a name the panel wrote is the panel's to keep current, a
-    // name the user typed is theirs forever, and without the memory those are just two
+    // name you typed is theirs forever, and without the memory those are just two
     // indistinguishable strings.
     let renamed = false;
     d.slots.forEach((s, i) => {
@@ -1871,7 +1871,7 @@ function sync(node, force = false) {
         : targetKeys.slice(0, outs.length);
     while (cur.length < outs.length) cur.push(`__extra_${cur.length}`);
 
-    // 1) drop sockets whose value is gone from the target. A HIDDEN key is the user's
+    // 1) drop sockets whose value is gone from the target. A HIDDEN key is your
     // deliberate act recorded in the config, so its socket goes even when wired. A key
     // that merely left the channel (a Send renamed, a load still settling) only loses
     // its socket when unwired: cutting a wire is only ever done on instruction.
@@ -1932,8 +1932,8 @@ function sync(node, force = false) {
   // say, so the FIRST sync snaps the height back to what the content needs.
   //
   // Only the first. Re-fitting on every socket change meant the node resized itself
-  // every time a channel was added or removed, throwing away whatever size the user
-  // had just dragged it to. After birth the node's size belongs to the user: it only
+  // every time a channel was added or removed, throwing away whatever size you
+  // had just dragged it to. After birth the node's size belongs to you: it only
   // ever GROWS here, and only when new sockets would otherwise draw past the bottom.
   if (structural) {
     const min = node.computeSize?.();
@@ -2033,7 +2033,7 @@ for (const which of [SEND, RECEIVE]) {
             let seq;
             if (mode === "input") {
               // channel chips in their order, then each Send's rows in ITS row order,
-              // which is the wiring order the user actually built
+              // which is the wiring order you actually built
               seq = [];
               for (const ch of chans) {
                 for (const m of sends) {

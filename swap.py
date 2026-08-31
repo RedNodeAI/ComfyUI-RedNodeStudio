@@ -1,6 +1,6 @@
 """Swap: the Img2Img tab's character stage.
 
-The user's ask (2026-08-18): put the Subject onto the person in the picture,
+Your ask (2026-08-18): put the Subject onto the person in the picture,
 the way the face function does, but in the engine where a swap is known to
 land - Qwen-Image-Edit-2509/2511 with Alissonerdx's BFS (Best Face Swap)
 LoRA, the same edit engine Re-angle runs (shared through reangle.load_engine,

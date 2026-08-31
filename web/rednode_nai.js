@@ -1,5 +1,5 @@
 // The NovelAI rig's panel UI - The NovelAI rig's panel: public since 2026-08-19.
-// One-for-one with ComfyUI_NAIDGenerator's option set, per the user's call.
+// One-for-one with ComfyUI_NAIDGenerator's option set, per .
 // Settings write onto the rig object and ride the config JSON; the backend
 // reads them off the rig's raw dict (nai_rig.py). No image content is
 // ever inspected here - the vibe picker forwards bytes untouched.
@@ -445,7 +445,7 @@ window.rnLocalRigUI = (node, body, rig, ctx) => {
       line.append(inf);
     }
     // ENCODE: the one button here that spends money, so it says the price and
-    // asks first (the user, 2026-08-18). A raw image on V4/V4.5 is encoded by
+    // asks first. A raw image on V4/V4.5 is encoded by
     // NovelAI on EVERY render at 2 Anlas a time; encoding it once writes a
     // .naiv4vibe next to it and every render after that is free. Re-encoding
     // the same picture at the same Information costs nothing: the file is

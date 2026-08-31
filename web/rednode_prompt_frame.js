@@ -247,7 +247,7 @@ function keepSize(node, key, box) {
 
 // THE WHOLE FRAME EDITOR, host-agnostic: the node's panel and the Workspace's
 // Prompts tab both call this, so there is exactly one implementation of the thing
-// the user keeps asking for by name. F is the value store: get/set by field name,
+// you keep asking for by name. F is the value store: get/set by field name,
 // opts for the dropdown lists, dirty() when something changed, onPreview(prompt,
 // notice) when the server has assembled the live prompt.
 export function buildFrameEditor(wrap, F) {
@@ -263,7 +263,7 @@ export function buildFrameEditor(wrap, F) {
   const presetBtn = el("button", "rn-pf-btn", "Load");
   head.appendChild(presetSel);
   head.appendChild(presetBtn);
-  // AUTO SORT, the user's ask: the same Ollama the auto prompt leans on reads
+  // AUTO SORT: the same Ollama the auto prompt leans on reads
   // every box and puts each phrase where it belongs - a lumped prompt tidied
   // into Style, Subject, Surroundings, Light and placement in one press.
   // The host names the model (F.sortModel); without one the button says so.
@@ -466,7 +466,7 @@ export function buildFrameEditor(wrap, F) {
                   framing: "\u2316", light: "\u2600" };
   // TWO COLUMNS when the host is wide (the Workspace's Prompts tab): the
   // writing sections stack on the left, the dials and the preview on the
-  // right - the arrangement the user drew. A narrow host keeps one column.
+  // right - the arrangement you drew. A narrow host keeps one column.
   let colL = null, colR = null;
   if (F.twoColumn) {
     const cols = el("div", "rn-pf-cols");
@@ -476,7 +476,7 @@ export function buildFrameEditor(wrap, F) {
     wrap.appendChild(cols);
   }
   // writing on the left (style, subject, surroundings, light & colour); the
-  // camera and the prompt preview on the right - the user's arrangement
+  // camera and the prompt preview on the right - your arrangement
   const RIGHT = new Set(["framing"]);
   const group = (key, title, hint, els) => {
     const gbox = el("div", "rn-pf-box");
@@ -574,7 +574,7 @@ export function buildFrameEditor(wrap, F) {
   // disclosure, is the advanced view and mounts FULL WIDTH below the columns.
   // Push is retired (camera-first ordering IS the push); the placement
   // dropdowns fold into the studio's relations, the typed placement stays.
-  // SIMPLE / ADVANCED (the user's ask: two buttons, nothing else). Simple:
+  // SIMPLE / ADVANCED. Simple:
   // the chips write the camera words. Advanced: the Camera Studio drives
   // them - in the workspace it lives on the Camera tab (Advanced opens it),
   // in the standalone node it unfolds below.
@@ -624,7 +624,7 @@ export function buildFrameEditor(wrap, F) {
     const target = (cur && cur.camera && typeof cur.camera.target === "number") ? cur.camera.target : 0;
     const prime = subj[target] || subj[0];
     const camPrev = cur && cur.camera ? cur.camera : null;
-    // keep the bearing the user chose in the studio (which side the camera is on)
+    // keep the bearing you chose in the studio (which side the camera is on)
     let bearing = 0;
     if (camPrev && Array.isArray(camPrev.pos)) {
       bearing = Math.atan2(camPrev.pos[0] - prime.pos[0], camPrev.pos[2] - prime.pos[2]) * 180 / Math.PI;
@@ -635,7 +635,7 @@ export function buildFrameEditor(wrap, F) {
     studioSet(state);
     if (studio) studio.refresh();
   };
-  // A TOGGLE THAT SURVIVES A RE-RENDER (the user's report: switching tabs
+  // A TOGGLE THAT SURVIVES A RE-RENDER (switching tabs
   // hid the studio every time). Shown-ness is a fold key in the host's fold
   // store, exactly like the section folds, so it comes back on the next
   // render; and it follows the rule: studio active -> shown by default,
@@ -841,7 +841,7 @@ export function buildFrameEditor(wrap, F) {
     if (e.button === 1) app.canvas?.processMouseDown?.(e);
   });
 
-  // THE PROMPT LIBRARY: the shipped examples plus the user's own saved prompts,
+  // THE PROMPT LIBRARY: the shipped examples plus your own saved prompts,
   // one store on disk shared by the node and the Prompts tab. Save writes every
   // frame field; Load applies every field a prompt carries, so a saved look comes
   // back whole: style, lighting, framing, push, all of it.

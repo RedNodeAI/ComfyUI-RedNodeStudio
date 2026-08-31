@@ -14,7 +14,7 @@ text file next to it with the prompts and the settings laid out for reading, by 
 human or by a model. The PNG metadata still goes in, for drag-back. The text file is
 the portable copy.
 
-Nothing in here reads any file the user already had. It writes.
+Nothing in here reads any file you already had. It writes.
 """
 
 import json
@@ -62,7 +62,7 @@ TOKENS = ("%date%", "%time%", "%year%", "%month%", "%day%",
           "%preset%", "%seed%", "%model%", "%w%", "%h%", "%size%")
 
 # Naming conventions worth starting from. These ship built in and cannot be deleted;
-# anything the user saves lives beside them and can be.
+# anything you save lives beside them and can be.
 BUILTIN_PRESETS = {
     "Date and time": {"subfolder": "%date%", "name": "%date%_%time%",
                       "numbering": "counter", "pad": 4},
@@ -1362,7 +1362,7 @@ try:
         """File an image the queue produced but no Save node filed, as a KEEPER.
 
         The paint tab's result is a temp preview unless a RedNode Save node sits in
-        the paint branch, and asking the user to rewire their graph to keep one good
+        the paint branch, and asking you to rewire your graph to keep one good
         picture is backwards. This copies the preview into the keepers tree through
         the same path builder a Save node uses, with the preset name "paint", so it
         lands organised exactly where the Save tab files everything else. A COPY, not

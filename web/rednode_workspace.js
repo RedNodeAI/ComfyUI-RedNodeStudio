@@ -905,7 +905,7 @@ export function readCfg(node) {
   if (!Array.isArray(d.loras.slots)) d.loras.slots = [];
   if (typeof d.loras.ui !== "object" || !d.loras.ui) d.loras.ui = {};
   if (typeof d.loras.seed !== "number") d.loras.seed = 0;
-  // ONE paint stack, flat, the user's call after a per-model-choice version lasted a
+  // ONE paint stack, flat, after a per-model-choice version lasted a
   // single local day: it put three LoRA controls on screen and explained itself in
   // riddles. Swapping sets is what the Stack preset row is for, and tying stacks to
   // the model choice returns WITH the Models tab, where it can actually render. A
@@ -1013,7 +1013,7 @@ export function readCfg(node) {
   // value that changes nothing: the chain only starts at two
   d.paint.passes = Math.max(1, Math.min(PASS_MAX,
     typeof d.paint.passes === "number" ? Math.round(d.paint.passes) : 1));
-  // two options, the user's call: the main tab's LoRAs or this renderer's paint stack.
+  // two options: the main tab's LoRAs or this renderer's paint stack.
   // "none" existed for a day and folds into "main"; wire the raw model for bare.
   if (d.paint.lora_mode !== "main" && d.paint.lora_mode !== "paint") {
     d.paint.lora_mode = "main";
@@ -1361,7 +1361,7 @@ function openFullscreen(node) {
   // THE ROOM SCALES ITSELF FROM THE SCREEN. The same CSS pixels read small on an
   // ultrawide and right on 1080p, so the big room measures the window and zooms its
   // content to hold the design's proportions: 1600 wide is the reference, an
-  // ultrawide grows towards 1.8x, nothing ever shrinks below 1x, and the user's UI
+  // ultrawide grows towards 1.8x, nothing ever shrinks below 1x, and your UI
   // slider still multiplies on top for taste. Zoom on fshost is the safe shape, a
   // flex item with nothing after it.
   const fit = () => {
@@ -1422,7 +1422,7 @@ async function copyResultToInput(r) {
 
 /** The durable upgrade, after the fact: same picture, new address, so the strokes
  *  key follows it and nothing painted meanwhile is lost. Skipped silently if the
- *  user already moved to another picture while the copy was in flight. */
+ * user already moved to another picture while the copy was in flight. */
 function upgradeSourceDurability(node, r) {
   const wanted = resultEntry(r);
   (async () => {
@@ -1451,7 +1451,7 @@ function upgradeSourceDurability(node, r) {
  *  drives, so it is what an ordinary queue paints through. Saving it was a button, and
  *  being a button is why it felt broken: paint, then queue normally without pressing
  *  it, and the run silently used the PREVIOUS mask. Its own tooltip warned about that,
- *  which is a tell that the job was never the user's to remember.
+ * which is a tell that the job was never your to remember.
  *
  *  Debounced because a stroke is many segments and a gesture is many strokes: without
  *  it a minute of painting is a minute of uploads. The delay is longer than the gap
@@ -1771,7 +1771,7 @@ async function autoPromptPaintResult(node, r) {
   if (!live) return;
   const currentPrompt = String(live.prompt || "");
   const currentAuto = String(live.auto_prompt || "");
-  // Captioning can take long enough for the user to keep typing. A second notice
+  // Captioning can take long enough for you to keep typing. A second notice
   // protects text written after the first confirmation from a late response.
   if (currentPrompt !== beforePrompt || currentAuto !== beforeAuto) {
     if (typeof globalThis.confirm === "function"
@@ -2240,7 +2240,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
 }
 
 // ---------------------------------------------------------------- Camera tab
-// THE CAMERA TAB (the user's ask, 2026-08-17): the studio has its own tab, with
+// THE CAMERA TAB: the studio has its own tab, with
 // two sub-tabs. PROMPT is the studio that drives the words and the camera
 // LoRAs of a Prompts-tab row (the same state the Prompt Frame's chips seed;
 // the frame's Advanced button lands here). IMG2IMG is a SEPARATE studio whose
@@ -4239,7 +4239,7 @@ async function loraPresetAction(node, body) {
 
 
 // ---- LoRA SETS. The LoRAs tab is Main plus any number of named sets, each a
-// whole stack of its own, each its own tab up there (the user, 2026-08-18:
+// whole stack of its own, each its own tab up there ( 
 // "each set of the LoRAs in its own tab"). Rigs (Models tab), Detailer passes
 // and the paint pass name the set they run with, so image-to-image,
 // from-scratch, camera work and different models keep their own LoRAs. The
@@ -4495,10 +4495,10 @@ function lorasBody(node, body) {
 
   loraPresetRow(node, body, L);
   {
-    // SEED AND ADD RIDE THE PRESET LINE (the user, 2026-08-19). The seed is
+    // SEED AND ADD RIDE THE PRESET LINE. The seed is
     // the Models tab's control in miniature: the number, and a dice that rolls
     // a new one. It stays a fixed number on purpose - a stack that re-rolls
-    // its strengths behind you is not a stack you can compare against.
+    // its strengths behind you are not a stack you can compare against.
     const line = loraPresetRow._row;
     const slab = document.createElement("span");
     slab.className = "rn-ws-note";
@@ -4560,7 +4560,7 @@ function lorasBody(node, body) {
   node._rnUI = L.ui;
 
   // THE STACK IN A BOX. The group cards were sitting straight on the panel's
-  // background, which read as floating (the user, 2026-08-19); everything else
+  // background, which read as floating; everything else
   // on this panel lives in a bordered surface. min-height:0 with overflow on
   // the box is what lets a long stack scroll INSIDE it, which is also what
   // turns the footer into a floating bar exactly when it should be one.
@@ -4628,7 +4628,7 @@ function paintLorasBody(node, body) {
   // the paint pass's own set, the rig's set) and until this line existed the
   // only way to find out was to read the console after a queue - which is how
   // "the painting is not carrying the correct LoRAs" felt like a bug when the
-  // routing was right (the user, 2026-08-18).
+  // routing was right.
   {
     const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
     const setName = cfg.paint.lora_mode === "paint" ? null
@@ -4653,7 +4653,7 @@ function paintLorasBody(node, body) {
   }
 
   if (cfg.paint.lora_mode !== "paint") {
-    // MAIN: blank on purpose (the user, 2026-08-18: "this needs to be blank"),
+    // MAIN: blank on purpose,
     // apart from which LoRAs-tab set the paint pass runs with
     const srow = document.createElement("div");
     srow.className = "rn-ws-row";
@@ -4782,7 +4782,7 @@ function workspacePrefs(node, body) {
   sect.appendChild(head);
 
   // Paint layout: three explicit choices, stacked being exactly what always
-  // happened. Automatic exists but is never imposed; that ordering was the user's
+  // happened. Automatic exists but is never imposed; that ordering was your
   // direct instruction after automatic UI guesses went wrong before.
   const lay = document.createElement("div");
   lay.className = "rn-ws-row";
@@ -4953,7 +4953,7 @@ function workspacePrefs(node, body) {
   sect.appendChild(vis);
 
   // ---- VRAM: hand the card back when it has been full and idle ---------------
-  // On the tab rather than only in the settings dialog, at the user's call: a
+  // On the tab rather than only in the settings dialog, at : a
   // behaviour that unloads models on its own must be visible where you work, not
   // discovered later in a menu. OFF by default; automatic that guesses wrong is
   // worse than none.
@@ -5467,7 +5467,7 @@ const PAINT_PLUMBING = new Set([
 ]);
 
 // A title somebody typed, as opposed to the one the node was born with. A renamed node
-// anywhere in a chain is the user having already said what that chain is, and that
+// anywhere in a chain already says what that chain is, and that
 // beats anything guessed from node types.
 function namedByHand(n) {
   const title = String(n?.title || "").trim();
@@ -5568,7 +5568,7 @@ export function rendererName(t) {
     if (!clash) return label;
   } catch (err) {
     // A half-wired graph must not take the panel down with it: this runs on every
-    // render, including while the user is still dragging the wires in.
+    // render, including while you are still dragging the wires in.
     console.debug?.("[RedNode Workspace] could not name a renderer:", err);
     if (!label) label = t?.kind === "render" ? "Paint Render" : "Paint In (own chain)";
   }
@@ -5682,7 +5682,7 @@ function advanceSeeds(prompt, keptIds) {
 }
 
 // Rolled seeds stay inside 32 bits ON PURPOSE, not because JS could not go higher.
-// The seed socket feeds whatever the user wired it into, and the receiver's range is
+// The seed socket feeds whatever you wired it into, and the receiver's range is
 // theirs, not ours: NovelAI's node caps its seed at 9999999999 and the service clamps
 // anything past it, so a 2^53 roll landed on the SAME clamped value every single time.
 // The number on screen changed, the seed NAI actually used did not, and every Generate
@@ -5765,7 +5765,7 @@ async function paintGenerate(node) {
   // NOT on every Generate: twenty low-denoise passes on one model is the normal way to
   // use this tab, and freeing each time makes every pass a multi-gigabyte reload.
   //
-  // WHETHER it frees is the user's call. On a card with room, two renderers sitting
+  // WHETHER it frees is a choice. On a card with room, two renderers sitting
   // resident together makes switching between them instant, and paying a
   // multi-gigabyte reload for memory nobody needed back is the wrong trade. "high"
   // is the middle answer: only unload when VRAM is already over the auto unload
@@ -6065,7 +6065,7 @@ function paintBody(node, body) {
   if (Math.abs(topScale - 1) >= 0.001) topbar.style.zoom = String(topScale);
   topbarBox.appendChild(topbar);
 
-  // TWO COLUMNS, the user's layout: the pictures stacked on the left, paint above
+  // TWO COLUMNS, your layout: the pictures stacked on the left, paint above
   // result, and every setting in a column on the right. One tall stack under the
   // canvases was fine with four controls and is a wall with fourteen: the settings
   // read top to bottom beside the picture they change, and the canvases get the
@@ -6139,7 +6139,7 @@ function paintBody(node, body) {
   const stage = document.createElement("div");
   // The arrangement is the USER'S setting, not a guess: automatic layout here has
   // been gotten wrong before, so it is one of three explicit choices and the
-  // default is exactly what always happened. NODE VIEW ONLY, stated by the user:
+  // default is exactly what always happened. NODE VIEW ONLY, stated by you:
   // full screen has the room by definition and never reads this.
   const layoutPref = fs ? "side" : String(wsPref("PaintLayout", "stacked"));
   stage.className = "rn-ws-paint"
@@ -6655,7 +6655,7 @@ function paintBody(node, body) {
       node._rnSyncRing?.();
       // the layout can hold the full height now, so a scroll restore the browser
       // clamped at render time is paid here, once. The still-at-zero check is what
-      // keeps it from ever fighting the user: a hand that scrolled since the render
+      // keeps it from ever fighting you: a hand that scrolled since the render
       // moved the body off the clamp, and that position wins.
       const owed = node._rnScrollOwed;
       if (owed && owed.tab === node._rnBodyTab && node._rnBodyEl
@@ -7007,7 +7007,7 @@ function paintBody(node, body) {
     bSync();
     const colourClu = buildColourCluster(node);
     if (fs) {
-      // THE RAIL OWNS THE BRUSH in the big room, per the user's drawing: a vertical
+      // THE RAIL OWNS THE BRUSH in the big room, per your drawing: a vertical
       // bar filling the rail's empty middle, label at the top, value beneath it, the
       // shape toggles stacked below, and undo staying pinned at the rail's foot. The
       // size pills remain a card and node-room feature; the rail is too narrow to
@@ -7025,7 +7025,7 @@ function paintBody(node, body) {
       rb.append(bLab, bRng, bVal, shapeCol, colourClu.el);
       zbar.appendChild(rb);
     } else {
-      // ONE line under the canvas, the user's sketch: view buttons with undo beside
+      // ONE line under the canvas, your sketch: view buttons with undo beside
       // Fit, then the brush stretched across the middle, then the size pills at the
       // right end, so the gap between the two pictures stays a single row tall
       brushCtl.className = "rn-ws-pcard rowline";
@@ -7106,7 +7106,7 @@ function paintBody(node, body) {
   paintDropZone(node, left);
   }
   // WHILE THE CANVAS-ONLY ROOM IS OPEN the pane lives in that overlay, and taking it
-  // back here would empty the room the user is painting in. The panel still renders
+  // back here would empty the room you are painting in. The panel still renders
   // normally around a stand-in.
   if (node._rnCanvasOnly?.pane === left) {
     const held = document.createElement("div");
@@ -7439,7 +7439,7 @@ function paintBody(node, body) {
     syncDenoiseZone();
     writeCfg(node);
   });
-  // The four denoise values the user actually works between, one click each. The
+  // The four denoise values you actually works between, one click each. The
   // active pill doubles as a zone readout, and the pills live NEXT to the slider
   // rather than replacing it, because the slider is still how in-between values
   // happen. The brush is gone from this bar: it is a canvas tool and lives on the
@@ -7745,7 +7745,7 @@ function paintBody(node, body) {
          + "when the thing you want kept is smaller than the thing you want redone.",
          P.mask_only && P.invert,
          () => { P.mask_only = true; P.invert = true; });
-  // Mask size on the primary bar, in the mode's old slot: the user's call, and the
+  // Mask size on the primary bar, in the mode's old slot: and the
   // right one, it is the dial that decides what a paint pass costs and where it
   // lived buried it below the fold in the big room.
   const maskCtl = document.createElement("span");
@@ -7963,7 +7963,7 @@ function paintBody(node, body) {
   // Mask shape stays out of this primary bar so Denoise and Mask size keep the room
   // they need. Its four compact icons live beside Seed in the settings box.
   topbar.appendChild(barRight);
-  // Generate above, the mode beneath it, one stacked block per the user's layout
+  // Generate above, the mode beneath it, one stacked block per your layout
   // NOT one box: Generate and the mode are two boxes stacked, each its own, and the
   // mode's box takes the width its three words need rather than being squeezed to
   // the button's width. The pair parks hard against the bar's right edge.
@@ -8042,7 +8042,7 @@ function paintBody(node, body) {
         // node._rnCfg, and writing to the old object then lands on something nothing
         // reads: the mask came back, the panel said nothing, and the key stayed empty.
         const live = node._rnCfg?.paint || P;
-        // it REPLACES rather than adding to what is there, which is what the user
+        // it REPLACES rather than adding to what is there, which is what you
         // asked for: press it and the canvas shows that mask. The strokes go with it,
         // because they were drawn against a mask that is no longer the one underneath.
         live.auto_mask = d.mask;
@@ -8193,7 +8193,7 @@ function paintBody(node, body) {
     render(node);
   };
 
-  // SAVE MASK IS GONE, because it was never the user's job. The mask now uploads by
+  // SAVE MASK IS GONE, because it was never your job. The mask now uploads by
   // itself when a stroke ends and when an auto mask lands, so what an ordinary queue
   // paints through is always what is on screen. Clear stores NO mask instead of
   // uploading an empty one. The button was not broken, it was manual: paint, queue
@@ -8328,7 +8328,7 @@ function paintBody(node, body) {
   rlab.style.cssText = "flex:none;width:96px";
   rlab.textContent = "Use as reference";
   refRow.appendChild(rlab);
-  // THE MODEL DECIDES whether these are offered, the user's rule since the Models
+  // THE MODEL DECIDES whether these are offered, your rule since the Models
   // tab exists: references are Krea 2 conditioning, so a rig whose CLIP type is
   // krea2 can carry them and any other model cannot, wherever the render runs. A
   // graph with no rigs configured keeps the old renderer-kind rule (internal Paint
@@ -8383,7 +8383,7 @@ function paintBody(node, body) {
     routeBox.appendChild(warn);
   }
 
-  // THE OLD "LoRA tab / Wired in" SWITCH, retired by the user 2026-08-12: the Paint
+  // THE OLD "LoRA tab / Wired in" SWITCH, retired by the Paint
   // LoRAs tab in the paint column is the one LoRA choice now, and this row said the
   // same kind of thing in different words right underneath it. It still WORKS for a
   // workflow saved with the non-default "tab" setting (Paint Render keeps honouring
@@ -8908,7 +8908,7 @@ function modelsBody(node, page) {
   mwrap.style.cssText = "display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start";
   page.appendChild(mwrap);
   // box headers carry an icon, an accent and an optional badge now, the
-  // ChatGPT-mock direction the user pointed at: sections identify themselves
+  // ChatGPT-mock direction the direction pointed at: sections identify themselves
   // at a glance and the border whispers the same colour
   const mkBox = (title, accent, icon, badge) => {
     const a = accent || "#c8ccd2";
@@ -8962,7 +8962,7 @@ function modelsBody(node, page) {
     pillMount(box).appendChild(row);
     return row;
   };
-  // ---- the page header and the RIG bar, the user's mock made real:
+  // ---- the page header and the RIG bar, your mock made real:
   // rig chips with an ACTIVE badge, add and manage on the same line
   {
     const head = document.createElement("div");
@@ -9037,7 +9037,7 @@ function modelsBody(node, page) {
     const spring = document.createElement("span");
     spring.style.flex = "1";
     bar.appendChild(spring);
-    // ACTIVE PROMPT (the user's ask): which Prompts-tab row this rig renders,
+    // ACTIVE PROMPT: which Prompts-tab row this rig renders,
     // right here, and a switcher. Choosing a row moves this rig into that
     // row's rig list (and out of the others), so one rig has one prompt.
     if (M.rigs.length && Array.isArray(cfg.prompts?.rows)) {
@@ -9329,7 +9329,7 @@ function modelsBody(node, page) {
          + "only worth it with plenty of RAM to spare.");
   }
 
-  // IDENTITY RESCUE, SHELVED (2026-08-14, the user's call): restoring the
+  // IDENTITY RESCUE, SHELVED: restoring the
   // LoRA-touched layers toward the official base did not bring faces back on
   // the moody mix - even attention layers that literally WERE the official
   // weights changed nothing, so the mechanism lives deeper. The backend
@@ -9717,7 +9717,7 @@ function promptsBody(node, body) {
     sub.textContent = "Write prompts that live with the model they were written for.";
     head.append(h1, sub);
     body.appendChild(head);
-    // the PROMPT bar, the user's call: switch and add prompts up here, one
+    // the PROMPT bar: switch and add prompts up here, one
     // editor below for the active one. The chip names the prompt and its
     // rig; the active prompt is lit and badged.
     {
@@ -9798,7 +9798,7 @@ function promptsBody(node, body) {
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
     name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
-    // RIGS (the user's ask: one prompt, several models): a chip per rig on
+    // RIGS: a chip per rig on
     // the Models tab, click to include or drop; row.rig mirrors the first for
     // older readers. No chip lit = an unlinked row that serves any rig.
     const rigPick = document.createElement("div");
@@ -9848,7 +9848,7 @@ function promptsBody(node, body) {
     if (row.kind === "krea2") {
       // THE PROMPT FRAME ITSELF, one for one: the same buildFrameEditor the node's
       // panel calls, values living in row.frame, the assembled prompt streaming into
-      // row.text through the same server preview the node uses. What the user asked
+      // row.text through the same server preview the node uses. What you asked
       // for three times, drawn by the code that already existed.
       if (!FRAME_DEF) {
         const wait = document.createElement("div");
@@ -9883,7 +9883,7 @@ function promptsBody(node, body) {
         // the mock's two columns: the frame on the left, the assembled prompt
         // in a PROMPT PREVIEW card on the right, side by side when wide
         // the frame lays itself out in two columns now (writing left,
-        // dials and preview right), the arrangement the user drew
+        // dials and preview right), the arrangement you drew
         F.twoColumn = true;
         // the studio has its own tab now: Advanced on the frame opens it there
         F.openCameraTab = () => {
@@ -9939,14 +9939,14 @@ function promptsBody(node, body) {
   body.appendChild(add);
 }
 
-// THE BIG PROMPT EDITOR, the Sick Ollie interaction the user asked for: a
+// THE BIG PROMPT EDITOR, the Sick Ollie interaction you asked for: a
 // small box grows into a proper fullscreen writing surface. Esc cancels,
 // Ctrl+Enter saves, Save commits through the same change path the inline box
 // uses, so config writing stays in one place.
-// ONE CARD STYLE for grouped controls, the user's box treatment: slightly
+// ONE CARD STYLE for grouped controls, your box treatment: slightly
 // darker ground, a border, a small title. The Latent tab's CANVAS card set
 // the look; every tab's clusters use this same helper now.
-// fold: {node, key, open} makes the card a fold-down section (the user's ask:
+// fold: {node, key, open} makes the card a fold-down section (
 // SOURCE / PASS / RE-ANGLE like AUTO PROMPT). The head toggles it; the state
 // lives on node._rnCardFolds[key] so a re-render keeps it. Everything after the
 // head hides when folded.
@@ -10042,7 +10042,7 @@ function openBigEdit(title, value, onSave) {
 // Wraps a textarea so it can grow: an expand glyph in the corner, and a
 // double-click anywhere in the box, both open the big editor.
 function expandable(ta, title, onSave) {
-  // THE WRAPPER MUST CARRY THE TEXTAREA'S SIZING (the user, 2026-08-18: "the
+  // THE WRAPPER MUST CARRY THE TEXTAREA'S SIZING ( "the
   // prompt box is the wrong size, not wide enough"). These boxes sit in flex
   // rows and size themselves with flex:1, but wrapping one in a plain block
   // left that flex:1 with nothing to flex against, so the textarea fell back
@@ -10151,7 +10151,7 @@ function latentBody(node, body) {
       + "changes width. The pixel budget stays locked, so this changes the "
       + "ratio, not the scale. Snaps to 64.";
   if (!L.random) {
-    // EDGE-HANDLE RESIZE, the user's spec: grab the top or bottom edge and
+    // EDGE-HANDLE RESIZE, your spec: grab the top or bottom edge and
     // only height moves; grab left or right and only width moves; the edge
     // you hold lights up; the pixel BUDGET is locked, so a drag trades one
     // dimension for the other and the total pixels stay where the Scale
@@ -10200,7 +10200,7 @@ function latentBody(node, body) {
       const budget = w0 * h0;      // locked for the whole drag
       const snap = (v) => Math.max(256, Math.min(4096, Math.round(v / 64) * 64));
       // 3 px of pointer per 8 canvas px: a full sweep of the stage covers a
-      // sensible range instead of the old x6, which the user found twitchy
+      // sensible range instead of the old x6, which you found twitchy
       const GAIN = 8 / 3;
       const move = (ev) => {
         let w = w0, h = h0;
@@ -10241,7 +10241,7 @@ function latentBody(node, body) {
   }
   stage.appendChild(rect);
 
-  // ASPECT presets, the Sick Ollie canvas system the user preferred: a ratio
+  // ASPECT presets, the Sick Ollie canvas system you preferred: a ratio
   // shapes the pixel budget (the Scale number below) into a canvas, floored
   // to 64s. w/h stay the stored truth, so nothing downstream changes.
   const ASPECTS = ASPECT_LIST;
@@ -10297,7 +10297,7 @@ function latentBody(node, body) {
   dice.onclick = () => { L.random = !L.random; writeCfg(node); render(node); };
   chips.appendChild(dice);
 
-  // the whole canvas cluster lives in ONE card, the user's call: slightly
+  // the whole canvas cluster lives in ONE card: slightly
   // darker ground and a border, so size controls read as a single place
   const cols = document.createElement("div");
   cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1.5fr) "
@@ -10348,7 +10348,7 @@ function latentBody(node, body) {
     previewCard.appendChild(strip);
   }
   cols.appendChild(previewCard);
-  // the same presets as a NAMED dropdown, the Sick Ollie box the user asked
+  // the same presets as a NAMED dropdown, the Sick Ollie box you asked
   // for beside the visual chips: squares for the eye, names for the click
   {
     const arow = document.createElement("div");
@@ -10381,7 +10381,7 @@ function latentBody(node, body) {
     swapTop.onclick = () => {
       const w = L.w; L.w = L.h; L.h = w;
       // the tag follows the flip, or the old tag and the new ratio light
-      // two chips at once (the user's report)
+      // two chips at once
       const flipped = ASPECTS.find((x) => Math.abs(L.w / L.h - x[1] / x[2]) < 0.02);
       L.aspect = flipped ? flipped[0] : "";
       writeCfg(node); render(node);
@@ -11451,7 +11451,7 @@ const tabLit = (cfg, id) =>
                              || String(cfg.tabs?.i2i?.reangle?.studio || "").trim()))
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
-  // IMG2IMG DOES NOT NEED A GALLERY IMAGE (the user, 2026-08-18: the dot stays
+  // IMG2IMG DOES NOT NEED A GALLERY IMAGE ( the dot stays
   // dark with the tab on and the canvas set to Wired image). Its canvas can be
   // the wired image_in or latent input, in which case the tab has no picture of
   // its own and the plain rule below - on AND a gallery image - can never light
@@ -11788,7 +11788,7 @@ async function refreshAutoStatus() {
 }
 
 // ---- vision prompt presets -------------------------------------------------
-// Shipped premades plus the user's saved ones, fetched once and after every change.
+// Shipped premades plus your saved ones, fetched once and after every change.
 let visionPrompts = {};        // {name: text}
 let visionBuiltin = [];        // names that ship with the pack (not deletable)
 async function refreshVisionPrompts() {
@@ -12087,7 +12087,7 @@ function build(node) {
 // the server tells us which images a random tab actually rolled
 api.addEventListener("rednode-workspace-seed", (e) => {
   // the run's seed, straight from the build: feeds "Use last queued" and
-  // "Copy last seed" on the Models tab, the Sick Ollie seed console the user
+  // "Copy last seed" on the Models tab, the Sick Ollie seed console you
   // asked ours to match
   const d = e?.detail || {};
   for (const n of allNodes()) {

@@ -20,7 +20,7 @@ import { app } from "../../scripts/app.js";
 // and the honest answer is an upstream report rather than a deeper hack here.
 //
 // Deliberately cheap and idempotent: a resize is rare, the work is a size write and a
-// dirty flag, and it must never fight the user or fire during a drag.
+// dirty flag, and it must never fight you or fire during a drag.
 
 const PANEL_WIDGETS = ["rednode_workspace_ui", "rednode_control_ui",
                        "rednode_channel_ui", "rednode_lora_ui", "rednode_group_ui"];
@@ -48,7 +48,7 @@ function healPanels() {
       if (!isPanelNode(node)) continue;
       // setSize with the size it already has is the smallest thing that makes
       // litegraph and the widget store agree again: it runs onResize, which is what
-      // recomputes a DOM widget's box, without changing anything the user chose.
+      // recomputes a DOM widget's box, without changing anything you chose.
       try { node.setSize?.(node.size); } catch (e) { /* a half-built node, skip it */ }
       node.setDirtyCanvas?.(true, true);
       touched++;

@@ -8,7 +8,7 @@
 
 // Which tabs exist, in the order they are shown.
 
-// GROUPED ORDER (2026-08-16, the user's call): each group runs contiguously
+// GROUPED ORDER: each group runs contiguously
 // so the strip's colour underlines read as bands - model tabs, then canvas
 // tabs, then mood, edit, post, settings - instead of interleaving.
 export const TAB_ORDER = [
@@ -458,7 +458,7 @@ export function maskValueOf(pos) {
 
 // Mirrored from WHOLE_FRAME_CAPS in paint_render.py. A resample costs no VRAM by
 // itself; the cap protects what comes NEXT, which is painting and rendering on the
-// bigger canvas, and that was the user's explicit call.
+// bigger canvas, and that was your explicit call.
 export const WHOLE_FRAME_CAPS = { low: 1280, medium: 2048, high: 4096 };
 
 export function wholeFrameLimit(tier) {

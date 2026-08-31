@@ -1,6 +1,6 @@
 """RedNode Rig Out / Rig In - the Paint bridge pattern for external engines.
 
-The user's call (2026-08-14), replacing the wire-six-sockets approach: "we
+Your call (2026-08-14), replacing the wire-six-sockets approach: "we
 create one node similar to the paint - one that has out and then one that has
 in. That's it." Rig Out finds the Studio Workspace in the graph by itself (the
 same discovery Paint Out uses), picks a rig by name, and hands out everything
@@ -62,7 +62,7 @@ class RedNodeRigOut:
         name = r.get("name") or "(unnamed)"
         if want and name != want:
             # a typo must be LOUD, not a silent fall to the active rig with a
-            # different prompt - exactly the confusion the user hit
+            # different prompt - exactly the confusion you hit
             print("[RedNode Rig Out] no rig named %r on the Models tab; using "
                   "the active rig %r and ITS prompt row. Pick from the "
                   "dropdown to avoid typos." % (want, name), flush=True)
@@ -86,7 +86,7 @@ class RedNodeRigOut:
             scale = 1.0
         w = max(64, int(int(lc.get("w", 832)) * scale) // 8 * 8)
         h = max(64, int(int(lc.get("h", 1216)) * scale) // 8 * 8)
-        # THE MODE SWITCH, the user's design: an image wired in means i2i and
+        # THE MODE SWITCH: an image wired in means i2i and
         # the rig's own strength dial; nothing wired means a fresh render, and
         # an image to image with no image runs at denoise 1.0, no guessing
         denoise = float(r.get("denoise", 1.0)) if image is not None else 1.0

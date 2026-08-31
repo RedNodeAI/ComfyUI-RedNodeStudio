@@ -23,7 +23,7 @@ Slot schema (all keys optional except name):
      "random": false, "rand_min": 0.0, "rand_max": 2.0,
      "scale_min": -2.0, "scale_max": 2.0,
      "label": "nickname",           # display only; the file is still `name`
-     "note": "free text"}           # user's own notes, carried through presets
+     "note": "free text"} # user's own notes, carried through presets
 
 `rand_min`/`rand_max` are the random band (rolled when `random` is on).
 `scale_min`/`scale_max` are UI-only: the slider's end stops. They carry through
@@ -128,7 +128,7 @@ def parse_slots(stack_json):
             "color": s.get("color") or None,
             # optional nickname shown instead of the filename (display only)
             "label": str(s.get("label", "") or "").strip() or None,
-            # free-text note the user keeps about this LoRA (never affects sampling)
+            # free-text note you keep about this LoRA (never affects sampling)
             "note": str(s.get("note", "") or "") or None,
             # colour of the nickname text (display only)
             "label_color": str(s.get("label_color", "") or "").strip() or None,

@@ -96,7 +96,7 @@ VRAM_CAPS = {
 
 
 def rerun_reasons(cfg):
-    """Why this node cannot be cached between queues, in the user's own terms.
+    """Why this node cannot be cached between queues, in your own terms.
 
     A node that re-runs every time re-captions every time, and from the console
     that just looks like the caption cache failing. These are the switches that
@@ -324,7 +324,7 @@ def _instructions_path(make=False):
 
 
 def load_caption_instructions():
-    """Shipped instructions plus the user's saved ones; shipped names always win.
+    """Shipped instructions plus your saved ones; shipped names always win.
     Every entry comes back as {system, question} whatever shape it was stored in."""
     out = {}
     try:
@@ -711,7 +711,7 @@ def parse_config(config_json):
         "ui": pln.get("ui") if isinstance(pln.get("ui"), dict) else {},
         "seed": max(0, plseed),
     }
-    # THE CAMERA MASTER SWITCH (the user's ask, 2026-08-18: "there is no way to
+    # THE CAMERA MASTER SWITCH ( "there is no way to
     # turn the cameras off, no toggle on this tab like the others"). Off, the
     # Camera tab contributes NOTHING to a render: no camera paragraph, no camera
     # slider LoRAs, no camera path, and the re-angle falls back to its bands.
@@ -719,7 +719,7 @@ def parse_config(config_json):
     # exactly as it was - the same contract as the image tabs' own toggles.
     cin = data.get("camera") if isinstance(data.get("camera"), dict) else {}
     camera_cfg = {"on": True if cin.get("on") is None else bool(cin.get("on"))}
-    # LORA SETS (the user's ask, 2026-08-18): the LoRAs tab holds MAIN plus any
+    # LORA SETS: the LoRAs tab holds MAIN plus any
     # number of named sets, each a whole stack of its own, each its own tab up
     # there. A rig, a Detailer pass and the paint pass name the set they run
     # with, so image-to-image, from-scratch, camera work and different models
@@ -831,7 +831,7 @@ def parse_config(config_json):
         if not isinstance(p, dict):
             continue
         fr = p.get("frame") if isinstance(p.get("frame"), dict) else {}
-        # ONE PROMPT, SEVERAL RIGS (the user's ask, 2026-08-17): a row lists the
+        # ONE PROMPT, SEVERAL RIGS: a row lists the
         # rigs it serves; the old single "rig" is read as a one-item list and
         # written back as the first entry, so older configs keep working.
         _rigs = [str(x).strip() for x in (p.get("rigs") if isinstance(p.get("rigs"), list) else [])
@@ -851,7 +851,7 @@ def parse_config(config_json):
             "frame": {str(k): v for k, v in fr.items()
                       if isinstance(v, (str, int, float, bool))},
             # the caption layer: sectioned by the split instruction, kept apart from
-            # the typed text so clearing it never eats the user's words
+            # the typed text so clearing it never eats your words
             "auto": {str(k): str(v) for k, v in
                      (p.get("auto") if isinstance(p.get("auto"), dict) else {}).items()
                      if isinstance(v, str)},
@@ -926,7 +926,7 @@ def parse_config(config_json):
         # what you want for a patch.
         "prompt": str(pin.get("prompt") or ""),
         # The automatic caption is a separate layer, not text pasted into the box.
-        # Keeping it separate lets OFF remove it without eating the user's words, and
+        # Keeping it separate lets OFF remove it without eating your words, and
         # lets an empty box combine it with the wired main prompt instead of replacing
         # conditioning whose original text is not available here.
         "auto_prompt": str(pin.get("auto_prompt") or ""),
@@ -988,7 +988,7 @@ def parse_config(config_json):
         paint_cfg["passes"] = max(1, min(PAINT_PASS_MAX, int(pin["passes"])))
     # Which LoRAs the paint branch carries: the main stack's ("main", the default and
     # exactly what every workflow did before this existed) or the model choice's own
-    # paint stack applied to the raw wired model ("paint"). Two options, the user's
+    # paint stack applied to the raw wired model ("paint"). Two options, your
     # call; a bare paint pass is the raw model wired in. A branch, never a chain:
     # chained, the paint pass would inherit the very style LoRAs it is escaping.
     # "none" existed for one unreleased day and folds into "main".
@@ -1001,7 +1001,7 @@ def parse_config(config_json):
     # queue can never repaint by accident.
     paint_cfg["run_token"] = str(pin.get("run_token") or "")
     # THE PROMPTS TAB FEEDS THE PAINT, when the paint box is silent. Text typed in the
-    # Paint tab always wins, the user's standing rule: what you write is first
+    # Paint tab always wins, your standing rule: what you write is first
     # priority. An empty box takes the row linked to the ACTIVE rig, so the Prompt Box
     # editor on the Prompts tab authors paint prompts by simply leaving the paint box
     # alone. Paint Out re-resolves against its own pinned rig; prompt_from says which
@@ -1144,7 +1144,7 @@ def blocked():
     """A silent ExecutionBlocker: downstream nodes skip instead of crashing.
 
     Core nodes like PreviewImage have no None guard, so handing them None on a
-    paint run or in external-sampler mode is a TypeError in the user's face.
+    paint run or in external-sampler mode is a TypeError in your face.
     Blocking the socket is core's own way of saying "nothing this run". Plain
     None offline, where comfy_execution does not exist.
     """
@@ -1294,7 +1294,7 @@ def lora_set_cfg(cfg, set_name="", who="Workspace"):
 def load_paint_rig(cfg, name=""):
     """The rig THROUGH the paint LoRA routing: what a paint node should render with.
 
-    "It should just be doing it automatically" (the user, 2026-08-12): the raw rig
+    "It should just be doing it automatically": the raw rig
     goes through whichever stack the Paint LoRAs routing names, the paint stack when
     it says paint, the main tab's stack otherwise, so every socket that hands a
     model to a paint chain hands the SAME stacked model the routing promises.
@@ -1824,7 +1824,7 @@ class RedNodeStudioWorkspace:
             else:
                 print("[RedNode Workspace] the i2i canvas is set to Wired latent "
                       "but nothing is wired into latent", flush=True)
-        # RE-ANGLE (the user's ask, 2026-08-17): image to image from a different
+        # RE-ANGLE: image to image from a different
         # angle. Before the i2i pass, the source is re-shot by the multi-angle edit
         # model from the camera this tab asks for - the three bands here, or the
         # active prompt row's Camera Studio (a path gives several views, one
@@ -1864,7 +1864,7 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
                       % exc, flush=True)
-        # SWAP (the user's ask, 2026-08-18): the Subject onto the person in the
+        # SWAP: the Subject onto the person in the
         # picture, in the engine where a swap lands - Qwen-Image-Edit + the BFS
         # LoRA - before the Krea 2 pass finishes it with the same Subject at the
         # tab's denoise. After Re-angle on purpose: the face lands on the final
@@ -2000,7 +2000,7 @@ class RedNodeStudioWorkspace:
         # Only when a real i2i pass was ASKED FOR and could not be delivered. Everything
         # off still outputs nothing, which is the documented behaviour and the honest
         # one: inventing a canvas nobody asked for would silently generate at the wrong
-        # size. But if the Img2Img tab is on and set to a real pass, the user is plainly
+        # size. But if the Img2Img tab is on and set to a real pass, you are plainly
         # expecting a latent, so give one at the source's own size rather than a None.
         if latent is None and it["on"] and not it["prompt_only"]:
             fw = fh = int(cfg["resize"] or 1024) or 1024
@@ -2057,7 +2057,7 @@ class RedNodeStudioWorkspace:
             a = t["auto"]
             wired = [wired_map[tab_name]] if wired_map[tab_name] else []
             if not (a["on"] and t["on"] and (t["images"] or wired)):
-                # a wired caption is text the user plumbed in by hand, so it ALWAYS
+                # a wired caption is text you plumbed in by hand, so it ALWAYS
                 # passes through, even with this tab's auto prompt (or the tab itself)
                 # switched off. Dropping it made "I wired text in and got nothing out"
                 # a silent, baffling dead end. Engines still need auto on. The
@@ -2134,8 +2134,8 @@ class RedNodeStudioWorkspace:
             # FRESH (fixed off) rebuilds but still stores, so flipping back is warm.
             prompts[tab_name] = _build()
             if prompts[tab_name]:
-                # the caption itself is only echoed when asked for: it is the user's
-                # writing about the user's picture, and a console is a public place
+                # the caption itself is only echoed when asked for: it is your
+                # writing about your picture, and a console is a public place
                 # the moment a screenshot is taken
                 if cfg["dials"].get("echo_prompts", True):
                     print(f"[RedNode Workspace] auto prompt ({tab_name}/{a['mode']}): "
@@ -2143,7 +2143,7 @@ class RedNodeStudioWorkspace:
                 else:
                     print(f"[RedNode Workspace] auto prompt ({tab_name}/{a['mode']}): "
                           f"{len(prompts[tab_name])} characters", flush=True)
-        # hand the VRAM back if that is what the user asked for; holding it was only
+        # hand the VRAM back if that is what you asked for; holding it was only
         # ever to get through this run's tabs on one load
         if ollama_tabs and int(ga0["keep_alive"]) <= 0:
             autoprompt.ollama_unload(ga0["model"], ga0["url"])
@@ -2207,7 +2207,7 @@ class RedNodeStudioWorkspace:
             # ALWAYS RE-ASSEMBLE A KREA 2 ROW WITH A FRAME AT QUEUE TIME. The
             # row's text is the panel's last preview; with the studio on its own
             # Camera tab, moving the camera there changed the studio state but
-            # not that text, so the queue rendered a stale paragraph (the user's
+            # not that text, so the queue rendered a stale paragraph (your
             # "height changes nothing" and then "everything is overhead", both
             # 2026-08-18). The frame + studio state are the truth; the text is a
             # cache of them.
@@ -2243,7 +2243,7 @@ class RedNodeStudioWorkspace:
                         # the camera: the Camera Studio state when set, else the
                         # simple height stop. Missing here meant the studio's
                         # paragraph vanished from the QUEUED prompt whenever the
-                        # auto prompt re-assembled the frame (the user's report)
+                        # auto prompt re-assembled the frame
                         camera_height=str(_fr.get("camera_height") or "Eye level"),
                         camera=(str(_fr.get("camera") or "") if camera_on(cfg) else ""),
                         style_in=_ins.get("style", ""),
@@ -2297,7 +2297,7 @@ class RedNodeStudioWorkspace:
         # and nobody touches the LoRA tab. Missing files are the stack's own
         # business (it reports and skips, like any slot).
         _cam_slots = []
-        # THE CAMERA PATH IN THE WORKSPACE (the user's report: "the path only
+        # THE CAMERA PATH IN THE WORKSPACE ("the path only
         # makes one image here"): when the active prompt's studio has a path,
         # the built-in sampler renders every shot - its own camera words and
         # its own LoRA strengths per shot - and the image output is the batch.
@@ -2565,7 +2565,7 @@ class RedNodeStudioWorkspace:
         # fresh canvas samples at 1.0 from an empty Krea 2 latent (16 channel).
         # NEVER ON A PAINT RUN: a paint Generate queues this node with a run token,
         # and rendering a whole fresh image underneath the paint pass is exactly
-        # the "ignores everything I painted" the user reported. A paint run paints.
+        # the "ignores everything I painted" you reported. A paint run paints.
         # the active rig's prompt row as PLAIN TEXT for the two appended string
         # sockets: what an external renderer (the NovelAI chain) reads instead
         # of conditioning. Wildcards roll on this run's seed, same as the
@@ -2697,7 +2697,7 @@ class RedNodeStudioWorkspace:
         # queued THIS node with a run token stamped into the config copy. The pass
         # runs on the routed paint model (paint stack overriding main, as agreed)
         # with the folded Studio's conditioning, which is the identity clip system
-        # the user was missing: refs, edit masks and all, exactly what the classic
+        # what was missing: refs, edit masks and all, exactly what the classic
         # Paint Render wiring carried, with no render node on the canvas.
         ui_extra = None
         if _prt:

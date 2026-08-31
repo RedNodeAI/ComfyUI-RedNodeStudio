@@ -8,7 +8,7 @@ Two caches keep it cheap, both on disk beside the presets:
 - hashes, keyed by path+size+mtime (re-hashing a 600 MB file every click would be silly);
 - Civitai answers, keyed by hash (including "not found", so misses stay quiet).
 
-Nothing here runs unless the user clicks ⓘ. No network call happens at import, on queue,
+Nothing here runs unless you clicks ⓘ. No network call happens at import, on queue,
 or during sampling — this module only serves an HTTP route for the frontend.
 """
 
@@ -109,7 +109,7 @@ def _norm(text):
 
 # ------------------------------------------------------------------- downloads
 #
-# Deliberate rules, because this writes to the user's model folder:
+# Deliberate rules, because this writes to your model folder:
 #   * one file per explicit click — never a batch, never automatic;
 #   * streams to "<name>.part", verifies SHA-256 against what Civitai published,
 #     and only then moves it into place. A mismatch deletes the file;

@@ -27,7 +27,7 @@ const norm = (s) => String(s ?? "").trim();
  * @param {string[]} groups   every group name in the workflow
  * @param {object[]} rules    {kind, a, b, on}
  * @param {object}   opts
- *   - manual: {name: boolean}  what the user set by hand, the starting position
+ * - manual: {name: boolean} what you set by hand, the starting position
  *   - state:  {key: boolean}   Workspace facts an "only if" rule can read
  * @returns {{on: object, why: object, conflicts: object[], order: string[]}}
  */

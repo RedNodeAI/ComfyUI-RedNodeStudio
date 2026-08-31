@@ -11,7 +11,7 @@ import { wsPref } from "./rednode_settings.js";
 //
 // This pack is mostly panels. One Workspace builds around 490 elements, a Control Panel
 // of 22 rows carries a range input each, and a big workflow has a dozen more. Zoomed
-// out that is thousands of elements being painted to show the user a grey smudge.
+// out that is thousands of elements being painted to show you a grey smudge.
 //
 // So: below a zoom, our panels stop rendering their contents. `content-visibility:
 // hidden` is exactly the tool — the browser skips the whole subtree's layout and paint
@@ -19,7 +19,7 @@ import { wsPref } from "./rednode_settings.js";
 // One class on <body> switches every panel at once, so crossing the threshold costs a
 // single class toggle rather than a walk of anything.
 //
-// Off is a real option (0), because it is a display trade and the user gets to make it.
+// Off is a real option (0), because it is a display trade and you get to make it.
 
 const PANELS = ["rn-ws-wrap", "rn-cp-wrap", "rn-gc-wrap", "rn-ls-wrap", "rn-pb-wrap",
                 "rn-pl-wrap", "rn-ps-wrap", "rn-rc-wrap", "rn-rt-wrap", "rn-rv-wrap",

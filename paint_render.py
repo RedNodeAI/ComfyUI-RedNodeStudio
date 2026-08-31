@@ -71,7 +71,7 @@ def _bbox(mask, pad=0.25):
 # 2.25x and then 3.4x without anyone touching it, while "2048" means 2048 no matter how
 # many passes it has been through. These caps are what stops that target asking for more
 # than the card has, so the dial can offer 4K without a low-tier machine trying it.
-# LOW IS 1280, not 1536, at the user's call after watching a low-tier run: 1536 was
+# LOW IS 1280, not 1536, at after watching a low-tier run: 1536 was
 # still asking too much of a small card. This number matters more than it looks,
 # because the caps are the ONLY thing that shrinks a painted region: the size dial is
 # a pixel BUDGET that never scales a region below its own pixels, so on a big picture
@@ -211,11 +211,11 @@ def _fit_region(t_nhwc, budget_side, cap=0, floor=False):
 
     THE DIAL IS A TARGET IN BOTH DIRECTIONS. It used to refuse to scale a region DOWN,
     on the reasoning that the composite would scale it back up afterwards and soften
-    the one area being worked on. That reasoning is real but it is not the user's to
+    the one area being worked on. That reasoning is real but it is not your to
     have made for them, and it made a control named "size" unable to reduce a size:
     set 1024, paint a 1404 region, and it rendered 1408 while the readout said 1024.
 
-    Two things outrank the softening, both from the user, who paints for a living:
+    Two things outrank the softening, both from you, who paints for a living:
 
     - A REGION FAR ABOVE A MODEL'S NATIVE RESOLUTION IS NOT SOFT, IT IS WRONG. Push an
       SD1.5-era model to 1404 and it duplicates limbs and repeats texture. Refusing to
