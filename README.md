@@ -276,13 +276,13 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_Simple.json` is the place to start since 1.2.0: one workspace, one
-  review, one save. The models load on the Models tab, the prompts live on the Prompts
-  tab, the sampler runs inside the node, and painting picks its model from the same
-  list. No loader nodes, no sampler nodes, no prompt wiring.
-- `RedNodeStudio_Ultima_V1.2.json` is the full rig with external chains, detailers
-  and upscalers. Everything in it keeps working unchanged: the rigs and the Prompts tab
-  are options, not requirements.
+- `RedNodeStudio_Ultima_V1.2.json` is the full rig: one workspace panel driving the
+  models, the prompts and the sampler, with painting, identity edit, the detailer
+  passes, the upscale and the grading chain around it. The rigs and the Prompts tab are
+  options rather than requirements, so a graph wired the old way keeps working.
+- `RedNode_MultiAngle_QwenEdit2511.json` re-shoots an existing photo from another
+  viewpoint: the Camera Studio's geometry becomes a Multiple-Angles prompt for
+  Qwen-Image-Edit-2511, and Krea 2 finishes the frame.
 
 - `RedNodeStudio_Ultima_V1.2.json`, my daily-driver pipeline with the whole rig wired up:
   workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
