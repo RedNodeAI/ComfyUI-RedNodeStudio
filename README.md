@@ -286,7 +286,15 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
 
 - `RedNodeStudio_Ultima_V1.2.json`, my daily-driver pipeline with the whole rig wired up:
   workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
-  other packs, and ComfyUI Manager offers them when you open it.
+  other packs, and ComfyUI Manager offers them when you open it: SeedVR2 Video Upscaler,
+  pysssss custom-scripts, easy-use, comfyui-krea-moodboards and Krea2-BBOX-Prompter. Manager
+  cannot fetch model files, so the upscaler's two are on you:
+  `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and `ema_vae_fp16.safetensors`.
+
+One optional pack matters to the STUDIO itself rather than to a workflow:
+**ComfyUI-Easy-Sam3** gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in
+`models/sams`). Without it the pack runs fine and a detailer pass says so and passes the picture
+through untouched, rather than failing.
 
 Baked-in settings worth knowing: ModelSamplingAuraFlow shift 1.15 (ComfyUI's stock Krea 2 default,
 the node is there as a handle), Euler with the simple scheduler, turbo at 8 steps and CFG 1. With
