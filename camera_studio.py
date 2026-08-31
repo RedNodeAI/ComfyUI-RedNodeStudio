@@ -152,6 +152,7 @@ def parse_state(config_json):
             # an apartment, a pitch, a street need room. Display only.
             "stage_zoom": (d.get("stage_zoom") if d.get("stage_zoom") in ("normal", "wide", "huge")
                            else "normal"),
+            "light_loras": _light_loras(d),
             "auto_latent": bool(d.get("auto_latent")),
             "latent_mp": num(d.get("latent_mp"), 1.0, 0.25, 4.0),
             "latent_batch": int(num(d.get("latent_batch"), 1, 1, 64))}
@@ -178,6 +179,48 @@ def _camera_path(d):
         return max(-360.0, min(360.0, v))
     return {"mode": mode, "shots": shots, "b": b,
             "orbit_from": _deg("orbit_from", 0.0), "orbit_to": _deg("orbit_to", 180.0)}
+
+
+def _light_loras(d):
+    """The lighting LoRA controls, same shape as the camera ones. Both rows
+    Off until asked: a slider that costs image quality is not switched on for
+    anybody by default."""
+    out = {}
+    raw = d.get("light_loras") if isinstance(d.get("light_loras"), dict) else {}
+    for key in _ct.LIGHT_LORA_KEYS:
+        e = raw.get(key) if isinstance(raw.get(key), dict) else {}
+        mode = e.get("mode") if e.get("mode") in ("off", "auto", "manual") else "off"
+        try:
+            strength = float(e.get("strength", 0.0))
+        except (TypeError, ValueError):
+            strength = 0.0
+        lo, hi = _ct.LIGHT_LORA_RANGE[key]
+        out[key] = {"name": str(e.get("name") or ""), "mode": mode,
+                    "strength": max(lo, min(hi, strength))}
+    return out
+
+
+def resolve_light_loras(st):
+    """[{key, name, strength}] for the lighting LoRAs this state switches on.
+
+    Auto reads the light rig - the brightness slider from the level the lights
+    actually make, the colour slider from the key light's kelvin - so the dials
+    follow the stage instead of being set twice.
+    """
+    out = []
+    for key in _ct.LIGHT_LORA_KEYS:
+        e = (st.get("light_loras") or {}).get(key) or {}
+        if e.get("mode", "off") == "off" or not e.get("name"):
+            continue
+        if e["mode"] == "auto":
+            strength = _ct.LIGHT_AUTO_FN[key](st["camera"], st["subjects"],
+                                              st.get("lights") or [])
+        else:
+            strength = float(e.get("strength", 0.0))
+        if abs(strength) < 0.05:
+            continue
+        out.append({"key": key, "name": e["name"], "strength": round(strength, 2)})
+    return out
 
 
 def _camera_loras(d):

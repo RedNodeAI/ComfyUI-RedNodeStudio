@@ -903,6 +903,79 @@ def light_words(camera, subjects, lights, join=", "):
     return _cap(join.join(b for b in bits if b)) + "."
 
 
+# ------------------------------------------------------- the lighting LoRAs
+# Two third-party sliders the light rig can drive, the way the camera drives
+# its own. Every number below was MEASURED on the sandbox (2026-08-19, 54
+# images, mean luminance and a warm/cool balance per frame); the tables are in
+# the hub's CAMERA_STUDIO.md. Nothing here is assumed, because the two authors
+# of "light sliders" disagree about which way is brighter.
+LIGHT_LORA_KEYS = ("brightness", "colour")
+LIGHT_LORA_RANGE = {"brightness": (-10.0, 10.0), "colour": (-4.0, 4.0)}
+# the part of each dial that is actually usable, for the panel to say so
+LIGHT_LORA_CLEAN = {"brightness": (-5.0, 3.0), "colour": (-2.5, 4.0)}
+
+# BRIGHTNESS: negative is dark, and the plus side is not a brightness control -
+# it blows highlights instead of lifting exposure (+6 clipped 11-37% of the
+# frame to white while the mean barely moved). So auto only ever darkens.
+LIGHT_AUTO_BY_STEP = {-2: -3.5, -1: -2.0, 0: 0.0, 1: 0.0, 2: 0.0}
+
+# COLOUR: positive is warm. Linear in MIREDS from a neutral, with a different
+# factor each way because the LoRA is not symmetric: the warm side is gentle
+# and near-linear to +4, the cool side turns violent past -2.5.
+COLOUR_NEUTRAL_K = 5200.0
+COLOUR_WARM_PER_MIRED = 0.011
+COLOUR_COOL_PER_MIRED = 0.027
+COLOUR_MAX_WARM = 4.0
+COLOUR_MAX_COOL = -2.5
+
+
+def auto_light_strength(camera, subjects, lights):
+    """Brightness-slider strength from the rig's own level. 0 when the scene
+    is ordinary or bright: this file cannot brighten."""
+    return LIGHT_AUTO_BY_STEP.get(rig_level(camera, subjects, lights), 0.0)
+
+
+def key_light_kelvin(camera, subjects, lights):
+    """The colour temperature of the light doing the work, or 0 when none of
+    them states one. The key is the strongest AT THE SUBJECT, the same rule
+    light_words() uses."""
+    live = [l for l in (lights or []) if l.get("on", True)]
+    if not live:
+        return 0.0
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    best, best_power = None, -1.0
+    for l in live:
+        lpos = [float(x) for x in l.get("pos", [0, 2.0, 0])]
+        power = illuminance(l.get("intensity", 1.0), _len(_v(lpos, face)))
+        if power > best_power:
+            best, best_power = l, power
+    try:
+        return float((best or {}).get("kelvin", 0) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def auto_colour_strength(camera, subjects, lights):
+    """Colour-slider strength from the key light's kelvin. 0 when the rig does
+    not state a colour - saying nothing beats inventing a cast."""
+    k = key_light_kelvin(camera, subjects, lights)
+    if k <= 0:
+        return 0.0
+    mired = 1e6 / max(1000.0, k)
+    delta = mired - (1e6 / COLOUR_NEUTRAL_K)          # + = warmer than neutral
+    if delta >= 0:
+        return round(min(COLOUR_MAX_WARM, delta * COLOUR_WARM_PER_MIRED), 2)
+    return round(max(COLOUR_MAX_COOL, delta * COLOUR_COOL_PER_MIRED), 2)
+
+
+LIGHT_AUTO_FN = {"brightness": auto_light_strength, "colour": auto_colour_strength}
+
+
 # ---------------------------------------------------------------- presets
 # The Prompt Frame's Camera height stops as camera states, so the dial and
 # the studio share one translator. Subject 1.7m at origin facing +z; camera

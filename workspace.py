@@ -2314,7 +2314,9 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] the Camera tab is off: no camera "
                       "paragraph, no camera LoRAs, no path", flush=True)
             if isinstance(_zcam, str) and _zcam.strip():
-                from .camera_studio import parse_state as _cs_parse, resolve_camera_loras as _cs_loras
+                from .camera_studio import parse_state as _cs_parse, \
+                    resolve_camera_loras as _cs_loras, \
+                    resolve_light_loras as _cs_light_loras
                 from . import camera_translate as _ct_path
                 _cst = _cs_parse(_zcam)
                 _cam_state_row = _zrow
@@ -2325,8 +2327,15 @@ class RedNodeStudioWorkspace:
                     _cam_slots.append({"name": _e["name"], "strength": float(_e["strength"]),
                                        "enabled": True, "type": "lora",
                                        "label": "camera %s" % _e["key"]})
+                # THE LIGHTING LORAS ride the same road: extra slots for this
+                # run, driven by the light rig rather than the camera. They are
+                # on the Camera tab, so the tab's master switch covers them too.
+                for _e in _cs_light_loras(_cst):
+                    _cam_slots.append({"name": _e["name"], "strength": float(_e["strength"]),
+                                       "enabled": True, "type": "lora",
+                                       "label": "light %s" % _e["key"]})
                 if _cam_slots:
-                    print("[RedNode Workspace] camera LoRAs: "
+                    print("[RedNode Workspace] camera / light LoRAs: "
                           + ", ".join("%s @ %+.1f" % (x["label"][7:], x["strength"]) for x in _cam_slots)
                           + (" (shot 1 of %d)" % len(_shot_states) if len(_shot_states) > 1 else ""),
                           flush=True)

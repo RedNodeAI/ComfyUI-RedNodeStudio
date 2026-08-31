@@ -123,6 +123,79 @@ function kelvinColour(k) {
   if (k < 9000) return "#cfe0ff";
   return "#b9d2ff";
 }
+// THE LIGHTING LORAS. Two third-party sliders the rig can drive; every number
+// here was measured on the sandbox (2026-08-19) and must match
+// camera_translate.py - check_camera_studio_panel.mjs holds the two together.
+const LIGHT_LORA_KEYS = ["brightness", "colour"];
+const LIGHT_LORA_RANGE = { brightness: [-10, 10], colour: [-4, 4] };
+const LIGHT_LORA_CLEAN = { brightness: [-5, 3], colour: [-2.5, 4] };
+const LIGHT_LORA_LABEL = { brightness: "Brightness", colour: "Colour temp" };
+const LIGHT_LORA_HINT = {
+  brightness: "Darkens the whole picture. Measured: -3 is a real clean darkening, "
+            + "-6 very dark, -10 destroys it; the PLUS side does not brighten, it "
+            + "blows highlights. So Auto only ever darkens, from the level your "
+            + "lights actually make.",
+  colour: "Warm / cool tint, without changing exposure. Measured: + is warm and "
+        + "gentle to +4, - is cool and turns violent past -2.5. Auto reads the key "
+        + "light's Colour; a light with no colour set leaves this at 0.",
+};
+// files: ours are guessed by name, like the camera ones
+const LIGHT_LORA_GUESS = {
+  brightness: [/light[_ -]?slider/i, /bright/i, /exposure/i],
+  colour: [/color[_ -]?temp/i, /colour[_ -]?temp/i, /temperature/i, /white[_ -]?balance/i],
+};
+const LIGHT_AUTO_BY_STEP = { "-2": -3.5, "-1": -2, "0": 0, "1": 0, "2": 0 };
+const COLOUR_NEUTRAL_K = 5200, COLOUR_WARM_PER_MIRED = 0.011,
+      COLOUR_COOL_PER_MIRED = 0.027, COLOUR_MAX_WARM = 4, COLOUR_MAX_COOL = -2.5;
+
+function lightEntry(st, key) {
+  st.light_loras = st.light_loras && typeof st.light_loras === "object" ? st.light_loras : {};
+  const e = st.light_loras[key] = st.light_loras[key] && typeof st.light_loras[key] === "object"
+    ? st.light_loras[key] : {};
+  if (typeof e.name !== "string") e.name = "";
+  if (!["off", "auto", "manual"].includes(e.mode)) e.mode = "off";
+  if (typeof e.strength !== "number") e.strength = 0;
+  return e;
+}
+// the same illuminance sum the level bands use, so the readout cannot drift
+function rigLevelStep(st) {
+  const lights = (st.lights || []).filter((l) => l.on);
+  if (!lights.length) return 0;
+  const tgt = st.subjects[st.camera.target] || st.subjects[0];
+  const face = tgt.pos[1] + tgt.height * 0.92;
+  let e = 0;
+  for (const l of lights) {
+    const d = Math.max(0.05, Math.hypot(Math.hypot(l.pos[0] - tgt.pos[0], l.pos[2] - tgt.pos[2]),
+                                        l.pos[1] - face));
+    e += Math.max(0, l.intensity) / (d * d);
+  }
+  const rel = e / 0.25;                                  // LEVEL_NOMINAL
+  return rel < 0.12 ? -2 : rel < 0.4 ? -1 : rel < 2.5 ? 0 : rel < 8 ? 1 : 2;
+}
+function keyLightKelvin(st) {
+  const lights = (st.lights || []).filter((l) => l.on);
+  if (!lights.length) return 0;
+  const tgt = st.subjects[st.camera.target] || st.subjects[0];
+  const face = tgt.pos[1] + tgt.height * 0.92;
+  let best = null, bestP = -1;
+  for (const l of lights) {
+    const d = Math.max(0.05, Math.hypot(Math.hypot(l.pos[0] - tgt.pos[0], l.pos[2] - tgt.pos[2]),
+                                        l.pos[1] - face));
+    const p = Math.max(0, l.intensity) / (d * d);
+    if (p > bestP) { best = l; bestP = p; }
+  }
+  return best ? best.kelvin || 0 : 0;
+}
+function autoLightStrength(st, key) {
+  if (key === "brightness") return LIGHT_AUTO_BY_STEP[String(rigLevelStep(st))] ?? 0;
+  const k = keyLightKelvin(st);
+  if (k <= 0) return 0;
+  const delta = 1e6 / Math.max(1000, k) - 1e6 / COLOUR_NEUTRAL_K;
+  return delta >= 0
+    ? Math.round(Math.min(COLOUR_MAX_WARM, delta * COLOUR_WARM_PER_MIRED) * 100) / 100
+    : Math.round(Math.max(COLOUR_MAX_COOL, delta * COLOUR_COOL_PER_MIRED) * 100) / 100;
+}
+
 const NEW_LIGHT = () => ({ name: "key", kind: "softbox", pos: [-1.4, 1.9, 1.4],
                            diameter: 1.0, intensity: 1.0, kelvin: 5600, on: true,
                            locked: false });
@@ -130,7 +203,12 @@ const CAM_LORA_KEYS = ["zoom", "height", "orbit", "back"];
 const CAM_LORA_RANGE = { zoom: [-10, 12], height: [-10, 12], orbit: [-8, 8], back: [0, 8] };
 const CAM_LORA_LABEL = { zoom: "Zoom", height: "Height", orbit: "Orbit", back: "Back" };
 const CAM_LORA_HINT = {
-  zoom: "Push in / pull out. Auto follows the shot size: close pushes in, wide pulls out.",
+  // CREDIT TRAVELS WITH THE UI, not just the docs: the zoom slider is not ours
+  // and its Civitai terms are credit-required, no-derivatives, so the row that
+  // drives it names its author and where to get it (2026-08-19).
+  zoom: "Push in / pull out. Auto follows the shot size: close pushes in, wide pulls out."
+      + "\nNot ours: \"Zoom Slider - (Krea2 + ZIT)\" by Loraholic, "
+      + "https://civitai.com/models/2717832 - download it there, the pack only drives it.",
   height: "Camera height. Auto follows the tilt: below eye level pulls minus, above pushes plus.",
   orbit: "Camera swung round the subject. Auto follows where the camera sits against the way they face.",
   back: "Seen from behind. Auto rises once the camera passes their shoulder line; 0 in front.",
@@ -1939,6 +2017,68 @@ export function buildStudio(host, S) {
       add.appendChild(clear);
     }
     lightList.appendChild(add);
+    // THE TWO LORA ROWS. Off by default; Auto is driven by the rig above, so
+    // the dials are not set twice. Neither file ships with the pack: both are
+    // third-party, credit-required, no-derivatives.
+    for (const key of LIGHT_LORA_KEYS) {
+      const e = lightEntry(st, key);
+      const row = document.createElement("div");
+      row.className = "row";
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = LIGHT_LORA_LABEL[key];
+      k.title = LIGHT_LORA_HINT[key];
+      const sel = document.createElement("select");
+      sel.className = "grow";
+      const fill = (list) => {
+        sel.replaceChildren();
+        for (const n of ["", ...(list || [])]) {
+          const o = document.createElement("option");
+          o.value = n; o.textContent = n || "(no file)"; o.selected = n === e.name;
+          sel.appendChild(o);
+        }
+        if (!e.name) {
+          for (const rx of LIGHT_LORA_GUESS[key]) {
+            const hit = (list || []).find((n) => rx.test(n));
+            if (hit) { e.name = hit; sel.value = hit; break; }
+          }
+        }
+      };
+      fill(LORA_LIST);
+      if (!LORA_LIST) fetchLoras().then((l) => fill(l));
+      sel.title = LIGHT_LORA_HINT[key];
+      sel.onchange = () => { e.name = sel.value; write(); render(); };
+      row.append(k, sel);
+      const modes = document.createElement("div");
+      modes.className = "chips";
+      for (const [v, l] of [["off", "Off"], ["auto", "Auto"], ["manual", "Manual"]]) {
+        const c = document.createElement("div");
+        c.className = "chip" + (e.mode === v ? " on" : "");
+        c.textContent = l;
+        c.onclick = () => { e.mode = v; write(); render(); };
+        modes.appendChild(c);
+      }
+      row.appendChild(modes);
+      lightList.appendChild(row);
+      if (e.mode !== "off" && e.name) {
+        const [lo, hi] = LIGHT_LORA_RANGE[key];
+        const [clo, chi] = LIGHT_LORA_CLEAN[key];
+        if (e.mode === "manual") {
+          lightList.appendChild(slider("Strength", lo, hi, 0.1, () => e.strength,
+            (v) => { e.strength = v; },
+            (v) => v.toFixed(2) + (v < clo || v > chi ? "  (past the clean range)" : "")));
+        } else {
+          const rd = document.createElement("div");
+          rd.className = "note";
+          const auto = autoLightStrength(st, key);
+          rd.textContent = key === "brightness"
+            ? "Auto: " + auto.toFixed(2) + (auto ? "" : " - the rig is not dim, and this "
+              + "slider cannot brighten")
+            : "Auto: " + auto.toFixed(2) + (auto ? "" : " - the key light states no colour");
+          lightList.appendChild(rd);
+        }
+      }
+    }
     const note = document.createElement("div");
     note.className = "note";
     note.textContent = (st.lights || []).length
