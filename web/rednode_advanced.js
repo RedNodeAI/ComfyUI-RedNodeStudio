@@ -187,6 +187,28 @@ function rigNames() {
   return names;
 }
 
+// the LoRA sets of the workspace in the graph: Main plus its named sets, the
+// tabs of its LoRAs tab
+function loraSetNames() {
+  const names = ["Main"];
+  const walk = (graph) => {
+    for (const n of graph?._nodes || []) {
+      if (n?.type === "RedNodeStudioWorkspace") {
+        try {
+          const cfgW = n.widgets?.find((w) => w.name === "config");
+          for (const st of JSON.parse(cfgW?.value || "{}").lora_sets || []) {
+            const nm = String(st?.name || "").trim();
+            if (nm && !names.includes(nm)) names.push(nm);
+          }
+        } catch (e) { /* half-typed config */ }
+      }
+      if (n?.subgraph) walk(n.subgraph);
+    }
+  };
+  walk(app.graph);
+  return names;
+}
+
 // the user's own saved layouts, server-side like sampler profiles
 let SAVED = null;
 async function fetchPresets() {
@@ -592,8 +614,9 @@ function buildPanel(node) {
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
           + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
           + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
-          + (s.loras === false ? " \u00b7 raw" : "")
-          + ((s.use_subject || s.use_scene || s.use_moodboard) ? " \u00b7 refs" : "")
+          + (s.loras === false ? " \u00b7 raw" : (s.lora_set ? " \u00b7 " + s.lora_set : ""))
+          + ((s.use_subject || s.use_scene || s.use_moodboard || s.use_picture) ? " \u00b7 refs" : "")
+          + (s.lora && s.lora !== "None" ? " \u00b7 " + s.lora.replace(/\.safetensors$/i, "") : "")
           + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat : "")
           + (s.crop_res ? " \u00b7 " + s.crop_res + "px" : "");
         top.appendChild(sum);
@@ -751,7 +774,28 @@ function buildPanel(node) {
         bottom.append(
           tog("LoRAs", "loras", true,
               "Apply the main LoRAs tab's stack to this pass's model and clip. "
-              + "Off runs the rig raw."),
+              + "Off runs the rig raw. With it on, the Set box next to it says WHICH "
+              + "LoRAs-tab set: (rig's) = the rig's own choice from the Models tab."));
+        if (s.loras !== false) {
+          // LORA SET for this pass: (rig's), Main, or a named set of the
+          // workspace's LoRAs tab. A picked name that no longer exists shows
+          // as missing rather than silently turning into Main.
+          const names = loraSetNames();
+          const cur = String(s.lora_set || "");
+          const opts = [["", "(rig's set)"], ...names.map((n) => [n, n])];
+          if (cur && !names.includes(cur)) opts.push([cur, cur + " (missing)"]);
+          const ssel = document.createElement("select");
+          for (const [v, l] of opts) {
+            const o = document.createElement("option");
+            o.value = v; o.textContent = l; o.selected = v === cur;
+            ssel.appendChild(o);
+          }
+          ssel.title = "Which LoRAs-tab set this pass runs with. (rig's set) follows the "
+                     + "Models tab; Main is the first tab there.";
+          ssel.onchange = () => { s.lora_set = ssel.value; writeCfg(node, d); render(); };
+          bottom.append(lab("Set"), ssel);
+        }
+        bottom.append(
           tog("Subject", "use_subject", false,
               "Krea 2 rigs only: this pass encodes with the Subject tab's image "
               + "as the identity reference."),
@@ -759,7 +803,33 @@ function buildPanel(node) {
               "Krea 2 rigs only: the Scene tab's image rides this pass's "
               + "conditioning."),
           tog("Mood", "use_moodboard", false,
-              "Krea 2 rigs only: the Moodboard batch styles this pass."));
+              "Krea 2 rigs only: the Moodboard batch styles this pass."),
+          tog("Picture", "use_picture", false,
+              "Krea 2 rigs only: the picture as it arrives (a detailer's crop) "
+              + "rides this pass as the FIRST reference, the base image of a "
+              + "two-reference edit LoRA. With Subject on, that is the BFS "
+              + "head/body swap order: base first, the Subject second. Wins over "
+              + "Scene when both are on."));
+        // the pass LoRA: a searchable picker, the pack's own (a native select is
+        // unusable at a few hundred files - the LoRA Stack learned that first)
+        const lp = document.createElement("input");
+        lp.type = "text";
+        lp.value = s.lora && s.lora !== "None" ? s.lora : "";
+        lp.placeholder = "LoRA for this pass: click and type to search";
+        lp.style.cssText = "flex:1;min-width:140px";
+        lp.title = "A LoRA only this pass loads, model side, on top of the stack (or "
+                 + "of the raw rig): the swap file goes here, so the main render "
+                 + "never sees it. Click and type to search; recently used come first.";
+        makePicker(lp, () => L.loras || [], (v) => {
+          s.lora = v; writeCfg(node, d); render();
+        }, { current: () => (s.lora && s.lora !== "None" ? s.lora : ""),
+             emptyLabel: "(none)", recent: "detailer-lora" });
+        bottom.append(lab("LoRA"), lp);
+        if (s.lora && s.lora !== "None") {
+          bottom.append(num(s.lora_strength ?? 1.0, 0.05, "Strength of the pass LoRA.",
+                            (v) => { s.lora_strength = Math.max(0, Math.min(2, v)); writeCfg(node, d); },
+                            "52px"));
+        }
         const pr = document.createElement("input");
         pr.type = "text";
         pr.placeholder = "Prompt: empty uses this rig's Prompts-tab row";

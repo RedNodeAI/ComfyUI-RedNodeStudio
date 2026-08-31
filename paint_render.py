@@ -461,7 +461,9 @@ class RedNodePaintRender:
         if not pc.get("use_loras"):
             return model, clip
         cfg = _workspace_cfg(prompt)
-        lc = cfg.get("loras") if isinstance(cfg.get("loras"), dict) else {}
+        from . import workspace as _wsg
+        lc = _wsg.lora_set_cfg(cfg, (cfg.get("paint") or {}).get("lora_set")
+                               or _wsg.rig_lora_set(cfg), "Paint")
         slots = lc.get("slots") or []
         if not lc.get("on", True) or not slots:
             print("[RedNode Paint] use LoRAs is on but the Workspace's LoRAs tab is "
@@ -472,7 +474,7 @@ class RedNodePaintRender:
             model, clip, _words, applied = _lora.apply_stack(
                 model, clip, _lora.CUSTOM_SENTINEL,
                 json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
-                int(lc.get("seed", 0) or 0), None, tag="Paint LoRAs")
+                int(lc.get("seed", 0) or 0), None, tag="Paint LoRAs (%s)" % lc["name"])
             print(f"[RedNode Paint] LoRAs applied for this paint: {applied}. If the "
                   "model wired here already went through the LoRAs tab, they are on "
                   "twice; switch this off.", flush=True)

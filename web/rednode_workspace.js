@@ -899,6 +899,25 @@ export function readCfg(node) {
   if (!Array.isArray(d.paint_loras.slots)) d.paint_loras.slots = [];
   if (typeof d.paint_loras.ui !== "object" || !d.paint_loras.ui) d.paint_loras.ui = {};
   if (typeof d.paint_loras.seed !== "number") d.paint_loras.seed = 0;
+  // the Camera tab's master switch: on unless a saved config says otherwise
+  d.camera = d.camera && typeof d.camera === "object" ? d.camera : {};
+  d.camera.on = d.camera.on === undefined ? true : !!d.camera.on;
+  // LORA SETS: Main (d.loras) plus named sets, each a whole stack, each its
+  // own tab on the LoRAs tab. Names unique, never "Main".
+  if (!Array.isArray(d.lora_sets)) d.lora_sets = [];
+  {
+    const seen = new Set();
+    d.lora_sets = d.lora_sets.filter((st) => st && typeof st === "object").map((st) => {
+      const name = String(st.name || "").trim().slice(0, 48);
+      return { name, slots: Array.isArray(st.slots) ? st.slots : [],
+               ui: st.ui && typeof st.ui === "object" ? st.ui : {},
+               seed: typeof st.seed === "number" ? Math.max(0, st.seed) : 0 };
+    }).filter((st) => {
+      if (!st.name || st.name === MAIN_SET || seen.has(st.name)) return false;
+      seen.add(st.name);
+      return true;
+    });
+  }
   // the Models tab: named rigs loaded inside the workspace. The active one fills
   // whatever input is not wired; a wired input always wins.
   d.models = d.models && typeof d.models === "object" ? d.models : {};
@@ -915,6 +934,9 @@ export function readCfg(node) {
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
     if (r.kind !== "external") r.kind = "";
     if (typeof r.denoise !== "number") r.denoise = 1.0;
+    // the LoRAs-tab SET this rig renders with; "" = Main
+    if (typeof r.lora_set !== "string") r.lora_set = "";
+    delete r.lora_groups;
   }
   if (d.models.sampler_mode !== "internal") d.models.sampler_mode = "external";
   if (typeof d.models.hold_two !== "boolean") d.models.hold_two = false;
@@ -971,6 +993,9 @@ export function readCfg(node) {
   if (d.paint.lora_mode !== "main" && d.paint.lora_mode !== "paint") {
     d.paint.lora_mode = "main";
   }
+  // main mode may name a LoRAs-tab set; "" = the rig's own set
+  if (typeof d.paint.lora_set !== "string") d.paint.lora_set = "";
+  delete d.paint.lora_groups;
   if (typeof d.paint.brush !== "number") d.paint.brush = 48;
   if (typeof d.paint.feather !== "number") d.paint.feather = 4;
   // clamped to the same range workspace.py clamps to, or a config holding an old 256
@@ -4160,6 +4185,37 @@ async function loraPresetAction(node, body) {
   render(node);
 }
 
+
+// ---- LoRA SETS. The LoRAs tab is Main plus any number of named sets, each a
+// whole stack of its own, each its own tab up there (the user, 2026-08-18:
+// "each set of the LoRAs in its own tab"). Rigs (Models tab), Detailer passes
+// and the paint pass name the set they run with, so image-to-image,
+// from-scratch, camera work and different models keep their own LoRAs. The
+// server mirrors this in workspace.py (lora_set_cfg / rig_lora_set).
+const MAIN_SET = "Main";
+function loraSetNames(cfg) {
+  return [MAIN_SET, ...((cfg?.lora_sets || []).map((st) => st.name).filter(Boolean))];
+}
+// a <select> of the sets. emptyLabel: what "" means for this picker (Main for
+// a rig, the rig's own set for a pass).
+function loraSetSelect(node, cfg, get, set, emptyLabel, tip) {
+  const sel = document.createElement("select");
+  sel.className = "rn-ws-select";
+  const cur = String(get() || "");
+  const names = loraSetNames(cfg);
+  const opts = [["", emptyLabel], ...names.filter((n) => n !== MAIN_SET || emptyLabel !== MAIN_SET)
+                                          .map((n) => [n, n])];
+  if (cur && !names.includes(cur)) opts.push([cur, cur + " (missing)"]);
+  for (const [v, l] of opts) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = l; o.selected = v === cur;
+    sel.appendChild(o);
+  }
+  sel.title = tip;
+  sel.onchange = () => { set(sel.value); writeCfg(node); render(node); };
+  return sel;
+}
+
 function loraPresetRow(node, body, stack = null) {
   // One shared store on disk, whichever stack this row serves: a stack saved from
   // the main tab, the paint tab or the LoRA Stack node appears in all three lists.
@@ -4252,70 +4308,218 @@ function loraPresetRow(node, body, stack = null) {
 
   row.append(lab, sel, save, del);
   body.appendChild(row);
+  loraPresetRow._row = row;                 // callers may add to this line
 
   const from = L.ui?.loaded_from;
   if (from) {
+    // the note says WHERE the slots came from and whether they were edited
+    // since; it used to claim "edits are not saved back" right after a save,
+    // which read as broken. The x forgets the link.
     const note = document.createElement("div");
-    note.className = "rn-ws-note";
-    note.textContent = `Loaded from "${from}". Edits here are not saved back until you `
-                     + "save again.";
+    note.className = "rn-ws-row";
+    note.style.cssText = "align-items:center;gap:8px";
+    const txt = document.createElement("span");
+    txt.className = "rn-ws-note";
+    txt.textContent = L.ui?.dirty
+      ? `Loaded from "${from}", edited since. Save stack writes it back under that name.`
+      : `Loaded from "${from}".`;
+    const x = document.createElement("button");
+    x.className = "rn-ws-btn";
+    x.style.cssText = "width:auto;padding:0 8px";
+    x.textContent = "\u00d7";
+    x.title = "Forget where these slots came from (the slots stay).";
+    x.onclick = () => {
+      L.ui = { ...(L.ui || {}) };
+      delete L.ui.loaded_from; delete L.ui.dirty;
+      writeCfg(node); render(node);
+    };
+    note.append(txt, x);
     body.appendChild(note);
   }
 }
 
 function lorasBody(node, body) {
   const cfg = node._rnCfg;
-  const L = cfg.loras;
+  // THE SET TABS: Main first, then every named set, then +. Which one is open
+  // lives in node.properties (a workflow switch rebuilds the node). The picked
+  // set is what the seed row, the preset row and the panel below edit.
+  if (!Array.isArray(cfg.lora_sets)) cfg.lora_sets = [];
+  if (node._rnLoraSet === undefined) node._rnLoraSet = String(node.properties?.rn_lora_set || "");
+  let curName = node._rnLoraSet;
+  if (curName && !cfg.lora_sets.some((st) => st.name === curName)) curName = "";
+  const curSet = curName ? cfg.lora_sets.find((st) => st.name === curName) : null;
+  const L = curSet || cfg.loras;
+  {
+    const tabs = document.createElement("div");
+    tabs.className = "rn-ws-tabs";
+    const mk = (name, label) => {
+      const t = document.createElement("div");
+      t.className = "rn-ws-tab g-model" + (name === curName ? " cur" : "");
+      t.textContent = label;
+      t.title = name ? "The set \"" + name + "\": its own stack. Double-click to rename."
+                     : "Main: the first set. Rigs run with it unless they pick another.";
+      t.onclick = () => {
+        node._rnLoraSet = name; (node.properties ||= {}).rn_lora_set = name; render(node);
+      };
+      if (name) {
+        t.ondblclick = () => {
+          const nn = (prompt("Rename this set", name) || "").trim().slice(0, 48);
+          if (!nn || nn === name) return;
+          if (nn === MAIN_SET || cfg.lora_sets.some((st) => st.name === nn)) {
+            alert("There is already a set called \"" + nn + "\"."); return;
+          }
+          const st = cfg.lora_sets.find((x) => x.name === name);
+          if (st) st.name = nn;
+          // every place that named the old set follows the rename
+          for (const r of cfg.models?.rigs || []) if (r.lora_set === name) r.lora_set = nn;
+          if (cfg.paint?.lora_set === name) cfg.paint.lora_set = nn;
+          node._rnLoraSet = nn; (node.properties ||= {}).rn_lora_set = nn;
+          writeCfg(node); render(node);
+        };
+      }
+      tabs.appendChild(t);
+      return t;
+    };
+    mk("", MAIN_SET);
+    for (const st of cfg.lora_sets) mk(st.name, st.name);
+    const add = document.createElement("div");
+    add.className = "rn-ws-tab g-model";
+    add.textContent = "+";
+    add.title = "Add a set: another whole stack, on its own tab. Name it for what it is "
+              + "for (Img2Img, Camera, Turbo...), then pick it on a rig, a Detailer pass "
+              + "or the paint pass.";
+    add.onclick = () => {
+      let n = cfg.lora_sets.length + 2, name = "Set " + n;
+      while (cfg.lora_sets.some((st) => st.name === name)) name = "Set " + (++n);
+      const typed = (prompt("Name the new set", name) || "").trim().slice(0, 48);
+      if (!typed) return;
+      if (typed === MAIN_SET || cfg.lora_sets.some((st) => st.name === typed)) {
+        alert("There is already a set called \"" + typed + "\"."); return;
+      }
+      cfg.lora_sets.push({ name: typed, slots: [], ui: {}, seed: 0 });
+      node._rnLoraSet = typed; (node.properties ||= {}).rn_lora_set = typed;
+      writeCfg(node); render(node);
+    };
+    tabs.appendChild(add);
+    body.appendChild(tabs);
+  }
 
   const row = document.createElement("div");
   row.className = "rn-ws-row";
-  const on = document.createElement("button");
-  on.className = "rn-ws-sw" + (L.on ? " on" : "");
-  on.title = L.on
-    ? "The stack is applied to the model input and handed back on the model output."
-    : "Off: the model passes through untouched.";
-  on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
+  if (!curSet) {
+    const on = document.createElement("button");
+    on.className = "rn-ws-sw" + (L.on ? " on" : "");
+    on.title = L.on
+      ? "The stack is applied to the model input and handed back on the model output."
+      : "Off: the model passes through untouched.";
+    on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
+    row.appendChild(on);
+  }
   const hint = document.createElement("span");
   hint.className = "hint";
-  hint.textContent = "Wire the model in and take it from the model output. Trigger words "
-                   + "come out on lora_keywords.";
-  row.append(on, hint);
+  hint.textContent = curSet
+    ? "The set \"" + curSet.name + "\". A rig picks it on the Models tab (LoRA set), a "
+      + "Detailer pass on its card, the paint pass on its Paint LoRAs tab."
+    : "Wire the model in and take it from the model output. Trigger words "
+      + "come out on lora_keywords. Rigs render with Main unless they pick a set.";
+  row.appendChild(hint);
+  if (curSet) {
+    const del = document.createElement("button");
+    del.className = "rn-ws-btn";
+    del.style.cssText = "width:auto;padding:0 10px;margin-left:auto";
+    del.textContent = "Delete set";
+    del.title = "Delete this set and its stack. Anything that picked it falls back to Main.";
+    del.onclick = () => {
+      if (!confirm("Delete the set \"" + curSet.name + "\" and its stack?")) return;
+      cfg.lora_sets = cfg.lora_sets.filter((st) => st !== curSet);
+      for (const r of cfg.models?.rigs || []) if (r.lora_set === curSet.name) r.lora_set = "";
+      if (cfg.paint?.lora_set === curSet.name) cfg.paint.lora_set = "";
+      node._rnLoraSet = ""; (node.properties ||= {}).rn_lora_set = "";
+      writeCfg(node); render(node);
+    };
+    row.appendChild(del);
+  }
   body.appendChild(row);
 
-  const seedRow = document.createElement("div");
-  seedRow.className = "rn-ws-row";
-  const slab = document.createElement("span");
-  slab.className = "rn-ws-note";
-  slab.textContent = "Seed";
-  const seed = document.createElement("input");
-  seed.type = "number";
-  seed.min = 0;
-  seed.value = L.seed;
-  seed.style.cssText = "width:130px;background:#15171b;border:1px solid #33373d;"
-                     + "border-radius:4px;color:#e8ecf1;font-size:12px;padding:4px 6px";
-  seed.title = "Drives any slot set to a random strength range. The same seed and the "
-             + "same stack give the same strengths.";
-  seed.addEventListener("change", () => {
-    L.seed = Math.max(0, parseInt(seed.value, 10) || 0);
-    writeCfg(node);
-  });
-  seedRow.append(slab, seed);
-  body.appendChild(seedRow);
-  loraPresetRow(node, body);
+  loraPresetRow(node, body, L);
+  {
+    // SEED AND ADD RIDE THE PRESET LINE (the user, 2026-08-19). The seed is
+    // the Models tab's control in miniature: the number, and a dice that rolls
+    // a new one. It stays a fixed number on purpose - a stack that re-rolls
+    // its strengths behind you is not a stack you can compare against.
+    const line = loraPresetRow._row;
+    const slab = document.createElement("span");
+    slab.className = "rn-ws-note";
+    slab.style.marginLeft = "6px";
+    slab.textContent = "Seed";
+    const seed = document.createElement("input");
+    seed.type = "number";
+    seed.min = 0;
+    seed.value = L.seed;
+    seed.style.cssText = "width:104px;background:#101216;border:1px solid #2f333a;"
+      + "border-radius:6px;color:#e8ecf1;font-size:13px;font-weight:600;padding:4px 8px";
+    seed.title = "Drives any slot set to a random strength range. The same seed and "
+               + "the same stack give the same strengths.";
+    seed.addEventListener("change", () => {
+      L.seed = Math.max(0, parseInt(seed.value, 10) || 0);
+      writeCfg(node);
+    });
+    const dice = document.createElement("button");
+    dice.className = "rn-ws-btn";
+    dice.style.cssText = "width:auto;padding:0 9px";
+    dice.textContent = "\uD83C\uDFB2";
+    dice.title = "Roll a new seed for the random-strength slots.";
+    dice.onclick = () => {
+      L.seed = Math.floor(Math.random() * 2 ** 32);
+      writeCfg(node); render(node);
+    };
+    const addTop = document.createElement("button");
+    addTop.className = "rn-ws-btn";
+    addTop.style.cssText = "width:auto;padding:0 10px;background:#1f9d55;color:#fff";
+    addTop.textContent = "\uFF0B LoRA";
+    addTop.title = "Add a slot without scrolling to the bottom of the stack.";
+    addTop.onclick = () => {
+      const slots = node._rnSlots || [];
+      node._rnFocusSlot = slots.length;
+      slots.push(LS_newSlot());
+      LS_writeSlots(node);
+      render(node);
+    };
+    line.append(slab, seed, dice, addTop);
+  }
 
-  // the shared panel reads and writes through these instead of a widget
-  node._rnStackRead = () => ({ ui: cfg.loras.ui, slots: cfg.loras.slots });
+  // the shared panel reads and writes through these instead of a widget; the
+  // accessors resolve the picked set at event time
+  const pickSet = (n) => {
+    const c = n._rnCfg;
+    const nm = n._rnLoraSet || "";
+    return (nm && (c.lora_sets || []).find((st) => st.name === nm)) || c.loras;
+  };
+  node._rnStackRead = (n) => { const S = pickSet(n || node); return { ui: S.ui, slots: S.slots }; };
   node._rnStackWrite = (n, v) => {
-    cfg.loras.ui = v.ui || {};
-    cfg.loras.slots = v.slots || [];
+    const S = pickSet(n);
+    const before = JSON.stringify(S.slots || []);
+    S.ui = v.ui || {};
+    S.slots = v.slots || [];
+    if (S.ui.loaded_from && JSON.stringify(S.slots) !== before) S.ui.dirty = true;
     writeCfg(n);
   };
-  node._rnSlots = cfg.loras.slots;
-  node._rnUI = cfg.loras.ui;
+  node._rnSlots = L.slots;
+  node._rnUI = L.ui;
 
+  // THE STACK IN A BOX. The group cards were sitting straight on the panel's
+  // background, which read as floating (the user, 2026-08-19); everything else
+  // on this panel lives in a bordered surface. min-height:0 with overflow on
+  // the box is what lets a long stack scroll INSIDE it, which is also what
+  // turns the footer into a floating bar exactly when it should be one.
+  const box = document.createElement("div");
+  box.style.cssText = "display:flex;flex-direction:column;flex:1;min-height:120px;"
+    + "background:#16181c;border:1px solid #2a2e35;border-radius:8px;padding:8px;"
+    + "overflow:auto";
+  body.appendChild(box);
   const host = document.createElement("div");
-  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:80px";
-  body.appendChild(host);
+  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:0";
+  box.appendChild(host);
   buildLoraPanel(node, host);
 }
 
@@ -4364,8 +4568,54 @@ function paintLorasBody(node, body) {
       + "Leave Paint Render's model input unwired and the rig arrives with this "
       + "stack by itself, or wire the paint_model output. Krea 2 only for now: an "
       + "external chain loads its own model and cannot hear this."
-    : "Pick Paint LoRAs above to use this stack.";
+    : "The paint pass renders with a LoRAs-tab set: the rig's own by default. "
+      + "Nothing to edit here; the stacks live on the LoRAs tab.";
   body.appendChild(hint);
+
+  // WHAT WILL ACTUALLY RUN, in one line. The routing is three-way (paint stack,
+  // the paint pass's own set, the rig's set) and until this line existed the
+  // only way to find out was to read the console after a queue - which is how
+  // "the painting is not carrying the correct LoRAs" felt like a bug when the
+  // routing was right (the user, 2026-08-18).
+  {
+    const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
+    const setName = cfg.paint.lora_mode === "paint" ? null
+      : (cfg.paint.lora_set || rig.lora_set || MAIN_SET);
+    const stack = cfg.paint.lora_mode === "paint"
+      ? (cfg.paint_loras.slots || [])
+      : (setName === MAIN_SET ? (cfg.loras.slots || [])
+         : ((cfg.lora_sets || []).find((x) => x.name === setName)?.slots || []));
+    const n = stack.filter((x) => x && x.type !== "title" && x.name && x.name !== "None").length;
+    const line = document.createElement("div");
+    line.className = "rn-ws-note";
+    line.style.cssText = "border-left:2px solid #b8283c;padding-left:7px";
+    line.textContent = "The paint pass renders with: "
+      + (cfg.paint.lora_mode === "paint"
+          ? "the Paint LoRAs stack below"
+          : "the LoRAs tab's \"" + setName + "\" set"
+            + (cfg.paint.lora_set ? " (picked here)" : " (the rig's own choice)"))
+      + " \u00b7 " + n + " LoRA" + (n === 1 ? "" : "s");
+    line.title = "Read this before queueing: it is the stack that will be on the model "
+               + "when the paint pass renders.";
+    body.appendChild(line);
+  }
+
+  if (cfg.paint.lora_mode !== "paint") {
+    // MAIN: blank on purpose (the user, 2026-08-18: "this needs to be blank"),
+    // apart from which LoRAs-tab set the paint pass runs with
+    const srow = document.createElement("div");
+    srow.className = "rn-ws-row";
+    const sl = document.createElement("span");
+    sl.className = "rn-ws-note";
+    sl.textContent = "Set";
+    if (typeof cfg.paint.lora_set !== "string") cfg.paint.lora_set = "";
+    srow.append(sl, loraSetSelect(node, cfg, () => cfg.paint.lora_set,
+                                  (v) => { cfg.paint.lora_set = v; }, "(rig's set)",
+                                  "Which LoRAs-tab set the paint pass renders with. (rig's set) "
+                                  + "follows the Models tab."));
+    body.appendChild(srow);
+    return;
+  }
 
   const seedRow = document.createElement("div");
   seedRow.className = "rn-ws-row";
@@ -9213,6 +9463,18 @@ function modelsBody(node, page) {
   }
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for detailer passes, on its own output.");
+  // LORA SET: which LoRAs-tab set this rig renders with. Main by default.
+  // Detailer passes and the paint pass on this rig inherit the choice unless
+  // they pick their own set.
+  if (rig.kind !== "external") {
+    if (typeof rig.lora_set !== "string") rig.lora_set = "";
+    const sel = loraSetSelect(node, cfg, () => rig.lora_set, (v) => { rig.lora_set = v; },
+      MAIN_SET, "The LoRAs-tab set this rig renders with. Detailer passes and the paint "
+              + "pass on this rig inherit it unless they pick their own. Make sets with "
+              + "the + on the LoRAs tab.");
+    pill(body, "LoRA set", sel,
+         "Which LoRAs-tab set this rig renders with. Main = the first tab there.");
+  }
 
   // The embedded sampler: comfy core's KSampler run inside the node. External is
   // the default; the five settings above still ride the outputs either way.

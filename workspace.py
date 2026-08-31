@@ -708,6 +708,36 @@ def parse_config(config_json):
         "ui": pln.get("ui") if isinstance(pln.get("ui"), dict) else {},
         "seed": max(0, plseed),
     }
+    # THE CAMERA MASTER SWITCH (the user's ask, 2026-08-18: "there is no way to
+    # turn the cameras off, no toggle on this tab like the others"). Off, the
+    # Camera tab contributes NOTHING to a render: no camera paragraph, no camera
+    # slider LoRAs, no camera path, and the re-angle falls back to its bands.
+    # The studio state is kept, so switching it back on restores every camera
+    # exactly as it was - the same contract as the image tabs' own toggles.
+    cin = data.get("camera") if isinstance(data.get("camera"), dict) else {}
+    camera_cfg = {"on": True if cin.get("on") is None else bool(cin.get("on"))}
+    # LORA SETS (the user's ask, 2026-08-18): the LoRAs tab holds MAIN plus any
+    # number of named sets, each a whole stack of its own, each its own tab up
+    # there. A rig, a Detailer pass and the paint pass name the set they run
+    # with, so image-to-image, from-scratch, camera work and different models
+    # each keep their own LoRAs without the stack being swapped by hand.
+    lora_sets = []
+    for st in (data.get("lora_sets") if isinstance(data.get("lora_sets"), list) else []):
+        if not isinstance(st, dict):
+            continue
+        try:
+            sseed = int(st.get("seed", 0))
+        except (TypeError, ValueError):
+            sseed = 0
+        nm = str(st.get("name") or "").strip()[:48]
+        if not nm or nm == MAIN_SET or any(x["name"] == nm for x in lora_sets):
+            continue
+        lora_sets.append({
+            "name": nm,
+            "slots": st.get("slots") if isinstance(st.get("slots"), list) else [],
+            "ui": st.get("ui") if isinstance(st.get("ui"), dict) else {},
+            "seed": max(0, sseed),
+        })
     # The Models tab: named rigs loaded INSIDE the workspace, so a custom workflow is
     # two nodes dropped in the middle instead of a transfer harness of loaders and
     # channel hops. Each rig is a checkpoint OR a diffusion model + CLIP + VAE, all by
@@ -762,6 +792,10 @@ def parse_config(config_json):
             "rescue_base": str(r.get("rescue_base") or ""),
             "rescue_lora": str(r.get("rescue_lora") or ""),
             "rescue_strength": _num("rescue_strength", 0.0, 1.0, 1.0, float),
+            # LORA SET, per rig: which LoRAs-tab set (Main or a named set) this
+            # rig renders with. "" = Main. A Detailer pass or the paint pass on
+            # this rig inherits it unless it names its own.
+            "lora_set": str(r.get("lora_set") or "")[:48],
         })
     try:
         active = int(min_.get("active", 0))
@@ -957,6 +991,8 @@ def parse_config(config_json):
     # "none" existed for one unreleased day and folds into "main".
     plm = str(pin.get("lora_mode") or "main").lower()
     paint_cfg["lora_mode"] = plm if plm in ("main", "paint") else "main"
+    # main mode may name a LoRAs-tab set; "" = the rig's own set
+    paint_cfg["lora_set"] = str(pin.get("lora_set") or "")[:48]
     # The built-in paint door's run stamp. It exists only in the QUEUED copy of the
     # config (Generate stamps it there), never in the saved workflow, so an ordinary
     # queue can never repaint by accident.
@@ -1045,7 +1081,8 @@ def parse_config(config_json):
             "studio_preset": studio_preset, "auto": auto, "latent": latent_cfg,
             "vram_tier": tier, "paint": paint_cfg,
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
-            "loras": loras_cfg, "paint_loras": paint_loras_cfg,
+            "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
+            "camera": camera_cfg,
             "models": models_cfg, "prompts": prompts_cfg}
 
 
@@ -2169,7 +2206,10 @@ class RedNodeStudioWorkspace:
         lora_words = ""
         lora_clip = clip
         raw_model = model            # the wired input, kept: the paint branch starts here
-        lc = cfg["loras"]
+        # THE ACTIVE RIG'S SET: Main, or the named LoRAs-tab set it picked
+        lc = lora_set_cfg(cfg, rig_lora_set(cfg))
+        if lc["name"] != MAIN_SET:
+            print("[RedNode Workspace] LoRA set %r for this rig" % lc["name"], flush=True)
         # THE CAMERA'S LORAS: the active prompt row's Camera Studio may switch
         # on up to four slider LoRAs (zoom / height / orbit / back), each at a
         # strength that is auto from the geometry or set by hand. They join the
@@ -2270,6 +2310,23 @@ class RedNodeStudioWorkspace:
         # LoRA text-encoder half the paint model carries, or trigger words and TE
         # weights silently sit out of the conditioning
         paint_clip = lora_clip
+        _paint_set = str(cfg["paint"].get("lora_set") or "")
+        _pl = None
+        if paint_mode == "main" and _paint_set and raw_model is not None \
+                and lora_set_cfg(cfg, _paint_set, "Paint")["name"] != _base_lc["name"]:
+            # main mode naming a DIFFERENT set than the rig's: that set on the
+            # raw model, so the paint pass carries its own LoRAs, main untouched
+            _pl = lora_set_cfg(cfg, _paint_set, "Paint")
+            if _pl["slots"]:
+                paint_model, _paint_clip, _pw, _pa = _lora.apply_stack(
+                    raw_model, clip, _lora.CUSTOM_SENTINEL,
+                    json.dumps({"ui": _pl["ui"], "slots": _pl["slots"]}),
+                    _pl["seed"], unique_id, tag="Workspace paint LoRAs (set %s)" % _pl["name"])
+                paint_clip = _paint_clip if _paint_clip is not None else clip
+            else:
+                paint_model = raw_model
+                print("[RedNode Workspace] paint LoRA set %r is empty, so the paint "
+                      "branch carries no LoRAs" % _pl["name"], flush=True)
         if paint_mode == "paint":
             if raw_model is not None and pls["slots"]:
                 paint_model, _paint_clip, _pw, _pa = _lora.apply_stack(
@@ -2557,11 +2614,13 @@ class RedNodeStudioWorkspace:
                 _pseed = run_seed
                 _n_stack = len([x for x in
                                 (pls["slots"] if paint_mode == "paint"
-                                 else cfg["loras"]["slots"])
+                                 else _base_lc["slots"])
                                 if isinstance(x, dict) and x.get("type") != "title"])
-                print("[RedNode Workspace] built-in paint pass: %s stack, %d LoRA "
-                      "slot(s) on the model going in" % (paint_mode, _n_stack),
-                      flush=True)
+                print("[RedNode Workspace] built-in paint pass: %s, %d LoRA slot(s) "
+                      "on the model going in"
+                      % ("the Paint LoRAs stack" if paint_mode == "paint"
+                         else "LoRA set %r" % (_pl["name"] if _paint_set else _base_lc["name"]),
+                         _n_stack), flush=True)
                 _pr = RedNodePaintRender().render(
                     model=paint_model if paint_model is not None else model,
                     positive=positive, negative=negative,

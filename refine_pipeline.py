@@ -94,11 +94,25 @@ def parse_pipeline(config_json):
             # ON by default, because everywhere else in the pack a rig arrives
             # carrying its stack; raw is the explicit choice, not the accident
             "loras": bool(s.get("loras", True)),
+            # which LoRAs-tab SET this pass runs with: "" = the rig's own
+            # choice (Models tab), and that "" too = Main
+            "lora_set": str(s.get("lora_set") or "")[:48],
             # Krea 2 references for this pass, the same three toggles the Paint
             # tab offers, off by default for the same reason they are there
             "use_subject": bool(s.get("use_subject")),
             "use_scene": bool(s.get("use_scene")),
             "use_moodboard": bool(s.get("use_moodboard")),
+            # PICTURE: the picture as it arrives (a detailer's crop) rides the
+            # pass as the FIRST reference, the Scene slot - the base image of
+            # a two-reference edit LoRA (BFS head/body swap on Krea 2: base
+            # first, the Subject second, the order the Studio already keeps).
+            # Wins over the Scene tab when both are on. Off by default.
+            "use_picture": bool(s.get("use_picture")),
+            # A LoRA only THIS pass loads, model side, on top of the stack (or
+            # of the raw rig): the swap file lives here, never on the main
+            # render. "" / "None" = nothing.
+            "lora": str(s.get("lora") or ""),
+            "lora_strength": _num("lora_strength", 0.0, 2.0, 1.0),
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
             "feather": _num("feather", 0, 64, 8, int),
             "padding": _num("padding", 0.0, 2.0, 0.35),
@@ -393,7 +407,8 @@ class RedNodeStudioDetailer:
             # THE STACK, unless this pass says raw: the main LoRAs tab applied to
             # model AND clip, the same halves the rest of the pack learned to keep
             # together the hard way
-            lc = ws_cfg.get("loras") or {}
+            lc = _ws.lora_set_cfg(
+                ws_cfg, s["lora_set"] or _ws.rig_lora_set(ws_cfg, s["rig"]), "Detailer")
             if s["loras"] and lc.get("on", True) and lc.get("slots"):
                 try:
                     from . import lora_stack as _lora
@@ -402,11 +417,19 @@ class RedNodeStudioDetailer:
                         json.dumps({"ui": lc.get("ui") or {},
                                     "slots": lc.get("slots") or []}),
                         int(lc.get("seed", 0) or 0), unique_id,
-                        tag="Detailer LoRAs")
+                        tag="Detailer LoRAs (%s)" % lc["name"])
                     clip = _c2 if _c2 is not None else clip
                 except Exception as exc:
                     print("[RedNode Detailer] LoRAs failed on this pass: %s" % exc,
                           flush=True)
+            if s["lora"] and s["lora"] != "None" and s["lora_strength"] > 0:
+                try:
+                    model = _pass_lora(model, s["lora"], s["lora_strength"])
+                    print("[RedNode Detailer] pass LoRA %s @ %.2f" % (
+                        s["lora"], s["lora_strength"]), flush=True)
+                except Exception as exc:
+                    print("[RedNode Detailer] pass LoRA %s failed: %s" % (
+                        s["lora"], exc), flush=True)
             # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
             # the same text the main render used, wildcards rolled on this seed.
             # Typed text in the pass wins, the standing rule.
