@@ -136,9 +136,12 @@ const LIGHT_LORA_HINT = {
             + "The dial runs the file's full -10..+10: -10 for near black, "
             + "+10 for a strong lift, and Auto puts the rig's own level on it "
             + "(dim -5, almost black -10, bright +5, very bright +10).",
-  colour: "Warm / cool tint, without changing exposure. Measured: + is warm and "
-        + "gentle to +4, - is cool and turns violent past -2.5. Auto reads the key "
-        + "light's Colour; a light with no colour set leaves this at 0.",
+  colour: "Warm / cool tint, without changing exposure: + warm, - cool. Auto reads "
+        + "the key light's Colour and stays inside the author's recommended -3..+3; "
+        + "a light with no colour set leaves it at 0.\n"
+        + "Not ours: \"Color Temperature Slider - Krea2\" by Loraholic, "
+        + "https://civitai.com/models/2760910 - download it there, the pack only "
+        + "drives it.",
 };
 // files: ours are guessed by name, like the camera ones
 const LIGHT_LORA_GUESS = {
@@ -147,7 +150,7 @@ const LIGHT_LORA_GUESS = {
 };
 const LIGHT_AUTO_BY_STEP = { "-2": -10, "-1": -5, "0": 0, "1": 5, "2": 10 };
 const COLOUR_NEUTRAL_K = 5200, COLOUR_WARM_PER_MIRED = 0.011,
-      COLOUR_COOL_PER_MIRED = 0.0435, COLOUR_MAX_WARM = 4, COLOUR_MAX_COOL = -4;
+      COLOUR_COOL_PER_MIRED = 0.0435, COLOUR_MAX_WARM = 3, COLOUR_MAX_COOL = -3;
 
 function lightEntry(st, key) {
   st.light_loras = st.light_loras && typeof st.light_loras === "object" ? st.light_loras : {};

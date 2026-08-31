@@ -940,8 +940,12 @@ LIGHT_AUTO_BY_STEP = {-2: -10.0, -1: -5.0, 0: 0.0, 1: 5.0, 2: 10.0}
 COLOUR_NEUTRAL_K = 5200.0
 COLOUR_WARM_PER_MIRED = 0.011
 COLOUR_COOL_PER_MIRED = 0.0435
-COLOUR_MAX_WARM = 4.0
-COLOUR_MAX_COOL = -4.0        # the file's own range, per the user
+# The DIAL runs the file's full -4..+4, but AUTO stops at the author's own
+# recommendation - Loraholic's listing says "Recommended range: -3.0 to 3.0"
+# (civitai 2760910). Automatic behaviour should not go past what the person who
+# trained it suggests; Manual still reaches the ends for anyone who wants them.
+COLOUR_MAX_WARM = 3.0
+COLOUR_MAX_COOL = -3.0
 
 
 def auto_light_strength(camera, subjects, lights):
