@@ -199,6 +199,49 @@ function autoLightStrength(st, key) {
     : Math.round(Math.max(COLOUR_MAX_COOL, delta * COLOUR_COOL_PER_MIRED) * 100) / 100;
 }
 
+// A light's own contribution at the subject, and the rig's, both as the
+// nominal-relative number the level bands use (power 1.0 at 2 m = 1.0).
+function lightRel(st, l) {
+  const tgt = st.subjects[st.camera.target] || st.subjects[0];
+  const face = tgt.pos[1] + tgt.height * 0.92;
+  const d = Math.max(0.05, Math.hypot(Math.hypot(l.pos[0] - tgt.pos[0],
+                                                 l.pos[2] - tgt.pos[2]),
+                                      l.pos[1] - face));
+  return (Math.max(0, l.intensity) / (d * d)) / 0.25;
+}
+function rigRel(st) {
+  let e = 0;
+  for (const x of st.lights || []) if (x.on) e += lightRel(st, x);
+  return e;
+}
+// stops around an ordinary exposure: 0 = nominal, -1 = half, +1 = twice
+function lightStops(st, l) {
+  const rel = lightRel(st, l);
+  if (rel <= 0) return -4;
+  return Math.max(-4, Math.min(4, Math.round(Math.log2(rel) * 10) / 10));
+}
+function stopsToIntensity(st, l, stops) {
+  const tgt = st.subjects[st.camera.target] || st.subjects[0];
+  const face = tgt.pos[1] + tgt.height * 0.92;
+  const d = Math.max(0.05, Math.hypot(Math.hypot(l.pos[0] - tgt.pos[0],
+                                                 l.pos[2] - tgt.pos[2]),
+                                      l.pos[1] - face));
+  return Math.round(Math.pow(2, stops) * 0.25 * d * d * 1000) / 1000;
+}
+// colour as a centred step: 0 neutral, + warm, - cold, spaced in mireds
+const K_NEUTRAL = 5200, MIRED_PER_WARM_STEP = 91, MIRED_PER_COLD_STEP = 23;
+function stepToKelvin(step) {
+  const base = 1e6 / K_NEUTRAL;
+  const mired = base + step * (step >= 0 ? MIRED_PER_WARM_STEP : MIRED_PER_COLD_STEP);
+  return Math.max(1800, Math.min(12000, Math.round(1e6 / Math.max(1, mired) / 50) * 50));
+}
+function kelvinToStep(k) {
+  if (!k) return 0;
+  const delta = 1e6 / Math.max(1000, k) - 1e6 / K_NEUTRAL;
+  const step = delta / (delta >= 0 ? MIRED_PER_WARM_STEP : MIRED_PER_COLD_STEP);
+  return Math.max(-4, Math.min(4, Math.round(step * 10) / 10));
+}
+
 const NEW_LIGHT = () => ({ name: "key", kind: "softbox", pos: [-1.4, 1.9, 1.4],
                            diameter: 1.0, intensity: 1.0, kelvin: 5600, on: true,
                            locked: false });
@@ -1960,32 +2003,57 @@ export function buildStudio(host, S) {
         }));
       card.appendChild(slider("Height", 0, 6, 0.05, () => l.pos[1],
         (v) => { l.pos[1] = v; }, (v) => v.toFixed(2) + " m"));
-      // POWER says what it does, like Size does: it is how much light lands on
-      // the subject (power over distance squared), which is what makes a
-      // picture dark. Colour temperature never darkens anything.
-      card.appendChild(slider("Power", 0, 10, 0.05, () => l.intensity,
-        (v) => { l.intensity = v; }, () => {
-          const tgt = st.subjects[st.camera.target] || st.subjects[0];
-          const face = tgt.pos[1] + tgt.height * 0.92;
-          let e = 0;
-          for (const x of st.lights || []) {
-            if (!x.on) continue;
-            const d = Math.max(0.05, Math.hypot(Math.hypot(x.pos[0] - tgt.pos[0],
-                                                           x.pos[2] - tgt.pos[2]),
-                                                x.pos[1] - face));
-            e += Math.max(0, x.intensity) / (d * d);
-          }
-          const rel = e / 0.25;                       // LEVEL_NOMINAL
+      // EXPOSURE, IN STOPS, CENTRED ON 0 (the user, 2026-08-19: "start at 0 in
+      // the middle, light and dark each side"). Power was a raw 0..10
+      // multiplier, so the whole dark half lived in the first 0.4 of the
+      // slider and everything else read bright - unusable as a dial. A stop is
+      // what a photographer means anyway: 0 is an ordinary exposure for where
+      // this light stands, -1 is half the light, +1 is twice it. What gets
+      // stored is still an absolute intensity, so the physics (move it back,
+      // it dims) is unchanged - the stop value simply follows.
+      card.appendChild(slider("Exposure", -4, 4, 0.1, () => lightStops(st, l),
+        (v) => { l.intensity = stopsToIntensity(st, l, v); },
+        (v) => {
+          const rel = rigRel(st);
           const word = rel < 0.12 ? "almost black" : rel < 0.4 ? "dim"
                      : rel < 2.5 ? "ordinary" : rel < 8 ? "bright" : "very bright";
-          return l.intensity.toFixed(2) + " \u00b7 scene " + word;
+          return (v > 0 ? "+" : "") + v.toFixed(1) + " stop"
+               + (Math.abs(v) === 1 ? "" : "s") + " \u00b7 scene " + word;
         }));
-      // COLOUR has a floor: below about 1800 K there is no such light (a candle
-      // flame IS 1800), so anything under it snapped to 200 K on the panel and
-      // read as a number that cannot exist. 0 still means "say nothing".
-      card.appendChild(slider("Colour", 0, 10000, 100, () => l.kelvin,
-        (v) => { l.kelvin = v > 0 && v < 1800 ? 1800 : v; },
-        (v) => (v ? Math.round(v < 1800 ? 1800 : v) + " K" : "not stated")));
+      // COLOUR, ALSO CENTRED: cold to the left, warm to the right, neutral in
+      // the middle, because "0 = not stated" at one end of a 0..10000 K slider
+      // put daylight two thirds along and made warm and cool feel like the
+      // same direction. The stored value is still kelvin, and the readout
+      // names it; the steps are MIREDS, which is how colour temperature is
+      // actually spaced (1800 K is far from 2700 K, 8000 K is not far from
+      // 10000 K), so the dial moves evenly to the eye.
+      card.appendChild(slider("Colour", -4, 4, 0.1, () => kelvinToStep(l.kelvin),
+        (v) => { l.kelvin = stepToKelvin(v); },
+        (v) => {
+          const k = stepToKelvin(v);
+          const name = k >= 8000 ? "cold blue" : k >= 6000 ? "cool"
+                     : k >= 4600 ? "neutral" : k >= 3400 ? "warm white"
+                     : k >= 2400 ? "warm amber" : "deep amber";
+          return (v > 0 ? "+" : "") + v.toFixed(1) + " \u00b7 " + k + " K " + name;
+        }));
+      {
+        // and a way back to saying nothing at all, which is often the best
+        // answer: no colour word, and the colour LoRA's Auto sits at 0
+        const cr = document.createElement("div");
+        cr.className = "row";
+        const cl = document.createElement("span");
+        cl.className = "k";
+        cl.textContent = "";
+        const chip = document.createElement("span");
+        chip.className = "chip" + (l.kelvin ? "" : " on");
+        chip.textContent = l.kelvin ? "Clear colour" : "no colour stated";
+        chip.title = "With no colour stated the sentence says nothing about the light's "
+                   + "colour and the colour LoRA's Auto stays at 0. Often the best answer: "
+                   + "the model picks a colour that suits the scene.";
+        chip.onclick = () => { l.kelvin = l.kelvin ? 0 : 5200; write(); render(); };
+        cr.append(cl, chip);
+        card.appendChild(cr);
+      }
       lightList.appendChild(card);
     });
     const add = document.createElement("div");
