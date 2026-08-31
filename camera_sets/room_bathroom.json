@@ -175,6 +175,22 @@
    "focal_mm": 24,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "ceiling panel",
+    "kind": "softbox",
+    "pos": [
+     0.0,
+     2.3,
+     0.8
+    ],
+    "diameter": 1.0,
+    "intensity": 0.5,
+    "kelvin": 5000,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

@@ -212,6 +212,36 @@
    "focal_mm": 28,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "window",
+    "kind": "window",
+    "pos": [
+     -1.8,
+     1.5,
+     1.0
+    ],
+    "diameter": 1.6,
+    "intensity": 0.7,
+    "kelvin": 6500,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "bedside lamp",
+    "kind": "practical",
+    "pos": [
+     1.2,
+     0.9,
+     -0.9
+    ],
+    "diameter": 0.22,
+    "intensity": 0.5,
+    "kelvin": 2400,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

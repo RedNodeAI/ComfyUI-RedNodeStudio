@@ -549,6 +549,36 @@
    "focal_mm": 24,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "window",
+    "kind": "window",
+    "pos": [
+     -2.6,
+     1.9,
+     1.4
+    ],
+    "diameter": 2.0,
+    "intensity": 1.0,
+    "kelvin": 6200,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "lamp",
+    "kind": "practical",
+    "pos": [
+     1.8,
+     1.2,
+     -1.2
+    ],
+    "diameter": 0.3,
+    "intensity": 0.3,
+    "kelvin": 2700,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

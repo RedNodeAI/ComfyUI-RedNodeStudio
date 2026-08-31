@@ -192,6 +192,36 @@
    "focal_mm": 28,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "window",
+    "kind": "window",
+    "pos": [
+     -2.2,
+     1.8,
+     0.6
+    ],
+    "diameter": 1.8,
+    "intensity": 1.0,
+    "kelvin": 6200,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "under-cupboard",
+    "kind": "practical",
+    "pos": [
+     1.4,
+     2.2,
+     -0.8
+    ],
+    "diameter": 0.25,
+    "intensity": 0.35,
+    "kelvin": 2700,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

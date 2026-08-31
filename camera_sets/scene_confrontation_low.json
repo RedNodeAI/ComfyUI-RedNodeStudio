@@ -61,6 +61,22 @@
     1.25,
     0.0
    ]
-  }
+  },
+  "lights": [
+   {
+    "name": "hard key",
+    "kind": "bulb",
+    "pos": [
+     -1.2,
+     2.4,
+     0.8
+    ],
+    "diameter": 0.12,
+    "intensity": 0.2,
+    "kelvin": 3200,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

@@ -209,6 +209,36 @@
    "focal_mm": 28,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "window",
+    "kind": "window",
+    "pos": [
+     2.0,
+     1.7,
+     1.2
+    ],
+    "diameter": 1.8,
+    "intensity": 1.0,
+    "kelvin": 6000,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "table lamp",
+    "kind": "practical",
+    "pos": [
+     -1.6,
+     1.1,
+     -0.6
+    ],
+    "diameter": 0.3,
+    "intensity": 0.4,
+    "kelvin": 2600,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

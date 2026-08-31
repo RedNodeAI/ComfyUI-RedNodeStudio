@@ -61,6 +61,36 @@
     1.5,
     0.0
    ]
-  }
+  },
+  "lights": [
+   {
+    "name": "key",
+    "kind": "softbox",
+    "pos": [
+     -1.6,
+     2.0,
+     1.6
+    ],
+    "diameter": 1.4,
+    "intensity": 1.0,
+    "kelvin": 5200,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "rim",
+    "kind": "bulb",
+    "pos": [
+     1.4,
+     2.2,
+     -1.6
+    ],
+    "diameter": 0.15,
+    "intensity": 0.8,
+    "kelvin": 6000,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

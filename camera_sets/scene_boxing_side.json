@@ -129,6 +129,36 @@
     1.3,
     0.0
    ]
-  }
+  },
+  "lights": [
+   {
+    "name": "ring light",
+    "kind": "bulb",
+    "pos": [
+     0.0,
+     3.4,
+     0.0
+    ],
+    "diameter": 0.25,
+    "intensity": 2.0,
+    "kelvin": 5600,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "rim",
+    "kind": "bulb",
+    "pos": [
+     2.0,
+     2.8,
+     -1.4
+    ],
+    "diameter": 0.2,
+    "intensity": 1.0,
+    "kelvin": 6000,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

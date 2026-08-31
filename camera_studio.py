@@ -371,9 +371,12 @@ class RedNodeCameraStudio:
 # camera state. Built-in sets ship in the pack's camera_sets/ folder (rooms
 # built from objects, two-person scenes); the user's own live in the ComfyUI
 # user dir like the LoRA presets. Loading a set replaces subjects, camera,
-# path and stage zoom; the panel keeps the LoRA picks and output settings.
+# path, stage zoom AND LIGHTS (2026-08-19, the user's ask): a room with a
+# window and no light on it is half a set, and the lighting is the part people
+# least want to place twice. The panel keeps the LoRA picks and output
+# settings, because a file name is a machine's business, not a scene's.
 _SETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_sets")
-_SET_KEYS = ("camera", "subjects", "path", "stage_zoom")
+_SET_KEYS = ("camera", "subjects", "path", "stage_zoom", "lights")
 
 
 def _user_sets_path(make=False):

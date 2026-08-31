@@ -124,6 +124,36 @@
    "focal_mm": 24,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "ring light",
+    "kind": "bulb",
+    "pos": [
+     0.0,
+     3.4,
+     0.4
+    ],
+    "diameter": 0.25,
+    "intensity": 2.0,
+    "kelvin": 5600,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "rim",
+    "kind": "bulb",
+    "pos": [
+     -1.6,
+     2.6,
+     -1.8
+    ],
+    "diameter": 0.2,
+    "intensity": 1.2,
+    "kelvin": 6000,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

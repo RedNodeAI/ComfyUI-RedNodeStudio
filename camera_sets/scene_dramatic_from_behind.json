@@ -73,6 +73,22 @@
    "focal_mm": 35,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "window behind",
+    "kind": "window",
+    "pos": [
+     0.2,
+     1.9,
+     -2.6
+    ],
+    "diameter": 1.8,
+    "intensity": 1.6,
+    "kelvin": 6400,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }

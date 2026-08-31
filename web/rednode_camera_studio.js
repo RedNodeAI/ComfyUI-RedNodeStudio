@@ -686,7 +686,10 @@ export function buildStudio(host, S) {
   loadB.onclick = () => {
     const set = findSet();
     if (!set) return;
-    const keep = { cam_loras: st.cam_loras, output: st.output, join: st.join,
+    // the set brings the scene AND its lights; what stays is this machine's
+    // business - which LoRA files are picked, and how the prompt is written
+    const keep = { cam_loras: st.cam_loras, light_loras: st.light_loras,
+                   output: st.output, join: st.join,
                    auto_latent: st.auto_latent, latent_mp: st.latent_mp, latent_batch: st.latent_batch,
                    zoom_lora: st.zoom_lora, zoom_mode: st.zoom_mode, zoom_strength: st.zoom_strength };
     st = normalise({ ...JSON.parse(JSON.stringify(set.state)), ...keep });

@@ -90,6 +90,36 @@
    "focal_mm": 300,
    "roll_deg": 0,
    "lock": true
-  }
+  },
+  "lights": [
+   {
+    "name": "sun",
+    "kind": "sun",
+    "pos": [
+     -3.0,
+     6.0,
+     2.0
+    ],
+    "diameter": 1.0,
+    "intensity": 30.0,
+    "kelvin": 5400,
+    "on": true,
+    "locked": false
+   },
+   {
+    "name": "sky fill",
+    "kind": "ambient",
+    "pos": [
+     2.0,
+     2.0,
+     2.0
+    ],
+    "diameter": 4.0,
+    "intensity": 6.0,
+    "kelvin": 6500,
+    "on": true,
+    "locked": false
+   }
+  ]
  }
 }
