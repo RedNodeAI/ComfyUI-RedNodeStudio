@@ -1,5 +1,6 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
+import { makePicker } from "./rednode_picker.js";
 
 // RedNode Studio Detailer — the post-render passes as a list you can read.
 //
@@ -179,6 +180,7 @@ async function fetchLists() {
   LISTS = {
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
+    loras: await pull("LoraLoaderModelOnly", "lora_name"),
     samModels,
   };
   return LISTS;
@@ -409,7 +411,7 @@ function buildPanel(node) {
 
   const render = () => {
     const d = readCfg(node);
-    const L = LISTS || { samplers: [], schedulers: [], samModels: [] };
+    const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [] };
     wrap.replaceChildren();
     const cap = (t) => {
       const c = document.createElement("div");
@@ -672,6 +674,19 @@ function buildPanel(node) {
                            s.crop_res = v ? parseInt(v, 10) : 0;
                            writeCfg(node, d);
                          }, "(crop)"));
+        } else {
+          top.append(lab("Res"),
+                     sel(["768", "1024", "1280", "1536", "2048"],
+                         s.crop_res ? String(s.crop_res) : "",
+                         "A working size for the whole frame: its long edge is "
+                         + "resized to this before rendering, and the result comes "
+                         + "back at the frame's own size (Scale still sticks). "
+                         + "(frame) renders at the size it arrives. A big frame at a "
+                         + "high denoise wants this: Krea 2 past ~1.5 MP goes fuzzy.",
+                         (v) => {
+                           s.crop_res = v ? parseInt(v, 10) : 0;
+                           writeCfg(node, d);
+                         }, "(frame)"));
         }
       }
       const spacer = document.createElement("span");

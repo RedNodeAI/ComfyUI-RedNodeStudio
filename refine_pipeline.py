@@ -585,12 +585,26 @@ class RedNodeStudioDetailer:
         # the scale sticks on a sampler pass: a 0.5 pass hands the next pass a
         # smaller frame, a 2.0 pass a bigger one, which is how the chain grows
         image = self._resize(image, s["scale"])
-        lat = {"samples": vae.encode(image[:, :, :, :3])}
+        # RES on a sampler pass: the frame renders at that long edge and comes
+        # back at its own size, so a big frame never sends Krea 2 past its
+        # comfort zone (a 4K frame at denoise 1 is fuzz). The scale above still
+        # sticks; this is a working size, not a new size.
+        work = image
+        if s.get("crop_res"):
+            f = s["crop_res"] / max(image.shape[1], image.shape[2])
+            work = self._resize(image, f)
+            print("[RedNode Detailer] frame %d x %d, working at %d x %d"
+                  % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]),
+                  flush=True)
+        lat = {"samples": vae.encode(work[:, :, :, :3])}
         out = self._ksample(model, seed, steps, cfg_v, sampler, scheduler, pos,
                             neg, lat, s["denoise"], start, end)
         img = vae.decode(out["samples"])
         while img.ndim > 4:
             img = img[0]
+        if img.shape[1:3] != image.shape[1:3]:
+            img = F.interpolate(img.permute(0, 3, 1, 2), size=image.shape[1:3],
+                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
         return img
 
     def _locate(self, image, s):
@@ -624,7 +638,7 @@ class RedNodeStudioDetailer:
         return merged
 
     def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
-                scheduler, start, end):
+                scheduler, start, end, encode_for=None):
         mask, box, why = self._locate(image, s)
         if why is not None:
             return image, why
@@ -744,6 +758,30 @@ class RedNodeStudioDetailer:
 # The panel ships premade layouts client-side (the proven face-identity chain among
 # them); this store holds the user's OWN saved lists, server-side so they survive
 # browsers and reinstalls the way sampler profiles do.
+
+_PASS_LORA_CACHE = {}       # name -> loaded state dict, the last two files
+_PASS_LORA_KEEP = 2
+
+
+def _pass_lora(model, name, strength):
+    """The pass's own LoRA on a clone of the model (model side only, the way
+    LoraLoaderModelOnly does it). The file is kept loaded across queues."""
+    import comfy.sd
+    import comfy.utils
+    import folder_paths
+    lora = _PASS_LORA_CACHE.get(name)
+    if lora is None:
+        path = folder_paths.get_full_path("loras", name)
+        if not path:
+            raise FileNotFoundError("%s is not in the loras folder" % name)
+        lora = comfy.utils.load_torch_file(path, safe_load=True)
+        _PASS_LORA_CACHE[name] = lora
+        while len(_PASS_LORA_CACHE) > _PASS_LORA_KEEP:
+            del _PASS_LORA_CACHE[next(iter(_PASS_LORA_CACHE))]
+    new_model, _ = comfy.sd.load_lora_for_models(model, None, lora,
+                                                 float(strength), 0.0)
+    return new_model
+
 
 def _presets_path(make=False):
     import os
