@@ -9223,9 +9223,9 @@ function modelsBody(node, page) {
     kb.className = "rn-ws-on" + (rig.kind ? " on" : "");
     kb.style.width = "auto";
     kb.style.padding = "0 10px";
-    // personal-only kinds (window.rnLocalRigKinds, from a gitignored local
+    // personal-only kinds (window.rnRigKinds, from a gitignored local
     // web file) join the cycle when present; public installs never see them
-    const kinds = ["", "external", ...(window.rnLocalRigKinds || [])];
+    const kinds = ["", "external", ...(window.rnRigKinds || [])];
     kb.textContent = rig.kind === "external" ? "External renderer"
                    : rig.kind ? (window.rnLocalRigLabel?.(rig.kind) || rig.kind)
                    : "Local files";

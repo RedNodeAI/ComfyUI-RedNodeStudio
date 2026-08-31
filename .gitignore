@@ -14,3 +14,7 @@ docs/
 # rig lives here. Tokens too - nothing under these paths may ever be added.
 local/
 web/rednode_local*.js
+
+# a NovelAI token is a credential: never in the repo, wherever it lands
+nai_token.txt
+**/nai_token.txt
