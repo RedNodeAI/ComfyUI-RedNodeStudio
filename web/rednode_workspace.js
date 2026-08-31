@@ -4303,7 +4303,7 @@ function loraPresetRow(node, body, stack = null) {
       const d = await r.json();
       if (d.error) throw new Error(d.error);
       L.slots = d.slots || [];
-      L.ui = { ...(L.ui || {}), loaded_from: name };
+      L.ui = { ...(L.ui || {}), loaded_from: name, dirty: false };
       writeCfg(node);
       render(node);
     } catch (e) {
@@ -4325,7 +4325,7 @@ function loraPresetRow(node, body, stack = null) {
     try {
       await loraPresetAction(node, { action: "save", name,
                                      slots: L.slots || [] });
-      L.ui = { ...(L.ui || {}), loaded_from: name };
+      L.ui = { ...(L.ui || {}), loaded_from: name, dirty: false };
       writeCfg(node);
       render(node);
     } catch (e) {
@@ -4698,16 +4698,23 @@ function paintLorasBody(node, body) {
   };
   node._rnStackWrite = (n, v) => {
     const s = n._rnCfg.paint_loras;
+    const before = JSON.stringify(s.slots || []);
     s.ui = v.ui || {};
     s.slots = v.slots || [];
+    if (s.ui.loaded_from && JSON.stringify(s.slots) !== before) s.ui.dirty = true;
     writeCfg(n);
   };
   node._rnSlots = PL.slots;
   node._rnUI = PL.ui;
 
+  const box = document.createElement("div");
+  box.style.cssText = "display:flex;flex-direction:column;flex:1;min-height:120px;"
+    + "background:#16181c;border:1px solid #2a2e35;border-radius:8px;padding:8px;"
+    + "overflow:auto";
+  body.appendChild(box);
   const host = document.createElement("div");
-  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:80px";
-  body.appendChild(host);
+  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:0";
+  box.appendChild(host);
   buildLoraPanel(node, host);
 }
 
@@ -10035,8 +10042,17 @@ function openBigEdit(title, value, onSave) {
 // Wraps a textarea so it can grow: an expand glyph in the corner, and a
 // double-click anywhere in the box, both open the big editor.
 function expandable(ta, title, onSave) {
+  // THE WRAPPER MUST CARRY THE TEXTAREA'S SIZING (the user, 2026-08-18: "the
+  // prompt box is the wrong size, not wide enough"). These boxes sit in flex
+  // rows and size themselves with flex:1, but wrapping one in a plain block
+  // left that flex:1 with nothing to flex against, so the textarea fell back
+  // to its intrinsic ~20-column width - a narrow box in a wide pane. The wrap
+  // takes the flex role, and the textarea fills it.
   const wrap = document.createElement("div");
-  wrap.style.cssText = "position:relative;width:100%";
+  wrap.style.cssText = "position:relative;flex:1;min-width:0;width:100%";
+  ta.style.width = "100%";
+  ta.style.boxSizing = "border-box";
+  ta.style.flex = "none";
   const btn = document.createElement("button");
   btn.textContent = "\u26F6";
   btn.title = "Open the fullscreen editor. Double-clicking the box does the "
@@ -11430,10 +11446,21 @@ const tabLit = (cfg, id) =>
       r.checkpoint || r.unet || r.clip || r.vae)
   : id === "prompts" ? !!cfg.prompts?.rows?.some?.((x) => x.text.trim())
   // the Camera tab is lit when a prompt's studio is live or the re-angle studio has a camera
-  : id === "camera" ? !!(cfg.prompts?.rows?.some?.((x) => x.frame && String(x.frame.camera || "").trim())
-                         || String(cfg.tabs?.i2i?.reangle?.studio || "").trim())
+  : id === "camera" ? !!(cfg.camera?.on !== false
+                         && (cfg.prompts?.rows?.some?.((x) => x.frame && String(x.frame.camera || "").trim())
+                             || String(cfg.tabs?.i2i?.reangle?.studio || "").trim()))
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
+  // IMG2IMG DOES NOT NEED A GALLERY IMAGE (the user, 2026-08-18: the dot stays
+  // dark with the tab on and the canvas set to Wired image). Its canvas can be
+  // the wired image_in or latent input, in which case the tab has no picture of
+  // its own and the plain rule below - on AND a gallery image - can never light
+  // it, however hard it is working. Prompt-only counts too: the tab is then
+  // contributing its words rather than a canvas, which is still doing something.
+  : id === "i2i" ? !!(cfg.tabs.i2i.on
+                      && (cfg.tabs.i2i.images.length
+                          || cfg.tabs.i2i.canvas !== "gallery"
+                          || cfg.tabs.i2i.prompt_only))
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the

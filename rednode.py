@@ -443,6 +443,22 @@ class Krea2RedNode:
                 print(f"[Krea2 RedNode] preset '{preset}'")
         args = _fusion_args(cfg)
         args["strength"] = float(style_strength)
+        # SAY WHEN AN EXPERIMENTAL TOGGLE IS ON. These rewrite the reference path
+        # itself, so a picture made with one on cannot be compared with anything
+        # else - and until 2026-08-18 they were completely silent. ref_t0
+        # modulation cost the user an evening of hunting a "doubling / ghosting"
+        # artifact through the LoRAs, the paint pass and the whole pack's git
+        # history: it modulates the clean reference tokens at timestep 0 while
+        # the frame runs at the live timestep, which the identity edit LoRA was
+        # not trained for at inference, so the reference lands out of phase.
+        _exp = [n for n, on in (("ref t0 modulation", args["ref_t0_modulation"]),
+                                ("picture labels", args["picture_labels"]),
+                                ("a custom vision system prompt", bool(str(args["system_prompt"]).strip())))
+                if on]
+        if _exp:
+            print("[Krea2 RedNode] EXPERIMENTAL: %s. These change the reference "
+                  "path, not just the look. Turn them off first if faces double, "
+                  "ghost or drift off the reference." % ", ".join(_exp), flush=True)
 
         # training order for two-ref edit LoRAs is scene first, subject second — handled here
         # so users never have to know it.

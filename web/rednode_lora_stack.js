@@ -69,8 +69,13 @@ const css = document.createElement("style");
 css.textContent = `
 .rn-ls-wrap{display:flex;flex-direction:column;gap:6px;padding:${PAD}px;box-sizing:border-box;
   font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:auto}
+/* the + / preset / cog footer sits UNDER THE LAST ROW, not at the bottom of
+   whatever height the node happens to have (the user, 2026-08-19: a stretched
+   node left it floating a screen away from the stack). It only becomes a
+   floating bar when the list is long enough to scroll, which is what
+   position:sticky does on its own - margin-top:auto was pinning it always. */
 .rn-ls-head{display:flex;gap:8px;align-items:center;flex:none;position:sticky;bottom:0;
-  padding-top:6px;margin-top:auto;background:#16181c}
+  padding-top:6px;background:#16181c}
 .rn-ls-add{background:#1f9d55;border:0;color:#fff;border-radius:5px;padding:2px 0;width:54px;cursor:pointer;font-size:17px;font-weight:600;line-height:1.2}
 .rn-ls-add:hover{background:#25b863}
 .rn-ls-slot{display:flex;flex-direction:column;background:#212429;border-radius:5px;flex:none;overflow:hidden}
@@ -1519,12 +1524,17 @@ export function render(node) {
     if (hideUntilTitle) return;
     bucket.appendChild(buildSlot(node, slot, i));
   });
-  const wrap = node._rnWidget?.element;
+  // the bar's home is the LIST'S OWN CONTAINER: on the LoRA Stack node that is
+  // the widget element, on the Workspace it is the LoRAs tab's host. Mounted
+  // on node._rnWidget it landed at the top of the WHOLE workspace panel, above
+  // the tab strip, and select mode looked like it had no actions - the user's
+  // report (2026-08-18), a repeat of the off-screen-below-the-footer bug.
+  const wrap = node._rnListEl?.parentElement || node._rnWidget?.element;
   wrap?.querySelector(".rn-ls-selbar")?.remove();
-  // the bar goes at the TOP and sticks there: inserted above the footer it
-  // sat below a long stack, off screen, and select mode looked like it had
-  // no actions at all - the user's report
-  if (inSelMode(node) && wrap) wrap.insertBefore(buildSelBar(node), wrap.firstChild);
+  node._rnWidget?.element?.querySelector(".rn-ls-selbar")?.remove();
+  // the bar goes at the TOP of the list and sticks there: inserted above the
+  // footer it sat below a long stack, off screen
+  if (inSelMode(node) && wrap) wrap.insertBefore(buildSelBar(node), list);
   if (node._rnWidget?.options) node._rnWidget.options.getMinHeight = () => MIN_PANEL_H;
   // Size the node ONCE, when it is first created, then leave it alone. Pinning the height
   // to the slot count meant a long stack could not be shrunk, and scrolling the list beats
