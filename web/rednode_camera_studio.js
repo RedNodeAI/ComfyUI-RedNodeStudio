@@ -94,6 +94,7 @@ const DEFAULT = () => ({
   auto_latent: false, latent_mp: 1.0, latent_batch: 1,
   zoom_lora: "", zoom_mode: "off", zoom_strength: 0,
   cam_loras: {},
+  light_loras: {},
   path: { mode: "off", shots: 10, b: null, orbit_from: 0, orbit_to: 180 },
   stage_zoom: "normal",
   lights: [],
@@ -298,6 +299,18 @@ function normalise(d) {
         const e = d.cam_loras[k];
         if (!e || typeof e !== "object") continue;
         o.cam_loras[k] = {
+          name: typeof e.name === "string" ? e.name : "",
+          mode: ["off", "auto", "manual"].includes(e.mode) ? e.mode : "off",
+          strength: typeof e.strength === "number" ? e.strength : 0,
+        };
+      }
+    }
+    if (d.light_loras && typeof d.light_loras === "object") {
+      o.light_loras = {};
+      for (const k of LIGHT_LORA_KEYS) {
+        const e = d.light_loras[k];
+        if (!e || typeof e !== "object") continue;
+        o.light_loras[k] = {
           name: typeof e.name === "string" ? e.name : "",
           mode: ["off", "auto", "manual"].includes(e.mode) ? e.mode : "off",
           strength: typeof e.strength === "number" ? e.strength : 0,
