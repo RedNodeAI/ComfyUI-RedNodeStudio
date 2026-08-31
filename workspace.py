@@ -610,6 +610,9 @@ def parse_config(config_json):
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
+            # SWAP: the character stage that runs after Re-angle, before the pass
+            from . import swap as _sw_parse
+            tabs[name]["swap"] = _sw_parse.parse(t.get("swap"))
         if name in CONVERTER_TABS:
             conv_in = t.get("conv") if isinstance(t.get("conv"), dict) else {}
             tabs[name]["conv"] = {
@@ -1808,6 +1811,30 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
                       % exc, flush=True)
+        # SWAP (the user's ask, 2026-08-18): the Subject onto the person in the
+        # picture, in the engine where a swap lands - Qwen-Image-Edit + the BFS
+        # LoRA - before the Krea 2 pass finishes it with the same Subject at the
+        # tab's denoise. After Re-angle on purpose: the face lands on the final
+        # viewpoint. The result IS the i2i source from here on, like Re-angle's.
+        _sw = it.get("swap") or {}
+        if it["on"] and not it["prompt_only"] and _sw.get("on") and i2i_img is not None:
+            _ref = subject if _sw["reference"] == "subject" else tab_image(_sw["reference"])
+            if _ref is None:
+                print("[RedNode Workspace] swap: the %s tab is off or empty, so there is "
+                      "no reference; the source is used as it is"
+                      % _sw["reference"].replace("subject", "Subject ").strip(), flush=True)
+            else:
+                try:
+                    from . import swap as _swap
+                    _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
+                    i2i_img = _swap.render(_sw, i2i_img, _ref, _sseed)
+                    print("[RedNode Workspace] swap: %d frame(s), %s from the %s tab -> "
+                          "the i2i source (%d x %d)" % (i2i_img.shape[0], _sw["mode"],
+                                                        _sw["reference"], i2i_img.shape[2],
+                                                        i2i_img.shape[1]), flush=True)
+                except Exception as exc:
+                    print("[RedNode Workspace] swap failed: %s; the source is used as it is"
+                          % exc, flush=True)
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
         if latent is None and real_i2i:
             if vae is not None:

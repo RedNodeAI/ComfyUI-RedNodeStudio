@@ -839,6 +839,30 @@ export function readCfg(node) {
       if (typeof R.cfg_norm !== "boolean") R.cfg_norm = true;
       if (typeof R.seed !== "number") R.seed = 0;
       if (typeof R.seed_random !== "boolean") R.seed_random = true;
+      // SWAP, the character stage after re-angle, before the i2i pass (server: swap.py)
+      if (!t.swap || typeof t.swap !== "object") t.swap = {};
+      const S = t.swap;
+      if (typeof S.on !== "boolean") S.on = false;
+      if (!SW_MODES.includes(S.mode)) S.mode = "head";
+      if (!SW_REFS.includes(S.reference)) S.reference = "subject";
+      if (!["auto", "body_first", "face_first"].includes(S.order)) S.order = "auto";
+      if (typeof S.prompt !== "string") S.prompt = "";
+      if (typeof S.keep_size !== "boolean") S.keep_size = false;
+      if (typeof S.unet !== "string") S.unet = "";
+      if (typeof S.clip !== "string") S.clip = "";
+      if (typeof S.vae !== "string") S.vae = "";
+      if (typeof S.lora_swap !== "string") S.lora_swap = "";
+      if (typeof S.lora_light !== "string") S.lora_light = "None";
+      if (typeof S.lora_swap_strength !== "number") S.lora_swap_strength = 1;
+      if (typeof S.lora_light_strength !== "number") S.lora_light_strength = 1;
+      if (typeof S.steps !== "number") S.steps = 16;
+      if (typeof S.cfg !== "number") S.cfg = 2;
+      if (typeof S.sampler !== "string") S.sampler = "er_sde";
+      if (typeof S.scheduler !== "string") S.scheduler = "beta";
+      if (typeof S.shift !== "number") S.shift = 3;
+      if (typeof S.cfg_norm !== "boolean") S.cfg_norm = false;
+      if (typeof S.seed !== "number") S.seed = 0;
+      if (typeof S.seed_random !== "boolean") S.seed_random = true;
       if (typeof t.scale !== "number") t.scale = 1;
       t.scale = Math.max(0.25, Math.min(3, t.scale));
     }
@@ -10545,6 +10569,19 @@ const RA_AZ = ["front view", "front-right quarter view", "right side view", "bac
                "back view", "back-left quarter view", "left side view", "front-left quarter view"];
 const RA_EL = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle shot"];
 const RA_DI = ["close-up", "medium shot", "wide shot"];
+const SW_MODES = ["face", "head", "person"];
+const SW_REFS = ["subject", "subject2", "subject3"];
+const SW_MODE_TIP = {
+  face: "Only the face. Hair, head shape and everything else stay from the picture (BFS Face).",
+  head: "The whole head, hair included: the strongest identity (BFS Head, the author's recommended one).",
+  person: "The whole person: no BFS LoRA is trained for it, the base edit model does its best. The weakest of the three, here to test.",
+};
+// the author's own prompts (swap.py holds them; shown here as placeholders)
+const SW_PROMPT_HINT = {
+  face: "face swap face from {face} to {body}. swap only the face (not the hair), match the skin tone to {body}, keep {body} pose and lighting.",
+  head: "head_swap: start with {body} as the base image, keeping its lighting, environment, and background. remove the head from {body} completely and replace it with the head from {face}, strictly preserving the hair, eye color, and nose structure of {face}. copy the eye direction, head rotation, and micro-expressions from {body}. high quality, sharp details, 4k",
+  person: "replace the person in {body} with the person from {face}, keeping the pose, framing, camera angle, lighting, environment and background of {body}. the face, hair, body and clothing come from {face}. high quality, sharp details",
+};
 const RA_DEFAULT = { unet: "qwen_image_edit_2511_fp8mixed.safetensors", clip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
                      vae: "qwen_image_vae.safetensors", lora_angles: "qwen-image-edit-2511-multiple-angles-lora.safetensors",
                      lora_light: "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors" };
@@ -10733,6 +10770,210 @@ function reangleSection(node, body, tabName) {
     note.textContent = "The edit model (about 20 GB) loads beside the rig; Comfy swaps them. The re-shot "
       + "picture rides the i2i_image output too. Direction is exact, height is good, distance is "
       + "coarse: leave framing to the denoise and the Krea pass.";
+    card.appendChild(note);
+  }
+  body.appendChild(card);
+}
+
+function swapSection(node, body, tabName) {
+  if (tabName !== "i2i") return;
+  const t = node._rnCfg.tabs.i2i;
+  if (t.prompt_only) return;
+  const S = t.swap;
+  if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+  const L = MODEL_LISTS || {};
+  const open = (node._rnSwapOpen ||= { engine: false });
+  const refName = (r) => r === "subject" ? "Subject" : "Subject " + r.replace("subject", "");
+  const card = sectionCard("SWAP", "#e08fb0",
+    !S.on ? "off" : S.mode + " from the " + refName(S.reference) + " tab",
+    { node, key: "i2i_swap", open: !!S.on });
+  const row0 = document.createElement("div");
+  row0.className = "rn-ws-row";
+  const sw = document.createElement("div");
+  sw.className = "rn-ws-sw" + (S.on ? " on" : "");
+  sw.title = "On: before the image to image pass (and after RE-ANGLE), the person in the "
+           + "source gets the Subject's face, head or body from the BFS swap LoRA on the "
+           + "Qwen edit model, and THAT picture is the i2i source. The Krea 2 pass then "
+           + "finishes it with the same Subject at the denoise above. Off: nothing swapped.";
+  sw.onclick = () => { S.on = !S.on; writeCfg(node); render(node); };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = S.on
+    ? "The " + refName(S.reference) + " goes onto the person first, then the i2i pass runs on it at the denoise above."
+    : "Put the Subject onto the person in the picture, then paint over it.";
+  row0.append(sw, lab);
+  card.appendChild(row0);
+  if (S.on) {
+    const mrow = document.createElement("div");
+    mrow.className = "rn-ws-row";
+    const ml = document.createElement("span");
+    ml.className = "rn-ws-note";
+    ml.textContent = "Swap";
+    const mseg = document.createElement("div");
+    mseg.className = "rn-ws-seg";
+    for (const m of SW_MODES) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (S.mode === m ? " on" : "");
+      b.textContent = m; b.title = SW_MODE_TIP[m];
+      b.onclick = () => { S.mode = m; writeCfg(node); render(node); };
+      mseg.appendChild(b);
+    }
+    const rl = document.createElement("span");
+    rl.className = "rn-ws-note";
+    rl.textContent = "Reference";
+    const rseg = document.createElement("div");
+    rseg.className = "rn-ws-seg";
+    for (const r of SW_REFS) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (S.reference === r ? " on" : "");
+      b.textContent = refName(r);
+      b.title = "The reference person: that tab's selected image. The tab must be on.";
+      b.onclick = () => { S.reference = r; writeCfg(node); render(node); };
+      rseg.appendChild(b);
+    }
+    mrow.append(ml, mseg, rl, rseg);
+    card.appendChild(mrow);
+    // prompt: the author's words for the mode, or your own
+    const prow = document.createElement("div");
+    prow.className = "rn-ws-row";
+    const pl = document.createElement("span");
+    pl.className = "rn-ws-note";
+    pl.textContent = "Prompt";
+    const px = document.createElement("input");
+    px.type = "text";
+    px.value = S.prompt;
+    px.placeholder = SW_PROMPT_HINT[S.mode];
+    px.title = "Empty = the LoRA author's prompt for this mode (the placeholder). Your own words replace it; {face} and {body} become the Picture numbers in the order the LoRA wants.";
+    px.style.cssText = "flex:1;min-width:120px;background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+    px.onchange = () => { S.prompt = px.value; writeCfg(node); };
+    prow.append(pl, px);
+    card.appendChild(prow);
+    // engine (folded)
+    const eh = document.createElement("button");
+    eh.className = "rn-ws-on";
+    eh.style.cssText = "width:auto;padding:0 10px";
+    eh.textContent = (open.engine ? "\u25be" : "\u25b8") + " Engine: " + ((S.lora_swap || "first BFS file").replace(/\.safetensors$/i, ""))
+      + " \u00b7 " + S.steps + " steps \u00b7 cfg " + S.cfg + " \u00b7 " + (S.seed_random ? "random seed" : "seed " + S.seed);
+    eh.onclick = () => { open.engine = !open.engine; render(node); };
+    card.appendChild(eh);
+    if (open.engine) {
+      const grid = document.createElement("div");
+      grid.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center";
+      const inpCss = "background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+      const pick = (label, list, key, dflt, tip, noneLabel) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const sel = document.createElement("select"); sel.className = "rn-ws-select";
+        const names = [...new Set([...(list || []), ...(S[key] ? [S[key]] : []), ...(dflt ? [dflt] : [])])];
+        const cur = S[key] || dflt;
+        if (noneLabel) { const op = document.createElement("option"); op.value = ""; op.textContent = noneLabel; op.selected = !S[key]; sel.appendChild(op); }
+        for (const n of names) {
+          const op = document.createElement("option"); op.value = n; op.textContent = n; op.selected = n === cur;
+          sel.appendChild(op);
+        }
+        if (key === "lora_light") { const op = document.createElement("option"); op.value = "None"; op.textContent = "(none)"; op.selected = S[key] === "None"; sel.appendChild(op); }
+        sel.title = tip;
+        sel.onchange = () => { S[key] = sel.value; writeCfg(node); render(node); };
+        grid.append(l, sel);
+      };
+      const loras = L.loras || [];
+      // LoRA fields are searchable pickers (the pack's own): a native select is
+      // unusable at a few hundred files. BFS files lead the unfiltered list.
+      const loraPick = (label, key, tip, emptyLabel) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const inp = document.createElement("input"); inp.type = "text";
+        inp.value = S[key] && S[key] !== "None" ? S[key] : "";
+        inp.placeholder = emptyLabel + " - click and type to search";
+        inp.title = tip + " Click and type to search; recently used come first.";
+        inp.style.cssText = inpCss;
+        makePicker(inp, () => loras.filter((n) => /bfs/i.test(n)).concat(loras.filter((n) => !/bfs/i.test(n))),
+                   (v) => { S[key] = v || (key === "lora_light" ? "None" : ""); writeCfg(node); render(node); },
+                   { current: () => (S[key] && S[key] !== "None" ? S[key] : ""), emptyLabel, recent: "swap-lora" });
+        grid.append(l, inp);
+      };
+      loraPick("Swap LoRA", "lora_swap",
+               "Alissonerdx's BFS file for the Qwen edit model: Face V1 for face, Head V3/V4/V5 for head. The Krea 2 BFS files do NOT go here (those are Detailer pass LoRAs).",
+               "(first Qwen BFS file in the folder)");
+      const ol = document.createElement("span"); ol.className = "rn-ws-note"; ol.textContent = "Picture order";
+      const orow = document.createElement("div"); orow.className = "rn-ws-seg";
+      for (const [v, l, tip] of [["auto", "Auto", "Read the order off the file name: Face V1 and Head V1-V2 want face first, Head V3+ body first."],
+                                 ["body_first", "Body first", "Picture 1 = the source, Picture 2 = the reference (Head V3, V4, V5)."],
+                                 ["face_first", "Face first", "Picture 1 = the reference, Picture 2 = the source (Face V1, Head V1-V2)."]]) {
+        const b = document.createElement("button");
+        b.className = "rn-ws-segb" + (S.order === v ? " on" : "");
+        b.textContent = l; b.title = tip;
+        b.onclick = () => { S.order = v; writeCfg(node); render(node); };
+        orow.appendChild(b);
+      }
+      grid.append(ol, orow);
+      pick("Edit model", L.unets, "unet", RA_DEFAULT.unet, "Qwen-Image-Edit-2509 or 2511 (diffusion_models); shared with RE-ANGLE, read once.");
+      pick("Text encoder", L.clips, "clip", RA_DEFAULT.clip, "Qwen2.5-VL 7B (text_encoders).");
+      pick("VAE", L.vaes, "vae", RA_DEFAULT.vae, "The Qwen Image VAE.");
+      loraPick("Speed LoRA", "lora_light",
+               "A Lightning LoRA: 4-8 steps, cfg 1. The BFS author warns it makes skin plastic; (none) = 16-20 steps at cfg 1.5-2.5.",
+               "(none)");
+      const num = (label, key, min, max, step, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;gap:6px;align-items:center";
+        const inp = document.createElement("input"); inp.type = "number"; inp.min = min; inp.max = max; inp.step = step;
+        inp.value = String(S[key]); inp.title = tip;
+        inp.style.cssText = "width:80px;" + inpCss;
+        inp.onchange = () => { const v = Number(inp.value); if (Number.isFinite(v)) S[key] = Math.max(min, Math.min(max, v)); writeCfg(node); render(node); };
+        inp.addEventListener("wheel", () => inp.blur(), { passive: true });
+        wrap.appendChild(inp);
+        grid.append(l, wrap);
+      };
+      num("Swap strength", "lora_swap_strength", 0, 2, 0.05, "1.0; 1.2-1.3 when the likeness slips (the author's tip).");
+      num("Speed strength", "lora_light_strength", 0, 2, 0.05, "1.0 with a Lightning LoRA.");
+      num("Steps", "steps", 1, 60, 1, "16-20 without a speed LoRA; 4-8 with one. Too many steps at low cfg = contrast and plastic skin.");
+      num("CFG", "cfg", 0, 20, 0.1, "1.5-2.5 without a speed LoRA; 1.0 with one.");
+      const sam = (label, list, key, fallback, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const sel = document.createElement("select"); sel.className = "rn-ws-select";
+        const names = [...new Set([...(list && list.length ? list : fallback), S[key]])];
+        for (const n of names) {
+          const op = document.createElement("option"); op.value = n; op.textContent = n; op.selected = n === S[key];
+          sel.appendChild(op);
+        }
+        sel.title = tip;
+        sel.onchange = () => { S[key] = sel.value; writeCfg(node); render(node); };
+        grid.append(l, sel);
+      };
+      sam("Sampler", L.samplers, "sampler", ["er_sde", "ddim", "euler"], "The author's picks: er_sde + beta, or ddim + ddim_uniform. Not in this ComfyUI = euler.");
+      sam("Scheduler", L.schedulers, "scheduler", ["beta", "ddim_uniform", "simple"], "");
+      num("Shift", "shift", 0, 10, 0.1, "ModelSamplingAuraFlow shift; 3.0 is the Qwen edit default. 0 = off.");
+      const ks = document.createElement("span"); ks.className = "rn-ws-note"; ks.textContent = "Size";
+      const ksw = document.createElement("div"); ksw.className = "rn-ws-sw" + (S.keep_size ? " on" : "");
+      ksw.title = "Off: the frame is brought to the edit model's ~1 MP working size (the i2i scale and the Krea pass bring it back up). On: swap at the source's own size, slower past 1 MP.";
+      ksw.onclick = () => { S.keep_size = !S.keep_size; writeCfg(node); render(node); };
+      const ksl = document.createElement("span"); ksl.className = "rn-ws-note"; ksl.textContent = S.keep_size ? "the source's own size" : "the model's ~1 MP";
+      const ksr = document.createElement("div"); ksr.style.cssText = "display:flex;gap:6px;align-items:center"; ksr.append(ksw, ksl);
+      grid.append(ks, ksr);
+      const sl = document.createElement("span"); sl.className = "rn-ws-note"; sl.textContent = "Seed";
+      const srow = document.createElement("div"); srow.style.cssText = "display:flex;gap:6px;align-items:center";
+      const rsw = document.createElement("div"); rsw.className = "rn-ws-sw" + (S.seed_random ? " on" : "");
+      rsw.title = "Random: the run's seed (a re-queue swaps again). Fixed: the number, and a re-queue that only changed the denoise reuses the cached swap.";
+      rsw.onclick = () => { S.seed_random = !S.seed_random; writeCfg(node); render(node); };
+      const rl2 = document.createElement("span"); rl2.className = "rn-ws-note"; rl2.textContent = S.seed_random ? "random (the run's seed)" : "fixed";
+      srow.append(rsw, rl2);
+      if (!S.seed_random) {
+        const si = document.createElement("input"); si.type = "number"; si.min = 0; si.step = 1; si.value = String(S.seed);
+        si.style.cssText = "width:120px;" + inpCss;
+        si.onchange = () => { const v = Math.floor(Number(si.value)); if (Number.isFinite(v) && v >= 0) S.seed = v; writeCfg(node); };
+        srow.appendChild(si);
+      }
+      grid.append(sl, srow);
+      const cn = document.createElement("span"); cn.className = "rn-ws-note"; cn.textContent = "CFG norm";
+      const cnsw = document.createElement("div"); cnsw.className = "rn-ws-sw" + (S.cfg_norm ? " on" : "");
+      cnsw.title = "CFGNorm on the edit model. Off by default here; try it if cfg 2+ over-saturates.";
+      cnsw.onclick = () => { S.cfg_norm = !S.cfg_norm; writeCfg(node); render(node); };
+      grid.append(cn, cnsw);
+      card.appendChild(grid);
+    }
+    const note = document.createElement("div");
+    note.className = "rn-ws-note";
+    note.textContent = "Same edit model as RE-ANGLE (read once, Comfy swaps it with the rig). With RE-ANGLE on, "
+      + "the swap runs on the re-shot view. The swapped picture rides the i2i_image output too; keep the "
+      + "Subject tab on so the Krea pass finishes the same person, and let the Detailer's face pass do the rest.";
     card.appendChild(note);
   }
   body.appendChild(card);
@@ -11309,6 +11550,7 @@ export function render(node) {
   // auto prompt's output, so it reads top to bottom in the order it runs.
   i2iPassRow(node, body, cur);                     // i2i: real pass or prompt only
   reangleSection(node, body, cur);                 // i2i: re-shoot the source first
+  swapSection(node, body, cur);                    // i2i: then the Subject onto the person
   dialSection(node, body, cur);                    // each tab carries its own dials
   if (cur !== "paint") {
     autoSection(node, body, cur);                  // captions for this tab's image

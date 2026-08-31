@@ -39,6 +39,25 @@ const PREMADES = {
     { type: "sampler", on: true, rig: "", steps: 4, denoise: 0.15,
       sampler: "euler", scheduler: "simple", use_subject: true, prompt: "" },
   ],
+  // BFS head / body swap on Krea 2 (Alissonerdx's bfs_*_krea2 files, 2026-08-18):
+  // one whole-frame pass, the picture as the base reference and the Subject as
+  // the head, the swap file as the pass's own LoRA (pick it on the card - names
+  // are per machine), the author's trigger as the prompt, denoise 1 like his
+  // workflow, the rig RAW (his graph is base + BFS, nothing else - the main
+  // stack's identity LoRA fights it), working at 1280 on the long edge (his
+  // frame is 848 x 1280). Best on the official Turbo rig, where edit LoRAs fire.
+  "Head swap (BFS Krea 2)": [
+    { type: "sampler", on: true, rig: "", steps: 8, denoise: 1.0, loras: false,
+      crop_res: 1280, sampler: "euler", scheduler: "simple",
+      use_subject: true, use_picture: true, lora: "", lora_strength: 1.0,
+      prompt: "head_swap: replace the head with the reference head." },
+  ],
+  "Body swap (BFS Krea 2)": [
+    { type: "sampler", on: true, rig: "", steps: 8, denoise: 1.0, loras: false,
+      crop_res: 1280, sampler: "euler", scheduler: "simple",
+      use_subject: true, use_picture: true, lora: "", lora_strength: 1.0,
+      prompt: "body_swap: replace the person with the reference person." },
+  ],
   "Shrink and regrow": [
     { type: "sampler", on: true, rig: "", denoise: 0.35, scale: 0.5, prompt: "" },
     { type: "sampler", on: true, rig: "", denoise: 0.2, scale: 2.0, prompt: "" },

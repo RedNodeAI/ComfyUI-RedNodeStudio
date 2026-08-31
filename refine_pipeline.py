@@ -448,34 +448,61 @@ class RedNodeStudioDetailer:
             # identity system instead of plain text. On any other rig they are
             # politely ignored, the same rule the Paint tab follows.
             refs_wanted = (s["use_subject"] or s["use_scene"]
-                           or s["use_moodboard"])
+                           or s["use_moodboard"] or s["use_picture"])
             rig_is_krea2 = rig.get("clip_type") == "krea2"
-            pos = neg = None
-            if refs_wanted and rig_is_krea2:
-                try:
-                    from .rednode import Krea2RedNode
-                    pos, neg = Krea2RedNode().encode(
-                        clip, text,
-                        ws_cfg.get("studio_preset") or "Balanced",
-                        0.5, negative_prompt=s["negative"], vae=vae,
-                        subject_image=(self._tab_tensor(ws_cfg, "subject")
-                                       if s["use_subject"] else None),
-                        scene_image=(self._tab_tensor(ws_cfg, "scene")
-                                     if s["use_scene"] else None),
-                        moodboard_style=(self._tab_tensor(ws_cfg, "moodboard",
-                                                          multi=True)
-                                         if s["use_moodboard"] else None))
-                except Exception as exc:
-                    print("[RedNode Detailer] reference encode failed, plain "
-                          "text instead: %s" % exc, flush=True)
-                    pos = neg = None
-            elif refs_wanted:
+            if refs_wanted and not rig_is_krea2:
                 print("[RedNode Detailer] references are Krea 2 conditioning and "
                       "rig %r is not a Krea 2 rig; encoding plain text"
                       % (rig_name or "(active)"), flush=True)
-            if pos is None:
-                pos = _encode_text(clip, text)
-                neg = _encode_text(clip, s["negative"])
+            # PICTURE makes the encode depend on what the pass is looking at
+            # (the frame for a sampler pass, the crop for a detailer), so the
+            # encode is a function and runs where the picture is known.
+            use_picture = s["use_picture"] and rig_is_krea2
+
+            def _encode(picture=None):
+                if refs_wanted and rig_is_krea2:
+                    try:
+                        from .rednode import Krea2RedNode, PRESETS as _PRESETS, \
+                            CUSTOM_SENTINEL as _CUSTOM
+                        preset = ws_cfg.get("studio_preset") or "Balanced"
+                        settings = None
+                        target = None
+                        if use_picture:
+                            scene = picture[:, :, :, :3] if picture is not None else None
+                            # A base-conditioned edit (the swap LoRAs) is the
+                            # author's geometry: refs FITTED to the sampled size
+                            # (v1.2 fit path, needs the target latent) and no
+                            # attention boost on either reference - his workflow
+                            # runs ref_boost 1 / 1. The Studio's Balanced 2.5x on
+                            # the subject over-drives a swap LoRA into noise.
+                            if scene is not None:
+                                target = {"samples": torch.zeros(
+                                    (1, 4, scene.shape[1] // 8, scene.shape[2] // 8))}
+                            base = dict(_PRESETS.get(preset) or _PRESETS["Balanced"])
+                            base.update(reference_fidelity=1.0, scene_fidelity=1.0,
+                                        fit_mode="fit")
+                            settings, preset = base, _CUSTOM
+                        else:
+                            scene = (self._tab_tensor(ws_cfg, "scene")
+                                     if s["use_scene"] else None)
+                        return Krea2RedNode().encode(
+                            clip, text, preset,
+                            0.5, negative_prompt=s["negative"], vae=vae,
+                            subject_image=(self._tab_tensor(ws_cfg, "subject")
+                                           if s["use_subject"] else None),
+                            scene_image=scene,
+                            moodboard_style=(self._tab_tensor(ws_cfg, "moodboard",
+                                                              multi=True)
+                                             if s["use_moodboard"] else None),
+                            output_latent=target, settings=settings)
+                    except Exception as exc:
+                        print("[RedNode Detailer] reference encode failed, plain "
+                              "text instead: %s" % exc, flush=True)
+                return _encode_text(clip, text), _encode_text(clip, s["negative"])
+
+            pos = neg = None
+            if not use_picture:
+                pos, neg = _encode()
             window = ("" if start == 0 and end is None
                       else ", steps %d..%s" % (start, end if end is not None
                                                else "end"))
@@ -488,6 +515,11 @@ class RedNodeStudioDetailer:
             for r in range(max(1, reps)):
                 rseed = seed + i + r * 131
                 if s["type"] == "sampler":
+                    if use_picture:
+                        pic = self._resize(out, s["scale"])
+                        if s.get("crop_res"):
+                            pic = self._resize(pic, s["crop_res"] / max(pic.shape[1], pic.shape[2]))
+                        pos, neg = _encode(pic)
                     out = self._sample(out, model, pos, neg, vae, s, rseed,
                                        steps, cfg_v, sampler, scheduler, start,
                                        end)
@@ -500,7 +532,8 @@ class RedNodeStudioDetailer:
                 else:
                     out, why = self._detail(out, model, pos, neg, vae, s, rseed,
                                             steps, cfg_v, sampler, scheduler,
-                                            start, end)
+                                            start, end,
+                                            encode_for=_encode if use_picture else None)
                     line = "%s: %s on rig %r, %s" % (
                         tag, s["target"], rig_name,
                         why or ("%d steps%s, %s/%s, denoise %.2f"
@@ -609,6 +642,10 @@ class RedNodeStudioDetailer:
                      work.shape[2], work.shape[1]), flush=True)
         else:
             work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
+        if encode_for is not None:
+            # PICTURE on a detailer: the crop is the base reference, so the
+            # swap lands on the face it is looking at, not on the whole frame
+            pos, neg = encode_for(work)
         lat = {"samples": vae.encode(work)}
         out = self._ksample(model, seed, steps, cfg_v, sampler, scheduler, pos,
                             neg, lat, s["denoise"], start, end)
