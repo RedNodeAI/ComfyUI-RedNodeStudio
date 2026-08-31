@@ -912,7 +912,7 @@ def light_words(camera, subjects, lights, join=", "):
 LIGHT_LORA_KEYS = ("brightness", "colour")
 LIGHT_LORA_RANGE = {"brightness": (-10.0, 10.0), "colour": (-4.0, 4.0)}
 # the part of each dial that is actually usable, for the panel to say so
-LIGHT_LORA_CLEAN = {"brightness": (-5.0, 3.0), "colour": (-2.5, 4.0)}
+LIGHT_LORA_CLEAN = {"brightness": (-10.0, 10.0), "colour": (-4.0, 4.0)}
 
 # BRIGHTNESS: negative darkens, positive brightens, and how well the plus side
 # works depends entirely on HEADROOM (measured twice, 2026-08-19 - the first
@@ -924,16 +924,24 @@ LIGHT_LORA_CLEAN = {"brightness": (-5.0, 3.0), "colour": (-2.5, 4.0)}
 #   crushed blacks recovered from 16.7% to 0.7%. A real, monotonic lift.
 # So auto works both ways, gently on the plus side because that is where the
 # clipping lives when a scene is already bright.
-LIGHT_AUTO_BY_STEP = {-2: -3.5, -1: -2.0, 0: 0.0, 1: 2.5, 2: 5.0}
+# THE USER'S NUMBERS, and they overrule the strip (2026-08-19): "almost black
+# is around -9 not -4, and around 10 is good for high brightness" - then "in
+# fact you can use -10, its cleaner". The sandbox
+# sweep was a bare Turbo at 8 steps with no other LoRAs on the model; their
+# real stack carries the identity LoRA, the bypasses and a style, and a slider
+# lands very differently underneath that lot. They judge by the generation, so
+# the dial is theirs: the ends of the file's own range, and the halfway points
+# between.
+LIGHT_AUTO_BY_STEP = {-2: -10.0, -1: -5.0, 0: 0.0, 1: 5.0, 2: 10.0}
 
 # COLOUR: positive is warm. Linear in MIREDS from a neutral, with a different
 # factor each way because the LoRA is not symmetric: the warm side is gentle
 # and near-linear to +4, the cool side turns violent past -2.5.
 COLOUR_NEUTRAL_K = 5200.0
 COLOUR_WARM_PER_MIRED = 0.011
-COLOUR_COOL_PER_MIRED = 0.027
+COLOUR_COOL_PER_MIRED = 0.0435
 COLOUR_MAX_WARM = 4.0
-COLOUR_MAX_COOL = -2.5
+COLOUR_MAX_COOL = -4.0        # the file's own range, per the user
 
 
 def auto_light_strength(camera, subjects, lights):

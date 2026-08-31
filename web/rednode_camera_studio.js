@@ -129,15 +129,13 @@ function kelvinColour(k) {
 // camera_translate.py - check_camera_studio_panel.mjs holds the two together.
 const LIGHT_LORA_KEYS = ["brightness", "colour"];
 const LIGHT_LORA_RANGE = { brightness: [-10, 10], colour: [-4, 4] };
-const LIGHT_LORA_CLEAN = { brightness: [-5, 3], colour: [-2.5, 4] };
+const LIGHT_LORA_CLEAN = { brightness: [-10, 10], colour: [-4, 4] };
 const LIGHT_LORA_LABEL = { brightness: "Brightness", colour: "Colour temp" };
 const LIGHT_LORA_HINT = {
   brightness: "Exposure, both ways, from the level your lights actually make. "
-            + "Measured: -3 is a clean darkening, -6 very dark, -10 destroys the "
-            + "frame. The plus side needs somewhere to go: on a dark scene it lifts "
-            + "cleanly (+3 more than doubled the exposure and recovered the crushed "
-            + "blacks), on an already-lit one it does little until +6 and then blows "
-            + "highlights.",
+            + "The dial runs the file's full -10..+10: -10 for near black, "
+            + "+10 for a strong lift, and Auto puts the rig's own level on it "
+            + "(dim -5, almost black -10, bright +5, very bright +10).",
   colour: "Warm / cool tint, without changing exposure. Measured: + is warm and "
         + "gentle to +4, - is cool and turns violent past -2.5. Auto reads the key "
         + "light's Colour; a light with no colour set leaves this at 0.",
@@ -147,9 +145,9 @@ const LIGHT_LORA_GUESS = {
   brightness: [/light[_ -]?slider/i, /bright/i, /exposure/i],
   colour: [/color[_ -]?temp/i, /colour[_ -]?temp/i, /temperature/i, /white[_ -]?balance/i],
 };
-const LIGHT_AUTO_BY_STEP = { "-2": -3.5, "-1": -2, "0": 0, "1": 2.5, "2": 5 };
+const LIGHT_AUTO_BY_STEP = { "-2": -10, "-1": -5, "0": 0, "1": 5, "2": 10 };
 const COLOUR_NEUTRAL_K = 5200, COLOUR_WARM_PER_MIRED = 0.011,
-      COLOUR_COOL_PER_MIRED = 0.027, COLOUR_MAX_WARM = 4, COLOUR_MAX_COOL = -2.5;
+      COLOUR_COOL_PER_MIRED = 0.0435, COLOUR_MAX_WARM = 4, COLOUR_MAX_COOL = -4;
 
 function lightEntry(st, key) {
   st.light_loras = st.light_loras && typeof st.light_loras === "object" ? st.light_loras : {};
