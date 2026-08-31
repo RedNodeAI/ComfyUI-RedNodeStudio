@@ -83,7 +83,8 @@ LIGHTING_CHOICES = [NONE] + list(LIGHTING)
 
 # Styles that light the scene themselves; picking one of these AND a lighting option is
 # usually a mistake. Kept here so the node can say so.
-SELF_LIT_STYLES = {"Photo: phone flash", "Photo: editorial"}
+SELF_LIT_STYLES = {"Photo: phone flash", "Photo: editorial",
+                   "Photo: nocturnal low-key"}
 
 PLACEMENT_PREPOSITIONS = [
     NONE, "on", "in", "under", "on top of", "beside", "behind", "in front of",

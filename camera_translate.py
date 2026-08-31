@@ -578,6 +578,331 @@ def _facing_words(kind, o_rel, prime, o, oname, sname):
     return "its back to the camera"
 
 
+# ---------------------------------------------------------------- lights
+# THE LIGHT RIG (the user's ask, 2026-08-18: "add a light source like Unreal -
+# diameter, soft or hard, directional or orbital, colour tone - through
+# prompting"). Same contract as the camera translator and the depth-of-field
+# sentence: geometry and physics in, prose out, no renderer involved.
+#
+# WHY THIS CAN WORK AT ALL, and the rule every sentence here obeys: the corpus
+# study behind prompt_lists.LIGHTING found that lighting is followed when it
+# names A SOURCE, A DIRECTION and WHAT IT LANDS ON, and ignored when it is a
+# bare label ("cinematic lighting" measured as a large change with no control).
+# A light standing on the stage knows all three, and knows them in the units a
+# photographer would use, so it writes the long form every time.
+#
+# The physics that is real rather than decorative:
+#   - HARDNESS is angular size. A source's apparent width from the subject,
+#     2*atan(d/2L), decides the shadow edge: the sun is 0.5 deg and cuts hard,
+#     a 1 m softbox at 1 m is 53 deg and wraps. This is the same kind of
+#     computation dof_words() makes from the blur circle, and it means "big
+#     light close" and "small light far" stop being guesses.
+#   - RATIO is inverse square. Key and fill intensities at their own distances
+#     give a lighting ratio in stops, which is what low-key and high-key
+#     actually mean, so the words follow the rig instead of a mood label.
+#   - DIRECTION is the same bearing maths the camera uses, read twice: against
+#     the VIEWER (screen left/right, which is what a viewer sees) and against
+#     the subject's own facing (short vs broad lighting, rim, backlight).
+LIGHT_KINDS = ("softbox", "bulb", "sun", "window", "practical", "ambient")
+
+# apparent-size bands -> shadow character. Degrees of angular width.
+def hardness_words(angular_deg):
+    if angular_deg >= 45:
+        return ("very soft", "shadows so soft they barely have an edge")
+    if angular_deg >= 20:
+        return ("soft", "soft-edged shadows that wrap around the form")
+    if angular_deg >= 8:
+        return ("fairly soft", "gently graded shadow edges")
+    if angular_deg >= 2:
+        return ("crisp", "clearly drawn shadow edges")
+    return ("hard", "hard-edged shadows with a sharp line between light and dark")
+
+
+def angular_size_deg(diameter_m, distance_m):
+    """How wide the source looks from where it is standing, in degrees."""
+    d = max(0.001, float(diameter_m))
+    L = max(0.05, float(distance_m))
+    return math.degrees(2.0 * math.atan((d / 2.0) / L))
+
+
+def colour_words(kelvin):
+    """Colour of the light. 0 = don't mention it.
+
+    NAME THE COLOUR, NEVER THE THING THAT MAKES IT (the user, 2026-08-18):
+    the first version said "candle-warm" under 2200 K and the model drew
+    candles. A colour word is a description; a light-source noun is an object,
+    and an object named in a prompt gets rendered. Same reason the source
+    wording below stopped saying softbox and bulb.
+    """
+    try:
+        k = float(kelvin or 0)
+    except (TypeError, ValueError):
+        k = 0.0
+    if k <= 0:
+        return ""
+    if k < 2200:
+        return "deep amber"
+    if k < 3000:
+        return "warm amber"
+    if k < 4000:
+        return "warm white"
+    if k < 5200:
+        return "neutral white"
+    if k < 6500:
+        return "cool white"
+    if k < 9000:
+        return "cold blue-white"
+    return "icy blue"
+
+
+# HOW MUCH LIGHT LANDS, which is what makes a picture dark - NOT the colour
+# (the user, 2026-08-18: "when the colour is very low should it be quite dark?").
+# 1900 K is the colour of a candle flame, not its level: a warm scene can be
+# blazing and a blue one can be nearly black. Level is power over distance
+# squared, and the nominal is power 1.0 at 2 m, so a light dragged back really
+# does dim the scene, exactly as it would in a room.
+LEVEL_NOMINAL = 0.25          # illuminance of power 1.0 at 2 m
+LEVEL_BANDS = (0.12, 0.4, 2.5, 8.0)
+
+
+def illuminance(intensity, distance_m):
+    try:
+        i = max(0.0, float(intensity))
+    except (TypeError, ValueError):
+        i = 1.0
+    return i / max(0.05, float(distance_m)) ** 2
+
+
+def level_words(rel, sname="the subject"):
+    """(sentence, step) for how lit the scene is, relative to the nominal.
+    step: -2 very dark .. +2 blown, 0 = ordinary, which says nothing.
+
+    DARKNESS IS A THING, NOT AN EXPOSURE (the user, 2026-08-18: "I am still not
+    getting the dark effect I want"). The corpus-validated entries in
+    prompt_lists.LIGHTING never say "the frame is dark"; they name the lit POOL
+    and then what lies BEYOND it - "deep shadow beyond a tight pool of orange
+    light", "everything beyond the pool falling away into dark", "leaving the
+    room behind dark". A model can draw an unlit background; it cannot draw an
+    f-stop. So the dark bands describe the room, not the exposure.
+    """
+    lo, dim, hi, blown = LEVEL_BANDS
+    if rel < lo:
+        return ("a tight pool of light on %s and nothing else, the background "
+                "unlit and velvety black, the walls and floor beyond swallowed "
+                "by it" % sname, -2)
+    if rel < dim:
+        return ("the light falling away quickly past %s, the background dark and "
+                "unlit, only the nearest shapes catching any of it" % sname, -1)
+    if rel < hi:
+        return ("", 0)
+    if rel < blown:
+        return ("everything around %s lit as well, shadows open and full of "
+                "detail" % sname, 1)
+    return ("the whole scene flooded with light, highlights close to blowing "
+            "out", 2)
+
+
+def rig_level(camera, subjects, lights):
+    """The level step a placed rig implies, or 0 when there is none. The frame's
+    own Brightness dial can disagree with this, and prompt_frame says so."""
+    live = [l for l in (lights or []) if l.get("on", True)]
+    if not live:
+        return 0
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    total = 0.0
+    for l in live:
+        lpos = [float(x) for x in l.get("pos", [0, 2.0, 0])]
+        total += illuminance(l.get("intensity", 1.0), _len(_v(lpos, face)))
+    return level_words(total / LEVEL_NOMINAL)[1]
+
+
+def _light_geometry(light, subject_face, subject_pos, facing_deg, cam_pos):
+    """Where a light stands, in the two frames a sentence needs: against the
+    VIEWER (screen left/right, front/back) and against the SUBJECT's facing."""
+    lpos = [float(x) for x in light.get("pos", [0, 2.0, 0])]
+    geo = camera_geometry(lpos, subject_face)          # light -> face
+    dist = geo["distance"]
+    # elevation of the light as seen from the face: + is above
+    elev = math.degrees(math.atan2(lpos[1] - subject_face[1],
+                                   max(0.01, geo["ground"])))
+    # bearing of the light around the subject, measured against the CAMERA's
+    # bearing: 0 = from behind the camera, 180 = straight into the lens
+    b_light = bearing_from(subject_pos, lpos)
+    b_cam = bearing_from(subject_pos, cam_pos)
+    rel_cam = (b_light - b_cam + 180) % 360 - 180      # + = viewer's right
+    rel_face = rel_bearing(subject_pos, lpos, facing_deg)
+    return {"pos": lpos, "distance": dist, "elev": elev,
+            "rel_cam": rel_cam, "rel_face": rel_face}
+
+
+def _direction_words(g):
+    """Where the light comes from, told the way a viewer sees it."""
+    a = abs(g["rel_cam"])
+    side = "right" if g["rel_cam"] > 0 else "left"
+    if a < 18:
+        where = "from behind the camera, straight onto the subject"
+    elif a < 65:
+        where = "from the %s of frame" % side
+    elif a < 115:
+        where = "from directly %s of the subject, edge on" % side
+    elif a < 160:
+        where = "from behind the subject on the %s, raking forward" % side
+    else:
+        where = "from directly behind the subject, straight back into the lens"
+    e = g["elev"]
+    if e >= 55:
+        height = "almost overhead"
+    elif e >= 25:
+        height = "high and angled down"
+    elif e >= 8:
+        height = "a little above the face"
+    elif e >= -8:
+        height = "level with the face"
+    elif e >= -30:
+        height = "from below the face"
+    else:
+        height = "from low down, throwing shadows upward"
+    return where, height
+
+
+# The classic setups, recognised from the geometry. A named setup is obeyed far
+# better than a described one (the same reason the camera translator names its
+# bands), so when a rig lands on one, the sentence says its name as well.
+def named_setup(g, hard, filled=False):
+    e, a, rel_face = g["elev"], abs(g["rel_cam"]), g["rel_face"]
+    if a >= 160:
+        # a silhouette needs an EMPTY shadow side; with a fill in the rig the
+        # same geometry is a rim/backlight, and calling it a silhouette while
+        # asking for shadow detail is a contradiction the model has to resolve
+        if filled:
+            return "a strong backlight drawing a bright rim around the edges"
+        return "a backlit silhouette" if hard else "a soft backlight"
+    if a >= 115:
+        return "rim lighting"
+    if 22 <= e <= 62 and 28 <= a <= 68:
+        return "Rembrandt lighting, a small triangle of light on the shadow cheek"
+    if e >= 35 and a < 25:
+        return "butterfly lighting, a small shadow straight under the nose"
+    if 85 <= a <= 115 and abs(e) < 25:
+        return "split lighting, half the face lit and half in shadow"
+    if e <= -25 and a < 65:
+        return "uplighting from below"
+    if a < 20 and abs(e) < 20:
+        return "flat frontal lighting"
+    if abs(rel_face) > 100 and a < 90:
+        return "short lighting, the lit side turned away from the camera"
+    return ""
+
+
+def _ratio_words(key, others):
+    """Key-to-fill in stops, which is what low-key and high-key really mean."""
+    def pull(l):
+        try:
+            i = float(l.get("intensity", 1.0))
+        except (TypeError, ValueError):
+            i = 1.0
+        return max(0.0, i)
+    kp = pull(key["light"]) / max(0.05, key["geo"]["distance"]) ** 2
+    fills = [pull(o["light"]) / max(0.05, o["geo"]["distance"]) ** 2 for o in others]
+    if kp <= 0 or not fills or max(fills) <= 0:
+        return "the shadow side falling away with no fill" if not fills else ""
+    stops = math.log(kp / max(fills), 2)
+    if stops >= 4:
+        return "the fill far below it, so the shadows stay deep and low-key"
+    if stops >= 2:
+        return "a fill about %d stops down, keeping detail in the shadows" % round(stops)
+    if stops >= 0.7:
+        return "a fill close behind it, an even, high-key balance"
+    return ("the two nearly equal, flat and shadowless" if len(fills) == 1
+            else "the others nearly as strong, flat and shadowless")
+
+
+def light_words(camera, subjects, lights, join=", "):
+    """The lighting paragraph for a stage's lights, or "" when there are none.
+
+    Source, direction and what it lands on, every time, plus the shadow
+    character its real angular size implies, its colour, and the ratio to any
+    other light. Lights beyond the first two are summarised rather than
+    described: a paragraph naming four exact sources averages into mush, which
+    is the same obedience ceiling the reference stack has.
+    """
+    live = [l for l in (lights or []) if l.get("on", True)]
+    if not live:
+        return ""
+    geo0, _rel = _prime_geo(camera, subjects)
+    ti = camera.get("target")
+    if not isinstance(ti, int) or ti < 0 or ti >= len(subjects):
+        ti = 0
+    prime = subjects[ti]
+    sname = str(prime.get("name") or "the subject")
+    spos = [float(x) for x in prime.get("pos", [0, 0, 0])]
+    face = [spos[0], spos[1] + float(prime.get("height", 1.7)) * 0.92, spos[2]]
+    cpos = [float(x) for x in camera.get("pos", [0, face[1], 3.0])]
+    rigs = []
+    for l in live:
+        g = _light_geometry(l, face, spos, prime.get("facing_deg", 0), cpos)
+        rigs.append({"light": l, "geo": g,
+                     "power": (float(l.get("intensity", 1.0) or 0)
+                               / max(0.05, g["distance"]) ** 2)})
+    rigs.sort(key=lambda r: -r["power"])
+    key, others = rigs[0], rigs[1:]
+    kl, kg = key["light"], key["geo"]
+    kind = str(kl.get("kind") or "softbox")
+    if kind not in LIGHT_KINDS:
+        kind = "softbox"
+    # the sun is a special case: 150 million km away, so its angular size is
+    # fixed at half a degree no matter what diameter the stage gives it
+    ang = 0.53 if kind == "sun" else angular_size_deg(kl.get("diameter", 1.0), kg["distance"])
+    hard_word, shadow_words = hardness_words(ang)
+    where, height = _direction_words(kg)
+    colour = colour_words(kl.get("kelvin", 0))
+    tint = (colour.replace(" ", "-") + " ") if colour else ""
+    # HARDWARE IS AN OBJECT. "softbox" and "bulb" put studio gear in the frame
+    # the same way "candle-warm" put candles in it, so the sentence describes
+    # the LIGHT and only names a thing where the thing is wanted in shot: a
+    # practical lamp, and a window, which is a feature of the room anyway.
+    # A panel and a bare bulb differ by ONE thing a picture can show: how hard
+    # their shadows are, which the size and distance already decided. So neither
+    # names itself; "soft light" and "hard light" is the whole honest difference,
+    # and the direction clause that follows reads without a second "from".
+    source = {"softbox": "%s %slight" % (hard_word, tint),
+              "bulb": "%s %slight" % (hard_word, tint),
+              "sun": "hard direct %ssunlight" % tint,
+              "window": "%s %sdaylight through a window" % (hard_word, tint),
+              "practical": "%s %slight cast by a lamp in the scene" % (hard_word, tint),
+              "ambient": "%s %sambient light" % (hard_word, tint)}[kind]
+    lead = "%s lit by %s %s, %s" % (sname, source, where, height)
+    bits = [lead, shadow_words]
+    # the LEVEL of the whole rig, so turning the power down darkens the picture
+    # instead of doing nothing (with one light it used to do exactly nothing:
+    # intensity only ever fed the ratio between two of them)
+    total_e = sum(illuminance(r["light"].get("intensity", 1.0), r["geo"]["distance"])
+                  for r in rigs)
+    lvl, _step = level_words(total_e / LEVEL_NOMINAL, sname)
+    if lvl:
+        bits.append(lvl)
+    setup = named_setup(kg, ang < 8, filled=bool(others))
+    if setup:
+        bits.append(setup)
+    ratio = _ratio_words(key, others)
+    if ratio:
+        bits.append(ratio)
+    if len(others) == 1:
+        og = others[0]["geo"]
+        ow, _oh = _direction_words(og)
+        oc = colour_words(others[0]["light"].get("kelvin", 0))
+        bits.append("a second, %sweaker light %s"
+                    % (oc.replace(" ", "-") + " " if oc else "", ow))
+    elif len(others) > 1:
+        bits.append("%d further sources filling the scene" % len(others))
+    return _cap(join.join(b for b in bits if b)) + "."
+
+
 # ---------------------------------------------------------------- presets
 # The Prompt Frame's Camera height stops as camera states, so the dial and
 # the studio share one translator. Subject 1.7m at origin facing +z; camera

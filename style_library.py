@@ -113,6 +113,21 @@ STYLES = {
         "falloff, tack-sharp detail through the plane of focus, neutral colour, smooth "
         "highlight rolloff, every texture legible without looking sharpened."),
 
+    # The user's own find (2026-08-18), from Krea's "Moody Nocturnal Elegance"
+    # moodboard blurb: aesthetic + MATERIAL words push tones darker where
+    # exposure words fail. "Velvety" is the load-bearing one - it makes the dark
+    # a surface the model can render, not a level it has to obey. Repetition
+    # across several vocabularies (low-key, nocturnal, cool palette, high
+    # contrast, velvety) is the point, not padding: each one pulls the same way.
+    # Self-lit, so the lighting dropdown will be flagged against it.
+    "Photo: nocturnal low-key": (
+        "A low-key nocturnal photograph. The subject is lit by one small source and "
+        "everything else falls to rich velvety black, backgrounds reading as deep "
+        "unlit space rather than dim grey. Contrast is high and intimate, the palette "
+        "cool and desaturated with only the lit skin or surface holding warmth. "
+        "Highlights are small and controlled, shadow has no detail in it at all, and "
+        "the darkness is smooth and grainless rather than muddy."),
+
     "Photo: 35mm film": (
         "A 35mm film photograph. Visible silver grain, halation blooming around the "
         "brightest highlights, warm highlight rolloff into cream rather than white, gentle "
@@ -128,7 +143,7 @@ STYLES = {
 
 # Styles that describe their own light source, so a scene implying different light will
 # fight them. Surfaced as a warning when the surroundings mention a window or daylight.
-OWN_LIGHT = {"Photo: phone flash", "Photo: editorial"}
+OWN_LIGHT = {"Photo: phone flash", "Photo: editorial", "Photo: nocturnal low-key"}
 
 # Three of these impose their own palette or drop colour entirely, so a user's palette
 # wording in the extras box will fight them. Surfaced in the tooltip.

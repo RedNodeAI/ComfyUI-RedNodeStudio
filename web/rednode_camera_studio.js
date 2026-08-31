@@ -96,7 +96,36 @@ const DEFAULT = () => ({
   cam_loras: {},
   path: { mode: "off", shots: 10, b: null, orbit_from: 0, orbit_to: 180 },
   stage_zoom: "normal",
+  lights: [],
 });
+// THE LIGHTS (2026-08-18). Things on the stage like the subjects, but read by
+// camera_translate.light_words: diameter and distance decide how hard the light
+// is, intensity and distance the ratio against the others, kelvin its colour.
+const LIGHT_KINDS = ["softbox", "bulb", "sun", "window", "practical", "ambient"];
+const LIGHT_HINT = {
+  softbox: "A broad source. Big and close wraps the face; small and far cuts. "
+         + "Written as light, never as a softbox: naming gear puts gear in the shot.",
+  bulb: "A small point source: hard-edged shadows unless it is very close.",
+  sun: "Direct sun. Always hard, whatever diameter is set: it is 150 million km away.",
+  window: "Daylight through a window. Soft, and it does name the window, which "
+        + "usually belongs in the room anyway.",
+  practical: "A lamp inside the scene: the one kind meant to appear in frame.",
+  ambient: "A broad glow with no clear direction: the fill of last resort.",
+};
+// kelvin -> a swatch, so the stage reads warm/cold at a glance
+function kelvinColour(k) {
+  if (!k) return "#e8ecf1";
+  if (k < 2200) return "#ff9b4a";
+  if (k < 3000) return "#ffc07a";
+  if (k < 4000) return "#ffe0b0";
+  if (k < 5200) return "#fff6e6";
+  if (k < 6500) return "#eaf2ff";
+  if (k < 9000) return "#cfe0ff";
+  return "#b9d2ff";
+}
+const NEW_LIGHT = () => ({ name: "key", kind: "softbox", pos: [-1.4, 1.9, 1.4],
+                           diameter: 1.0, intensity: 1.0, kelvin: 5600, on: true,
+                           locked: false });
 const CAM_LORA_KEYS = ["zoom", "height", "orbit", "back"];
 const CAM_LORA_RANGE = { zoom: [-10, 12], height: [-10, 12], orbit: [-8, 8], back: [0, 8] };
 const CAM_LORA_LABEL = { zoom: "Zoom", height: "Height", orbit: "Orbit", back: "Back" };
@@ -142,6 +171,18 @@ function normalise(d) {
       if (typeof c.aperture === "number") o.camera.aperture = c.aperture;
       if (c.lock === false) o.camera.lock = false;
       if (Array.isArray(c.aim) && c.aim.length === 3) o.camera.aim = c.aim.map(Number);
+    }
+    if (Array.isArray(d.lights)) {
+      o.lights = d.lights.filter((l) => l && typeof l === "object").map((l) => ({
+        name: typeof l.name === "string" && l.name.trim() ? l.name : "a light",
+        kind: LIGHT_KINDS.includes(l.kind) ? l.kind : "softbox",
+        pos: Array.isArray(l.pos) && l.pos.length === 3 ? l.pos.map(Number) : [-1.4, 1.9, 1.4],
+        diameter: typeof l.diameter === "number" ? Math.max(0.01, Math.min(20, l.diameter)) : 1.0,
+        intensity: typeof l.intensity === "number" ? Math.max(0, Math.min(100, l.intensity)) : 1.0,
+        kelvin: typeof l.kelvin === "number" ? Math.max(0, Math.min(20000, l.kelvin)) : 0,
+        on: l.on !== false,
+        locked: !!l.locked,
+      }));
     }
     if (Array.isArray(d.subjects) && d.subjects.length) {
       o.subjects = d.subjects.filter((s) => s && typeof s === "object").map((s) => ({
@@ -353,6 +394,7 @@ export function buildStudio(host, S) {
   host.classList.add("rn-cs");
   let st = normalise(S.get());
   let sel = 0;                       // selected subject index
+  let lightSel = -1;                 // selected light index, -1 = none
   let dragging = null;               // {kind: "cam"|"subj"|"face", i}
   let dragOff = [0, 0];              // grab offset (world m): drag from where you clicked, not the centre
   // STAGE SCALE (the user's ask: bigger rooms, outdoors): normal 12 x 9 m,
@@ -561,6 +603,22 @@ export function buildStudio(host, S) {
   subjGrid.className = "subj-grid";
   subjCard.appendChild(subjGrid);
   cols.appendChild(subjCard);      // full width, under both columns
+
+  // THE LIGHTS CARD. A light is a thing on the stage: drag it where it stands,
+  // set how big it is (that is what decides hard or soft), how strong, and its
+  // colour. The sentence it writes is the live preview at the bottom.
+  const lightCard = document.createElement("div");
+  lightCard.className = "card full";
+  const lTtl2 = document.createElement("div");
+  lTtl2.className = "ttl";
+  lTtl2.textContent = "LIGHTS";
+  const lSum2 = document.createElement("span");
+  lSum2.className = "sum";
+  lTtl2.appendChild(lSum2);
+  lightCard.appendChild(lTtl2);
+  const lightList = document.createElement("div");
+  lightCard.appendChild(lightList);
+  cols.appendChild(lightCard);
   // SCENE FOCUS: the stage canvas and the SUBJECTS card move into an overlay
   // room (the same elements, so every handler and the state stay live) and
   // come back to their places on close.
@@ -857,6 +915,45 @@ export function buildStudio(host, S) {
       g.font = "10px system-ui";
       g.fillText(s.name.slice(0, 18), sx, sy + Math.max(d, 8) / 2 + 12);
     });
+    // LIGHTS: a ring whose size follows the diameter, tinted by its colour, with
+    // a dashed line to the subject it is aimed at - the direction the sentence
+    // will describe, visible on the stage.
+    (st.lights || []).forEach((l, i) => {
+      const [lx, ly] = worldToPx(l.pos[0], l.pos[2]);
+      const tgt = st.subjects[st.camera.target] || st.subjects[0];
+      const [tx, ty] = worldToPx(tgt.pos[0], tgt.pos[2]);
+      const tint = kelvinColour(l.kelvin);
+      g.globalAlpha = l.on ? 1 : 0.35;
+      g.setLineDash([4, 4]);
+      g.strokeStyle = tint;
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(lx, ly); g.lineTo(tx, ty); g.stroke();
+      g.setLineDash([]);
+      // the ring: radius from the real diameter, so a big softbox looks big
+      const rr = Math.max(7, Math.min(34, (l.diameter * pxm()) / 2));
+      g.fillStyle = tint;
+      g.strokeStyle = (lightSel === i) ? "#4a8fe0" : "#2a2e34";
+      g.lineWidth = (lightSel === i) ? 3 : 1.5;
+      g.beginPath(); g.arc(lx, ly, rr, 0, Math.PI * 2); g.fill(); g.stroke();
+      // rays, so a light never reads as a subject dot
+      g.strokeStyle = tint;
+      g.lineWidth = 1.5;
+      for (let a2 = 0; a2 < 8; a2++) {
+        const ang = (a2 * Math.PI) / 4;
+        g.beginPath();
+        g.moveTo(lx + Math.cos(ang) * (rr + 2), ly + Math.sin(ang) * (rr + 2));
+        g.lineTo(lx + Math.cos(ang) * (rr + 6), ly + Math.sin(ang) * (rr + 6));
+        g.stroke();
+      }
+      g.fillStyle = "#15171b";
+      g.font = "bold 10px system-ui";
+      g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillText(String(i + 1), lx, ly);
+      g.fillStyle = "#9aa0a8";
+      g.font = "10px system-ui";
+      g.fillText(l.name.slice(0, 14) + (l.on ? "" : " (off)"), lx, ly + rr + 11);
+      g.globalAlpha = 1;
+    });
     // people: dots with a facing arrow
     st.subjects.forEach((s, i) => {
       if (s.kind !== "person") return;
@@ -916,6 +1013,14 @@ export function buildStudio(host, S) {
       const [ax, ay] = worldToPx(cam.aim[0], cam.aim[2]);
       if (Math.hypot(px - ax, py - ay) < 14) return { kind: "aim" };
     }
+    for (let i = (st.lights || []).length - 1; i >= 0; i--) {
+      const l = st.lights[i];
+      const [lx, ly] = worldToPx(l.pos[0], l.pos[2]);
+      const rr = Math.max(7, Math.min(34, (l.diameter * pxm()) / 2));
+      if (Math.hypot(px - lx, py - ly) < rr + 4) {
+        return { kind: "light", i, locked: !!l.locked };
+      }
+    }
     for (let i = st.subjects.length - 1; i >= 0; i--) {
       const s = st.subjects[i];
       const [sx, sy] = worldToPx(s.pos[0], s.pos[2]);
@@ -952,6 +1057,7 @@ export function buildStudio(host, S) {
     e.preventDefault(); e.stopPropagation();
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* older hosts */ }
     if (h.kind === "subj" || h.kind === "face") { sel = h.i; renderSubjects(); }
+    if (h.kind === "light") { lightSel = h.i; renderLights(); }
     if (h.locked) { draw(); return; }        // select, never move: it is locked
     dragging = h;
     // THE PIVOT IS WHERE YOU CLICKED (the user's ask): remember the offset
@@ -962,6 +1068,7 @@ export function buildStudio(host, S) {
       const ref = h.kind === "cam" ? st.camera.pos
                 : h.kind === "pathB" ? st.path.b.pos
                 : h.kind === "aim" ? st.camera.aim
+                : h.kind === "light" ? st.lights[h.i].pos
                 : h.kind === "subj" ? st.subjects[h.i].pos : null;
       dragOff = ref ? [wx0 - ref[0], wz0 - ref[2]] : [0, 0];
     }
@@ -989,6 +1096,9 @@ export function buildStudio(host, S) {
       st.path.b.pos[0] = cx_(gx); st.path.b.pos[2] = cz_(gz);
     } else if (dragging.kind === "aim") {
       st.camera.aim[0] = cx_(gx); st.camera.aim[2] = cz_(gz);
+    } else if (dragging.kind === "light") {
+      st.lights[dragging.i].pos[0] = cx_(gx);
+      st.lights[dragging.i].pos[2] = cz_(gz);
     } else if (dragging.kind === "subj") {
       st.subjects[dragging.i].pos[0] = cx_(gx);
       st.subjects[dragging.i].pos[2] = cz_(gz);
@@ -1686,6 +1796,159 @@ export function buildStudio(host, S) {
   }
 
   let previewTimer = null;
+  function renderLights() {
+    lightList.replaceChildren();
+    const n = (st.lights || []).length;
+    const on = (st.lights || []).filter((l) => l.on).length;
+    lSum2.textContent = n ? (on + " of " + n + " on") : "none: the scene lights itself";
+    (st.lights || []).forEach((l, i) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.style.cssText = "margin:0 0 6px 0;border-color:"
+        + (lightSel === i ? "#4a8fe0" : "#2a2e34");
+      const head = document.createElement("div");
+      head.className = "row";
+      const eye = document.createElement("span");
+      eye.className = "chip" + (l.on ? " on" : "");
+      eye.textContent = l.on ? "\u25cf" : "\u2014";
+      eye.title = l.on ? "On. Click to mute this light without losing it."
+                       : "Muted: it writes nothing. Click to switch it back on.";
+      eye.onclick = () => { l.on = !l.on; write(); render(); };
+      const nm = document.createElement("input");
+      nm.type = "text";
+      nm.value = l.name;
+      nm.title = "What to call this light. Names are for you; the sentence describes it "
+               + "by what it is and where it stands.";
+      nm.style.cssText = "flex:1;min-width:70px";
+      nm.onchange = () => { l.name = nm.value.trim() || "a light"; write(); render(); };
+      const kind = document.createElement("select");
+      for (const k of LIGHT_KINDS) {
+        const o = document.createElement("option");
+        o.value = k; o.textContent = k; o.selected = l.kind === k;
+        kind.appendChild(o);
+      }
+      kind.title = LIGHT_HINT[l.kind] || "";
+      kind.onchange = () => { l.kind = kind.value; write(); render(); };
+      const del = document.createElement("span");
+      del.className = "chip";
+      del.textContent = "\u2715";
+      del.title = "Remove this light.";
+      del.onclick = () => {
+        st.lights.splice(i, 1);
+        if (lightSel >= st.lights.length) lightSel = st.lights.length - 1;
+        write(); render();
+      };
+      head.append(eye, nm, kind, del);
+      // SELECTING A ROW MUST NOT EAT ITS OWN BUTTONS (the user: "the X is
+      // broken, I cannot remove the lights"). This handler runs on POINTERDOWN
+      // and re-renders the list, which removes the very element the pending
+      // CLICK was going to land on - so the mute dot and the X did nothing.
+      // Anything that is itself a control is left alone here; it handles its
+      // own click and re-renders afterwards.
+      const selectRow = (e) => {
+        if (e.target !== head && e.target !== card) return;
+        lightSel = i; draw(); renderLights();
+      };
+      head.onpointerdown = selectRow;
+      card.onpointerdown = selectRow;      // the row's background selects too
+      card.appendChild(head);
+      // SIZE is the one that decides hard or soft, so it says so as you drag it
+      card.appendChild(slider("Size", 0.05, 6, 0.05, () => l.diameter,
+        (v) => { l.diameter = v; }, (v) => {
+          const tgt = st.subjects[st.camera.target] || st.subjects[0];
+          const dx = l.pos[0] - tgt.pos[0], dz = l.pos[2] - tgt.pos[2];
+          const dy = l.pos[1] - (tgt.pos[1] + tgt.height * 0.92);
+          const dist = Math.max(0.05, Math.hypot(Math.hypot(dx, dz), dy));
+          const ang = l.kind === "sun" ? 0.53
+                    : (2 * Math.atan((v / 2) / dist) * 180) / Math.PI;
+          const word = ang >= 45 ? "very soft" : ang >= 20 ? "soft"
+                     : ang >= 8 ? "fairly soft" : ang >= 2 ? "crisp" : "hard";
+          return v.toFixed(2) + " m \u00b7 " + word;
+        }));
+      card.appendChild(slider("Height", 0, 6, 0.05, () => l.pos[1],
+        (v) => { l.pos[1] = v; }, (v) => v.toFixed(2) + " m"));
+      // POWER says what it does, like Size does: it is how much light lands on
+      // the subject (power over distance squared), which is what makes a
+      // picture dark. Colour temperature never darkens anything.
+      card.appendChild(slider("Power", 0, 10, 0.05, () => l.intensity,
+        (v) => { l.intensity = v; }, () => {
+          const tgt = st.subjects[st.camera.target] || st.subjects[0];
+          const face = tgt.pos[1] + tgt.height * 0.92;
+          let e = 0;
+          for (const x of st.lights || []) {
+            if (!x.on) continue;
+            const d = Math.max(0.05, Math.hypot(Math.hypot(x.pos[0] - tgt.pos[0],
+                                                           x.pos[2] - tgt.pos[2]),
+                                                x.pos[1] - face));
+            e += Math.max(0, x.intensity) / (d * d);
+          }
+          const rel = e / 0.25;                       // LEVEL_NOMINAL
+          const word = rel < 0.12 ? "almost black" : rel < 0.4 ? "dim"
+                     : rel < 2.5 ? "ordinary" : rel < 8 ? "bright" : "very bright";
+          return l.intensity.toFixed(2) + " \u00b7 scene " + word;
+        }));
+      // COLOUR has a floor: below about 1800 K there is no such light (a candle
+      // flame IS 1800), so anything under it snapped to 200 K on the panel and
+      // read as a number that cannot exist. 0 still means "say nothing".
+      card.appendChild(slider("Colour", 0, 10000, 100, () => l.kelvin,
+        (v) => { l.kelvin = v > 0 && v < 1800 ? 1800 : v; },
+        (v) => (v ? Math.round(v < 1800 ? 1800 : v) + " K" : "not stated")));
+      lightList.appendChild(card);
+    });
+    const add = document.createElement("div");
+    add.className = "row";
+    const mk = (label, tip, make) => {
+      const b = document.createElement("span");
+      b.className = "chip";
+      b.textContent = label;
+      b.title = tip;
+      b.onclick = () => {
+        st.lights = st.lights || [];
+        make();
+        lightSel = st.lights.length - 1;
+        write(); render();
+      };
+      add.appendChild(b);
+    };
+    mk("+ Light", "A softbox to the camera-left, a little above the face: the usual key.",
+       () => st.lights.push(NEW_LIGHT()));
+    // the named rigs: a placed set beats a described one, and these are the
+    // arrangements every portrait book starts from
+    mk("Three-point", "Key camera-left and high, a softer fill opposite, a rim behind.", () => {
+      st.lights.push({ ...NEW_LIGHT(), name: "key", pos: [-1.4, 2.0, 1.3], diameter: 1.0, intensity: 1.0 });
+      st.lights.push({ ...NEW_LIGHT(), name: "fill", kind: "softbox", pos: [1.4, 1.6, 1.4],
+                       diameter: 1.4, intensity: 0.3 });
+      st.lights.push({ ...NEW_LIGHT(), name: "rim", kind: "bulb", pos: [1.5, 2.2, -1.6],
+                       diameter: 0.12, intensity: 1.2, kelvin: 6000 });
+    });
+    mk("Rembrandt", "One hard source, 45 degrees up and 45 across: the triangle on the far cheek.",
+       () => st.lights.push({ ...NEW_LIGHT(), name: "key", kind: "bulb", pos: [1.5, 2.6, 1.2],
+                              diameter: 0.15, intensity: 1.0, kelvin: 3200 }));
+    mk("Window", "A big soft window to one side, level with the face.",
+       () => st.lights.push({ ...NEW_LIGHT(), name: "window", kind: "window", pos: [-2.0, 1.7, 0.4],
+                              diameter: 1.8, intensity: 1.0, kelvin: 6200 }));
+    mk("Backlit", "Sun behind the subject, straight into the lens.",
+       () => st.lights.push({ ...NEW_LIGHT(), name: "sun", kind: "sun", pos: [0.2, 2.4, -3.5],
+                              diameter: 1.0, intensity: 4.0, kelvin: 5400 }));
+    if ((st.lights || []).length) {
+      const clear = document.createElement("span");
+      clear.className = "chip";
+      clear.textContent = "Clear";
+      clear.title = "Remove every light. The prompt goes back to its Lighting dropdown.";
+      clear.onclick = () => { st.lights = []; lightSel = -1; write(); render(); };
+      add.appendChild(clear);
+    }
+    lightList.appendChild(add);
+    const note = document.createElement("div");
+    note.className = "note";
+    note.textContent = (st.lights || []).length
+      ? "Drag a light on the stage to move it. Size is what makes it hard or soft: big and "
+        + "close wraps, small and far cuts. The sentence below is what the prompt will say."
+      : "No lights placed, so the prompt keeps whatever its Lighting dropdown says. Add one "
+        + "and it writes the light instead.";
+    lightList.appendChild(note);
+  }
+
   function readout() {
     const cam = st.camera;
     const s = st.subjects[cam.target] || st.subjects[0];
@@ -1709,6 +1972,7 @@ export function buildStudio(host, S) {
     st = normalise(st);
     renderCamera();
     renderSubjects();
+    renderLights();
     renderLatent();
     renderPath();
     draw();

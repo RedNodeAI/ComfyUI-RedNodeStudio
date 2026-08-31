@@ -1,5 +1,6 @@
 import * as _appmod from "../../scripts/app.js";
 import { makePicker } from "./rednode_picker.js";
+import { newSlot as LS_newSlot, writeSlots as LS_writeSlots } from "./rednode_lora_stack.js";
 import { makeHighlightEditor } from "./rednode_promptbox.js";
 import { buildFrameEditor } from "./rednode_prompt_frame.js";
 const { app } = _appmod;
@@ -2256,6 +2257,33 @@ const CAMERA_PREVIEW = async (state) => {
 function cameraBody(node, body) {
   const cfg = node._rnCfg;
   const sub = node._rnCameraSub === "i2i" ? "i2i" : "prompt";
+  // THE MASTER SWITCH, first thing on the tab, the same shape the image tabs
+  // carry: off, nothing here reaches a render - no camera paragraph, no camera
+  // slider LoRAs, no camera path, and the re-angle uses its bands. The studios
+  // keep their state, so switching it back on restores every camera as it was.
+  {
+    if (!cfg.camera || typeof cfg.camera !== "object") cfg.camera = { on: true };
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const sw = document.createElement("button");
+    sw.className = "rn-ws-sw" + (cfg.camera.on ? " on" : "");
+    sw.title = cfg.camera.on
+      ? "On: the studio below writes the camera paragraph, drives the camera LoRAs "
+        + "and renders a camera path. Switch off to take the cameras out of every "
+        + "render without losing them."
+      : "Off: nothing on this tab reaches a render - the prompt falls back to its "
+        + "Shot size / Camera height chips, no camera LoRAs, no path, and the "
+        + "Img2Img re-angle uses its bands. The cameras are kept as they are.";
+    sw.onclick = () => { cfg.camera.on = !cfg.camera.on; writeCfg(node); render(node); };
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.textContent = cfg.camera.on
+      ? "Cameras on: the studio drives the prompt, the camera LoRAs and the path."
+      : "Cameras OFF: prompts use their simple chips, no camera LoRAs, no path. "
+        + "Everything below is kept for when you switch it back on.";
+    row.append(sw, lab);
+    body.appendChild(row);
+  }
   const bar = document.createElement("div");
   bar.className = "rn-ws-row";
   const seg = document.createElement("div");

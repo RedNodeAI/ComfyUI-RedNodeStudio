@@ -100,10 +100,36 @@ def parse_state(config_json):
         subjects = [{"name": "the subject", "pos": [0, 0, 0], "height": 1.7,
                      "facing_deg": 0, "kind": "person", "rel": None,
                      "size": [0.6, 0.6]}]
+    # THE LIGHTS (2026-08-18): things on the stage like the subjects, but read
+    # by camera_translate.light_words instead of the camera paragraph. Diameter
+    # and distance decide how hard the light is, intensity and distance decide
+    # the ratio against the others, kelvin its colour. Junk never reaches the
+    # translator, the same contract as everything else here.
+    lights = []
+    for l in (d.get("lights") if isinstance(d.get("lights"), list) else []):
+        if not isinstance(l, dict):
+            continue
+        p = l.get("pos") if isinstance(l.get("pos"), list) and len(l.get("pos")) == 3 else [1.5, 2.0, 1.5]
+        kind = str(l.get("kind") or "softbox")
+        if kind not in _ct.LIGHT_KINDS:
+            kind = "softbox"
+        lights.append({
+            "name": str(l.get("name") or "").strip() or "a light",
+            "kind": kind,
+            "pos": [num(p[0], 1.5, -30, 30), num(p[1], 2.0, 0, 30), num(p[2], 1.5, -30, 30)],
+            # metres across: a 1 m softbox at 1 m wraps, a 5 cm bulb cuts hard
+            "diameter": num(l.get("diameter"), 1.0, 0.01, 20.0),
+            # relative power; with distance it gives the lighting ratio
+            "intensity": num(l.get("intensity"), 1.0, 0.0, 100.0),
+            # colour temperature; 0 = say nothing about colour
+            "kelvin": num(l.get("kelvin"), 0, 0, 20000),
+            "on": l.get("on", True) is not False,
+            "locked": bool(l.get("locked", False)),
+        })
     if camera["target"] >= len(subjects) or subjects[camera["target"]]["kind"] != "person":
         people = [i for i, x in enumerate(subjects) if x["kind"] == "person"]
         camera["target"] = people[0] if people else 0
-    return {"camera": camera, "subjects": subjects,
+    return {"camera": camera, "subjects": subjects, "lights": lights,
             "output": (d.get("output") if d.get("output") in _ct.OUTPUT_MODES else "krea2"),
             "join": str(d.get("join") or "lead"),
             # AUTO LATENT, the user's ask: an empty latent shaped by the camera's
@@ -419,8 +445,12 @@ try:
         except Exception:
             return web.json_response({"error": "bad request"}, status=400)
         st = parse_state(json.dumps(body))
-        return web.json_response({"prompt": _ct.describe(st["camera"], st["subjects"],
-                                                         output=st["output"])})
+        # the lights ride the preview too, so the panel shows the same two
+        # paragraphs the queue will send: camera first, then the light rig
+        text = _ct.describe(st["camera"], st["subjects"], output=st["output"])
+        lit = _ct.light_words(st["camera"], st["subjects"], st["lights"])
+        return web.json_response({"prompt": (text + ("\n\n" + lit if lit else "")),
+                                  "light": lit})
 except Exception as _e:
     print("[RedNode Camera Studio] preview route not registered: %s" % _e, flush=True)
 

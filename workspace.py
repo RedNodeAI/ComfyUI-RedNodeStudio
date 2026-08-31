@@ -1243,6 +1243,54 @@ def load_active_rig(cfg, name=""):
     return rig["name"], model, clip, vae
 
 
+MAIN_SET = "Main"
+
+
+def camera_on(cfg):
+    """Is the Camera tab switched on? Missing block = on (the old behaviour)."""
+    c = cfg.get("camera")
+    return True if not isinstance(c, dict) or c.get("on") is None else bool(c["on"])
+
+
+def rig_lora_set(cfg, name=""):
+    """The named rig's LoRA set (the active rig's when unnamed); "" = Main."""
+    try:
+        rigs = cfg.get("models", {}).get("rigs") or []
+        want = str(name or "").strip()
+        if want and want != "(active rig)":
+            for r in rigs:
+                if r.get("name") == want:
+                    return str(r.get("lora_set") or "")
+        if rigs:
+            i = max(0, min(int(cfg["models"].get("active", 0)), len(rigs) - 1))
+            return str(rigs[i].get("lora_set") or "")
+    except Exception:
+        pass
+    return ""
+
+
+def lora_set_cfg(cfg, set_name="", who="Workspace"):
+    """The stack a set name means: {"on", "slots", "ui", "seed", "name"}.
+    "" or Main = the LoRAs tab's main stack; a named set = that tab; a name
+    that no longer exists = Main, said out loud."""
+    main = dict(cfg.get("loras") or {})
+    main.setdefault("on", True)
+    main.setdefault("slots", [])
+    main.setdefault("ui", {})
+    main.setdefault("seed", 0)
+    main["name"] = MAIN_SET
+    want = str(set_name or "").strip()
+    if not want or want == MAIN_SET:
+        return main
+    for st in cfg.get("lora_sets") or []:
+        if st.get("name") == want:
+            return {"on": True, "slots": st.get("slots") or [], "ui": st.get("ui") or {},
+                    "seed": int(st.get("seed", 0) or 0), "name": want}
+    print("[RedNode %s] LoRA set %r is not on the LoRAs tab any more; using Main"
+          % (who, want), flush=True)
+    return main
+
+
 def load_paint_rig(cfg, name=""):
     """The rig THROUGH the paint LoRA routing: what a paint node should render with.
 
@@ -1255,7 +1303,9 @@ def load_paint_rig(cfg, name=""):
     if model is None:
         return nm, model, clip, vae
     use_paint = cfg["paint"].get("lora_mode") == "paint"
-    lc = (cfg.get("paint_loras") if use_paint else cfg.get("loras")) or {}
+    lc = (cfg.get("paint_loras") if use_paint
+          else lora_set_cfg(cfg, cfg["paint"].get("lora_set") or rig_lora_set(cfg, name),
+                            "Paint rig")) or {}
     slots = lc.get("slots") or []
     if slots and lc.get("on", True):
         model, c2, _w, applied = _lora.apply_stack(
@@ -1785,7 +1835,10 @@ class RedNodeStudioWorkspace:
             try:
                 from . import reangle as _re
                 _cams = []
-                if _rg["camera"] == "studio":
+                if _rg["camera"] == "studio" and not camera_on(cfg):
+                    print("[RedNode Workspace] re-angle: the Camera tab is off, "
+                          "so the bands are used instead of its studio", flush=True)
+                if _rg["camera"] == "studio" and camera_on(cfg):
                     # the Camera tab's Img2Img studio (its own state); an empty
                     # one falls back to the active prompt row's studio camera
                     _cj = _rg.get("studio") or ""
@@ -2192,7 +2245,7 @@ class RedNodeStudioWorkspace:
                         # paragraph vanished from the QUEUED prompt whenever the
                         # auto prompt re-assembled the frame (the user's report)
                         camera_height=str(_fr.get("camera_height") or "Eye level"),
-                        camera=str(_fr.get("camera") or ""),
+                        camera=(str(_fr.get("camera") or "") if camera_on(cfg) else ""),
                         style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),
@@ -2256,7 +2309,10 @@ class RedNodeStudioWorkspace:
         try:
             _zrow = prompt_row_for(cfg["models"], cfg["prompts"])
             _zfr = (_zrow or {}).get("frame") or {}
-            _zcam = _zfr.get("camera")
+            _zcam = _zfr.get("camera") if camera_on(cfg) else None
+            if _zfr.get("camera") and not camera_on(cfg):
+                print("[RedNode Workspace] the Camera tab is off: no camera "
+                      "paragraph, no camera LoRAs, no path", flush=True)
             if isinstance(_zcam, str) and _zcam.strip():
                 from .camera_studio import parse_state as _cs_parse, resolve_camera_loras as _cs_loras
                 from . import camera_translate as _ct_path

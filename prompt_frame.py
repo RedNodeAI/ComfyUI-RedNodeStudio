@@ -523,8 +523,23 @@ class RedNodePromptFrame:
         subject = _join_in(subject, subject_in)
         surroundings = _join_in(surroundings, surroundings_in)
         placed = build_placement(placement_where, placement_what, placement)
-        lit = _join_in(lighting_text(lighting), exposure(brightness), light_and_colour,
-                       light_and_colour_in)
+        # THE STAGE'S LIGHTS (2026-08-18). A light standing on the studio stage
+        # writes this box, exactly as its camera writes the camera paragraph:
+        # source, direction, what it lands on, the shadow character its real
+        # angular size implies. It leads the box, because a placed rig is a
+        # decision and the free text around it is seasoning.
+        rig_light, rig_step = "", 0
+        if cam_state:
+            try:
+                from . import camera_studio as _cs
+                from . import camera_translate as _ct2
+                _st = _cs.parse_state(json.dumps(cam_state))
+                rig_light = _ct2.light_words(_st["camera"], _st["subjects"], _st["lights"])
+                rig_step = _ct2.rig_level(_st["camera"], _st["subjects"], _st["lights"])
+            except Exception:
+                rig_light = ""
+        lit = _join_in(rig_light, lighting_text(lighting), exposure(brightness),
+                       light_and_colour, light_and_colour_in)
         prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
                           framing_push, camera_height, cam_state)
         prompt = expand(prompt, seed, resolve_wildcards)
@@ -547,6 +562,19 @@ class RedNodePromptFrame:
             if any(w in wired for w in LIGHT_WORDS):
                 notes.append("The style text sets its own light, and the %s option will "
                              "fight it. Use one or the other." % lighting)
+        # the rig's own level and the Brightness dial can pull opposite ways:
+        # "a dim scene, most of the frame sinking into shadow" next to "the
+        # frame is bright and airy" is a contradiction the model resolves by
+        # picking one, which reads as the dial doing nothing
+        if rig_step and brightness and (rig_step > 0) != (int(brightness) > 0):
+            notes.append("The stage's lights make this %s and Brightness asks for the "
+                         "opposite. Turn the lights' Power up or down instead, or set "
+                         "Brightness back to 0."
+                         % ("a bright scene" if rig_step > 0 else "a dark scene"))
+        if rig_light and lighting != LIST_NONE:
+            notes.append("The stage has lights placed, and the %s option describes "
+                         "the light too. Use one or the other: clear the option, or "
+                         "switch the stage lights off on the Camera tab." % lighting)
         if style in SELF_LIT_STYLES and lighting != LIST_NONE:
             notes.append("%s already sets its own light, so the %s option will fight it. "
                          "Use one or the other." % (style, lighting))
