@@ -4,7 +4,95 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
-**1.2.0** - 2026-08-13
+**1.2.0** - 2026-08-31
+
+The workspace becomes the whole studio, and the studio grows a camera and a set
+of lights. Everything below is in this release; the sections are grouped by what
+they change rather than by the order they were written.
+
+### The Camera Studio
+
+- A top-view stage inside the Prompt Frame and on its own Camera tab: place
+  people, objects, walls, doors and windows, point a camera at them, and the
+  geometry is written as the physical-camera language Krea 2 obeys - position,
+  pitch in degrees, what the subject shows the lens, what is behind them, the
+  lens itself. A bare "high angle" gets reinterpreted; the stack does not
+- Lock on a subject or aim freely; walls occlude what the lens cannot see; a
+  centred foreground person is named as between the camera and the subject
+- Auto latent: the frame's aspect follows the camera, at a pixel budget
+- Sets: built-in rooms (kitchen, living room, bedroom, bathroom, apartment) and
+  two-person scenes (conversations, confrontation, boxing, baseball), plus your
+  own saved and deleted from the panel. Every built-in set ships a light rig
+- Camera paths: A to B in N shots, or an orbit sweep. The workspace renders one
+  image per shot in the built-in sampler, each with its own camera words and its
+  own camera-LoRA strengths, and the images come back as a batch
+- Scene focus: the stage fills the screen with the subjects card beside it, Esc
+  closes. Drag keeps the grab point; the wheel over a thing turns it
+- Aperture: with an f-number set, the depth of field is computed from lens,
+  aperture and distance, and says who is sharp and who dissolves
+- Camera LoRAs card: zoom, height, orbit and back, each off / auto / manual,
+  auto strengths coming from the same geometry the words come from. Three of the
+  four sliders are ours and are a separate download; the zoom slider is
+  Loraholic's and only ever linked, never shipped
+- RedNode Camera Multi-Angle turns the same stage into a Qwen-Image-Edit
+  Multiple-Angles prompt, for re-shooting an existing photo from a new viewpoint
+- A master on/off for the whole Camera tab: off, nothing on it reaches a render
+
+### Lights
+
+- Place lights on the stage like subjects: a ring sized by the real diameter,
+  tinted by its colour, with a dashed line to whatever it is aimed at
+- The sentence they write names a source, a direction and what it lands on,
+  which is what the corpus study found gets obeyed. Hardness is real angular
+  size, the key-to-fill ratio is inverse square, and named setups (Rembrandt,
+  butterfly, split, rim, uplight, short, silhouette) come out of the geometry
+- Exposure per light in stops, centred on 0, and colour from cold through
+  neutral to warm, spaced in mireds. Moving a light dims it, as it should
+- One-click rigs: three-point, Rembrandt, window, backlit
+- Two optional lighting LoRA rows, off / auto / manual, driven by the rig you
+  placed: brightness from the level your lights make, colour from the key
+  light's temperature. Both files are third-party and only ever linked
+- Style "Photo: nocturnal low-key" for the dark, velvety look that words alone
+  fight for
+
+### Swaps, sets and passes
+
+- Img2Img SWAP stage: put the Subject's face, head or whole person onto the
+  picture with Alissonerdx's BFS LoRAs on Qwen-Image-Edit, before the Krea 2
+  pass finishes it. Face, head and person modes, the Picture order read off the
+  file name
+- The same author's Krea 2 BFS files run instead as a Detailer pass, on two new
+  per-pass options: Picture (the frame, or a detailer's crop, as the base
+  reference) and a per-pass LoRA that never touches the main render. Presets for
+  both head and body swap
+- Img2Img RE-ANGLE: the source re-shot from another viewpoint by
+  Qwen-Image-Edit-2511 and the Multiple-Angles LoRA before the i2i pass, from
+  the bands or from the Camera tab's own studio
+- LoRA sets: the LoRAs tab is Main plus any number of named sets, each on its
+  own tab, and a rig, a Detailer pass or the paint pass picks one by name
+- Detailer: a working resolution on sampler passes as well as detailer ones
+
+### NovelAI
+
+- The NovelAI rig is public: a Models-tab rig kind that renders through your own
+  NovelAI subscription instead of a checkpoint, with the site's own option set,
+  vibe transfer and character prompts
+- Vibe encoding is a button that says its price: 2 Anlas the first time for a
+  picture, model and Information, then cached and free. Nothing spends Anlas on
+  its own
+- Your token lives in NAI_ACCESS_TOKEN or in the ComfyUI user directory, never
+  in a workflow and never in the pack folder
+
+### Fixes worth naming
+
+- An experimental reference toggle that rewrites the reference path now
+  announces itself in the console: ref_t0_modulation cost a day of hunting a
+  doubled, ghosted identity that no LoRA and no model was causing
+- The Img2Img tab lights its dot on a wired canvas, prompt boxes fill their
+  pane, the LoRA stack's footer sits under the stack instead of the node's
+  bottom edge, and the select-mode bar appears where the rows are
+
+**1.2.0 (the workspace work, written 2026-08-13)**
 
 The workspace becomes the whole studio. Models load inside it, prompts live with the
 model they were written for, the sampler runs inside the node, and painting picks its

@@ -18,7 +18,7 @@ Search **RedNode Studio** in ComfyUI Manager, or clone it:
 git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Then open **[Rednode Ultima](example_workflows/Rednode_Ultima_V1.1.0%20Release.json)** in ComfyUI's
+Then open **[RedNode Studio Ultima](example_workflows/RedNodeStudio_Ultima_V1.2.json)** in ComfyUI's
 template browser. It is the complete rig, and ComfyUI Manager offers its additional node
 dependencies when you load it.
 
@@ -87,8 +87,8 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 
 ## Quick start
 
-Open the template browser and load **Rednode Ultima**, or open
-`example_workflows/Rednode_Ultima_V1.1.0 Release.json` directly. It is the whole rig wired up, and
+Open the template browser and load **RedNode Studio Ultima**, or open
+`example_workflows/RedNodeStudio_Ultima_V1.2.json` directly. It is the whole rig wired up, and
 it reads left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you
 open it.
 
@@ -197,6 +197,15 @@ what they did. Treat them as legacy.
 | RedNode Combo Control | The single-row version of the same idea. |
 | RedNode Group Control | Turn workflow groups on and off, with saved scenes. |
 | RedNode Group Modes | Named modes that enable one set of groups and bypass the rest. |
+| RedNode Rig Out / Rig In | Hand a Models-tab rig's prompt, seed and sampler numbers to an outside engine, then bring its picture back into the chain. |
+
+### Camera
+
+| Node | What it does |
+|---|---|
+| RedNode Camera Studio | A top-view stage: place the subjects, the walls and the lights, move the camera, and the geometry is written as the physical-camera language Krea 2 obeys. Camera paths render one image per shot. |
+| RedNode Camera LoRAs | Applies the camera slider LoRAs (zoom, height, orbit, back) from the studio's own geometry, off / auto / manual per slider. |
+| RedNode Camera Multi-Angle | Turns the studio's camera into a Qwen-Image-Edit Multiple-Angles prompt, for re-shooting an existing photo from another viewpoint. |
 
 ### Images, painting and review
 
@@ -271,11 +280,11 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
   review, one save. The models load on the Models tab, the prompts live on the Prompts
   tab, the sampler runs inside the node, and painting picks its model from the same
   list. No loader nodes, no sampler nodes, no prompt wiring.
-- `Rednode_Ultima_V1.1.0 Release.json` is the full rig with external chains, detailers
+- `RedNodeStudio_Ultima_V1.2.json` is the full rig with external chains, detailers
   and upscalers. Everything in it keeps working unchanged: the rigs and the Prompts tab
   are options, not requirements.
 
-- `Rednode_Ultima_V1.1.0 Release.json`, my daily-driver pipeline with the whole rig wired up:
+- `RedNodeStudio_Ultima_V1.2.json`, my daily-driver pipeline with the whole rig wired up:
   workspace panel, painting, identity edit, face detailer, upscale and grading. It pulls in a few
   other packs, and ComfyUI Manager offers them when you open it.
 
