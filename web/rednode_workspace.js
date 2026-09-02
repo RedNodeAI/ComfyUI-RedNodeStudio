@@ -868,11 +868,16 @@ export function readCfg(node) {
       t.scale = Math.max(0.25, Math.min(3, t.scale));
       if (typeof t.passes !== "number") t.passes = 1;
       t.passes = Math.max(1, Math.min(PASS_MAX, Math.round(t.passes)));
-      // a denoise per pass, off by default: the list is kept even while it is
-      // off, so switching back on returns the numbers that were chosen before
+      // a denoise and a scale per pass, both off by default: each list is kept
+      // even while its switch is off, so switching back on returns the numbers
+      // that were chosen before
       t.pass_custom = !!t.pass_custom;
       t.pass_denoise = Array.isArray(t.pass_denoise)
         ? t.pass_denoise.map((v) => Math.max(0, Math.min(1, Number(v) || 0)))
+        : [];
+      t.scale_custom = !!t.scale_custom;
+      t.pass_scale = Array.isArray(t.pass_scale)
+        ? t.pass_scale.map((v) => Math.max(0.25, Math.min(3, Number(v) || 1)))
         : [];
     }
     if (CONVERTER_TABS.includes(name)) {
@@ -10500,19 +10505,100 @@ function latentBody(node, body) {
 // applied to the i2i prompt, with the moodboard as the style authority.
 // Img2Img pass mode: real i2i (encoded source + denoise) or prompt only (the Latent
 // tab's canvas takes over and the source just donates its description)
-// The denoise each pass runs at, always as long as the pass count. A shorter
-// stored list repeats its last value, so raising the count never moves a number
-// that was already chosen, and an empty one falls back to the single dial.
-function passDenoiseList(t) {
+// A per-pass list, always as long as the pass count. A shorter stored list
+// repeats its last value, so raising the count never moves a number that was
+// already chosen, and an empty one falls back to the single dial above it.
+// Denoise and Scale both ride this.
+function passValueList(t, key, base, min, max) {
   const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
-  const src = Array.isArray(t.pass_denoise) ? t.pass_denoise : [];
+  const src = Array.isArray(t[key]) ? t[key] : [];
+  const fit = (v) => Math.max(min, Math.min(max, v));
   const out = [];
   for (let i = 0; i < n; i++) {
     const v = Number(src[i]);
-    out.push(Number.isFinite(v) ? Math.max(0, Math.min(1, v))
-                                : (i ? out[i - 1] : Math.max(0, Math.min(1, Number(t.denoise) || 0))));
+    out.push(Number.isFinite(v) ? fit(v)
+                                : (i ? out[i - 1] : fit(Number(t[base]) || min)));
   }
   return out;
+}
+
+// The advanced half of a pass dial: one bar per pass in the order they run,
+// with the switch that turns it on and a Ramp that spaces them evenly. Both
+// halves stay in the DOM and swap by display, so changing the pass count never
+// destroys the control the pointer is on.
+function perPassSection(node, t, o) {
+  const box = document.createElement("div");
+  box.style.cssText = "display:flex;flex-direction:column;gap:6px";
+  const build = () => {
+    box.replaceChildren();
+    const list = passValueList(t, o.key, o.base, o.min, o.max);
+    t[o.key] = list.slice();
+    list.forEach((v, i) => {
+      const r = document.createElement("div");
+      r.className = "rn-ws-row";
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.style.minWidth = "54px";
+      l.textContent = "Pass " + (i + 1);
+      const rg = document.createElement("input");
+      rg.type = "range";
+      rg.min = o.min; rg.max = o.max; rg.step = o.step;
+      rg.value = v;
+      rg.style.cssText = "flex:1;min-width:0;height:20px;accent-color:" + o.accent;
+      const rv = document.createElement("span");
+      rv.className = "rn-ws-note";
+      rv.textContent = o.fmt(v);
+      rg.title = o.barTitle;
+      rg.addEventListener("input", () => {
+        const n = snapStep(rg.value, o.min, o.max, o.step);
+        t[o.key][i] = n;
+        rv.textContent = o.fmt(n);
+        writeCfg(node);
+      });
+      r.append(l, rg, rv);
+      box.appendChild(r);
+    });
+  };
+  build();
+
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (t[o.flag] ? " on" : "");
+  sw.title = t[o.flag] ? o.onTitle : o.offTitle;
+  sw.onclick = () => {
+    t[o.flag] = !t[o.flag];
+    if (t[o.flag]) t[o.key] = passValueList(t, o.key, o.base, o.min, o.max);
+    writeCfg(node);
+    render(node);
+  };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = o.label;
+  const ramp = document.createElement("button");
+  ramp.className = "rn-ws-btn";
+  ramp.textContent = "Ramp";
+  ramp.title = o.rampTitle;
+  ramp.onclick = () => {
+    const list = passValueList(t, o.key, o.base, o.min, o.max);
+    const a = list[0], z = list[list.length - 1];
+    t[o.key] = list.map((_, i) =>
+      snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), o.min, o.max, o.step));
+    build();
+    writeCfg(node);
+  };
+  row.append(sw, lab, ramp);
+
+  // on only counts above one pass: a single pass has nothing to vary
+  const sync = () => {
+    const many = Math.max(1, Math.round(Number(t.passes) || 1)) > 1;
+    const on = !!t[o.flag] && many;
+    box.style.display = on ? "" : "none";
+    ramp.style.display = on ? "" : "none";
+    row.style.display = many ? "" : "none";
+    return on;
+  };
+  return { box, row, build, sync };
 }
 
 function i2iPassRow(node, body, tabName) {
@@ -10539,15 +10625,17 @@ function i2iPassRow(node, body, tabName) {
   b.onclick = () => { t.prompt_only = !t.prompt_only; writeCfg(node); render(node); };
   row.append(lab, b);
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
-  const steps0 = passDenoiseList(t);
-  const perPass = !!t.pass_custom && npass > 1;
+  const dSteps = passValueList(t, "pass_denoise", "denoise", 0, 1);
+  const sSteps = passValueList(t, "pass_scale", "scale", 0.25, 3);
+  const perDen = !!t.pass_custom && npass > 1;
+  const perScl = !!t.scale_custom && npass > 1;
+  const span = (list, fmt) => fmt(list[0]) + " to " + fmt(list[npass - 1]);
   const pcard = sectionCard("PASS", "#4a8fe0",
     t.prompt_only ? "prompt only"
-      : perPass
-        ? "denoise " + steps0[0].toFixed(2) + " to " + steps0[npass - 1].toFixed(2)
-          + " · ×" + npass
-        : "denoise " + Number(t.denoise).toFixed(2)
-          + (npass > 1 ? " · ×" + npass : ""),
+      : "denoise "
+        + (perDen ? span(dSteps, (v) => v.toFixed(2)) : Number(t.denoise).toFixed(2))
+        + (perScl ? " · scale " + span(sSteps, (v) => v.toFixed(2) + "x") : "")
+        + (npass > 1 ? " · ×" + npass : ""),
     { node, key: "i2i_pass", open: true });
 
   if (!t.prompt_only) {
@@ -10577,85 +10665,22 @@ function i2iPassRow(node, body, tabName) {
     });
     drow.append(dlab, dr, dv);
 
-    // A DENOISE PER PASS, the advanced half: one bar per pass, in the order they
-    // run. Both halves stay in the DOM and swap by display, so changing the
-    // count never destroys the box the pointer is on.
-    const stepsBox = document.createElement("div");
-    stepsBox.style.cssText = "display:flex;flex-direction:column;gap:6px";
-    const buildSteps = () => {
-      stepsBox.replaceChildren();
-      const list = passDenoiseList(t);
-      t.pass_denoise = list.slice();
-      list.forEach((v, i) => {
-        const r = document.createElement("div");
-        r.className = "rn-ws-row";
-        const l = document.createElement("span");
-        l.className = "rn-ws-note";
-        l.style.minWidth = "54px";
-        l.textContent = "Pass " + (i + 1);
-        const rg = document.createElement("input");
-        rg.type = "range";
-        rg.min = 0; rg.max = 1; rg.step = 0.01;
-        rg.value = v;
-        rg.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
-        const rv = document.createElement("span");
-        rv.className = "rn-ws-note";
-        rv.textContent = Number(v).toFixed(2);
-        rg.title = "What this pass repaints. Each pass starts from the picture the "
-                 + "one before it made, so a strong first pass changes the shot and "
-                 + "weaker ones settle it.";
-        rg.addEventListener("input", () => {
-          const n = snapStep(rg.value, 0, 1, 0.01);
-          t.pass_denoise[i] = n;
-          rv.textContent = Number(n).toFixed(2);
-          writeCfg(node);
-        });
-        r.append(l, rg, rv);
-        stepsBox.appendChild(r);
-      });
-    };
-    buildSteps();
-
-    const arow = document.createElement("div");
-    arow.className = "rn-ws-row";
-    const asw = document.createElement("button");
-    asw.className = "rn-ws-sw" + (t.pass_custom ? " on" : "");
-    asw.title = t.pass_custom
-      ? "On: every pass runs its own denoise, in the order above. Switch off to put "
-        + "them all back on the single bar."
-      : "Off: every pass runs the one denoise above. Switch on to set a denoise per "
-        + "pass, which is what a strong first pass followed by weaker ones needs.";
-    asw.onclick = () => {
-      t.pass_custom = !t.pass_custom;
-      if (t.pass_custom) t.pass_denoise = passDenoiseList(t);
-      writeCfg(node);
-      render(node);
-    };
-    const alab = document.createElement("span");
-    alab.className = "rn-ws-note";
-    alab.textContent = "Denoise per pass";
-    const ramp = document.createElement("button");
-    ramp.className = "rn-ws-btn";
-    ramp.textContent = "Ramp";
-    ramp.title = "Space the passes evenly between the first bar and the last, so a "
-               + "run can fall away from 0.6 to 0.2 without setting each one by hand.";
-    ramp.onclick = () => {
-      const list = passDenoiseList(t);
-      const a = list[0], z = list[list.length - 1];
-      t.pass_denoise = list.map((_, i) =>
-        snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), 0, 1, 0.01));
-      buildSteps();
-      writeCfg(node);
-    };
-    arow.append(asw, alab, ramp);
-    const syncHalves = () => {
-      const on = !!t.pass_custom && Math.round(Number(t.passes) || 1) > 1;
-      drow.style.display = on ? "none" : "";
-      stepsBox.style.display = on ? "" : "none";
-      ramp.style.display = on ? "" : "none";
-      arow.style.display = Math.round(Number(t.passes) || 1) > 1 ? "" : "none";
-    };
-    syncHalves();
+    const den = perPassSection(node, t, {
+      key: "pass_denoise", flag: "pass_custom", base: "denoise",
+      min: 0, max: 1, step: 0.01, accent: "#b8283c",
+      label: "Denoise per pass",
+      fmt: (v) => Number(v).toFixed(2),
+      barTitle: "What this pass repaints. Each pass starts from the picture the one "
+              + "before it made, so a strong first pass changes the shot and weaker "
+              + "ones settle it.",
+      onTitle: "On: every pass runs its own denoise, in the order above. Switch off to "
+             + "put them all back on the single bar.",
+      offTitle: "Off: every pass runs the one denoise above. Switch on to set a denoise "
+              + "per pass, which is what a strong first pass followed by weaker ones "
+              + "needs.",
+      rampTitle: "Space the passes evenly between the first bar and the last, so a run "
+               + "can fall away from 0.6 to 0.2 without setting each one by hand.",
+    });
 
     // the i2i pass gets its own size, separate from the global resize
     const srow = document.createElement("div");
@@ -10683,6 +10708,33 @@ function i2iPassRow(node, body, tabName) {
       writeCfg(node);
     });
     srow.append(slab, sr, sv);
+
+    // A SCALE PER PASS: the same shape as the denoise, and what makes a run
+    // climb. Pass 1's scale is the size the source is encoded at, and every
+    // pass after it resizes the latent before it samples, so 1.0 then 1.5
+    // drafts the shot small and rebuilds it larger with the detail that comes
+    // with the pixels.
+    const scl = perPassSection(node, t, {
+      key: "pass_scale", flag: "scale_custom", base: "scale",
+      min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0",
+      label: "Scale per pass",
+      fmt: (v) => Number(v).toFixed(2) + "x",
+      barTitle: "The size this pass runs at, as a multiple of the source. Going up "
+              + "between passes costs the square of it in pixels, so 2x is four times "
+              + "the work of 1x.",
+      onTitle: "On: each pass runs at its own size, the first one setting the size the "
+             + "source is encoded at. Switch off to run every pass at the single scale.",
+      offTitle: "Off: every pass runs at the one scale above. Switch on to climb, which "
+              + "is a small fast draft followed by larger passes that add the detail.",
+      rampTitle: "Space the passes evenly between the first bar and the last, which is "
+               + "the usual climb: 1x to 2x over four passes without setting each one.",
+    });
+
+    const syncHalves = () => {
+      drow.style.display = den.sync() ? "none" : "";
+      srow.style.display = scl.sync() ? "none" : "";
+    };
+    syncHalves();
 
     // PASSES, the Paint tab's iteration brought over: the same box, the same
     // red glow when it is more than one, because a queue that quietly runs five
@@ -10713,8 +10765,8 @@ function i2iPassRow(node, body, tabName) {
       syncPass();
       // the per-pass bars follow the count in place. A full re-render here would
       // take the number box out from under the pointer mid-click.
-      t.pass_denoise = passDenoiseList(t);
-      buildSteps();
+      den.build();
+      scl.build();
       syncHalves();
       writeCfg(node);
     });
@@ -10723,7 +10775,7 @@ function i2iPassRow(node, body, tabName) {
     pWrap.append(pLab, pInp);
     syncPass();
     row.append(pWrap);
-    pcard.append(row, drow, stepsBox, arow, srow);
+    pcard.append(row, drow, den.box, den.row, srow, scl.box, scl.row);
   } else {
     pcard.appendChild(row);
   }

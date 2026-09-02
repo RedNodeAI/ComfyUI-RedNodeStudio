@@ -612,19 +612,30 @@ def parse_config(config_json):
             # be raised without the numbers already chosen moving. Off, the list
             # is still filled with the single dial, which keeps the sampler loop
             # reading one field either way.
-            _pd = t.get("pass_denoise")
-            _custom = bool(t.get("pass_custom")) and isinstance(_pd, list) and bool(_pd)
-            _steps = []
-            for _i in range(tabs[name]["passes"]):
-                _v = tabs[name]["denoise"]
-                if _custom:
-                    try:
-                        _v = float(_pd[_i] if _i < len(_pd) else _pd[-1])
-                    except (TypeError, ValueError):
-                        _v = tabs[name]["denoise"]
-                _steps.append(max(0.0, min(1.0, _v)))
-            tabs[name]["pass_custom"] = _custom
-            tabs[name]["pass_denoise"] = _steps
+            def _per_pass(raw, on, base, lo, hi, _n=tabs[name]["passes"]):
+                use = bool(on) and isinstance(raw, list) and bool(raw)
+                out = []
+                for _i in range(_n):
+                    _v = base
+                    if use:
+                        try:
+                            _v = float(raw[_i] if _i < len(raw) else raw[-1])
+                        except (TypeError, ValueError):
+                            _v = base
+                    out.append(max(lo, min(hi, _v)))
+                return use, out
+
+            tabs[name]["pass_custom"], tabs[name]["pass_denoise"] = _per_pass(
+                t.get("pass_denoise"), t.get("pass_custom"),
+                tabs[name]["denoise"], 0.0, 1.0)
+            # THE SAME FOR SIZE. Pass 1's scale is the size the source is encoded
+            # at, so it stands in for the single dial while the switch is on, and
+            # each later pass resizes the latent before it samples.
+            tabs[name]["scale_custom"], tabs[name]["pass_scale"] = _per_pass(
+                t.get("pass_scale"), t.get("scale_custom"),
+                tabs[name]["scale"], 0.25, 3.0)
+            if tabs[name]["scale_custom"]:
+                tabs[name]["scale"] = tabs[name]["pass_scale"][0]
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
@@ -2686,10 +2697,34 @@ class RedNodeStudioWorkspace:
                     # from Sampler Config, a re-angle, a fresh canvas) keeps the
                     # one denoise it has always used
                     _dn_steps = it.get("pass_denoise") if it.get("pass_custom") else None
+                    # SIZE PER PASS: the source was encoded at the first pass's
+                    # scale, so every later one is a ratio against that and the
+                    # latent is resized before it samples. Latent side, not a VAE
+                    # round trip: the picture is already in the sampler's space,
+                    # and decoding to resize would cost two conversions a pass.
+                    _sc_steps = it.get("pass_scale") if it.get("scale_custom") else None
+                    _base_hw = (tuple(_out["samples"].shape[-2:])
+                                if _i2i_run and _sc_steps and _out is not None else None)
                     for _p in range(max(1, _npass)):
                         _dnp = _dn
                         if _i2i_run and _dn_steps and _p < len(_dn_steps):
                             _dnp = float(_dn_steps[_p])
+                        if _base_hw and _p < len(_sc_steps):
+                            _ratio = float(_sc_steps[_p]) / max(1e-6, float(_sc_steps[0]))
+                            _th = max(8, int(round(_base_hw[0] * _ratio)))
+                            _tw = max(8, int(round(_base_hw[1] * _ratio)))
+                            if (_th, _tw) != tuple(_out["samples"].shape[-2:]):
+                                _res = dict(_out)
+                                _res["samples"] = torch.nn.functional.interpolate(
+                                    _out["samples"], size=(_th, _tw), mode="bilinear",
+                                    align_corners=False)
+                                # a mask made for the old size cannot follow the
+                                # picture up, and a stale one crops the pass
+                                _res.pop("noise_mask", None)
+                                _out = _res
+                                print("[RedNode Workspace] i2i pass %d scale %.2fx: "
+                                      "%d x %d pixels" % (_p + 1, float(_sc_steps[_p]),
+                                                          _tw * 8, _th * 8), flush=True)
                         if _npass > 1:
                             print("[RedNode Workspace] i2i pass %d of %d, denoise "
                                   "%.2f" % (_p + 1, _npass, _dnp), flush=True)
@@ -2699,7 +2734,26 @@ class RedNodeStudioWorkspace:
                             denoise=_dnp)[0]
                     _last_out = _out
                     if _v is not None:
-                        _img = _v.decode(_out["samples"])
+                        # the same courtesy the encode gets: past roughly 2
+                        # megapixels a whole decode is a VRAM spike that reads as
+                        # a hang, and a climbing scale reaches that on the last
+                        # pass. Tiling is the optimisation, not the point, so a
+                        # VAE that refuses still gets its whole decode.
+                        _s = _out["samples"]
+                        _px = int(_s.shape[-1]) * int(_s.shape[-2]) * 64
+                        _img = None
+                        if _px > 2_100_000 and hasattr(_v, "decode_tiled"):
+                            try:
+                                _img = _v.decode_tiled(_s, tile_x=512, tile_y=512,
+                                                       overlap=64)
+                                print("[RedNode Workspace] decoding %d x %d in tiles"
+                                      % (int(_s.shape[-1]) * 8, int(_s.shape[-2]) * 8),
+                                      flush=True)
+                            except Exception as _de:
+                                print("[RedNode Workspace] the tiled decode failed "
+                                      "(%s); decoding it whole" % _de, flush=True)
+                        if _img is None:
+                            _img = _v.decode(_s)
                         while _img.ndim > 4:
                             _img = _img[0]
                         _shot_images.append(_img)
