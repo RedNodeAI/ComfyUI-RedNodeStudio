@@ -2713,18 +2713,38 @@ class RedNodeStudioWorkspace:
                             _ratio = float(_sc_steps[_p]) / max(1e-6, float(_sc_steps[0]))
                             _th = max(8, int(round(_base_hw[0] * _ratio)))
                             _tw = max(8, int(round(_base_hw[1] * _ratio)))
-                            if (_th, _tw) != tuple(_out["samples"].shape[-2:]):
-                                _res = dict(_out)
-                                _res["samples"] = torch.nn.functional.interpolate(
-                                    _out["samples"], size=(_th, _tw), mode="bilinear",
-                                    align_corners=False)
-                                # a mask made for the old size cannot follow the
-                                # picture up, and a stale one crops the pass
-                                _res.pop("noise_mask", None)
-                                _out = _res
-                                print("[RedNode Workspace] i2i pass %d scale %.2fx: "
-                                      "%d x %d pixels" % (_p + 1, float(_sc_steps[_p]),
-                                                          _tw * 8, _th * 8), flush=True)
+                            _sm = _out["samples"]
+                            if (_th, _tw) != tuple(_sm.shape[-2:]):
+                                try:
+                                    # A LATENT IS NOT ALWAYS (B, C, H, W). A frame
+                                    # axis makes it (B, C, T, H, W), and interpolate
+                                    # wants one size per spatial dimension, so the
+                                    # depth is carried through untouched and the mode
+                                    # follows the rank. Only the picture is resized.
+                                    if _sm.ndim >= 5:
+                                        _size = tuple(_sm.shape[2:-2]) + (_th, _tw)
+                                        _mode = "trilinear" if _sm.ndim == 5 else "nearest"
+                                    else:
+                                        _size = (_th, _tw)
+                                        _mode = "bilinear"
+                                    _kw = {} if _mode == "nearest" else {"align_corners": False}
+                                    _res = dict(_out)
+                                    _res["samples"] = torch.nn.functional.interpolate(
+                                        _sm, size=_size, mode=_mode, **_kw)
+                                    # a mask made for the old size cannot follow the
+                                    # picture up, and a stale one crops the pass
+                                    _res.pop("noise_mask", None)
+                                    _out = _res
+                                    print("[RedNode Workspace] i2i pass %d scale %.2fx: "
+                                          "%d x %d pixels" % (_p + 1, float(_sc_steps[_p]),
+                                                              _tw * 8, _th * 8), flush=True)
+                                except Exception as _re_exc:
+                                    # a pass at the wrong size still renders; losing
+                                    # the whole run over a resize does not
+                                    print("[RedNode Workspace] pass %d could not be "
+                                          "resized (%s); it runs at %d x %d instead"
+                                          % (_p + 1, _re_exc, int(_sm.shape[-1]) * 8,
+                                             int(_sm.shape[-2]) * 8), flush=True)
                         if _npass > 1:
                             print("[RedNode Workspace] i2i pass %d of %d, denoise "
                                   "%.2f" % (_p + 1, _npass, _dnp), flush=True)
