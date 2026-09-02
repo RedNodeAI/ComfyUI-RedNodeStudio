@@ -866,6 +866,14 @@ export function readCfg(node) {
       if (typeof S.seed_random !== "boolean") S.seed_random = true;
       if (typeof t.scale !== "number") t.scale = 1;
       t.scale = Math.max(0.25, Math.min(3, t.scale));
+      if (typeof t.passes !== "number") t.passes = 1;
+      t.passes = Math.max(1, Math.min(PASS_MAX, Math.round(t.passes)));
+      // a denoise per pass, off by default: the list is kept even while it is
+      // off, so switching back on returns the numbers that were chosen before
+      t.pass_custom = !!t.pass_custom;
+      t.pass_denoise = Array.isArray(t.pass_denoise)
+        ? t.pass_denoise.map((v) => Math.max(0, Math.min(1, Number(v) || 0)))
+        : [];
     }
     if (CONVERTER_TABS.includes(name)) {
       t.conv = t.conv && typeof t.conv === "object" ? t.conv : {};
@@ -9497,7 +9505,7 @@ function modelsBody(node, page) {
     dlab.textContent = "Denoise";
     const dr = document.createElement("input");
     dr.type = "range";
-    dr.min = 0; dr.max = 1; dr.step = 0.05;
+    dr.min = 0; dr.max = 1; dr.step = 0.01;
     dr.value = rig.denoise ?? 1.0;
     dr.style.cssText = "width:160px;height:20px;accent-color:#b8283c";
     dr.title = "The strength dial for the external engine, carried on the "
@@ -10492,6 +10500,21 @@ function latentBody(node, body) {
 // applied to the i2i prompt, with the moodboard as the style authority.
 // Img2Img pass mode: real i2i (encoded source + denoise) or prompt only (the Latent
 // tab's canvas takes over and the source just donates its description)
+// The denoise each pass runs at, always as long as the pass count. A shorter
+// stored list repeats its last value, so raising the count never moves a number
+// that was already chosen, and an empty one falls back to the single dial.
+function passDenoiseList(t) {
+  const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+  const src = Array.isArray(t.pass_denoise) ? t.pass_denoise : [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const v = Number(src[i]);
+    out.push(Number.isFinite(v) ? Math.max(0, Math.min(1, v))
+                                : (i ? out[i - 1] : Math.max(0, Math.min(1, Number(t.denoise) || 0))));
+  }
+  return out;
+}
+
 function i2iPassRow(node, body, tabName) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
@@ -10515,21 +10538,33 @@ function i2iPassRow(node, body, tabName) {
       + "only instead.";
   b.onclick = () => { t.prompt_only = !t.prompt_only; writeCfg(node); render(node); };
   row.append(lab, b);
+  const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+  const steps0 = passDenoiseList(t);
+  const perPass = !!t.pass_custom && npass > 1;
   const pcard = sectionCard("PASS", "#4a8fe0",
     t.prompt_only ? "prompt only"
-                  : "denoise " + Number(t.denoise).toFixed(2)
-                    + ((t.passes || 1) > 1 ? " · ×" + t.passes : ""),
+      : perPass
+        ? "denoise " + steps0[0].toFixed(2) + " to " + steps0[npass - 1].toFixed(2)
+          + " · ×" + npass
+        : "denoise " + Number(t.denoise).toFixed(2)
+          + (npass > 1 ? " · ×" + npass : ""),
     { node, key: "i2i_pass", open: true });
 
   if (!t.prompt_only) {
+    // DENOISE, on its own row at the full width of the card. At 160px a 0.01
+    // step was a pixel wide, which is why the bar used to move in 0.05 jumps
+    // while the value underneath it was already finer than that.
+    const drow = document.createElement("div");
+    drow.className = "rn-ws-row";
     const dlab = document.createElement("span");
     dlab.className = "rn-ws-note";
+    dlab.style.minWidth = "54px";
     dlab.textContent = "Denoise";
     const dr = document.createElement("input");
     dr.type = "range";
-    dr.min = 0; dr.max = 1; dr.step = 0.05;
+    dr.min = 0; dr.max = 1; dr.step = 0.01;
     dr.value = t.denoise;
-    dr.style.cssText = "width:160px;height:20px;accent-color:#b8283c";
+    dr.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
     const dv = document.createElement("span");
     dv.className = "rn-ws-note";
     dv.textContent = Number(t.denoise).toFixed(2);
@@ -10540,17 +10575,100 @@ function i2iPassRow(node, body, tabName) {
       dv.textContent = Number(t.denoise).toFixed(2);
       writeCfg(node);
     });
-    row.append(dlab, dr, dv);
+    drow.append(dlab, dr, dv);
+
+    // A DENOISE PER PASS, the advanced half: one bar per pass, in the order they
+    // run. Both halves stay in the DOM and swap by display, so changing the
+    // count never destroys the box the pointer is on.
+    const stepsBox = document.createElement("div");
+    stepsBox.style.cssText = "display:flex;flex-direction:column;gap:6px";
+    const buildSteps = () => {
+      stepsBox.replaceChildren();
+      const list = passDenoiseList(t);
+      t.pass_denoise = list.slice();
+      list.forEach((v, i) => {
+        const r = document.createElement("div");
+        r.className = "rn-ws-row";
+        const l = document.createElement("span");
+        l.className = "rn-ws-note";
+        l.style.minWidth = "54px";
+        l.textContent = "Pass " + (i + 1);
+        const rg = document.createElement("input");
+        rg.type = "range";
+        rg.min = 0; rg.max = 1; rg.step = 0.01;
+        rg.value = v;
+        rg.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
+        const rv = document.createElement("span");
+        rv.className = "rn-ws-note";
+        rv.textContent = Number(v).toFixed(2);
+        rg.title = "What this pass repaints. Each pass starts from the picture the "
+                 + "one before it made, so a strong first pass changes the shot and "
+                 + "weaker ones settle it.";
+        rg.addEventListener("input", () => {
+          const n = snapStep(rg.value, 0, 1, 0.01);
+          t.pass_denoise[i] = n;
+          rv.textContent = Number(n).toFixed(2);
+          writeCfg(node);
+        });
+        r.append(l, rg, rv);
+        stepsBox.appendChild(r);
+      });
+    };
+    buildSteps();
+
+    const arow = document.createElement("div");
+    arow.className = "rn-ws-row";
+    const asw = document.createElement("button");
+    asw.className = "rn-ws-sw" + (t.pass_custom ? " on" : "");
+    asw.title = t.pass_custom
+      ? "On: every pass runs its own denoise, in the order above. Switch off to put "
+        + "them all back on the single bar."
+      : "Off: every pass runs the one denoise above. Switch on to set a denoise per "
+        + "pass, which is what a strong first pass followed by weaker ones needs.";
+    asw.onclick = () => {
+      t.pass_custom = !t.pass_custom;
+      if (t.pass_custom) t.pass_denoise = passDenoiseList(t);
+      writeCfg(node);
+      render(node);
+    };
+    const alab = document.createElement("span");
+    alab.className = "rn-ws-note";
+    alab.textContent = "Denoise per pass";
+    const ramp = document.createElement("button");
+    ramp.className = "rn-ws-btn";
+    ramp.textContent = "Ramp";
+    ramp.title = "Space the passes evenly between the first bar and the last, so a "
+               + "run can fall away from 0.6 to 0.2 without setting each one by hand.";
+    ramp.onclick = () => {
+      const list = passDenoiseList(t);
+      const a = list[0], z = list[list.length - 1];
+      t.pass_denoise = list.map((_, i) =>
+        snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), 0, 1, 0.01));
+      buildSteps();
+      writeCfg(node);
+    };
+    arow.append(asw, alab, ramp);
+    const syncHalves = () => {
+      const on = !!t.pass_custom && Math.round(Number(t.passes) || 1) > 1;
+      drow.style.display = on ? "none" : "";
+      stepsBox.style.display = on ? "" : "none";
+      ramp.style.display = on ? "" : "none";
+      arow.style.display = Math.round(Number(t.passes) || 1) > 1 ? "" : "none";
+    };
+    syncHalves();
 
     // the i2i pass gets its own size, separate from the global resize
+    const srow = document.createElement("div");
+    srow.className = "rn-ws-row";
     const slab = document.createElement("span");
     slab.className = "rn-ws-note";
+    slab.style.minWidth = "54px";
     slab.textContent = "Scale";
     const sr = document.createElement("input");
     sr.type = "range";
     sr.min = 0.25; sr.max = 3; sr.step = 0.05;
     sr.value = t.scale;
-    sr.style.cssText = "width:130px;height:18px;accent-color:#4a8fe0";
+    sr.style.cssText = "flex:1;min-width:0;height:18px;accent-color:#4a8fe0";
     const sv = document.createElement("span");
     sv.className = "rn-ws-note";
     const svText = () => `${Number(t.scale).toFixed(2)}x`;
@@ -10564,12 +10682,14 @@ function i2iPassRow(node, body, tabName) {
       sv.textContent = svText();
       writeCfg(node);
     });
-    row.append(slab, sr, sv);
+    srow.append(slab, sr, sv);
 
     // PASSES, the Paint tab's iteration brought over: the same box, the same
     // red glow when it is more than one, because a queue that quietly runs five
-    // samples should look like it will
+    // samples should look like it will. It rides the head row so the bars below
+    // it can have the card's whole width.
     const pWrap = document.createElement("div");
+    pWrap.style.marginLeft = "auto";
     const pLab = document.createElement("span");
     pLab.className = "k";
     pLab.textContent = "Passes";
@@ -10591,6 +10711,11 @@ function i2iPassRow(node, body, tabName) {
       t.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
       pInp.value = String(t.passes);
       syncPass();
+      // the per-pass bars follow the count in place. A full re-render here would
+      // take the number box out from under the pointer mid-click.
+      t.pass_denoise = passDenoiseList(t);
+      buildSteps();
+      syncHalves();
       writeCfg(node);
     });
     // the wheel is for sliders; a focused number box must not catch it
@@ -10598,8 +10723,10 @@ function i2iPassRow(node, body, tabName) {
     pWrap.append(pLab, pInp);
     syncPass();
     row.append(pWrap);
+    pcard.append(row, drow, stepsBox, arow, srow);
+  } else {
+    pcard.appendChild(row);
   }
-  pcard.appendChild(row);
   body.appendChild(pcard);
 }
 

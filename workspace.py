@@ -607,6 +607,24 @@ def parse_config(config_json):
             except (TypeError, ValueError):
                 ips = 1
             tabs[name]["passes"] = max(1, min(PAINT_PASS_MAX, ips))
+            # A DENOISE PER PASS, off by default. On, the list drives the passes
+            # in order and a short list repeats its last value, so the count can
+            # be raised without the numbers already chosen moving. Off, the list
+            # is still filled with the single dial, which keeps the sampler loop
+            # reading one field either way.
+            _pd = t.get("pass_denoise")
+            _custom = bool(t.get("pass_custom")) and isinstance(_pd, list) and bool(_pd)
+            _steps = []
+            for _i in range(tabs[name]["passes"]):
+                _v = tabs[name]["denoise"]
+                if _custom:
+                    try:
+                        _v = float(_pd[_i] if _i < len(_pd) else _pd[-1])
+                    except (TypeError, ValueError):
+                        _v = tabs[name]["denoise"]
+                _steps.append(max(0.0, min(1.0, _v)))
+            tabs[name]["pass_custom"] = _custom
+            tabs[name]["pass_denoise"] = _steps
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
@@ -2663,14 +2681,22 @@ class RedNodeStudioWorkspace:
                             print("[RedNode Workspace] shot %d setup failed: %s; using the placed camera"
                                   % (_si + 1, _se), flush=True)
                     _out = _lat
+                    # the per-pass list only takes over when the Img2Img tab's
+                    # advanced switch is on, so every other route (an override
+                    # from Sampler Config, a re-angle, a fresh canvas) keeps the
+                    # one denoise it has always used
+                    _dn_steps = it.get("pass_denoise") if it.get("pass_custom") else None
                     for _p in range(max(1, _npass)):
+                        _dnp = _dn
+                        if _i2i_run and _dn_steps and _p < len(_dn_steps):
+                            _dnp = float(_dn_steps[_p])
                         if _npass > 1:
                             print("[RedNode Workspace] i2i pass %d of %d, denoise "
-                                  "%.2f" % (_p + 1, _npass, _dn), flush=True)
+                                  "%.2f" % (_p + 1, _npass, _dnp), flush=True)
                         _out = _core.common_ksampler(
                             _model_i, _seed + _p, rig_steps, rig_cfg, rig_sampler,
                             rig_scheduler, _pos_i, negative, _out,
-                            denoise=_dn)[0]
+                            denoise=_dnp)[0]
                     _last_out = _out
                     if _v is not None:
                         _img = _v.decode(_out["samples"])
