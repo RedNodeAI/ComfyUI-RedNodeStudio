@@ -64,8 +64,15 @@ function liveNodes() {
 function sourceId(node) {
   const link = node.inputs?.[0]?.link;
   if (link == null) return null;
+  // litegraph's own lookup first; the link table is a Map on current frontends
+  // and a plain object on older ones, so the fallbacks try both shapes
+  try {
+    const src = node.getInputNode?.(0);
+    if (src?.id != null) return String(src.id);
+  } catch (e) { /* no graph yet */ }
   const g = node.graph || app.graph;
-  const l = g?.links?.[link] ?? g?._links?.get?.(link) ?? app.graph?.links?.[link];
+  const l = g?.links?.get?.(link) ?? g?.links?.[link] ?? g?._links?.get?.(link)
+         ?? app.graph?.links?.get?.(link) ?? app.graph?.links?.[link];
   if (!l) return null;
   const id = l.origin_id ?? l[1];
   return id == null ? null : String(id);
@@ -84,8 +91,13 @@ function state(node) {
   return (node._rnLp ||= { kind: "idle", src: "", step: 0, total: 0, blobUrl: "" });
 }
 
-function showBlob(node, blob) {
+function showBlob(node, blob, fromId) {
   const s = state(node);
+  // once per run, so a wrong wire shows up in the console instead of as silence
+  if (s.kind !== "live") {
+    console.log(`[RedNode Live Preview] node ${node.id} showing frames from node ${fromId ?? "?"}`
+                + (sourceId(node) === null ? " (unwired: any node)" : ""));
+  }
   if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (e) { /* gone */ } }
   s.blobUrl = URL.createObjectURL(blob);
   s.src = s.blobUrl;
@@ -178,7 +190,7 @@ api.addEventListener("b_preview_with_metadata", (e) => {
   const d = e?.detail || {};
   if (!d.blob) return;
   for (const n of liveNodes()) {
-    if (watches(n, d.nodeId, d.displayNodeId, d.realNodeId)) showBlob(n, d.blob);
+    if (watches(n, d.nodeId, d.displayNodeId, d.realNodeId)) showBlob(n, d.blob, d.displayNodeId ?? d.nodeId);
   }
 });
 api.addEventListener("b_preview", (e) => {
@@ -186,7 +198,7 @@ api.addEventListener("b_preview", (e) => {
   if (!blob || typeof blob !== "object" || blob.blob) return;   // the tagged form handled above
   const running = app.runningNodeId;
   for (const n of liveNodes()) {
-    if (watches(n, running)) showBlob(n, blob);
+    if (watches(n, running)) showBlob(n, blob, running);
   }
 });
 // the step count rides the progress event, tagged the same way
