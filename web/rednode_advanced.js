@@ -17,6 +17,9 @@ import { makePicker } from "./rednode_picker.js";
 
 const NODE_NAMES = ["RedNodeStudioDetailer", "RedNodeStudioAdvanced"];
 const TARGETS = ["face", "hair", "hands", "eyes", "clothes", "background"];
+// the upscale sizes, in the order they grow; refine_pipeline.py holds the pixel
+// budget behind each name and works the short edge out from the frame's aspect
+const SIZES = ["720p", "1080p", "2K", "1440p", "4K"];
 
 // the Control Panel's row palette, verbatim: one set of colours across the pack
 const COLORS = [
@@ -85,6 +88,7 @@ css.textContent = `
   border-radius:4px;flex:none}
 .rn-adv .chip.sampler{background:#233a5c;color:#9cc4ff}
 .rn-adv .chip.detailer{background:#4a2d57;color:#e2b0ff}
+.rn-adv .chip.upscale{background:#1f4d3a;color:#9be7c0}
 .rn-adv select,.rn-adv input{background:#15171b;border:1px solid #33373d;
   border-radius:4px;color:#e8ecf1;font-size:12px;padding:3px 6px}
 .rn-adv input[type=number]{width:58px}
@@ -196,12 +200,22 @@ async function fetchLists() {
       if (opts.some((x) => /sam/i.test(String(x)))) { samModels = opts; break; }
     }
   }
+  // the SeedVR2 pack's three nodes, for the upscale card; absent, the card says so
+  const dit = await inputs("SeedVR2LoadDiTModel");
+  const svae = await inputs("SeedVR2LoadVAEModel");
+  const up = await inputs("SeedVR2VideoUpscaler");
   LISTS = {
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
     loras: await pull("LoraLoaderModelOnly", "lora_name"),
     samModels,
     samPrecisions: optionsOf(sam.precision),
+    seedvr: !!Object.keys(dit).length,
+    ditModels: optionsOf(dit.model),
+    vaeModels: optionsOf(svae.model),
+    attention: optionsOf(dit.attention_mode),
+    offloads: optionsOf(dit.offload_device),
+    colorFixes: optionsOf(up.color_correction),
   };
   return LISTS;
 }
@@ -248,6 +262,32 @@ function loraSetNames() {
   };
   walk(app.graph);
   return names;
+}
+
+// the Prompts-tab rows of the workspace in the graph, as a pass can name them:
+// by name, or "#N" for the Nth row when it has none, the key the server resolves
+function promptRows() {
+  const out = [];
+  const walk = (graph) => {
+    for (const n of graph?._nodes || []) {
+      if (n?.type === "RedNodeStudioWorkspace") {
+        try {
+          const cfgW = n.widgets?.find((w) => w.name === "config");
+          const rows = JSON.parse(cfgW?.value || "{}").prompts?.rows || [];
+          rows.forEach((r, j) => {
+            const rigs = Array.isArray(r?.rigs) ? r.rigs : (r?.rig ? [r.rig] : []);
+            const name = String(r?.name || "").trim();
+            out.push({ key: name || `#${j + 1}`,
+                       label: (name || `Prompt ${j + 1}`)
+                            + (rigs.length ? `  [${rigs.join(", ")}]` : "") });
+          });
+        } catch (e) { /* half-typed config */ }
+      }
+      if (n?.subgraph) walk(n.subgraph);
+    }
+  };
+  walk(app.graph);
+  return out;
 }
 
 // your own saved layouts, server-side like sampler profiles
@@ -434,7 +474,8 @@ function buildPanel(node) {
   const render = () => {
     const d = readCfg(node);
     const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [],
-                         samPrecisions: [] };
+                         samPrecisions: [], ditModels: [], vaeModels: [],
+                         attention: [], offloads: [], colorFixes: [] };
     wrap.replaceChildren();
     const cap = (t) => {
       const c = document.createElement("div");
@@ -689,6 +730,15 @@ function buildPanel(node) {
     d.stages.forEach((s, i) => {
       const isFolded = !!node.properties?.rn_adv_folds?.[i];
       const writeAndRender = () => { writeCfg(node, d); render(); };
+      const tog = (label, key, dv2, tip) => {
+        const cur = s[key] === undefined ? dv2 : !!s[key];
+        const b = document.createElement("button");
+        b.className = "tog" + (cur ? " on" : "");
+        b.textContent = label;
+        b.title = tip;
+        b.onclick = () => { s[key] = !cur; writeCfg(node, d); render(); };
+        return b;
+      };
       if (s.type === "title") {
         // a group header, the Group Control look: caret boxed at the front,
         // its own eye flipping every member down to the next title, the name,
@@ -784,14 +834,18 @@ function buildPanel(node) {
       eye.onclick = () => { s.on = s.on === false; writeCfg(node, d); render(); };
       const chip = document.createElement("span");
       chip.className = "chip " + s.type;
-      chip.textContent = s.type === "sampler" ? "SAMPLER" : "DETAILER";
+      chip.textContent = s.type === "sampler" ? "SAMPLER"
+                       : s.type === "upscale" ? "UPSCALE" : "DETAILER";
       top.append(caret, grip, eye, chip);
       if (isFolded) {
         // folded, the header still says what would run
         const sum = document.createElement("span");
         sum.className = "k";
         sum.style.fontSize = "12px";
-        sum.textContent = (s.rig || "(active rig)")
+        sum.textContent = s.type === "upscale"
+          ? "SeedVR2 \u00b7 " + (s.size || "1080p")
+            + (s.dit_model ? " \u00b7 " + s.dit_model.replace(/\.safetensors$/i, "") : "")
+          : (s.rig || "(active rig)")
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
           + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
           + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
@@ -802,6 +856,18 @@ function buildPanel(node) {
              + ((s.pass_custom || s.scale_custom) ? " per round" : "") : "")
           + (s.crop_res ? " \u00b7 " + s.crop_res + "px" : "");
         top.appendChild(sum);
+      } else if (s.type === "upscale") {
+        // no rig: the SeedVR2 loaders do the loading. The size is the whole
+        // header, the workflow's combo of pixel budgets plus a 2K step.
+        top.append(lab("Size"),
+                   sel(SIZES, SIZES.includes(s.size) ? s.size : "1080p",
+                       "The size SeedVR2 works to, as a pixel budget: 1080p is "
+                       + "1920 x 1080's pixels whatever the frame's shape, and the "
+                       + "short edge is worked out from its aspect. 720p 1280x720, "
+                       + "1080p 1920x1080, 2K 2048x1080, 1440p 2560x1440, 4K "
+                       + "3840x2160. A frame already past the size is brought DOWN "
+                       + "to it, the same as the workflow.",
+                       (v) => { s.size = v; writeCfg(node, d); }));
       } else {
         top.append(lab("Rig"),
                    sel(rigs, s.rig, "Which Models-tab rig runs this pass.",
@@ -875,7 +941,79 @@ function buildPanel(node) {
       top.append(spacer, dup, del);
       card.appendChild(top);
 
-      if (!isFolded) {
+      if (!isFolded && s.type === "upscale") {
+        // MODEL: the two loaders' dials, as the workflow sets them by hand
+        const mdl = group("Model");
+        mdl.line.append(
+          lab("DiT"),
+          sel(L.ditModels, s.dit_model,
+              "The SeedVR2 DiT checkpoint. (loader default) is the pack's 3B; the "
+              + "workflow runs the 7B fp8 mixed file.",
+              (v) => { s.dit_model = v; writeCfg(node, d); }, "(loader default)"),
+          lab("VAE"),
+          sel(L.vaeModels, s.vae_model, "The SeedVR2 VAE. (loader default) is ema_vae_fp16.",
+              (v) => { s.vae_model = v; writeCfg(node, d); }, "(loader default)"),
+          lab("Attention"),
+          sel(L.attention, s.attention,
+              "The attention backend. (loader default) is sdpa, which always works; "
+              + "sageattn_2 is faster where the sageattention package is installed.",
+              (v) => { s.attention = v; writeCfg(node, d); }, "(loader default)"),
+          lab("Blocks to swap"),
+          num(s.blocks_to_swap ?? 36, 1,
+              "Transformer blocks swapped to the offload device to fit the card: 36 "
+              + "is all of the 7B's, the workflow's setting. 0 keeps everything on "
+              + "the GPU, fastest, biggest.",
+              (v) => { s.blocks_to_swap = Math.max(0, Math.min(36, Math.round(v))); writeCfg(node, d); }),
+          lab("Offload"),
+          sel(L.offloads.length ? L.offloads : ["none", "cpu"], s.offload || "cpu",
+              "Where the models rest when not working. cpu is system RAM, the "
+              + "workflow's choice; none keeps them on the GPU.",
+              (v) => { s.offload = v; writeCfg(node, d); }),
+          tog("Cache model", "cache_model", false,
+              "Keep the SeedVR2 models loaded between queues on the offload device. "
+              + "Faster runs, RAM held between them."));
+        card.appendChild(mdl.box);
+
+        // OUTPUT: what comes back and how the VAE is tiled to fit
+        const outg = group("Output");
+        outg.line.append(
+          lab("Colour fix"),
+          sel(L.colorFixes.length ? L.colorFixes
+                                  : ["lab", "wavelet", "wavelet_adaptive", "hsv", "adain", "none"],
+              s.color_fix || "lab",
+              "Matches the upscale's colours back to the input. lab is the pack's "
+              + "recommendation and the workflow's.",
+              (v) => { s.color_fix = v; writeCfg(node, d); }),
+          lab("Max edge"),
+          num(s.max_edge || 0, 2, "Cap on either edge in pixels, 0 for none. Guards an "
+              + "extreme aspect from an enormous long edge.",
+              (v) => { s.max_edge = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          tog("Tiled VAE", "tiled", true,
+              "Encode and decode in tiles so a big frame fits the card. On in the "
+              + "workflow; off is faster when memory allows."),
+          lab("Tile"),
+          num(s.tile ?? 1024, 32, "Tile size in pixels, both axes.",
+              (v) => { s.tile = Math.max(64, Math.round(v)); writeCfg(node, d); }),
+          lab("Overlap"),
+          num(s.tile_overlap ?? 128, 32, "Pixels of overlap between tiles, blended to hide seams.",
+              (v) => { s.tile_overlap = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("Input noise"),
+          num(s.input_noise ?? 0, 0.01, "Noise added to the input before encoding, 0 to 1. "
+              + "0 off; a touch can help some artefacts.",
+              (v) => { s.input_noise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }),
+          lab("Latent noise"),
+          num(s.latent_noise ?? 0, 0.01, "Noise added in the latent during diffusion, 0 to 1. "
+              + "0 off; softens detail if input noise did not help.",
+              (v) => { s.latent_noise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }));
+        card.appendChild(outg.box);
+        if (LISTS && !L.seedvr) {
+          const warn = document.createElement("div");
+          warn.className = "hint";
+          warn.textContent = "ComfyUI-SeedVR2_VideoUpscaler is not installed, so this pass "
+                           + "will say so and pass the picture through.";
+          card.appendChild(warn);
+        }
+      } else if (!isFolded) {
         const isDet = s.type === "detailer";
         // SAMPLING: the numbers a KSampler wants plus the step window. Empty
         // inherits the rig's, so the Models tab stays where a model's numbers live.
@@ -987,15 +1125,6 @@ function buildPanel(node) {
         // references, a LoRA of its own, and the words.
         const prm = group("Prompt");
         const bottom = prm.line;
-        const tog = (label, key, dv2, tip) => {
-          const cur = s[key] === undefined ? dv2 : !!s[key];
-          const b = document.createElement("button");
-          b.className = "tog" + (cur ? " on" : "");
-          b.textContent = label;
-          b.title = tip;
-          b.onclick = () => { s[key] = !cur; writeCfg(node, d); render(); };
-          return b;
-        };
         bottom.append(
           tog("LoRAs", "loras", true,
               "Apply the main LoRAs tab's stack to this pass's model and clip. "
@@ -1055,12 +1184,31 @@ function buildPanel(node) {
                             (v) => { s.lora_strength = Math.max(0, Math.min(2, v)); writeCfg(node, d); },
                             "52px"));
         }
+        // WHICH PROMPT: a Prompts-tab row for this pass. (rig's prompt) is the
+        // row linked to the pass's rig, the same text the main render used, so
+        // a chain no longer has to say the same thing on every pass.
+        const rowsAvail = promptRows();
+        const curRow = String(s.prompt_row || "");
+        const ropts = [["", "(rig's prompt)"], ...rowsAvail.map((r) => [r.key, r.label])];
+        if (curRow && !rowsAvail.some((r) => r.key === curRow)) {
+          ropts.push([curRow, curRow + " (missing)"]);
+        }
+        const rsel = document.createElement("select");
+        for (const [v, l] of ropts) {
+          const o = document.createElement("option");
+          o.value = v; o.textContent = l; o.selected = v === curRow;
+          rsel.appendChild(o);
+        }
+        rsel.title = "Which Prompts-tab row this pass reads when the box beside it is "
+                   + "empty. (rig's prompt) is the row linked to the pass's rig, the "
+                   + "text the main render used. Typed text still wins.";
+        rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
+        bottom.append(lab("Prompt"), rsel);
         const pr = document.createElement("input");
         pr.type = "text";
-        pr.placeholder = "Prompt: empty uses this rig's Prompts-tab row";
-        pr.title = "Empty means the rig's own prompt from the workspace, the same "
-                 + "text the main render used, wildcards rolled on this run's seed. "
-                 + "Typed text wins.";
+        pr.placeholder = "Prompt: empty uses the row picked";
+        pr.title = "Empty means the picked Prompts-tab row, wildcards rolled on this "
+                 + "run's seed. Typed text wins.";
         pr.value = s.prompt || "";
         pr.onchange = () => { s.prompt = pr.value; writeCfg(node, d); };
         bottom.appendChild(pr);
@@ -1083,6 +1231,14 @@ function buildPanel(node) {
                                    target: "face", denoise: 0.15, steps: 0,
                                    threshold: 0.5, feather: 8, padding: 0.35,
                                    sam_model: "", prompt: "" }));
+    // the workflow's SeedVR2 group as one card, opened on its own settings:
+    // 7B-sized swap, cpu offload, tiled VAE at 1024/128, lab colour fix, 1080p
+    mk("＋ SeedVR2 upscale", () => ({ on: true, type: "upscale", size: "1080p",
+                                     dit_model: "", vae_model: "", attention: "",
+                                     blocks_to_swap: 36, offload: "cpu",
+                                     cache_model: false, tiled: true, tile: 1024,
+                                     tile_overlap: 128, color_fix: "lab", max_edge: 0,
+                                     input_noise: 0, latent_noise: 0 }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");

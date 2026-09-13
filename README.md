@@ -211,7 +211,7 @@ are unsure about.
 | Node | What it does |
 |---|---|
 | RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. Start here. |
-| RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round; the SAM file and precision are picked on the node. |
+| RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round, pick which Prompts-tab row it reads, and a SeedVR2 upscale pass (720p to 4K) sits in the same list; the SAM file and precision are picked on the node. |
 | RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. |
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
 

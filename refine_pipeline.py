@@ -7,6 +7,8 @@ Two pass kinds, both taken from the shapes you already runs as subgraphs:
   sampler   whole-frame refine at a denoise, an img2img over the incoming picture
   detailer  SAM3 segments a target (face, hair, hands...), a low-denoise pass over
             the crop, composited back through a feathered mask
+  upscale   SeedVR2 at a named size (720p to 4K), the workflow's upscale group as
+            one card: its two loaders, its dials, and its short-edge maths
 
 Every pass carries the full sampler vocabulary: steps, CFG, sampler, scheduler, a
 denoise, and a start/end step window for the partial-schedule tricks detailer chains
@@ -62,7 +64,7 @@ def parse_pipeline(config_json):
                            "name": str(s.get("name") or ""),
                            "color": str(s.get("color") or "")})
             continue
-        if s.get("type") not in ("sampler", "detailer"):
+        if s.get("type") not in ("sampler", "detailer", "upscale"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -125,7 +127,29 @@ def parse_pipeline(config_json):
             # over its own result N times, fresh seed each round
             "repeat": _num("repeat", 1, 10, 1, int),
             "color": str(s.get("color") or ""),      # panel cosmetics, kept
+            # WHICH PROMPT this pass reads when its box is empty: "" is the row
+            # linked to its rig, else a Prompts-tab row by name, or "#N" for
+            # the Nth row when it has no name
+            "prompt_row": str(s.get("prompt_row") or "")[:64],
+            # A SEEDVR2 UPSCALE PASS: its size and the loader dials the workflow
+            # sets by hand. "" on a combo is the loader's own default.
+            "size": str(s.get("size") or "1080p"),
+            "dit_model": str(s.get("dit_model") or ""),
+            "vae_model": str(s.get("vae_model") or ""),
+            "attention": str(s.get("attention") or ""),
+            "blocks_to_swap": _num("blocks_to_swap", 0, 36, 36, int),
+            "offload": str(s.get("offload") or "cpu"),
+            "cache_model": bool(s.get("cache_model")),
+            "tiled": (True if s.get("tiled") is None else bool(s.get("tiled"))),
+            "tile": _num("tile", 64, 4096, 1024, int),
+            "tile_overlap": _num("tile_overlap", 0, 1024, 128, int),
+            "color_fix": str(s.get("color_fix") or "lab"),
+            "max_edge": _num("max_edge", 0, 16384, 0, int),
+            "input_noise": _num("input_noise", 0.0, 1.0, 0.0),
+            "latent_noise": _num("latent_noise", 0.0, 1.0, 0.0),
         })
+        if stages[-1]["size"] not in UPSCALE_SIZES:
+            stages[-1]["size"] = "1080p"
         st = stages[-1]
         # A DENOISE PER ROUND and A SCALE PER ROUND, the Img2Img PASS rule on a
         # repeat. Off, each list is the single dial repeated, so the loop reads
@@ -184,6 +208,116 @@ def round_stage(s, r):
     elif s["type"] == "sampler" and r > 0:
         out["scale"] = 1.0
     return out
+
+
+# The upscale sizes as a PIXEL BUDGET, the way the workflow's combo carried
+# them (921600, 2073600, ...): 1080p means 1920 x 1080's pixels whatever the
+# frame's shape, and the short edge is worked out from its own aspect.
+UPSCALE_SIZES = {"720p": 1280 * 720, "1080p": 1920 * 1080, "2K": 2048 * 1080,
+                 "1440p": 2560 * 1440, "4K": 3840 * 2160}
+
+
+def upscale_short_edge(w, h, target_px):
+    """The workflow's own maths, min(sqrt(a/(b*c))*b, sqrt(a/(b*c))*c): the
+    short edge that puts target_px pixels in a w x h frame at its aspect. Even,
+    which the upscaler asks for."""
+    f = (float(target_px) / max(1, int(w) * int(h))) ** 0.5
+    return max(16, int(round(f * min(int(w), int(h)) / 2.0)) * 2)
+
+
+def _call_node(cls, kw):
+    """A node called the way the graph calls it, its outputs as a list. A V3
+    node (comfy_api io.ComfyNode) hands back a NodeOutput with the values in
+    .args rather than a tuple."""
+    out = getattr(cls(), cls.FUNCTION)(**kw)
+    vals = getattr(out, "args", None)
+    if vals is None:
+        vals = out if isinstance(out, (tuple, list)) else [out]
+    return list(vals)
+
+
+def _seedvr2(image, s, seed):
+    """The picture through SeedVR2 at the pass's size, or None with a reason.
+
+    The workflow's upscale group, mechanised: the DiT loader, the VAE loader
+    and the upscaler, called through their own classes out of
+    NODE_CLASS_MAPPINGS so this follows the pack instead of reimplementing it.
+    The resolution is the workflow's maths, the short edge that puts the size's
+    pixels in the frame. Nothing is cached here: the loaders own that (their
+    cache_model dial), and a 7B checkpoint held twice is a RAM surprise.
+    Everything inside one try for the reason SAM3 is: an optional pack must
+    fail as words, never as a dead queue.
+    """
+    try:
+        maps = _core.NODE_CLASS_MAPPINGS
+        dit_cls = maps.get("SeedVR2LoadDiTModel")
+        vae_cls = maps.get("SeedVR2LoadVAEModel")
+        up_cls = maps.get("SeedVR2VideoUpscaler")
+        if dit_cls is None or vae_cls is None or up_cls is None:
+            return None, ("ComfyUI-SeedVR2_VideoUpscaler is not installed, and it "
+                          "is what upscales. Install it in Manager.")
+
+        def fill(cls, values):
+            # the loader's own defaults, then the pass's choices over them;
+            # "" on a combo keeps the default, a dial the node lacks is dropped
+            kw = _defaults_for(cls)
+            have = _all_inputs(cls)
+            for k, v in values.items():
+                if k in have and v is not None and v != "":
+                    kw[k] = v
+            return kw
+        dit = _call_node(dit_cls, fill(dit_cls, {
+            "model": s["dit_model"], "blocks_to_swap": s["blocks_to_swap"],
+            "swap_io_components": False, "offload_device": s["offload"],
+            "cache_model": s["cache_model"], "attention_mode": s["attention"]}))[0]
+        vae = _call_node(vae_cls, fill(vae_cls, {
+            "model": s["vae_model"], "encode_tiled": s["tiled"],
+            "encode_tile_size": s["tile"], "encode_tile_overlap": s["tile_overlap"],
+            "decode_tiled": s["tiled"], "decode_tile_size": s["tile"],
+            "decode_tile_overlap": s["tile_overlap"],
+            "offload_device": s["offload"], "cache_model": s["cache_model"]}))[0]
+        h, w = int(image.shape[1]), int(image.shape[2])
+        res = upscale_short_edge(
+            w, h, UPSCALE_SIZES.get(s["size"], UPSCALE_SIZES["1080p"]))
+        outs = _call_node(up_cls, fill(up_cls, {
+            "image": image, "dit": dit, "vae": vae,
+            "seed": int(seed) & 0xffffffff, "resolution": res,
+            "max_resolution": s["max_edge"], "batch_size": 1,
+            "uniform_batch_size": False, "temporal_overlap": 0,
+            "prepend_frames": 0, "color_correction": s["color_fix"],
+            "input_noise_scale": s["input_noise"],
+            "latent_noise_scale": s["latent_noise"],
+            "offload_device": s["offload"], "enable_debug": False}))
+        for v in outs:
+            if torch.is_tensor(v) and v.ndim == 4:
+                return v, None
+        return None, "SeedVR2 returned no image"
+    except Exception as exc:
+        return None, "SeedVR2 failed: %s" % exc
+
+
+def _pass_prompt_row(ws_cfg, s):
+    """The Prompts-tab row a pass reads: the one it names, else its rig's.
+
+    A name that no longer exists falls back to the rig's row and says so,
+    because a pass that silently went mute would be blamed on the model.
+    """
+    want = str(s.get("prompt_row") or "").strip()
+    rows = (ws_cfg.get("prompts") or {}).get("rows") or []
+    if want:
+        for row in rows:
+            if row.get("name") and row["name"] == want:
+                return row
+        if want.startswith("#"):
+            try:
+                idx = int(want[1:]) - 1
+                if 0 <= idx < len(rows):
+                    return rows[idx]
+            except ValueError:
+                pass
+        print("[RedNode Detailer] prompt row %r is not on the Prompts tab; "
+              "using the rig's" % want, flush=True)
+    return _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"], s["rig"])
 
 
 def _rig_settings(ws_cfg, name):
@@ -435,6 +569,22 @@ class RedNodeStudioDetailer:
             tag = "%d/%d %s" % (i, len(stages), s["type"])
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
                      sam_precision=cfg["sam_precision"])
+            # A SEEDVR2 UPSCALE loads no rig: the pack's own loaders do the
+            # loading, and a pass that could not run passes the picture on
+            if s["type"] == "upscale":
+                up, why = _seedvr2(out, s, seed + i)
+                if up is not None:
+                    line = "%s: SeedVR2 %s, %d x %d -> %d x %d" % (
+                        tag, s["size"], out.shape[2], out.shape[1],
+                        up.shape[2], up.shape[1])
+                    out = up
+                else:
+                    line = "%s: %s; passed through" % (tag, why)
+                print("[RedNode Detailer] " + line, flush=True)
+                report.append(line)
+                if tap and up is not None:
+                    tap(out, "%d upscale %s" % (i, s["size"]))
+                continue
             # AN ENGINE RIG (a handled kind, the personal NovelAI rig) takes
             # its own road: the handler renders, nothing loads
             rigd = _rig_settings(ws_cfg, s["rig"])
@@ -487,8 +637,7 @@ class RedNodeStudioDetailer:
             # Typed text in the pass wins, the standing rule.
             text = s["prompt"]
             if not text.strip():
-                row = _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"],
-                                         s["rig"])
+                row = _pass_prompt_row(ws_cfg, s)
                 if row is not None:
                     try:
                         from .prompt_frame import expand as _pf_expand
@@ -735,8 +884,7 @@ class RedNodeStudioDetailer:
                 eff[key] = s[key]
         text = s["prompt"]
         if not text.strip():
-            row = _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"],
-                                     s["rig"])
+            row = _pass_prompt_row(ws_cfg, s)
             if row is not None:
                 try:
                     from .prompt_frame import expand as _pf_expand
