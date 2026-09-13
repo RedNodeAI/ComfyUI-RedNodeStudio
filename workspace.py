@@ -542,6 +542,27 @@ def _normalise_auto(auto_in, default_mode):
     }
 
 
+def _pass_list(raw, on, base, lo, hi, n, first=None):
+    """(switch, one value per pass). A short stored list repeats its last value, so
+    raising the pass count never moves a number already chosen, and an empty one falls
+    back to the single dial above it. `first` is the default for pass 1 where that pass
+    is not the same job as the rest, which is the Latent tab: it generates, the others
+    refine. Shared by the Img2Img tab and the Latent tab so both read one field either
+    way and the sampler loop does not care which tab it came from.
+    """
+    use = bool(on) and isinstance(raw, list) and bool(raw)
+    out = []
+    for i in range(max(1, int(n))):
+        v = base if (i or first is None) else first
+        if use:
+            try:
+                v = float(raw[i] if i < len(raw) else raw[-1])
+            except (TypeError, ValueError):
+                v = base if (i or first is None) else first
+        out.append(max(lo, min(hi, v)))
+    return use, out
+
+
 def parse_config(config_json):
     """Normalised config: {tabs: {name: {on, images, sel, mask}}, dials: {...}, resize, use_dials}."""
     try:
@@ -612,28 +633,15 @@ def parse_config(config_json):
             # be raised without the numbers already chosen moving. Off, the list
             # is still filled with the single dial, which keeps the sampler loop
             # reading one field either way.
-            def _per_pass(raw, on, base, lo, hi, _n=tabs[name]["passes"]):
-                use = bool(on) and isinstance(raw, list) and bool(raw)
-                out = []
-                for _i in range(_n):
-                    _v = base
-                    if use:
-                        try:
-                            _v = float(raw[_i] if _i < len(raw) else raw[-1])
-                        except (TypeError, ValueError):
-                            _v = base
-                    out.append(max(lo, min(hi, _v)))
-                return use, out
-
-            tabs[name]["pass_custom"], tabs[name]["pass_denoise"] = _per_pass(
+            tabs[name]["pass_custom"], tabs[name]["pass_denoise"] = _pass_list(
                 t.get("pass_denoise"), t.get("pass_custom"),
-                tabs[name]["denoise"], 0.0, 1.0)
+                tabs[name]["denoise"], 0.0, 1.0, tabs[name]["passes"])
             # THE SAME FOR SIZE. Pass 1's scale is the size the source is encoded
             # at, so it stands in for the single dial while the switch is on, and
             # each later pass resizes the latent before it samples.
-            tabs[name]["scale_custom"], tabs[name]["pass_scale"] = _per_pass(
+            tabs[name]["scale_custom"], tabs[name]["pass_scale"] = _pass_list(
                 t.get("pass_scale"), t.get("scale_custom"),
-                tabs[name]["scale"], 0.25, 3.0)
+                tabs[name]["scale"], 0.25, 3.0, tabs[name]["passes"])
             if tabs[name]["scale_custom"]:
                 tabs[name]["scale"] = tabs[name]["pass_scale"][0]
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
@@ -699,6 +707,29 @@ def parse_config(config_json):
         latent_cfg["scale"] = max(1.0, min(2.0, float(lat_in.get("scale", 1.0))))
     except (TypeError, ValueError):
         latent_cfg["scale"] = 1.0
+    # REFINE PASSES on a canvas that starts empty. The Img2Img tab's per-pass denoise
+    # and scale, brought to the tab that has no source image: pass 1 generates the
+    # picture at the full denoise, and every pass after it treats what came out as its
+    # own source, which is an image to image chain that begins from nothing. That is
+    # the draft small and climb workflow without a second node or a wire.
+    try:
+        _lps = int(lat_in.get("passes", 1))
+    except (TypeError, ValueError):
+        _lps = 1
+    latent_cfg["passes"] = max(1, min(PAINT_PASS_MAX, _lps))
+    # The single dial the later passes run at. Pass 1 is not on it: a canvas of noise
+    # sampled at 0.45 is mush, so the first pass always gets the run's own denoise
+    # unless the per-pass list below says otherwise in as many words.
+    try:
+        latent_cfg["refine"] = max(0.0, min(1.0, float(lat_in.get("refine", 0.45))))
+    except (TypeError, ValueError):
+        latent_cfg["refine"] = 0.45
+    latent_cfg["pass_custom"], latent_cfg["pass_denoise"] = _pass_list(
+        lat_in.get("pass_denoise"), lat_in.get("pass_custom"),
+        latent_cfg["refine"], 0.0, 1.0, latent_cfg["passes"], first=1.0)
+    latent_cfg["scale_custom"], latent_cfg["pass_scale"] = _pass_list(
+        lat_in.get("pass_scale"), lat_in.get("scale_custom"),
+        1.0, 0.25, 3.0, latent_cfg["passes"])
     # the LoRAs tab: the stack the panel edits, in the same shape the LoRA Stack
     # node's hidden widget uses, so one panel implementation serves both
     lin = data.get("loras") if isinstance(data.get("loras"), dict) else {}
@@ -803,6 +834,13 @@ def parse_config(config_json):
             "sampler": str(r.get("sampler") or "euler"),
             "scheduler": str(r.get("scheduler") or "simple"),
             "detailer_steps": _num("detailer_steps", 0, 200, 8),
+            # A SECOND PAIR, for image to image runs only: the sampler that draws
+            # well from noise is not always the one that repaints well over a
+            # picture that already exists. Empty means "the pair above", so a rig
+            # that never sets one behaves exactly as it always did, and a blank
+            # canvas keeps the main pair whatever this says.
+            "i2i_sampler": str(r.get("i2i_sampler") or ""),
+            "i2i_scheduler": str(r.get("i2i_scheduler") or ""),
             # an EXTERNAL rig loads no files: it is the cockpit for a renderer
             # outside the workspace (the NovelAI chain). Its numbers and prompt
             # ride the typed output sockets; sampler and scheduler are free
@@ -1945,6 +1983,33 @@ class RedNodeStudioWorkspace:
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
                           % exc, flush=True)
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
+        # THE I2I PAIR takes over from here on: the built-in sampler, the paint
+        # render, the sampler_name and scheduler sockets, and through those the
+        # Studio Detailer, which inherits whatever the rig hands it. One switch, so
+        # nothing downstream has to ask which kind of run this was. A blank canvas
+        # keeps the main pair, refine passes and all: those are a generation that
+        # then tidies up after itself, not an image to image run.
+        if real_i2i:
+            _i2i_s = str(_ar.get("i2i_sampler") or "")
+            _i2i_c = str(_ar.get("i2i_scheduler") or "")
+            _swapped = []
+            if _i2i_s and _i2i_s in comfy.samplers.KSampler.SAMPLERS:
+                if _i2i_s != rig_sampler:
+                    _swapped.append("sampler %s -> %s" % (rig_sampler, _i2i_s))
+                rig_sampler = _i2i_s
+            elif _i2i_s:
+                print("[RedNode Workspace] the rig's i2i sampler %r is not one this "
+                      "build has, so the main sampler is used" % _i2i_s, flush=True)
+            if _i2i_c and _i2i_c in comfy.samplers.KSampler.SCHEDULERS:
+                if _i2i_c != rig_scheduler:
+                    _swapped.append("scheduler %s -> %s" % (rig_scheduler, _i2i_c))
+                rig_scheduler = _i2i_c
+            elif _i2i_c:
+                print("[RedNode Workspace] the rig's i2i scheduler %r is not one this "
+                      "build has, so the main scheduler is used" % _i2i_c, flush=True)
+            if _swapped:
+                print("[RedNode Workspace] image to image run, so the rig's i2i pair "
+                      "takes over: %s" % ", ".join(_swapped), flush=True)
         if latent is None and real_i2i:
             if vae is not None:
                 enc = i2i_img
@@ -2042,6 +2107,16 @@ class RedNodeStudioWorkspace:
             # the scale slider multiplies the base canvas; 2.0 is four times the pixels
             lw = int(lw * lc["scale"]) // 8 * 8
             lh = int(lh * lc["scale"]) // 8 * 8
+            # WITH A SCALE PER PASS, pass 1's entry is the size the canvas is BUILT at,
+            # not a ratio against it, so a first pass of 0.5 drafts small and the passes
+            # after it climb from there. Every later pass is a ratio against this one.
+            if lc.get("scale_custom") and lc.get("passes", 1) > 1:
+                _p1 = float(lc["pass_scale"][0])
+                if abs(_p1 - 1.0) > 1e-6:
+                    lw = max(256, int(lw * _p1)) // 8 * 8
+                    lh = max(256, int(lh * _p1)) // 8 * 8
+                    print(f"[RedNode Workspace] latent pass 1 at {_p1:.2f}x: "
+                          f"the canvas is built {lw} x {lh}", flush=True)
             if lc["random"]:
                 picks["latent"] = f"{lw} x {lh}"
                 print(f"[RedNode Workspace] rolled latent size: {lw} x {lh}", flush=True)
@@ -2707,6 +2782,7 @@ class RedNodeStudioWorkspace:
                 _seed = run_seed
                 _lat = latent
                 _dn = denoise_out if latent is not None else 1.0
+                _lat_from_i2i = False
                 # THE IMG2IMG TAB, honoured: with no edit latent, an image on the
                 # Img2Img tab is the canvas, encoded here and sampled at the tab's
                 # denoise. Without this the embedded sampler started every run from
@@ -2716,6 +2792,7 @@ class RedNodeStudioWorkspace:
                     if _v0 is not None:
                         _lat = {"samples": _v0.encode(i2i_img[:, :, :, :3])}
                         _dn = denoise_out
+                        _lat_from_i2i = True
                         print("[RedNode Workspace] built-in sampler: img2img from "
                               "the Img2Img tab at denoise %.2f" % _dn, flush=True)
                     else:
@@ -2739,7 +2816,28 @@ class RedNodeStudioWorkspace:
                             or (it["on"] and not it["prompt_only"]
                                 and it["canvas"] == "latent"
                                 and latent_in is not None))
-                _npass = int(it.get("passes", 1)) if _i2i_run else 1
+                # THE LATENT TAB'S OWN PASSES: the same chain on a canvas that starts
+                # empty. Pass 1 makes the picture, the passes after it refine what pass
+                # 1 made, so the tab with no source image gets the draft-and-climb run
+                # the Img2Img tab already had. It never competes with a real i2i pass:
+                # that one owns the canvas and is checked first.
+                _lc_pass = cfg["latent"]
+                _lat_run = (not _i2i_run and not _lat_from_i2i
+                            and bool(_lc_pass.get("on"))
+                            and _lc_pass.get("source") == "tab"
+                            and int(_lc_pass.get("passes", 1)) > 1
+                            and (_lc_pass.get("pass_custom")
+                                 or _lc_pass.get("scale_custom")))
+                if _i2i_run:
+                    _npass = int(it.get("passes", 1))
+                elif _lat_run:
+                    _npass = int(_lc_pass.get("passes", 1))
+                else:
+                    _npass = 1
+                # which tab's per-pass lists the loop below reads, so it does not have
+                # to ask twice further down
+                _pass_cfg = it if _i2i_run else (_lc_pass if _lat_run else None)
+                _pass_what = "latent" if _lat_run else "i2i"
                 _v = vae if vae is not None else rig_vae
                 # THE CAMERA PATH: one render per shot. Each shot re-assembles the
                 # prompt with ITS camera (words) and re-applies the camera LoRAs at
@@ -2768,18 +2866,25 @@ class RedNodeStudioWorkspace:
                     # advanced switch is on, so every other route (an override
                     # from Sampler Config, a re-angle, a fresh canvas) keeps the
                     # one denoise it has always used
-                    _dn_steps = it.get("pass_denoise") if it.get("pass_custom") else None
+                    _dn_steps = (_pass_cfg.get("pass_denoise")
+                                 if _pass_cfg and _pass_cfg.get("pass_custom") else None)
                     # SIZE PER PASS: the source was encoded at the first pass's
                     # scale, so every later one is a ratio against that and the
                     # latent is resized before it samples. Latent side, not a VAE
                     # round trip: the picture is already in the sampler's space,
                     # and decoding to resize would cost two conversions a pass.
-                    _sc_steps = it.get("pass_scale") if it.get("scale_custom") else None
+                    _sc_steps = (_pass_cfg.get("pass_scale")
+                                 if _pass_cfg and _pass_cfg.get("scale_custom") else None)
                     _base_hw = (tuple(_out["samples"].shape[-2:])
-                                if _i2i_run and _sc_steps and _out is not None else None)
+                                if _pass_cfg and _sc_steps and _out is not None else None)
                     for _p in range(max(1, _npass)):
                         _dnp = _dn
-                        if _i2i_run and _dn_steps and _p < len(_dn_steps):
+                        # On the Latent tab pass 1 is a generation and the rest are
+                        # refinements, so the single dial only speaks for the rest. The
+                        # per-pass list, when it is on, speaks for all of them.
+                        if _lat_run and _p:
+                            _dnp = float(_lc_pass.get("refine", 0.45))
+                        if _pass_cfg and _dn_steps and _p < len(_dn_steps):
                             _dnp = float(_dn_steps[_p])
                         if _base_hw and _p < len(_sc_steps):
                             _ratio = float(_sc_steps[_p]) / max(1e-6, float(_sc_steps[0]))
@@ -2807,8 +2912,9 @@ class RedNodeStudioWorkspace:
                                     # picture up, and a stale one crops the pass
                                     _res.pop("noise_mask", None)
                                     _out = _res
-                                    print("[RedNode Workspace] i2i pass %d scale %.2fx: "
-                                          "%d x %d pixels" % (_p + 1, float(_sc_steps[_p]),
+                                    print("[RedNode Workspace] %s pass %d scale %.2fx: "
+                                          "%d x %d pixels" % (_pass_what, _p + 1,
+                                                              float(_sc_steps[_p]),
                                                               _tw * 8, _th * 8), flush=True)
                                 except Exception as _re_exc:
                                     # a pass at the wrong size still renders; losing
@@ -2818,8 +2924,8 @@ class RedNodeStudioWorkspace:
                                           % (_p + 1, _re_exc, int(_sm.shape[-1]) * 8,
                                              int(_sm.shape[-2]) * 8), flush=True)
                         if _npass > 1:
-                            print("[RedNode Workspace] i2i pass %d of %d, denoise "
-                                  "%.2f" % (_p + 1, _npass, _dnp), flush=True)
+                            print("[RedNode Workspace] %s pass %d of %d, denoise "
+                                  "%.2f" % (_pass_what, _p + 1, _npass, _dnp), flush=True)
                         # every step of this call also streams a small frame,
                         # decoded by the pack's own tiny decoder, to any Live
                         # Preview node wired to this one (live_preview.py)

@@ -982,6 +982,9 @@ export function readCfg(node) {
     if (typeof r.sampler !== "string") r.sampler = "euler";
     if (typeof r.scheduler !== "string") r.scheduler = "simple";
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
+    // the i2i pair: "" means the pair above, which is every rig saved before it
+    if (typeof r.i2i_sampler !== "string") r.i2i_sampler = "";
+    if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
     if (r.kind !== "external") r.kind = "";
     if (typeof r.denoise !== "number") r.denoise = 1.0;
     // the LoRAs-tab SET this rig renders with; "" = Main
@@ -1099,6 +1102,14 @@ export function readCfg(node) {
   d.latent.source = d.latent.source === "input" ? "input" : "tab";
   if (typeof d.latent.scale !== "number") d.latent.scale = 1;
   d.latent.scale = Math.max(1, Math.min(2, d.latent.scale));
+  // refine passes: one pass and the same defaults workspace.py normalises to, so the
+  // bars the panel draws are the numbers the sampler will actually run
+  if (typeof d.latent.passes !== "number") d.latent.passes = 1;
+  d.latent.passes = Math.max(1, Math.min(PASS_MAX, Math.round(d.latent.passes)));
+  if (typeof d.latent.refine !== "number") d.latent.refine = 0.45;
+  d.latent.refine = Math.max(0, Math.min(1, d.latent.refine));
+  d.latent.pass_custom = !!d.latent.pass_custom;
+  d.latent.scale_custom = !!d.latent.scale_custom;
   d.auto = d.auto && typeof d.auto === "object" ? d.auto : {};
   if (typeof d.auto.model !== "string") d.auto.model = "";
   if (typeof d.auto.url !== "string") d.auto.url = "";
@@ -9631,6 +9642,33 @@ function modelsBody(node, page) {
            "Comes out typed, so it wires straight into a KSampler's sampler_name.");
     selRow("Scheduler", "scheduler", L.schedulers || [],
            "Wires straight into a KSampler's scheduler.");
+    // A SECOND PAIR, for image to image runs only. Blank is what every rig saved
+    // before this had, and blank means the pair above, so nothing moves unasked.
+    const i2iRow = (label, key, items, hint) => {
+      const sel = document.createElement("select");
+      const cur = String(rig[key] || "");
+      for (const [v, t] of [["", "Same as above"]].concat((items || []).map((v) => [v, v]))) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = t;
+        o.selected = v === cur;
+        sel.appendChild(o);
+      }
+      sel.title = hint;
+      sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
+      pill(body, label, sel, hint);
+    };
+    i2iRow("i2i sampler", "i2i_sampler", L.samplers || [],
+           "The sampler an IMAGE TO IMAGE run uses in place of the one above. The "
+         + "whole run follows it: the render, the paint pass, and the detailer, "
+         + "which inherits whatever the rig hands it. The sampler that draws well "
+         + "from noise is not always the one that repaints well over a picture that "
+         + "already exists. Same as above leaves i2i on the main sampler, and a "
+         + "blank canvas always uses the main pair, refine passes included.");
+    i2iRow("i2i scheduler", "i2i_scheduler", L.schedulers || [],
+           "The scheduler an image to image run uses in place of the one above, on "
+         + "the same terms as the i2i sampler beside it. Same as above leaves i2i "
+         + "on the main scheduler.");
   }
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for detailer passes, on its own output.");
@@ -10588,6 +10626,113 @@ function latentBody(node, body) {
   cols.appendChild(canvasCard);
   body.appendChild(cols);
 
+  // REFINE PASSES: the Img2Img tab's per-pass denoise and scale, on the tab that has
+  // no source image. Pass 1 generates the picture at the full denoise and every pass
+  // after it treats what pass 1 made as its own source, so a blank canvas gets the
+  // same draft-small-then-climb run without a second node or a wire.
+  const nP = Math.max(1, Math.min(PASS_MAX, Math.round(Number(L.passes) || 1)));
+  const passCard = sectionCard("REFINE PASSES", "#b8283c",
+    nP > 1 ? `${nP} passes` : "single pass");
+
+  const prow = document.createElement("div");
+  prow.className = "rn-ws-row";
+  const plab = document.createElement("span");
+  plab.className = "rn-ws-note";
+  plab.style.minWidth = "54px";
+  plab.textContent = "Passes";
+  const pInp = document.createElement("input");
+  pInp.type = "number";
+  pInp.min = 1; pInp.max = PASS_MAX; pInp.step = 1;
+  pInp.value = String(nP);
+  pInp.style.cssText = "width:86px;background:#101216;border:1px solid #2f333a;"
+    + "border-radius:7px;color:#e8ecf1;font-size:15px;font-weight:600;padding:8px 10px";
+  pInp.title = "How many times the built-in sampler runs on this canvas. 1 is a plain "
+             + "generation, as always. More than that and pass 1 makes the picture "
+             + "while the passes after it repaint it at the refine denoise, each with "
+             + "a fresh seed, and only the last one comes back. Drives the built-in "
+             + "sampler; an external sampler wired to output_latent still runs once.";
+  pInp.addEventListener("change", () => {
+    L.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
+    writeCfg(node); render(node);
+  });
+  const phint = document.createElement("span");
+  phint.className = "hint";
+  phint.textContent = nP > 1
+    ? "Pass 1 generates. The rest refine what it made."
+    : "One pass, the plain generation. Raise it to refine the result in place.";
+  prow.append(plab, pInp, phint);
+  passCard.appendChild(prow);
+
+  // the single dial the later passes run at. Pass 1 is deliberately not on it: a
+  // canvas of noise sampled at 0.45 is mush, not a soft start
+  const rrow = document.createElement("div");
+  rrow.className = "rn-ws-row";
+  const rlab = document.createElement("span");
+  rlab.className = "rn-ws-note";
+  rlab.style.minWidth = "54px";
+  rlab.textContent = "Refine";
+  const rr = document.createElement("input");
+  rr.type = "range";
+  rr.min = 0; rr.max = 1; rr.step = 0.01;
+  rr.value = L.refine ?? 0.45;
+  rr.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
+  const rv = document.createElement("span");
+  rv.className = "rn-ws-note";
+  rv.textContent = Number(L.refine ?? 0.45).toFixed(2);
+  rr.title = "How much each pass AFTER the first repaints the picture pass 1 made. "
+           + "0.45 rebuilds detail while the shape holds; past about 0.6 the later "
+           + "passes start rewriting the shot rather than finishing it.";
+  rr.addEventListener("input", () => {
+    L.refine = snapStep(rr.value, 0, 1, 0.01);
+    rv.textContent = Number(L.refine).toFixed(2);
+    writeCfg(node);
+  });
+  rrow.append(rlab, rr, rv);
+  passCard.appendChild(rrow);
+
+  const lden = perPassSection(node, L, {
+    key: "pass_denoise", flag: "pass_custom", base: "refine", first: 1.0,
+    min: 0, max: 1, step: 0.01, accent: "#b8283c",
+    label: "Denoise per pass",
+    fmt: (v) => Number(v).toFixed(2),
+    barTitle: "What this pass repaints. Pass 1 starts from an empty canvas, so it "
+            + "wants the full 1.00 unless you are after a hazier draft; the passes "
+            + "after it work on the picture the one before them made.",
+    onTitle: "On: every pass runs its own denoise, in the order above. Switch off to "
+           + "generate at the full denoise and refine at the single bar.",
+    offTitle: "Off: pass 1 generates and every pass after it runs the refine bar "
+            + "above. Switch on to set a denoise per pass, which is what a run that "
+            + "settles down pass by pass needs.",
+    rampTitle: "Space the passes evenly between the first bar and the last, so a run "
+             + "can fall away from 1.0 to 0.2 without setting each one by hand.",
+  });
+  passCard.append(lden.row, lden.box);
+
+  const lscl = perPassSection(node, L, {
+    key: "pass_scale", flag: "scale_custom", base: "scale", first: 1.0,
+    min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0",
+    label: "Scale per pass",
+    fmt: (v) => Number(v).toFixed(2) + "x",
+    barTitle: "The size this pass runs at. Pass 1's is the size the canvas is BUILT "
+            + "at, so 0.5 there drafts at half the size above and the passes after "
+            + "it climb from that. Going up costs the square of it in pixels.",
+    onTitle: "On: each pass runs at its own size, the first one setting the size the "
+           + "canvas is built at. Switch off to run every pass at the size above.",
+    offTitle: "Off: every pass runs at the size set above. Switch on to climb, which "
+            + "is a small fast draft followed by larger passes that add the detail.",
+    rampTitle: "Space the passes evenly between the first bar and the last, which is "
+             + "the usual climb: 0.5x to 1x over four passes without setting each.",
+  });
+  passCard.append(lscl.row, lscl.box);
+
+  const lsync = () => {
+    const dOn = lden.sync();
+    lscl.sync();
+    rrow.style.display = (nP > 1 && !dOn) ? "" : "none";
+  };
+  lsync();
+  body.appendChild(passCard);
+
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = !L.on
@@ -10599,6 +10744,11 @@ function latentBody(node, body) {
       : `output_latent carries ${L.batch} empty latent(s) at ${eff(L.w)} x ${eff(L.h)}. `
         + "A real Img2Img pass takes over instead; this is the canvas for prompt "
         + "only, and for a plain generation. An edit mask outranks both.";
+  if (L.on && nP > 1) {
+    note.textContent += ` The built-in sampler runs ${nP} passes on it: pass 1 `
+      + "generates, the rest refine. An Img2Img pass owns the canvas when one is "
+      + "running, and its own passes are used then, not these.";
+  }
   body.appendChild(note);
 }
 
@@ -10610,15 +10760,26 @@ function latentBody(node, body) {
 // repeats its last value, so raising the count never moves a number that was
 // already chosen, and an empty one falls back to the single dial above it.
 // Denoise and Scale both ride this.
-function passValueList(t, key, base, min, max) {
+// `first` is pass 1's default where that pass is not the same job as the rest, which
+// is the Latent tab: pass 1 generates the picture and the passes after it refine what
+// it made, so the list opens at a full denoise instead of at the refine dial. Left
+// out, pass 1 falls back to the dial like every other pass, which is the Img2Img tab.
+function passValueList(t, key, base, min, max, first) {
   const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const src = Array.isArray(t[key]) ? t[key] : [];
   const fit = (v) => Math.max(min, Math.min(max, v));
+  const dial = () => fit(Number(t[base]) || min);
+  const head = () => fit(Number(first === undefined ? t[base] : first) || min);
   const out = [];
   for (let i = 0; i < n; i++) {
-    const v = Number(src[i]);
-    out.push(Number.isFinite(v) ? fit(v)
-                                : (i ? out[i - 1] : fit(Number(t[base]) || min)));
+    // With nothing stored yet the list opens on the dial, pass 1 aside. With a list
+    // stored, a count raised past it repeats its last value, so a number already
+    // chosen never moves. Same two rules as _pass_list in workspace.py, which is
+    // what the sampler actually reads: the two disagreeing is a bug you only see
+    // at render time.
+    if (!src.length) { out.push(i ? dial() : head()); continue; }
+    const v = Number(i < src.length ? src[i] : src[src.length - 1]);
+    out.push(Number.isFinite(v) ? fit(v) : (i ? out[i - 1] : head()));
   }
   return out;
 }
@@ -10632,8 +10793,11 @@ function perPassSection(node, t, o) {
   box.style.cssText = "display:flex;flex-direction:column;gap:6px";
   const build = () => {
     box.replaceChildren();
-    const list = passValueList(t, o.key, o.base, o.min, o.max);
-    t[o.key] = list.slice();
+    const list = passValueList(t, o.key, o.base, o.min, o.max, o.first);
+    // Only a section that is ON owns the stored list. Writing it while off meant the
+    // very first render banked a list, and the defaults for a section switched on
+    // later were then read back off that instead of off the dial beside it.
+    if (t[o.flag]) t[o.key] = list.slice();
     list.forEach((v, i) => {
       const r = document.createElement("div");
       r.className = "rn-ws-row";
@@ -10669,7 +10833,7 @@ function perPassSection(node, t, o) {
   sw.title = t[o.flag] ? o.onTitle : o.offTitle;
   sw.onclick = () => {
     t[o.flag] = !t[o.flag];
-    if (t[o.flag]) t[o.key] = passValueList(t, o.key, o.base, o.min, o.max);
+    if (t[o.flag]) t[o.key] = passValueList(t, o.key, o.base, o.min, o.max, o.first);
     writeCfg(node);
     render(node);
   };
@@ -10681,7 +10845,7 @@ function perPassSection(node, t, o) {
   ramp.textContent = "Ramp";
   ramp.title = o.rampTitle;
   ramp.onclick = () => {
-    const list = passValueList(t, o.key, o.base, o.min, o.max);
+    const list = passValueList(t, o.key, o.base, o.min, o.max, o.first);
     const a = list[0], z = list[list.length - 1];
     t[o.key] = list.map((_, i) =>
       snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), o.min, o.max, o.step));
