@@ -12,6 +12,7 @@ const QUICK = [
   ["RedNode Studio Workspace", "RedNodeStudioWorkspace"],
   ["RedNode Save", "RedNodeSave"],
   ["RedNode Image Review", "RedNodeImageReview"],
+  ["RedNode Live Preview", "RedNodeLivePreview"],
   ["RedNode Sender", "RedNodeSubgraphSend"],
   ["RedNode Grabber", "RedNodeSubgraphReceive"],
   ["RedNode Paint Render", "RedNodePaintRender"],

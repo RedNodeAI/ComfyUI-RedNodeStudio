@@ -23,7 +23,7 @@ import { wsPref } from "./rednode_settings.js";
 
 const PANELS = ["rn-ws-wrap", "rn-cp-wrap", "rn-gc-wrap", "rn-ls-wrap", "rn-pb-wrap",
                 "rn-pl-wrap", "rn-ps-wrap", "rn-rc-wrap", "rn-rt-wrap", "rn-rv-wrap",
-                "rn-sg-wrap", "rn-sv-wrap", "rn-sw-wrap", "rn-np-wrap"];
+                "rn-sg-wrap", "rn-sv-wrap", "rn-sw-wrap", "rn-np-wrap", "rn-lp-wrap"];
 
 const css = document.createElement("style");
 css.textContent = `
