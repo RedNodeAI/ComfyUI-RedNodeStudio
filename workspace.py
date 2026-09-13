@@ -1860,6 +1860,11 @@ class RedNodeStudioWorkspace:
         # canvas each). The result IS the i2i source from here on: encode,
         # denoise, passes, the i2i_image output, all unchanged.
         _rg = it.get("reangle") or {}
+        # RE-ANGLE ONLY: set once the re-shot has landed, and only where the
+        # built-in sampler would have run the pass. It skips the encode and the
+        # sampler below, so the rig stays in RAM and the image output is the
+        # re-shot picture itself. An external sampler runs whatever is wired.
+        _stage_only = False
         if it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None:
             try:
                 from . import reangle as _re
@@ -1890,6 +1895,14 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] re-angle: %d view(s) from %s -> the i2i source "
                       "(%d x %d)" % (i2i_img.shape[0], "the studio" if _cams else "the bands",
                                      i2i_img.shape[2], i2i_img.shape[1]), flush=True)
+                if _rg.get("skip_pass"):
+                    if cfg["models"]["sampler_mode"] == "internal":
+                        _stage_only = True
+                    else:
+                        print("[RedNode Workspace] re-angle: Skip the i2i pass only "
+                              "applies to the built-in sampler; the external one runs "
+                              "as wired, with the re-shot picture on i2i_image",
+                              flush=True)
             except Exception as exc:
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
                       % exc, flush=True)
@@ -2562,8 +2575,8 @@ class RedNodeStudioWorkspace:
         _rig_is_krea2 = (not _rigs_now
                          or _rigs_now[cfg["models"]["active"]].get("clip_type")
                          == "krea2")
-        if clip is not None and (_mode == "internal"
-                                 or (_prow or {}).get("text", "").strip()):
+        if clip is not None and not _stage_only and (
+                _mode == "internal" or (_prow or {}).get("text", "").strip()):
             try:
                 _enc_clip = lora_clip if lora_clip is not None else clip
                 if _rig_is_krea2:
@@ -2617,7 +2630,14 @@ class RedNodeStudioWorkspace:
         # the image output exactly as the embedded sampler's would. Everything
         # downstream - Detailer chains, Review, Save - neither knows nor cares.
         _hk = _ar.get("kind")
-        if (_mode == "internal" and not _prt and _hk in RIG_KIND_HANDLERS):
+        if _stage_only and _mode == "internal" and not _prt:
+            # the re-shot picture is the render: nothing below runs, so the rig is
+            # never asked for VRAM while the edit model holds it
+            rig_image = i2i_img
+            print("[RedNode Workspace] re-angle only: the re-shot picture is the image "
+                  "output; no encode, no i2i pass", flush=True)
+        if (_mode == "internal" and not _prt and not _stage_only
+                and _hk in RIG_KIND_HANDLERS):
             try:
                 _himg = RIG_KIND_HANDLERS[_hk](
                     "render", rig=_ar, cfg=cfg, prompt_text=prompt_text_out,
@@ -2628,8 +2648,8 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 print("[RedNode Workspace] the %r rig's handler failed: %s"
                       % (_hk, exc), flush=True)
-        if (_mode == "internal" and not _prt and positive is not None
-                and model is not None):
+        if (_mode == "internal" and not _prt and not _stage_only
+                and positive is not None and model is not None):
             try:
                 import nodes as _core
                 _seed = run_seed

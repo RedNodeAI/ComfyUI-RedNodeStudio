@@ -10835,11 +10835,32 @@ function reangleSection(node, body, tabName) {
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   lab.textContent = R.on
-    ? "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above."
+    ? (R.skip_pass
+        ? "The source is re-shot from the camera below and goes straight to the image output."
+        : "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above.")
     : "Image to image from a different angle: re-shoot the source first, then paint over it.";
   row0.append(sw, lab);
   card.appendChild(row0);
   if (R.on) {
+    // SKIP THE PASS: the re-shot picture as it is. The point is memory: with the
+    // pass on, the rig and the edit model both want the card in one run.
+    const srow = document.createElement("div");
+    srow.className = "rn-ws-row";
+    const ssw = document.createElement("div");
+    ssw.className = "rn-ws-sw" + (R.skip_pass ? " on" : "");
+    ssw.title = R.skip_pass
+      ? "On: the re-shot picture is the image output as it is. No encode and no i2i "
+        + "pass, so the rig never enters VRAM beside the edit model. Polish it in a "
+        + "Detailer pass afterwards if you want the Krea look. Built-in sampler only."
+      : "Off: the i2i pass runs on the re-shot picture at the denoise above, the "
+        + "normal run. Switch on to stop after the re-shot and keep the rig out of "
+        + "VRAM while the edit model works.";
+    ssw.onclick = () => { R.skip_pass = !R.skip_pass; writeCfg(node); render(node); };
+    const sl = document.createElement("span");
+    sl.className = "rn-ws-note";
+    sl.textContent = "Skip the i2i pass";
+    srow.append(ssw, sl);
+    card.appendChild(srow);
     // camera source
     const crow = document.createElement("div");
     crow.className = "rn-ws-row";

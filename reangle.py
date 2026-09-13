@@ -85,6 +85,10 @@ def parse(raw):
         # separate from the prompt's studio, so re-angle and the words can
         # point their cameras differently
         "studio": r.get("studio") if isinstance(r.get("studio"), str) else "",
+        # STOP AFTER THE RE-SHOT: the re-angled picture is the workspace's image
+        # output as it is, no encode and no i2i pass, so the rig never enters
+        # VRAM beside the edit model. Off by default; the pass is the normal run.
+        "skip_pass": bool(r.get("skip_pass", False)),
     }
 
 
