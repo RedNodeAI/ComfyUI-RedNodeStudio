@@ -1,0 +1,7 @@
+# Left out of git archive and of the zips GitHub builds from a tag. The README
+# needs the screenshots on GitHub; a pack download does not.
+images/ export-ignore
+.github/ export-ignore
+tests/ export-ignore
+.comfyignore export-ignore
+.gitattributes export-ignore

@@ -8,3 +8,6 @@ tests/
 .github/
 __pycache__/
 *.pyc
+
+# the README screenshots: needed on GitHub, dead weight in a download
+images/
