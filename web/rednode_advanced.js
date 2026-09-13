@@ -5,11 +5,12 @@ import { makePicker } from "./rednode_picker.js";
 // RedNode Studio Detailer — the post-render passes as a list you can read.
 //
 // Start, the passes in order, End. Each pass is a card: the top line says what it
-// is, whose rig runs it and what it aims at; the bottom line is the full sampler
-// vocabulary, steps, CFG, sampler, scheduler, a start/end step window and the
-// denoise. Anything left at "rig" inherits the rig's own settings, so the Models
-// tab stays the one place a model's numbers live. An empty prompt uses the rig's
-// own Prompts-tab row, the same text the main render used.
+// is, whose rig runs it and what it aims at; under it three boxes, Sampling (steps,
+// CFG, sampler, scheduler, the step window), Strength (scale and denoise as bars,
+// the repeat and its per-round lists) and Prompt (the stack, references, a LoRA of
+// its own, the words). Anything left at "rig" inherits the rig's own settings, so
+// the Models tab stays the one place a model's numbers live. An empty prompt uses
+// the rig's own Prompts-tab row, the same text the main render used.
 //
 // Widget lifecycle follows the house pattern: the native config widget is HIDDEN,
 // never removed, and stays the value holder; the panel reads and writes it.
@@ -110,6 +111,18 @@ css.textContent = `
   background:transparent;border:none;min-width:60px}
 .rn-adv .tcard.off input.name{text-decoration:line-through;color:#f87171}
 .rn-adv .tcard.off{background:#17191d}
+/* The three groups of a pass card. A darker ground and a small caption at the
+   front, so the eye lands on "Sampling" before it lands on six number boxes. */
+.rn-adv .grp{display:flex;flex-direction:column;gap:4px;background:#15171b;
+  border:1px solid #262a30;border-radius:5px;padding:4px 6px}
+.rn-adv .gt{font-size:10px;font-weight:700;letter-spacing:.08em;color:#9aa3ae;
+  min-width:58px;flex:none;text-transform:uppercase}
+.rn-adv .bar{display:inline-flex;align-items:center;gap:4px;flex:1;min-width:120px}
+.rn-adv .bar input[type=range]{flex:1;min-width:70px;height:18px;margin:0;padding:0}
+.rn-adv .bar .v{width:42px;text-align:right;font-variant-numeric:tabular-nums;
+  color:#c8ccd2;font-size:11px}
+.rn-adv .rounds{gap:8px}
+.rn-adv .round{display:inline-flex;align-items:center;gap:4px;flex:1;min-width:150px}
 `;
 
 const menuCss = document.createElement("style");
@@ -153,35 +166,42 @@ function wireProgress() {
 
 // samplers, schedulers and the SAM checkpoints, off the live definitions so the
 // lists can never drift from what the install can actually run
+//
+// A combo's choices come in two shapes. A V1 node lists them in place; a comfy_api
+// V3 node (Easy-Sam3 is one) says "COMBO" and keeps the list under options. Reading
+// only the first shape is why the SAM picker showed nothing but its placeholder.
+const optionsOf = (spec) => {
+  if (!Array.isArray(spec)) return [];
+  if (Array.isArray(spec[0])) return spec[0];
+  if (spec[0] === "COMBO" && Array.isArray(spec[1]?.options)) return spec[1].options;
+  return [];
+};
 let LISTS = null;
 async function fetchLists() {
   if (LISTS) return LISTS;
-  const pull = async (nodeName, field) => {
+  const inputs = async (nodeName) => {
     try {
       const r = await api.fetchApi(`/object_info/${encodeURIComponent(nodeName)}`);
       const d = await r.json();
-      const v = d?.[nodeName]?.input?.required?.[field]?.[0];
-      return Array.isArray(v) ? v : [];
-    } catch (e) { return []; }
+      const it = d?.[nodeName]?.input || {};
+      return { ...(it.optional || {}), ...(it.required || {}) };
+    } catch (e) { return {}; }
   };
-  const samLoader = "easy sam3ModelLoader";
-  let samModels = [];
-  try {
-    const r = await api.fetchApi(`/object_info/${encodeURIComponent(samLoader)}`);
-    const d = await r.json();
-    const req = d?.[samLoader]?.input?.required || {};
-    for (const spec of Object.values(req)) {
-      if (Array.isArray(spec?.[0]) && spec[0].some((x) => /sam/i.test(String(x)))) {
-        samModels = spec[0];
-        break;
-      }
+  const pull = async (nodeName, field) => optionsOf((await inputs(nodeName))[field]);
+  const sam = await inputs("easy sam3ModelLoader");   // absent: the picker says so
+  let samModels = optionsOf(sam.model);
+  if (!samModels.length) {
+    for (const spec of Object.values(sam)) {
+      const opts = optionsOf(spec);
+      if (opts.some((x) => /sam/i.test(String(x)))) { samModels = opts; break; }
     }
-  } catch (e) { /* Easy-Sam3 absent: the picker says so */ }
+  }
   LISTS = {
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
     loras: await pull("LoraLoaderModelOnly", "lora_name"),
     samModels,
+    samPrecisions: optionsOf(sam.precision),
   };
   return LISTS;
 }
@@ -352,6 +372,8 @@ function readCfg(node) {
   if (typeof d.seed !== "number") d.seed = 0;
   if (typeof d.seed_random !== "boolean") d.seed_random = true;
   if (typeof d.taps !== "boolean") d.taps = false;
+  if (typeof d.sam_model !== "string") d.sam_model = "";
+  if (typeof d.sam_precision !== "string") d.sam_precision = "";
   return d;
 }
 
@@ -411,7 +433,8 @@ function buildPanel(node) {
 
   const render = () => {
     const d = readCfg(node);
-    const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [] };
+    const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [],
+                         samPrecisions: [] };
     wrap.replaceChildren();
     const cap = (t) => {
       const c = document.createElement("div");
@@ -470,19 +493,7 @@ function buildPanel(node) {
         render();
       };
       prow.append(lab("Preset"), psel, nameInp, saveB);
-      // TAPS: record the input, every pass and the output into the RedNode
-      // Stage View strip - a chain read step by step, no tap nodes wired.
-      // Off by default (the house rule); the strip is the Stage View node.
-      const tapB = document.createElement("button");
-      tapB.className = "tog" + (d.taps ? " on" : "");
-      tapB.style.marginLeft = "auto";
-      tapB.textContent = "◉ Taps";
-      tapB.title = "Record this run into RedNode Stage View: the input as it "
-                 + "arrives, a frame after every pass (every repeat round too) "
-                 + "and the output. Drop a Stage View node anywhere to watch "
-                 + "the strip; nothing to wire.";
-      tapB.onclick = () => { d.taps = !d.taps; writeCfg(node, d); render(); };
-      prow.append(tapB);
+
       const cur = node._rnAdvPreset || "";
       if (cur && !cur.startsWith("★ ") && (SAVED || {})[cur]) {
         const delB = document.createElement("button");
@@ -498,8 +509,146 @@ function buildPanel(node) {
       }
       wrap.appendChild(prow);
     }
+    // THE DETAILER'S OWN SAM: which checkpoint segments, and at what precision,
+    // for every detailer pass left at (node's). Here rather than on the Models
+    // tab because SAM is a detailer concern, not a rig's: the rig paints, SAM
+    // only says where.
+    {
+      const srow = document.createElement("div");
+      srow.className = "line";
+      srow.append(
+        lab("SAM file"),
+        sel(L.samModels, d.sam_model,
+            L.samModels.length
+              ? "Which SAM3 checkpoint segments the targets, for every detailer "
+                + "pass left at (node's). The files in models/sam3. (first file) "
+                + "takes whichever the loader lists first."
+              : "ComfyUI-Easy-Sam3 is not installed, or models/sam3 holds no "
+                + "checkpoint, so there is nothing to pick yet.",
+            (v) => { d.sam_model = v; writeCfg(node, d); }, "(first file)"),
+        lab("Precision"),
+        sel(L.samPrecisions, d.sam_precision,
+            "The precision SAM3 loads at. fp16 or bf16 halves its memory on the "
+            + "card; (loader default) is the pack's own choice, fp32 today.",
+            (v) => { d.sam_precision = v; writeCfg(node, d); }, "(loader default)"));
+      // TAPS: record the input, every pass and the output into the RedNode
+      // Stage View strip - a chain read step by step, no tap nodes wired.
+      // Off by default (the house rule); the strip is the Stage View node.
+      const tapB = document.createElement("button");
+      tapB.className = "tog" + (d.taps ? " on" : "");
+      tapB.style.marginLeft = "auto";
+      tapB.textContent = "◉ Taps";
+      tapB.title = "Record this run into RedNode Stage View: the input as it "
+                 + "arrives, a frame after every pass (every repeat round too) "
+                 + "and the output. Drop a Stage View node anywhere to watch "
+                 + "the strip; nothing to wire.";
+      tapB.onclick = () => { d.taps = !d.taps; writeCfg(node, d); render(); };
+      srow.append(tapB);
+      wrap.appendChild(srow);
+    }
     cap("START · the workspace's image arrives");
     const rigs = rigNames();
+    const fmt2 = (v) => Number(v).toFixed(2);
+    const fmtX = (v) => Number(v).toFixed(2) + "\u00d7";
+    const snap = (v, min, max, step) => {
+      const n = Math.max(min, Math.min(max, Math.round(v / step) * step));
+      return Number(n.toFixed(4));
+    };
+    // a titled box inside the card: the caption leads its first line
+    const group = (title) => {
+      const box = document.createElement("div");
+      box.className = "grp";
+      const line = document.createElement("div");
+      line.className = "line";
+      const t = document.createElement("span");
+      t.className = "gt";
+      t.textContent = title;
+      line.appendChild(t);
+      box.appendChild(line);
+      return { box, line };
+    };
+    // a drag bar with its number beside it: the dials you ride while tuning
+    // read at a glance where a box does not
+    const bar = (value, min, max, step, fmt, title, accent, onpick) => {
+      const box = document.createElement("span");
+      box.className = "bar";
+      const r = document.createElement("input");
+      r.type = "range";
+      r.min = String(min); r.max = String(max); r.step = String(step);
+      r.value = String(value);
+      r.title = title;
+      r.style.accentColor = accent;
+      const val = document.createElement("span");
+      val.className = "k v";
+      val.textContent = fmt(value);
+      r.addEventListener("input", () => { val.textContent = fmt(parseFloat(r.value)); });
+      r.addEventListener("change", () => {
+        const v = parseFloat(r.value);
+        if (Number.isFinite(v)) onpick(snap(v, min, max, step));
+      });
+      box.append(r, val);
+      return box;
+    };
+    // One value per repeat round, the Img2Img PASS rule. With nothing stored
+    // the list opens on the dial; a stored list repeats its last value when the
+    // count is raised, so a number already chosen never moves. Same two rules as
+    // _pass_list in workspace.py, which is what the server reads.
+    const roundList = (s, key, dv, min, max) => {
+      const n = Math.max(1, Math.min(10, Math.round(Number(s.repeat) || 1)));
+      const raw = Array.isArray(s[key]) ? s[key] : [];
+      const fit = (v) => Math.max(min, Math.min(max, v));
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        if (!raw.length) { out.push(fit(dv)); continue; }
+        const v = Number(i < raw.length ? raw[i] : raw[raw.length - 1]);
+        out.push(Number.isFinite(v) ? fit(v) : fit(dv));
+      }
+      return out;
+    };
+    // the switch for the Repeat line, and the bar rows it opens: one per round,
+    // with a Ramp that spaces them evenly between the first and the last
+    const perRound = (s, o, writeAndRender) => {
+      const on = !!s[o.flag];
+      const sw = document.createElement("button");
+      sw.className = "tog" + (on ? " on" : "");
+      sw.textContent = o.label;
+      sw.title = on ? o.onTitle : o.offTitle;
+      sw.onclick = () => {
+        s[o.flag] = !on;
+        if (!on) s[o.key] = roundList(s, o.key, o.dv, o.min, o.max);
+        writeAndRender();
+      };
+      const rows = [];
+      if (on) {
+        const list = roundList(s, o.key, o.dv, o.min, o.max);
+        s[o.key] = list.slice();           // the stored list is always count-long
+        const line = document.createElement("div");
+        line.className = "line rounds";
+        list.forEach((v, i) => {
+          const cell = document.createElement("span");
+          cell.className = "round";
+          cell.append(lab(`${o.short} ${i + 1}`),
+                      bar(v, o.min, o.max, o.step, o.fmt, o.barTitle, o.accent,
+                          (nv) => { s[o.key][i] = nv; writeCfg(node, d); }));
+          line.appendChild(cell);
+        });
+        const ramp = document.createElement("button");
+        ramp.textContent = "Ramp";
+        ramp.title = o.rampTitle;
+        ramp.onclick = () => {
+          // read the stored list, not the one this row was built from: the bars
+          // above have been writing into it since
+          const cur = roundList(s, o.key, o.dv, o.min, o.max);
+          const a = cur[0], z = cur[cur.length - 1];
+          s[o.key] = cur.map((_, i) =>
+            snap(a + (z - a) * (i / Math.max(1, cur.length - 1)), o.min, o.max, o.step));
+          writeAndRender();
+        };
+        line.appendChild(ramp);
+        rows.push(line);
+      }
+      return { sw, rows };
+    };
     // THE DROP TARGET: a dragged card lands on whichever card you let go over.
     // Fold flags ride along by being remapped with the same move, or a folded
     // card would unfold its neighbour every time it travelled past one.
@@ -583,6 +732,17 @@ function buildPanel(node) {
         nameI.title = "Name this group. Right-click for colour, duplicate and "
                     + "delete.";
         nameI.onchange = () => { s.name = nameI.value.trim(); writeCfg(node, d); };
+        const dupT = document.createElement("button");
+        dupT.textContent = "\u29c9";
+        dupT.title = "Duplicate this group, title and passes, right after it.";
+        dupT.onclick = () => {
+          let end = i + 1;
+          while (end < d.stages.length && d.stages[end].type !== "title") end++;
+          const copy = d.stages.slice(i, end).map((x) => JSON.parse(JSON.stringify(x)));
+          d.stages.splice(end, 0, ...copy);
+          shiftFolds(node, end, copy.length);
+          writeAndRender();
+        };
         const delT = document.createElement("button");
         delT.textContent = "✕";
         delT.title = "Remove this title; its passes stay.";
@@ -591,7 +751,7 @@ function buildPanel(node) {
           shiftFolds(node, i, -1);
           writeAndRender();
         };
-        t.append(caret, mkGrip(i, t), eyeT, nameI, delT);
+        t.append(caret, mkGrip(i, t), eyeT, nameI, dupT, delT);
         wrap.appendChild(t);
         return;
       }
@@ -638,7 +798,8 @@ function buildPanel(node) {
           + (s.loras === false ? " \u00b7 raw" : (s.lora_set ? " \u00b7 " + s.lora_set : ""))
           + ((s.use_subject || s.use_scene || s.use_moodboard || s.use_picture) ? " \u00b7 refs" : "")
           + (s.lora && s.lora !== "None" ? " \u00b7 " + s.lora.replace(/\.safetensors$/i, "") : "")
-          + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat : "")
+          + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat
+             + ((s.pass_custom || s.scale_custom) ? " per round" : "") : "")
           + (s.crop_res ? " \u00b7 " + s.crop_res + "px" : "");
         top.appendChild(sum);
       } else {
@@ -654,13 +815,13 @@ function buildPanel(node) {
           top.append(lab("SAM"),
                      sel(L.samModels, s.sam_model,
                          L.samModels.length
-                           ? "Which SAM checkpoint segments. Loader default when "
-                             + "unset."
+                           ? "A SAM checkpoint for this pass only. (node's) "
+                             + "follows the SAM file chosen at the top."
                            : "ComfyUI-Easy-Sam3 is not installed, so there is "
                              + "nothing to pick; this pass will say so and pass "
                              + "the image through.",
                          (v) => { s.sam_model = v; writeCfg(node, d); },
-                         "(loader default)"));
+                         "(node's)"));
           top.append(lab("Res"),
                      sel(["512", "768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",
@@ -691,50 +852,35 @@ function buildPanel(node) {
       }
       const spacer = document.createElement("span");
       spacer.className = "grow";
-      if (!isFolded) {
-        // iteration on one pass, the Paint tab's Passes: N rounds over its own
-        // result inside one queue, so "run it twice" stops meaning two cards
-        const rep = document.createElement("input");
-        rep.type = "number";
-        rep.min = 1; rep.max = 10; rep.step = 1;
-        rep.className = "rep" + ((s.repeat || 1) > 1 ? " on" : "");
-        rep.value = String(s.repeat || 1);
-        rep.title = "Run this pass over its own result this many times, a fresh "
-                  + "seed each round; only the last picture moves on. A sampler "
-                  + "pass's scale applies on the first round only, so the size "
-                  + "does not compound. 1 is a single run, as always.";
-        rep.onchange = () => {
-          s.repeat = Math.max(1, Math.min(10, Math.round(Number(rep.value) || 1)));
-          writeCfg(node, d);
-          render();
-        };
-        rep.addEventListener("wheel", () => rep.blur(), { passive: true });
-        top.append(lab("Repeat"), rep);
-      }
+      // DUPLICATE, in the open: the fastest way to build a chain is to copy the
+      // pass just tuned and nudge one number. The right-click menu has it too,
+      // but a button is found and a menu has to be remembered.
+      const dup = document.createElement("button");
+      dup.textContent = "\u29c9";
+      dup.title = "Duplicate this pass, placed right after it with every setting "
+                + "copied. A chain of near-identical passes is one click each.";
+      dup.onclick = () => {
+        d.stages.splice(i + 1, 0, JSON.parse(JSON.stringify(s)));
+        shiftFolds(node, i + 1, 1);
+        writeAndRender();
+      };
       const del = document.createElement("button");
       del.textContent = "\u2715";
       del.title = "Remove this pass.";
       del.onclick = () => {
         d.stages.splice(i, 1);
-        const folds = node.properties?.rn_adv_folds;
-        if (folds) {
-          const next = {};
-          Object.keys(folds).forEach((k) => {
-            const n2 = parseInt(k, 10);
-            if (folds[k] && n2 !== i) next[n2 > i ? n2 - 1 : n2] = true;
-          });
-          node.properties.rn_adv_folds = next;
-        }
-        writeCfg(node, d);
-        render();
+        shiftFolds(node, i, -1);
+        writeAndRender();
       };
-      top.append(spacer, del);
+      top.append(spacer, dup, del);
       card.appendChild(top);
 
       if (!isFolded) {
-        const mid = document.createElement("div");
-        mid.className = "line";
-        mid.append(
+        const isDet = s.type === "detailer";
+        // SAMPLING: the numbers a KSampler wants plus the step window. Empty
+        // inherits the rig's, so the Models tab stays where a model's numbers live.
+        const smp = group("Sampling");
+        smp.line.append(
           lab("Steps"),
           num(s.steps || "", 1, "Steps for this pass. 0 or empty inherits the "
               + "rig's: detailer passes take its Detailer steps, sampler passes "
@@ -754,50 +900,95 @@ function buildPanel(node) {
               (v) => { s.sampler = v; writeCfg(node, d); }, "(rig)"),
           lab("Sched"),
           sel(L.schedulers, s.scheduler, "Scheduler for this pass; (rig) inherits.",
-              (v) => { s.scheduler = v; writeCfg(node, d); }, "(rig)"),
-          lab("Scale"),
-          num(s.scale ?? 1.0, 0.05, "Resize ratio for this pass. 1 is the picture "
-              + "as it arrives. On a sampler pass the new size STICKS, so 0.5 then "
-              + "2.0 across two passes is the shrink-and-regrow chain that invents "
-              + "detail. On a detailer it renders the crop bigger and puts it back "
-              + "at its own size.",
-              (v) => { s.scale = Math.max(0.25, Math.min(4, v)); writeCfg(node, d); }),
-          lab("Denoise"),
-          (() => {
-            // a drag bar: denoise is the dial you ride while
-            // tuning a pass, and a slider reads at a glance where a box does not
-            const box = document.createElement("span");
-            box.style.cssText = "display:inline-flex;align-items:center;gap:4px;"
-                              + "flex:1;min-width:110px";
-            const r = document.createElement("input");
-            r.type = "range";
-            r.min = "0";
-            r.max = "1";
-            r.step = "0.01";
-            r.style.cssText = "flex:1;min-width:70px";
-            const dv = s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3);
-            r.value = String(dv);
-            r.title = "Denoise for this pass.";
-            const val = document.createElement("span");
-            val.className = "k";
-            val.style.width = "30px";
-            val.textContent = Number(dv).toFixed(2);
-            r.addEventListener("input", () => {
-              val.textContent = Number(r.value).toFixed(2);
-            });
-            r.addEventListener("change", () => {
-              s.denoise = Math.max(0, Math.min(1, parseFloat(r.value) || 0));
-              writeCfg(node, d);
-            });
-            box.append(r, val);
-            return box;
-          })());
-        card.appendChild(mid);
+              (v) => { s.scheduler = v; writeCfg(node, d); }, "(rig)"));
+        card.appendChild(smp.box);
 
-        const bottom = document.createElement("div");
-        bottom.className = "line";
-        const tog = (label, key, dv, tip) => {
-          const cur = s[key] === undefined ? dv : !!s[key];
+        // STRENGTH: the two dials ridden while tuning, both bars so the card
+        // reads at a glance, then the repeat and what each round of it does.
+        const str = group("Strength");
+        const dv = s.denoise ?? (isDet ? 0.15 : 0.3);
+        const sv = s.scale ?? 1.0;
+        const scaleMin = isDet ? 1 : 0.25;
+        str.line.append(
+          lab("Scale"),
+          bar(sv, scaleMin, 4, 0.05, fmtX,
+              isDet ? "Render the crop this much bigger, then put it back at its own "
+                      + "size: more pixels spent on the face, no change to the frame."
+                    : "Resize ratio for this pass. 1 is the picture as it arrives. The "
+                      + "new size STICKS, so 0.5 then 2.0 across two passes is the "
+                      + "shrink-and-regrow chain that invents detail.",
+              "#4a8fe0", (v) => { s.scale = v; writeCfg(node, d); }),
+          lab("Denoise"),
+          bar(dv, 0, 1, 0.01, fmt2, "Denoise for this pass.", "#b8283c",
+              (v) => { s.denoise = v; writeCfg(node, d); }));
+        const rrow = document.createElement("div");
+        rrow.className = "line";
+        // iteration on one pass, the Paint tab's Passes: N rounds over its own
+        // result inside one queue, so "run it twice" stops meaning two cards
+        const rep = document.createElement("input");
+        rep.type = "number";
+        rep.min = 1; rep.max = 10; rep.step = 1;
+        rep.className = "rep" + ((s.repeat || 1) > 1 ? " on" : "");
+        rep.value = String(s.repeat || 1);
+        rep.title = "Run this pass over its own result this many times, a fresh "
+                  + "seed each round; only the last picture moves on. Above 1, the "
+                  + "switches beside it give every round its own denoise or scale. "
+                  + "1 is a single run, as always.";
+        rep.onchange = () => {
+          s.repeat = Math.max(1, Math.min(10, Math.round(Number(rep.value) || 1)));
+          writeAndRender();
+        };
+        rep.addEventListener("wheel", () => rep.blur(), { passive: true });
+        rrow.append(lab("Repeat"), rep);
+        const reps = Math.max(1, Math.round(Number(s.repeat) || 1));
+        const extra = [];
+        if (reps > 1) {
+          const den = perRound(s, {
+            key: "pass_denoise", flag: "pass_custom", dv, min: 0, max: 1, step: 0.01,
+            accent: "#b8283c", fmt: fmt2, label: "Denoise per round", short: "Denoise",
+            barTitle: "What this round repaints. Each round starts from the picture "
+                    + "the one before it made, so a strong first round changes it and "
+                    + "weaker ones settle it.",
+            onTitle: "On: every round runs its own denoise, in order. Click to put "
+                   + "them all back on the single bar.",
+            offTitle: "Off: every round runs the one denoise above. Click to set a "
+                    + "denoise per round, which is what a strong first round followed "
+                    + "by weaker ones needs.",
+            rampTitle: "Space the rounds evenly between the first bar and the last, "
+                     + "so a run can fall away from 0.6 to 0.2 without setting each "
+                     + "one by hand.",
+          }, writeAndRender);
+          const scl = perRound(s, {
+            key: "pass_scale", flag: "scale_custom", dv: sv, min: scaleMin, max: 4,
+            step: 0.05, accent: "#4a8fe0", fmt: fmtX, label: "Scale per round",
+            short: "Scale",
+            barTitle: isDet
+              ? "How much bigger this round renders the crop."
+              : "This round's size against the picture as it arrived. 1.0 then 1.5 "
+                + "then 2.0 drafts small and rebuilds larger each round, a hi-res "
+                + "chain inside one pass.",
+            onTitle: "On: every round has its own scale. Click to put them all back "
+                   + "on the single bar.",
+            offTitle: isDet
+              ? "Off: every round renders the crop at the one scale above. Click "
+                + "to set a scale per round."
+              : "Off: the first round scales and the rest refine at the size it "
+                + "landed on. Click to set a size per round, which is how one pass "
+                + "drafts small and regrows.",
+            rampTitle: "Space the rounds evenly between the first bar and the last.",
+          }, writeAndRender);
+          rrow.append(den.sw, scl.sw);
+          extra.push(...den.rows, ...scl.rows);
+        }
+        str.box.append(rrow, ...extra);
+        card.appendChild(str.box);
+
+        // PROMPT: what the pass is told. The stack and its set, the Krea 2
+        // references, a LoRA of its own, and the words.
+        const prm = group("Prompt");
+        const bottom = prm.line;
+        const tog = (label, key, dv2, tip) => {
+          const cur = s[key] === undefined ? dv2 : !!s[key];
           const b = document.createElement("button");
           b.className = "tog" + (cur ? " on" : "");
           b.textContent = label;
@@ -873,7 +1064,7 @@ function buildPanel(node) {
         pr.value = s.prompt || "";
         pr.onchange = () => { s.prompt = pr.value; writeCfg(node, d); };
         bottom.appendChild(pr);
-        card.appendChild(bottom);
+        card.appendChild(prm.box);
       }
       wrap.appendChild(card);
     });
@@ -897,8 +1088,9 @@ function buildPanel(node) {
     const hint = document.createElement("div");
     hint.className = "hint";
     hint.textContent = d.stages.length
-      ? "Top to bottom is the run order. Steps, CFG, sampler and scheduler left "
-        + "empty inherit the rig's own settings from the Models tab."
+      ? "Top to bottom is the run order. Sampling boxes left empty inherit the "
+        + "rig's own settings from the Models tab. \u29c9 copies a pass; right-click "
+        + "a card for colours and groups."
       : "No passes yet: the image goes straight through. Add a sampler refine or a "
         + "face detailer, as many as you want, in any order.";
     wrap.appendChild(hint);

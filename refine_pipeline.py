@@ -126,6 +126,20 @@ def parse_pipeline(config_json):
             "repeat": _num("repeat", 1, 10, 1, int),
             "color": str(s.get("color") or ""),      # panel cosmetics, kept
         })
+        st = stages[-1]
+        # A DENOISE PER ROUND and A SCALE PER ROUND, the Img2Img PASS rule on a
+        # repeat. Off, each list is the single dial repeated, so the loop reads
+        # one field either way; on, a short list repeats its last value, so a
+        # raised count never moves a number already chosen. round_stage says
+        # what the scale list means on each kind of pass.
+        st["pass_custom"], st["pass_denoise"] = _ws._pass_list(
+            s.get("pass_denoise"), s.get("pass_custom"), st["denoise"],
+            0.0, 1.0, st["repeat"])
+        st["scale_custom"], st["pass_scale"] = _ws._pass_list(
+            s.get("pass_scale"), s.get("scale_custom"), st["scale"],
+            0.25, 4.0, st["repeat"])
+        if st["scale_custom"]:
+            st["scale"] = st["pass_scale"][0]
     try:
         seed = int(data.get("seed", 0))
     except (TypeError, ValueError):
@@ -136,7 +150,40 @@ def parse_pipeline(config_json):
             # record the input, every pass and the output into the RedNode
             # Stage View strip, so a chain can be read step by step without
             # wiring taps. Off by default, per the house rule.
-            "taps": bool(data.get("taps"))}
+            "taps": bool(data.get("taps")),
+            # the node's own SAM: the checkpoint every detailer pass segments
+            # with unless it names its own, and the precision it loads at. ""
+            # is the loader's first file and the loader's own precision.
+            "sam_model": str(data.get("sam_model") or ""),
+            "sam_precision": str(data.get("sam_precision") or "")}
+
+
+def round_stage(s, r):
+    """The stage as round `r` of its repeat runs it.
+
+    Denoise comes off the per-round list when that is on. Scale is the subtle
+    one. A sampler pass's scale STICKS (whatever runs next sees the new size),
+    so with the list on each round is a size against the picture as it arrived
+    and the resize applied is the ratio to the round before; with it off the
+    first round scales and the rest refine at the size it landed on, so 1.5x
+    three times can never quietly become 3.4x. A detailer's scale only renders
+    the crop bigger and never sticks, so each round simply takes its own.
+    """
+    out = dict(s)
+    if s.get("pass_custom") and s.get("pass_denoise"):
+        lst = s["pass_denoise"]
+        out["denoise"] = float(lst[min(r, len(lst) - 1)])
+    if s.get("scale_custom") and s.get("pass_scale"):
+        lst = s["pass_scale"]
+        cur = float(lst[min(r, len(lst) - 1)])
+        if s["type"] == "sampler" and r > 0:
+            prev = float(lst[min(r - 1, len(lst) - 1)])
+            out["scale"] = cur / prev if prev > 1e-6 else 1.0
+        else:
+            out["scale"] = cur
+    elif s["type"] == "sampler" and r > 0:
+        out["scale"] = 1.0
+    return out
 
 
 def _rig_settings(ws_cfg, name):
@@ -202,7 +249,7 @@ def _defaults_for(cls):
 _SAM3_CACHE = {"key": None, "model": None}
 
 
-def _sam3_mask(image, target, threshold, sam_model=""):
+def _sam3_mask(image, target, threshold, sam_model="", precision=""):
     """A [1,H,W] mask for `target`, through ComfyUI-Easy-Sam3, or None with a reason.
 
     The Easy-Sam3 nodes are called the way the graph calls them, through their own
@@ -210,7 +257,8 @@ def _sam3_mask(image, target, threshold, sam_model=""):
     reimplementing it. `sam_model` overrides the loader's checkpoint choice when
     set. Everything is inside one try because an optional dependency may be absent,
     half-installed or reshaped, and every one of those must come back as words
-    rather than a dead queue.
+    rather than a dead queue. `precision` is the loader's own choice (fp16,
+    bf16, fp32) when set; its default is fp32, which is twice the memory.
     """
     try:
         loader_cls = _core.NODE_CLASS_MAPPINGS.get("easy sam3ModelLoader")
@@ -225,6 +273,8 @@ def _sam3_mask(image, target, threshold, sam_model=""):
                 if key in _all_inputs(loader_cls):
                     lkw[key] = sam_model
                     break
+        if precision and "precision" in _all_inputs(loader_cls):
+            lkw["precision"] = precision
         # a default checkpoint name that is not actually in the loader's list
         # (folder renamed, file updated) raises before anything segments; the
         # first real choice beats a stale default
@@ -383,6 +433,8 @@ class RedNodeStudioDetailer:
         for i, (card_idx, s) in enumerate(stages, 1):
             self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
             tag = "%d/%d %s" % (i, len(stages), s["type"])
+            s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
+                     sam_precision=cfg["sam_precision"])
             # AN ENGINE RIG (a handled kind, the personal NovelAI rig) takes
             # its own road: the handler renders, nothing loads
             rigd = _rig_settings(ws_cfg, s["rig"])
@@ -514,23 +566,24 @@ class RedNodeStudioDetailer:
             why = None
             for r in range(max(1, reps)):
                 rseed = seed + i + r * 131
+                sr = round_stage(s, r)          # this round's denoise and scale
                 if s["type"] == "sampler":
                     if use_picture:
-                        pic = self._resize(out, s["scale"])
+                        pic = self._resize(out, sr["scale"])
                         if s.get("crop_res"):
                             pic = self._resize(pic, s["crop_res"] / max(pic.shape[1], pic.shape[2]))
                         pos, neg = _encode(pic)
-                    out = self._sample(out, model, pos, neg, vae, s, rseed,
+                    out = self._sample(out, model, pos, neg, vae, sr, rseed,
                                        steps, cfg_v, sampler, scheduler, start,
                                        end)
                     line = ("%s: rig %r, %d steps%s, cfg %.1f, %s/%s, denoise "
                             "%.2f" % (tag, rig_name, steps, window, cfg_v,
-                                      sampler, scheduler, s["denoise"]))
-                    if abs(s["scale"] - 1.0) >= 1e-3:
+                                      sampler, scheduler, sr["denoise"]))
+                    if abs(sr["scale"] - 1.0) >= 1e-3:
                         line += ", scale %.2f -> %d x %d" % (
-                            s["scale"], out.shape[2], out.shape[1])
+                            sr["scale"], out.shape[2], out.shape[1])
                 else:
-                    out, why = self._detail(out, model, pos, neg, vae, s, rseed,
+                    out, why = self._detail(out, model, pos, neg, vae, sr, rseed,
                                             steps, cfg_v, sampler, scheduler,
                                             start, end,
                                             encode_for=_encode if use_picture else None)
@@ -538,7 +591,7 @@ class RedNodeStudioDetailer:
                         tag, s["target"], rig_name,
                         why or ("%d steps%s, %s/%s, denoise %.2f"
                                 % (steps, window, sampler, scheduler,
-                                   s["denoise"])))
+                                   sr["denoise"])))
                 if reps > 1:
                     line += ", repeat %d of %d" % (r + 1, reps)
                 print("[RedNode Detailer] " + line, flush=True)
@@ -549,12 +602,6 @@ class RedNodeStudioDetailer:
                                           " x%d" % (r + 1) if reps > 1 else ""))
                 if why:
                     break
-                # a sampler pass's scale must not compound across repeats: 1.5x
-                # three times is 3.4x and a VRAM surprise. The first round
-                # scales, the rest refine at the size it landed on.
-                if r == 0 and reps > 1 and s["type"] == "sampler" \
-                        and abs(s["scale"] - 1.0) >= 1e-3:
-                    s = dict(s, scale=1.0)
         if tap:
             tap(out, "Detailer out")
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
@@ -574,8 +621,8 @@ class RedNodeStudioDetailer:
     def _resize(img, scale):
         if abs(scale - 1.0) < 1e-3:
             return img
-        h = max(64, int(img.shape[1] * scale) // 8 * 8)
-        w = max(64, int(img.shape[2] * scale) // 8 * 8)
+        h = max(64, int(round(img.shape[1] * scale)) // 8 * 8)
+        w = max(64, int(round(img.shape[2] * scale)) // 8 * 8)
         return F.interpolate(img.permute(0, 3, 1, 2), size=(h, w),
                              mode="bilinear",
                              align_corners=False).permute(0, 2, 3, 1)
@@ -610,7 +657,8 @@ class RedNodeStudioDetailer:
     def _locate(self, image, s):
         """The target's mask and padded box, or a why-string: shared by the
         model path and the engine-rig path, so both aim identically."""
-        mask, why = _sam3_mask(image, s["target"], s["threshold"], s["sam_model"])
+        mask, why = _sam3_mask(image, s["target"], s["threshold"], s["sam_model"],
+                               s.get("sam_precision", ""))
         if mask is None:
             return None, None, why + "; passed through"
         h, w = image.shape[1], image.shape[2]
@@ -700,14 +748,15 @@ class RedNodeStudioDetailer:
         reps = int(s.get("repeat", 1))
         for r in range(max(1, reps)):
             rseed = seed + r * 131
+            sr = round_stage(s, r)
             why = None
             try:
                 if s["type"] == "sampler":
-                    src = self._resize(out, s["scale"])
+                    src = self._resize(out, sr["scale"])
                     img = handler("render", rig=eff, cfg=ws_cfg,
                                   prompt_text=text,
                                   negative_text=s["negative"], seed=rseed,
-                                  source_image=src, denoise=s["denoise"])
+                                  source_image=src, denoise=sr["denoise"])
                     if img is None:
                         why = "the engine returned nothing"
                     else:
@@ -721,7 +770,7 @@ class RedNodeStudioDetailer:
                                       prompt_text=text,
                                       negative_text=s["negative"],
                                       seed=rseed, source_image=crop,
-                                      denoise=s["denoise"])
+                                      denoise=sr["denoise"])
                         if img is None:
                             why = "the engine returned nothing"
                         else:
@@ -739,7 +788,7 @@ class RedNodeStudioDetailer:
                 tag, rigd["kind"], rigd.get("name") or s["rig"],
                 why or ("%s, denoise %.2f"
                         % (s["target"] if s["type"] == "detailer"
-                           else "whole frame", s["denoise"])))
+                           else "whole frame", sr["denoise"])))
             if reps > 1:
                 line += ", repeat %d of %d" % (r + 1, reps)
             lines.append(line)
@@ -748,9 +797,6 @@ class RedNodeStudioDetailer:
                                       " x%d" % (r + 1) if reps > 1 else ""))
             if why:
                 break
-            if r == 0 and reps > 1 and s["type"] == "sampler" \
-                    and abs(s["scale"] - 1.0) >= 1e-3:
-                s = dict(s, scale=1.0)
         return out, lines
 
 
