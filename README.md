@@ -6,7 +6,7 @@ post-processing in one pack.
 
 ![Painting a region in the panel, with the result beside it](images/paint.webp)
 
-**52 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**59 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -67,6 +67,11 @@ the workspace.
 ![Previous runs, still there](images/review.webp)
 
 **A preview that remembers.** Browse previous runs instead of losing them to the next queue.
+
+**Watch the picture form.** RedNode Live Preview shows every step of a render as it happens, decoded
+by the small VAE, with a bar and the pass it belongs to, then the finished frame. Wire the
+workspace's image output in, or the Detailer's to watch its passes. The same frames appear over the
+Paint tab's result pane while a paint run samples.
 
 ![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
 
@@ -212,7 +217,7 @@ are unsure about.
 |---|---|
 | RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. Start here. |
 | RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round, pick which Prompts-tab row it reads, and a SeedVR2 upscale pass (720p to 4K) sits in the same list; the SAM file and precision are picked on the node. |
-| RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. |
+| RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. The Latent tab runs refine passes on a blank canvas, the Img2Img tab's RE-ANGLE can stop after the re-shot so the rig stays out of VRAM, a rig can name a second sampler pair for image to image runs, and a camera path renders one image per shot on the built-in sampler and on an engine rig. |
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
 
 RedNode Studio Preset Save and Preset Load still ship and still work, but the Workspace covers
@@ -251,7 +256,7 @@ what they did. Treat them as legacy.
 | RedNode Paint Render | Renders only the region you painted, then composites it back. |
 | RedNode Paint Out / Paint In | Hand the painted region to any other renderer, then composite the result back. |
 | RedNode Refine Crop / Refine Paste | Cut a masked region out for refinement by any sampler, then put it back. |
-| RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view. |
+| RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view where the wheel zooms and a drag pans. A run that made several pictures shows them in a column beside the big one; click to view any of them. |
 | RedNode Live Preview | Shows the picture forming step by step while the node wired into it renders, then the finished frame. The workspace and the Detailer decode every step with the small VAE (lighttaew2_1 in models/vae_approx for Krea 2) and stream it here, whatever ComfyUI's own preview setting is. |
 | RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
 | RedNode Stage Tap / Stage View | Photograph any point in the graph, then compare stages with a wipe. |
@@ -285,7 +290,7 @@ what they did. Treat them as legacy.
 | Node | What it does |
 |---|---|
 | RedNode Post Process | The Workspace Post tab's grading chain. Image in, graded image out. |
-| RedNode Post FX (standalone) | The same chain with its own panel, for any image, no workspace needed. |
+| RedNode Post FX (standalone) | The same chain with its own panel, for any image, no workspace needed. Depth of field and haze make their own depth map; the Depth card on the panel picks the estimator, the Depth Anything V2 checkpoint and the working resolution. |
 
 ### Moodboard and identity
 
