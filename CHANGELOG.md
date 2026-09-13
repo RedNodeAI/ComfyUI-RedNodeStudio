@@ -59,6 +59,21 @@ things that only made one image when they should have made several.
 - Post FX: the depth estimator is a Depth card on the post panel, both the
   standalone node and the Post tab: which estimator, which Depth Anything V2
   checkpoint, and the working resolution
+- Latent tab: refine passes on a blank canvas. Pass 1 generates at the full
+  denoise and every pass after it refines what pass 1 made, at a Refine dial
+  or a denoise and scale per pass, so the tab with no source image gets the
+  draft-and-climb run the Img2Img tab has
+- A rig can name a second sampler and scheduler that take over on image to
+  image runs; blank means the main pair, so nothing moves unasked
+
+### Video
+
+- Video Review: the frame rate is a dial on the panel with the same presets
+  as Save Video, a wired fps socket wins over it, and a workflow saved before
+  the panel keeps the rate and loop it had. Sound and loop flip the player on
+  screen instead of rebuilding it and dropping back to the start
+- Save Video announces its clip as animated, so the file shows in ComfyUI's
+  outputs instead of only on the console
 
 ### Fixes worth naming
 
