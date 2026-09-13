@@ -251,7 +251,7 @@ what they did. Treat them as legacy.
 | RedNode Paint Render | Renders only the region you painted, then composites it back. |
 | RedNode Paint Out / Paint In | Hand the painted region to any other renderer, then composite the result back. |
 | RedNode Refine Crop / Refine Paste | Cut a masked region out for refinement by any sampler, then put it back. |
-| RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. |
+| RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view. |
 | RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
 | RedNode Stage Tap / Stage View | Photograph any point in the graph, then compare stages with a wipe. |
 

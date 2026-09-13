@@ -1,7 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { setting } from "./rednode_settings.js";
-import { arrowKeys } from "./rednode_keys.js";
+import { arrowKeys, forgetArrowKeys } from "./rednode_keys.js";
 
 // RedNode Image Review — the panel over review.py.
 //
@@ -40,6 +40,27 @@ css.textContent = `
 .rn-rv-tag.old{color:#f0c58a}
 .rn-rv-cnt{position:absolute;top:5px;right:5px;background:#000c;color:#9aa0a8;font-size:10.5px;
   padding:2px 7px;border-radius:4px}
+/* The way into the big room. Bottom right so it never sits on the batch count. */
+.rn-rv-fs{position:absolute;bottom:6px;right:6px;background:#000c;color:#cfd4da;
+  border:1px solid #3a3d44;border-radius:5px;font-size:13px;line-height:1;padding:5px 7px;
+  cursor:pointer;opacity:.75}
+.rn-rv-fs:hover{opacity:1;border-color:#b8283c;color:#fff}
+/* The room itself: the same look as the Workspace's full screen. */
+.rn-rv-fsov{position:fixed;inset:0;z-index:9990;background:#0c0d10ee;display:flex;
+  flex-direction:column;padding:14px}
+.rn-rv-fsbar{display:flex;align-items:center;gap:10px;flex:none;padding:0 2px 10px}
+.rn-rv-fsbar .ttl{font:600 14px system-ui,sans-serif;color:#e8ecf1;letter-spacing:.02em}
+.rn-rv-fsbar .hint{font-size:11.5px;opacity:.5;color:#ddd}
+.rn-rv-fsx{margin-left:auto;background:#15171b;border:1px solid #33373d;
+  border-radius:5px;color:#ddd;cursor:pointer;font-size:13px;padding:7px 14px}
+.rn-rv-fsx:hover{border-color:#b8283c;color:#fff}
+/* The host is a .rn-rv-wrap, so render() needs no second layout; these only scale
+   the furniture up to the room. The picture already fills whatever it is given. */
+.rn-rv-fshost{flex:1;min-height:0;height:auto;border:1px solid #2f333a;border-radius:8px;
+  padding:10px}
+.rn-rv-fshost .rn-rv-strip{height:auto}
+.rn-rv-fshost .rn-rv-th{width:96px;height:96px}
+.rn-rv-fshost .rn-rv-tag,.rn-rv-fshost .rn-rv-stats,.rn-rv-fshost .rn-rv-cnt{font-size:13px}
 .rn-rv-strip{display:flex;gap:5px;overflow-x:auto;overflow-y:hidden;flex:none;height:${THUMB_H + 12}px;
   padding:3px 1px;scrollbar-width:thin}
 /* uniform squares: every thumb centre-crops to the same tile, whatever its aspect.
@@ -382,6 +403,11 @@ function openMenu(node, entry, index, ev) {
                     : "copies the positive prompt that produced this image",
     }),
     mk("Open in a new tab", () => { window.open(fileUrl(f), "_blank"); }),
+    mk(node._rnFsPrev ? "Leave full screen" : "View full screen", () => {
+      if (node._rnFsPrev) { node._rnFsClose?.(); return; }
+      node._rnView = index;                // the one you clicked is the one shown big
+      openFullscreen(node);
+    }),
     sep(),
     mk("Rerun (same seed, same everything)", async () => {
       await queuePrompt(await fetchPrompt(entry.prompt));
@@ -462,6 +488,101 @@ function openMenu(node, entry, index, ev) {
   setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
 }
 
+// ---- full screen -------------------------------------------------------------
+// The panel over the whole window, the Workspace's way: render() draws into
+// node._rnRootEl, so pointing that at an overlay host puts the picture, the strip,
+// the corner tags, the right-click menu and the recovery path in the big room with
+// no second implementation, and closing points it home and renders once. The node's
+// own element keeps its size and nothing on the canvas moves.
+function openFullscreen(node) {
+  if (node._rnFsPrev) return;                       // already open
+  const ov = document.createElement("div");
+  ov.className = "rn-rv-fsov";
+  for (const t of ["pointerdown", "pointermove", "pointerup", "click", "dblclick", "keydown"]) {
+    ov.addEventListener(t, (e) => e.stopPropagation());
+  }
+  // the backdrop is not a picture: no browser menu on it
+  ov.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); });
+  const bar = document.createElement("div");
+  bar.className = "rn-rv-fsbar";
+  const ttl = document.createElement("span");
+  ttl.className = "ttl";
+  ttl.textContent = "RedNode Image Review";
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = "Esc closes. Arrows and the wheel walk the history. Right-click for the menu.";
+  const x = document.createElement("button");
+  x.className = "rn-rv-fsx";
+  x.textContent = "Close  (Esc)";
+  bar.append(ttl, hint, x);
+  const fshost = document.createElement("div");
+  fshost.className = "rn-rv-wrap rn-rv-fshost";
+  ov.append(bar, fshost);
+  document.body.appendChild(ov);
+
+  const step = (dir) => {
+    const h = hist(node);
+    if (!h.length) return;
+    const at = node._rnView || 0;
+    node._rnView = dir === "first" ? 0
+                 : dir === "last" ? h.length - 1
+                 : Math.max(0, Math.min(h.length - 1, at + dir));
+    render(node);
+  };
+  // In the room there is no canvas under the pointer to zoom, so the plain wheel
+  // walks the history, the way a photo viewer's does. Shift+wheel still scrolls the
+  // strip, as it does on the node.
+  ov.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.shiftKey) {
+      const strip = fshost.querySelector(".rn-rv-strip");
+      if (strip) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
+      return;
+    }
+    if (e.deltaY) step(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+  arrowKeys(fshost, step);
+
+  node._rnFsPrev = node._rnRootEl;
+  node._rnRootEl = fshost;
+  const close = () => {
+    if (!node._rnFsPrev) return;
+    node._rnRootEl = node._rnFsPrev;
+    node._rnFsPrev = null;
+    node._rnFsClose = null;
+    forgetArrowKeys(fshost);
+    ov.remove();
+    document.removeEventListener("keydown", onKey, true);
+    render(node);
+  };
+  // Esc always closes. The arrows are handled here as well as through arrowKeys,
+  // because the room appears under a pointer that has not moved yet and the hover
+  // rule only takes hold once it does. rednode_keys stops the event when it acts
+  // first, so a press never moves the view twice.
+  const onKey = (e) => {
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const dir = { ArrowLeft: -1, ArrowUp: -1, PageUp: -1, ArrowRight: 1, ArrowDown: 1,
+                  PageDown: 1, Home: "first", End: "last" }[e.key];
+    if (dir === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    step(dir);
+  };
+  x.onclick = close;
+  document.addEventListener("keydown", onKey, true);
+  node._rnFsClose = close;
+  render(node);
+}
+
 // ---- render ----------------------------------------------------------------
 function render(node) {
   const root = node._rnRootEl;
@@ -534,6 +655,21 @@ function render(node) {
       cnt.textContent = `batch of ${entry.files.length}`;
       main.appendChild(cnt);
     }
+    // Corner glyph or a double-click on the picture, the pack's gesture for "bigger".
+    // The same two close it again from inside the room.
+    const inRoom = !!node._rnFsPrev;
+    const toggleRoom = () => { if (node._rnFsPrev) node._rnFsClose?.(); else openFullscreen(node); };
+    const fs = document.createElement("button");
+    fs.className = "rn-rv-fs";
+    fs.textContent = inRoom ? "✕" : "⛶";
+    fs.title = inRoom ? "Back to the node (Esc)."
+                      : "View full screen. The strip, the arrows and the menu all come along.";
+    fs.onclick = (e) => { e.stopPropagation(); toggleRoom(); };
+    main.appendChild(fs);
+    main.addEventListener("dblclick", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      toggleRoom();
+    });
     main.addEventListener("contextmenu", (e) => {
       e.preventDefault(); e.stopPropagation();
       openMenu(node, entry, view, e);
@@ -727,6 +863,14 @@ app.registerExtension({
     nodeType.prototype.onConfigure = function () {
       onConfigure?.apply(this, arguments);
       requestAnimationFrame(() => render(this));
+    };
+
+    // a node leaving the graph (delete, workflow switch) closes its room; otherwise
+    // the overlay would outlive the node and hold a render target nothing draws to
+    const onRemoved = nodeType.prototype.onRemoved;
+    nodeType.prototype.onRemoved = function () {
+      this._rnFsClose?.();
+      onRemoved?.apply(this, arguments);
     };
 
     // PreviewImage's own onExecuted would draw the stock image widget under our panel
