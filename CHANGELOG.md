@@ -4,6 +4,69 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.3.0** - 2026-09-13
+
+Watching the picture form, the Detailer as a proper list, and a handful of
+things that only made one image when they should have made several.
+
+### Live Preview
+
+- RedNode Live Preview, a new node: wire the workspace's image output in and
+  the picture forms on it step by step, with a bar and a "rendering 4 / 27"
+  tag, then the finished frame. The frames are decoded by the pack itself with
+  the small VAE from models/vae_approx (lighttaew2_1 for Krea 2), so it works
+  whatever ComfyUI's own preview setting is. Wire the Detailer's output instead
+  to watch its passes; unwired, it shows whatever is rendering
+- The same frames land over the Paint tab's result pane while a paint run
+  samples, and come off the moment the result does
+- Every frame says which pass, round or shot it belongs to, and the Paint tab
+  picks its own frame size, 512 up to the decoder's full output
+
+### Image Review
+
+- A full screen room: the corner glyph, a double-click or the right-click
+  menu opens it, Esc closes it. The wheel zooms the picture about the pointer,
+  a drag pans, the wheel over the strip scrolls the strip, arrows walk the
+  history
+- A batch column: a run that made several pictures shows them down the left
+  edge, click to view, the count reads "2 of 4", and the right-click actions
+  follow the picture that is up
+
+### Studio Detailer
+
+- Each pass card is a header and three boxes: Sampling, Strength and Prompt.
+  Scale is a bar beside Denoise, and a duplicate button sits by the delete on
+  passes and group titles
+- Repeat above one offers a denoise and a scale per round with a Ramp, the
+  same rule the Img2Img tab's passes follow
+- A pass picks which Prompts-tab row it reads; the rig's row stays the default
+- A SeedVR2 upscale pass: Size 720p, 1080p, 2K, 1440p or 4K as a pixel budget
+  with the short edge worked out from the frame's aspect, the loader dials on
+  the card, the pack's own nodes doing the work. Needs ComfyUI-SeedVR2 installed
+- The SAM file and precision are picked on the node, and the per-pass SAM list
+  now reads the V3 loader's choices, which had left it empty
+
+### Workspace
+
+- Img2Img RE-ANGLE: a switch to skip the i2i pass, so the re-shot picture is
+  the output and the rig never enters VRAM beside the edit model
+- Img2Img PASS: a full-width denoise bar in hundredths, a denoise per pass and
+  a scale per pass with a Ramp, the decode tiled when it gets big
+- A camera path on an engine rig, the NovelAI rig, renders one image per shot
+  and batches them; before, it rendered shot 1 and said nothing. On the
+  external sampler a path still renders shot 1 only, and the console, the
+  Camera tab and the sampler-mode tip now say so
+- Post FX: the depth estimator is a Depth card on the post panel, both the
+  standalone node and the Post tab: which estimator, which Depth Anything V2
+  checkpoint, and the working resolution
+
+### Fixes worth naming
+
+- The socket tuck sits on its own row above the tabs; it used to wrap onto a
+  stray line between the tabs and the box once the Camera tab filled the width
+- The README named the wrong folder for the SAM3 file; it is models/sam3
+- A pass latent resizes by its rank rather than an assumed four dims
+
 **1.2.0** - 2026-08-31
 
 The workspace becomes the whole studio, and the studio grows a camera and a set
