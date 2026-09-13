@@ -1626,13 +1626,11 @@ class RedNodeStudioWorkspace:
                     h.update(b"missing")
         return h.hexdigest()
 
-    def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
-                    rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
-                    positive_fallback, model_fallback):
-        """One camera-path shot: (positive conditioning, model) for that shot -
-        the row re-assembled with the shot's camera, encoded; the camera LoRAs
-        at the shot's strengths on the pre-camera model."""
-        from .camera_studio import resolve_camera_loras as _cs_loras
+    @staticmethod
+    def _shot_text(shot_state, row, run_seed):
+        """The row's prompt re-assembled with one shot's camera: the Frame run
+        again with that camera, so the paragraph describes where THIS shot
+        stands. A plain row has no frame to re-run and keeps its words."""
         cam_json = json.dumps(shot_state)
         text = row.get("text", "")
         fr = row.get("frame") or {}
@@ -1654,6 +1652,16 @@ class RedNodeStudioWorkspace:
                 camera_height=str(fr.get("camera_height") or "Eye level"),
                 camera=cam_json,
                 seed=run_seed)
+        return text
+
+    def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
+                    rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
+                    positive_fallback, model_fallback):
+        """One camera-path shot: (positive conditioning, model) for that shot -
+        the row re-assembled with the shot's camera, encoded; the camera LoRAs
+        at the shot's strengths on the pre-camera model."""
+        from .camera_studio import resolve_camera_loras as _cs_loras
+        text = self._shot_text(shot_state, row, run_seed)
         # encode
         pos = positive_fallback
         if enc_clip is not None:
@@ -2647,16 +2655,45 @@ class RedNodeStudioWorkspace:
                   "output; no encode, no i2i pass", flush=True)
         if (_mode == "internal" and not _prt and not _stage_only
                 and _hk in RIG_KIND_HANDLERS):
-            try:
-                _himg = RIG_KIND_HANDLERS[_hk](
-                    "render", rig=_ar, cfg=cfg, prompt_text=prompt_text_out,
-                    negative_text=negative_text_out, seed=int(run_seed),
-                    source_image=i2i_img, denoise=denoise_out)
-                if _himg is not None:
-                    rig_image = _himg
-            except Exception as exc:
-                print("[RedNode Workspace] the %r rig's handler failed: %s"
-                      % (_hk, exc), flush=True)
+            # THE CAMERA PATH ON AN ENGINE RIG: the same one-render-per-shot the
+            # built-in sampler does, with the shot's words in place of its
+            # conditioning; the engine cannot take a LoRA, so the words are the
+            # whole of the camera. The pictures batch on the output. Without
+            # this the NovelAI rig rendered shot 1 and the path read as broken.
+            _h_shots = []
+            if len(_shot_states) > 1 and _cam_state_row is not None:
+                print("[RedNode Workspace] camera path: %d shots, one render each "
+                      "on the %s rig" % (len(_shot_states), _hk), flush=True)
+                for _si, _sst in enumerate(_shot_states):
+                    _t = self._shot_text(_sst, _cam_state_row, run_seed)
+                    try:
+                        from .prompt_frame import expand as _pf_expand_s
+                        _t = _pf_expand_s(_t, run_seed, True)
+                    except Exception:
+                        pass
+                    print("[RedNode Workspace] shot %d: %s" % (
+                        _si + 1, _t.split(".")[0][:70]), flush=True)
+                    _h_shots.append(_t)
+            else:
+                _h_shots.append(prompt_text_out)
+            _h_imgs = []
+            for _t in _h_shots:
+                try:
+                    _himg = RIG_KIND_HANDLERS[_hk](
+                        "render", rig=_ar, cfg=cfg, prompt_text=_t,
+                        negative_text=negative_text_out, seed=int(run_seed),
+                        source_image=i2i_img, denoise=denoise_out)
+                    if _himg is not None:
+                        _h_imgs.append(_himg)
+                except Exception as exc:
+                    print("[RedNode Workspace] the %r rig's handler failed: %s"
+                          % (_hk, exc), flush=True)
+            if len(_h_imgs) == 1:
+                rig_image = _h_imgs[0]
+            elif _h_imgs:
+                _hh = min(x.shape[1] for x in _h_imgs)
+                _hw = min(x.shape[2] for x in _h_imgs)
+                rig_image = torch.cat([x[:, :_hh, :_hw, :] for x in _h_imgs], dim=0)
         if (_mode == "internal" and not _prt and not _stage_only
                 and positive is not None and model is not None):
             try:
