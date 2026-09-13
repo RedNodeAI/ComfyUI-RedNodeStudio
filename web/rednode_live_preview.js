@@ -129,6 +129,7 @@ function render(node) {
   tag.className = "rn-lp-tag " + (s.kind === "live" ? "live" : s.kind === "wait" ? "wait" : "");
   tag.textContent = s.kind === "live"
     ? (s.total ? `rendering ${s.step} / ${s.total}` : "rendering")
+      + (s.decoder ? ` · ${String(s.decoder).replace(/\.safetensors$/i, "")}` : "")
     : s.kind === "done" ? "done"
     : s.kind === "wait" ? "waiting for the run" : "";
   if (tag.textContent) main.appendChild(tag);
@@ -183,9 +184,33 @@ function build(node) {
 }
 
 // ---- the stream ----------------------------------------------------------------
-// The preview frame, tagged. Current frontends send the blob with the ids of the
-// node that made it; an older one sends the bare blob, and the executing node is
-// the frontend's own runningNodeId.
+// THE PACK'S OWN FRAMES: live_preview.py decodes every step with the tiny decoder
+// and sends it here as a data URI, tagged with the node, the step and the total.
+// This is the stream that matters; it works whatever ComfyUI's preview setting is.
+api.addEventListener("rednode-live-frame", (e) => {
+  const d = e?.detail || {};
+  if (!d.data || d.node == null) return;
+  for (const n of liveNodes()) {
+    if (!watches(n, d.node)) continue;
+    const s = state(n);
+    if (s.kind !== "live") {
+      console.log(`[RedNode Live Preview] node ${n.id} showing frames from node ${d.node}`
+                  + (d.decoder ? ` (${d.decoder})` : "")
+                  + (sourceId(n) === null ? " (unwired: any node)" : ""));
+    }
+    if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (err) { /* gone */ } s.blobUrl = ""; }
+    s.src = d.data;
+    s.step = Number(d.step) || 0;
+    s.total = Number(d.total) || 0;
+    s.decoder = d.decoder || "";
+    s.kind = "live";
+    render(n);
+  }
+});
+// ComfyUI's own preview frame, tagged, as a fallback for samplers the pack does not
+// wrap. Current frontends send the blob with the ids of the node that made it; an
+// older one sends the bare blob, and the executing node is the frontend's own
+// runningNodeId.
 api.addEventListener("b_preview_with_metadata", (e) => {
   const d = e?.detail || {};
   if (!d.blob) return;

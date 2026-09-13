@@ -2814,7 +2814,11 @@ class RedNodeStudioWorkspace:
                         if _npass > 1:
                             print("[RedNode Workspace] i2i pass %d of %d, denoise "
                                   "%.2f" % (_p + 1, _npass, _dnp), flush=True)
-                        _out = _core.common_ksampler(
+                        # every step of this call also streams a small frame,
+                        # decoded by the pack's own tiny decoder, to any Live
+                        # Preview node wired to this one (live_preview.py)
+                        from . import live_preview as _live
+                        _out = _live.sampled(unique_id, _core.common_ksampler)(
                             _model_i, _seed + _p, rig_steps, rig_cfg, rig_sampler,
                             rig_scheduler, _pos_i, negative, _out,
                             denoise=_dnp)[0]

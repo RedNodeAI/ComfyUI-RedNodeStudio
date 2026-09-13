@@ -1,17 +1,28 @@
-"""RedNode Live Preview: watch the picture form, step by step, on a node of its own.
+"""RedNode Live Preview: the picture forming, step by step, decoded by this pack.
 
-Wire it where the picture comes out, the workspace's image output usually. While the
-node upstream samples, ComfyUI streams that node's in-progress preview to the
-browser, tagged with the node's id; the panel catches the stream for the node it is
-wired to and draws it big, with a step bar, instead of the thumbnail ComfyUI paints
-on the node that is working. When the run lands, the finished frame replaces it.
+Two halves. The NODE is PreviewImage with a pass-through output, the Image Review
+shape: wire it where the picture comes out and the finished frame lands on it
+through the standard `ui.images` channel.
 
-Server-side this IS PreviewImage, exactly as Image Review is: the finished picture is
-saved to the temp dir and announced through the standard `ui.images` channel, and the
-image passes straight through so the node can sit inline. The live half is entirely
-web/rednode_live_preview.js, which needs no help from here: the stream already
-exists, this node only gives it a place to be seen.
+The STREAM is the part that matters. While the Workspace's built-in sampler (or a
+Detailer pass) runs, every step's denoised estimate is decoded here with the tiny
+decoder from models/vae_approx (lighttaew2_1 for Krea 2, whichever file matches
+the model's latent format), shrunk to a small JPEG, and sent to the browser as a
+`rednode-live-frame` event carrying the node id, the step and the total. The
+panel of every Live Preview node wired to that node draws it. This does NOT
+depend on ComfyUI's own preview setting: a preview method of "none" still gets
+frames here, because the decode is ours. Without a tiny decoder file the frames
+fall back to latent2rgb, the colour smear, and the event says which decoder made
+them.
+
+The hook is the callback core's common_ksampler builds through
+latent_preview.prepare_callback: `sampled()` wraps ONE sampler call so that the
+callback also feeds our stream, and puts the original back in a finally, so
+nothing outside that call is touched.
 """
+
+import base64
+import io
 
 import nodes
 
@@ -19,8 +30,9 @@ import nodes
 class RedNodeLivePreview(nodes.PreviewImage):
     CATEGORY = "RedNode/Image"
     DESCRIPTION = ("Shows the picture forming step by step while the node wired into "
-                   "it renders, then the finished frame. Wire the workspace's image "
-                   "output in; the live preview needs no other wire.")
+                   "it renders, decoded by the small VAE, then the finished frame. "
+                   "Wire the workspace's image output in; the frames need no other "
+                   "wire.")
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("images",)
@@ -36,6 +48,136 @@ class RedNodeLivePreview(nodes.PreviewImage):
         out = super().save_images(images=images, **kw)
         out["result"] = (images,)
         return out
+
+
+# ---- the stream ------------------------------------------------------------------
+
+_PREVIEWER = {"key": None, "obj": None, "how": ""}
+FRAME_MAX = 512          # the long edge of a streamed frame, in pixels
+FRAME_QUALITY = 75
+
+
+def _send(payload):
+    """One frame to the browser. Never fatal: a preview that fails to send is a
+    missing frame, not a dead render."""
+    try:
+        from server import PromptServer
+        PromptServer.instance.send_sync("rednode-live-frame", payload)
+    except Exception:
+        pass
+
+
+def our_previewer(model):
+    """(previewer, how) for this model's latent space, built by us.
+
+    The tiny decoder from vae_approx when a file matches the format's name
+    (lighttaew2_1 for Krea 2, a video-style TAE loaded the way core loads it),
+    else latent2rgb, which every format with rgb factors has. Cached per format
+    so a run of thirty steps loads the decoder once, not thirty times.
+    """
+    try:
+        import latent_preview as lp
+        import folder_paths
+        import comfy.utils
+        fmt = model.model.latent_format
+    except Exception as exc:
+        print("[RedNode Live Preview] no latent format to decode from: %s" % exc,
+              flush=True)
+        return None, ""
+    name = getattr(fmt, "taesd_decoder_name", None)
+    key = (name, fmt.__class__.__name__)
+    if _PREVIEWER["key"] == key and _PREVIEWER["obj"] is not None:
+        return _PREVIEWER["obj"], _PREVIEWER["how"]
+    prev, how = None, ""
+    if name:
+        try:
+            fn = next((f for f in folder_paths.get_filename_list("vae_approx")
+                       if f.startswith(name)), "")
+            path = folder_paths.get_full_path("vae_approx", fn) if fn else None
+        except Exception:
+            fn, path = "", None
+        if path:
+            try:
+                if name in getattr(lp, "VIDEO_TAES", []):
+                    from comfy.sd import VAE
+                    tae = VAE(comfy.utils.load_torch_file(path))
+                    tae.first_stage_model.show_progress_bar = False
+                    prev = lp.TAEHVPreviewerImpl(tae)
+                else:
+                    from comfy.taesd.taesd import TAESD
+                    prev = lp.TAESDPreviewerImpl(
+                        TAESD(None, path, latent_channels=fmt.latent_channels)
+                        .to(model.load_device))
+                how = fn
+            except Exception as exc:
+                print("[RedNode Live Preview] the tiny decoder %s failed to load (%s); "
+                      "frames fall back to latent2rgb" % (fn, exc), flush=True)
+                prev = None
+        else:
+            print("[RedNode Live Preview] no %s* in models/vae_approx; frames are "
+                  "latent2rgb until it is there" % name, flush=True)
+    if prev is None and getattr(fmt, "latent_rgb_factors", None) is not None:
+        prev = lp.Latent2RGBPreviewer(fmt.latent_rgb_factors,
+                                      getattr(fmt, "latent_rgb_factors_bias", None),
+                                      getattr(fmt, "latent_rgb_factors_reshape", None))
+        how = "latent2rgb"
+    _PREVIEWER.update(key=key, obj=prev, how=how)
+    return prev, how
+
+
+def frame_data(previewer, x0):
+    """One step's estimate as a small JPEG data URI."""
+    if getattr(x0, "is_nested", False):
+        x0 = x0.tensors[0]
+    _fmt, img, _max = previewer.decode_latent_to_preview_image("JPEG", x0)
+    img = img.copy()
+    img.thumbnail((FRAME_MAX, FRAME_MAX))
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, "JPEG", quality=FRAME_QUALITY)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def sampled(node_id, fn, label=""):
+    """`fn` (core's common_ksampler, or anything that builds its callback through
+    latent_preview.prepare_callback) wrapped so every step also streams a frame
+    tagged with `node_id`. The original prepare_callback goes back in a finally.
+
+    Used as `sampled(unique_id, _core.common_ksampler)(model, seed, ...)`.
+    """
+    def run(*args, **kw):
+        try:
+            import latent_preview as lp
+        except Exception:
+            return fn(*args, **kw)
+        orig = lp.prepare_callback
+        nid = str(node_id) if node_id is not None else ""
+        failed = [False]
+
+        def prepare(model, steps, *pa, **pk):
+            base = orig(model, steps, *pa, **pk)
+            prev, how = our_previewer(model)
+            if prev is None or not nid:
+                return base
+
+            def cb(step, x0, x, total):
+                base(step, x0, x, total)
+                if failed[0]:
+                    return
+                try:
+                    _send({"node": nid, "step": int(step) + 1, "total": int(total),
+                           "label": label, "decoder": how,
+                           "data": frame_data(prev, x0)})
+                except Exception as exc:
+                    failed[0] = True
+                    print("[RedNode Live Preview] frame decode failed (%s); no more "
+                          "frames this run" % exc, flush=True)
+            return cb
+        lp.prepare_callback = prepare
+        try:
+            return fn(*args, **kw)
+        finally:
+            lp.prepare_callback = orig
+    return run
 
 
 NODE_CLASS_MAPPINGS = {"RedNodeLivePreview": RedNodeLivePreview}

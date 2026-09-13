@@ -36,6 +36,7 @@ import comfy.samplers
 import nodes as _core
 
 from . import workspace as _ws
+from . import live_preview as _live
 from .paint_render import _bbox, _encode_text, _workspace_cfg, grow_to_aspect, \
     region_aspect
 
@@ -537,6 +538,7 @@ class RedNodeStudioDetailer:
                   "sampler), passes skipped", flush=True)
             return (_ws.blocked(), "no image arrived, passes skipped")
         cfg = parse_pipeline(config)
+        self._rn_uid = unique_id          # the Live Preview stream's tag for this node
         stages = [(k, s) for k, s in enumerate(cfg["stages"])
                   if s["on"] and s["type"] != "title"]
         report = []
@@ -793,8 +795,9 @@ class RedNodeStudioDetailer:
                   % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]),
                   flush=True)
         lat = {"samples": vae.encode(work[:, :, :, :3])}
-        out = self._ksample(model, seed, steps, cfg_v, sampler, scheduler, pos,
-                            neg, lat, s["denoise"], start, end)
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample)(
+            model, seed, steps, cfg_v, sampler, scheduler, pos,
+            neg, lat, s["denoise"], start, end)
         img = vae.decode(out["samples"])
         while img.ndim > 4:
             img = img[0]
@@ -858,8 +861,9 @@ class RedNodeStudioDetailer:
             # swap lands on the face it is looking at, not on the whole frame
             pos, neg = encode_for(work)
         lat = {"samples": vae.encode(work)}
-        out = self._ksample(model, seed, steps, cfg_v, sampler, scheduler, pos,
-                            neg, lat, s["denoise"], start, end)
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample)(
+            model, seed, steps, cfg_v, sampler, scheduler, pos,
+            neg, lat, s["denoise"], start, end)
         rendered = vae.decode(out["samples"])
         while rendered.ndim > 4:
             rendered = rendered[0]
