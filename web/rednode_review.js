@@ -40,6 +40,18 @@ css.textContent = `
 .rn-rv-tag.old{color:#f0c58a}
 .rn-rv-cnt{position:absolute;top:5px;right:5px;background:#000c;color:#9aa0a8;font-size:10.5px;
   padding:2px 7px;border-radius:4px}
+/* THE BATCH COLUMN: a run that made several pictures shows them down the left
+   edge of the big one, under the corner tags, scrolling on its own wheel. Click
+   one to view it. It floats over the picture so the strip below stays one thumb
+   per run, which is what the strip is for. */
+.rn-rv-batch{position:absolute;left:6px;top:50px;max-height:calc(100% - 60px);
+  display:flex;flex-direction:column;gap:4px;overflow-y:auto;overflow-x:hidden;
+  padding:3px;background:#000a;border-radius:6px;scrollbar-width:thin}
+.rn-rv-bth{width:44px;height:44px;border-radius:4px;overflow:hidden;flex:none;
+  border:2px solid #2a2e35;cursor:pointer;background:#111316}
+.rn-rv-bth img{width:100%;height:100%;object-fit:cover;display:block}
+.rn-rv-bth.cur{border-color:#b8283c;box-shadow:0 0 6px #b8283c66}
+.rn-rv-fshost .rn-rv-bth{width:72px;height:72px}
 /* The way into the big room. Bottom right so it never sits on the batch count. */
 .rn-rv-fs{position:absolute;bottom:6px;right:6px;background:#000c;color:#cfd4da;
   border:1px solid #3a3d44;border-radius:5px;font-size:13px;line-height:1;padding:5px 7px;
@@ -131,10 +143,10 @@ function statsLine(entry) {
 // the index had stopped knowing about it. A wrong explanation costs more than none,
 // because it sends you looking in the wrong place. Callers get {file} on success and
 // {file: null, why, path} otherwise.
-async function recover(entry) {
+async function recover(entry, slot = 0) {
   if (!entry?.prompt) return { file: null, why: "norun" };
   try {
-    const q = new URLSearchParams({ prompt_id: entry.prompt, index: "0" });
+    const q = new URLSearchParams({ prompt_id: entry.prompt, index: String(slot) });
     const res = await api.fetchApi(`/rednode/saved_for?${q}`);
     const d = await res.json();
     if (!d.found) return { file: null, why: "unlisted" };
@@ -177,6 +189,8 @@ function pushEntry(node, images, promptId) {
                           || MAX_KEEP);
   while (h.length > keep) h.pop();
   node._rnView = 0;                      // a new arrival always takes the top spot
+  node._rnSlot = 0;                      // ...its first frame...
+  node._rnSlotFor = 0;
   node._rnJumpHome = true;               // ...and the strip scrolls back to show it
   node.graph?.change?.();
   render(node);
@@ -355,7 +369,7 @@ async function setKept(found, kept) {
   return d;
 }
 
-function openMenu(node, entry, index, ev) {
+function openMenu(node, entry, index, ev, slot = 0) {
   document.querySelector(".rn-rv-menu")?.remove();
   const m = document.createElement("div");
   m.className = "rn-rv-menu";
@@ -368,7 +382,7 @@ function openMenu(node, entry, index, ev) {
                      (age > 0 ? ` · ${age} min ago` : " · just now") +
                      (entry.secs != null ? ` · ${entry.secs.toFixed(2)}s` : "") +
                      (entry.dims ? ` · ${entry.dims}` : "") +
-                     (entry.files.length > 1 ? ` · batch of ${entry.files.length}` : "");
+                     (entry.files.length > 1 ? ` · image ${slot + 1} of ${entry.files.length}` : "");
 
   const mk = (label, fn, { disabled = false, why = "" } = {}) => {
     const b = document.createElement("button");
@@ -392,12 +406,12 @@ function openMenu(node, entry, index, ev) {
     return d;
   };
 
-  const f = entry.files[0];
+  const f = entry.files[slot] || entry.files[0];
   const noPrompt = !entry.prompt;
   m.append(
     note,
     mk("Copy image", () => copyImage(f)),
-    mk("Copy prompt", () => copyPrompt(entry, 0, ev), {
+    mk("Copy prompt", () => copyPrompt(entry, slot, ev), {
       disabled: noPrompt,
       why: noPrompt ? "this entry predates prompt tracking"
                     : "copies the positive prompt that produced this image",
@@ -439,7 +453,7 @@ function openMenu(node, entry, index, ev) {
   );
   // The Save entry has to be asked for, so the item arrives a moment after the menu.
   // It is only inserted when this picture really was filed by a Save node.
-  savedFor(entry, 0).then((found) => {
+  savedFor(entry, slot).then((found) => {
     if (!found || !m.isConnected || found.missing) return;
     // Naming is on demand only: it loads a vision model and takes a few seconds, so
     // it never taxes a normal run. Ollama rather than the workflow's CLIP, because a
@@ -667,17 +681,23 @@ function render(node) {
     main.appendChild(empty);
   } else {
     const entry = h[view];
+    // which frame of a batch is up: kept while the view stays, first frame on
+    // a new view, and clamped in case the entry shrank underneath it
+    const slot = node._rnSlotFor === view
+      ? Math.max(0, Math.min(node._rnSlot || 0, entry.files.length - 1)) : 0;
+    node._rnSlot = slot;
+    node._rnSlotFor = view;
     const img = document.createElement("img");
-    img.src = fileUrl(entry.files[0]);
+    img.src = fileUrl(entry.files[slot]);
     img.onerror = () => {
       const gone = document.createElement("div");
       gone.className = "rn-rv-empty";
       // A preview lives in temp and does not survive a restart. If a RedNode Save
       // node filed that same run the real output is still on disk, and the prompt id
       // both nodes already share is enough to find it.
-      recover(entry).then((r) => {
+      recover(entry, slot).then((r) => {
         if (r.file) {
-          entry.files[0] = r.file;
+          entry.files[slot] = r.file;
           entry.recovered = true;
           node.graph?.change?.();
           render(node);
@@ -710,8 +730,37 @@ function render(node) {
     if (entry.files.length > 1) {
       const cnt = document.createElement("span");
       cnt.className = "rn-rv-cnt";
-      cnt.textContent = `batch of ${entry.files.length}`;
+      cnt.textContent = `${slot + 1} of ${entry.files.length}`;
+      cnt.title = `This run made ${entry.files.length} pictures. Click one in the column to view it.`;
       main.appendChild(cnt);
+      const col = document.createElement("div");
+      col.className = "rn-rv-batch";
+      // its own wheel: the column scrolls, and the event goes no further, so
+      // the canvas zoom under the node and the room's picture zoom stay still
+      col.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        col.scrollTop = (col.scrollTop || 0) + e.deltaY;
+      }, { passive: false });
+      entry.files.forEach((f, k) => {
+        const b = document.createElement("div");
+        b.className = "rn-rv-bth" + (k === slot ? " cur" : "");
+        b.title = `Picture ${k + 1} of ${entry.files.length}. Click to view.`;
+        const ti = document.createElement("img");
+        ti.loading = "lazy";
+        ti.decoding = "async";
+        ti.src = thumbUrl(f);
+        ti.onerror = () => { if (!ti.dataset.rnFullTried) { ti.dataset.rnFullTried = "1"; ti.src = fileUrl(f); } };
+        b.appendChild(ti);
+        b.onclick = (e) => { e.stopPropagation(); node._rnSlot = k; node._rnSlotFor = view; render(node); };
+        b.addEventListener("dblclick", (e) => e.stopPropagation());
+        b.addEventListener("contextmenu", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          openMenu(node, entry, view, e, k);
+        });
+        col.appendChild(b);
+      });
+      main.appendChild(col);
     }
     // Corner glyph or a double-click on the picture, the pack's gesture for "bigger".
     // The same two close it again from inside the room.
@@ -730,7 +779,7 @@ function render(node) {
     });
     main.addEventListener("contextmenu", (e) => {
       e.preventDefault(); e.stopPropagation();
-      openMenu(node, entry, view, e);
+      openMenu(node, entry, view, e, slot);
     });
   }
   root.appendChild(main);
