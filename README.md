@@ -444,6 +444,71 @@ the v1.2 LoRA, 8 steps gets composition and 12 gets face detail. Generate at 2MP
 Matching output aspect to the source is no longer required once `target_latent` is connected,
 though staying close still looks best.
 
+## Downloads
+
+Everything the pack needs beyond ComfyUI and the image models themselves, with where each file
+goes. ComfyUI Manager installs the packs; the files are yours to fetch.
+
+### Krea 2
+
+| File | Goes in | Where from |
+|---|---|---|
+| `qwen3vl_4b_fp8_scaled.safetensors` (or the bf16) | `models/text_encoders` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/text_encoders) |
+| `qwen_image_vae.safetensors` | `models/vae` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/vae) |
+| `krea2_identity_edit_v1_2.safetensors`, the identity edit LoRA | `models/loras` | [conradlocke/krea2-identity-edit](https://huggingface.co/conradlocke/krea2-identity-edit) |
+
+### Camera and light sliders
+
+| File | Goes in | Where from |
+|---|---|---|
+| `camera_height_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_height_krea2_rednode.safetensors) |
+| `camera_orbit_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_orbit_krea2_rednode.safetensors) |
+| `camera_back_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_back_krea2_rednode.safetensors) |
+| Zoom slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2717832) |
+| Colour temperature slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2760910) |
+| PornMaster Krea2 Light Slider V1, the brightness slider | `models/loras` | Civitai, search by name |
+
+The three camera files are mine: free to use and share, not to sell. The other three are their
+authors' and are only ever linked. Every slider slot is optional; the Camera LoRAs card is happy
+with none of them.
+
+### The Detailer
+
+| File | Goes in | Where from |
+|---|---|---|
+| [ComfyUI-Easy-Sam3](https://github.com/yolain/ComfyUI-Easy-Sam3), the pack | Manager | the face, hair and hands masks |
+| `sam3.pt` | `models/sam3` | [facebook/sam3](https://huggingface.co/facebook/sam3), gated: request access on the page, then download |
+| [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler), the pack | Manager | the upscale pass |
+| `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` | `models/SEEDVR2` | [AInVFX/SeedVR2_comfyUI](https://huggingface.co/AInVFX/SeedVR2_comfyUI/tree/main) |
+| `ema_vae_fp16.safetensors` | `models/SEEDVR2` | [numz/SeedVR2_comfyUI](https://huggingface.co/numz/SeedVR2_comfyUI/blob/main/ema_vae_fp16.safetensors) |
+
+The SeedVR2 loaders also fetch their files on first use when the folder is empty, so the two rows
+above are for anyone who would rather place them by hand. The 3B model is smaller and its loader's
+default; the 7B is what the example workflow runs.
+
+### Live preview and depth
+
+| File | Goes in | Where from |
+|---|---|---|
+| `lighttaew2_1.safetensors`, the small VAE for Krea 2 frames | `models/vae_approx` | [lightx2v/Autoencoders](https://huggingface.co/lightx2v/Autoencoders/blob/main/lighttaew2_1.safetensors) |
+| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), the pack | Manager | the Post FX Depth card's estimators; each fetches its own weights on first use |
+
+Without the small VAE the live frames still stream, as the colour smear rather than a decode.
+
+### Re-angle and swap
+
+The Img2Img tab's RE-ANGLE and the multi-angle workflow run on Qwen-Image-Edit-2511; the SWAP
+stage and the Detailer's swap presets run on the BFS files.
+
+| File | Goes in | Where from |
+|---|---|---|
+| `qwen_image_edit_2511_fp8mixed.safetensors` | `models/diffusion_models` | [Comfy-Org/Qwen-Image-Edit_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/tree/main/split_files/diffusion_models) |
+| `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `models/text_encoders` | [Comfy-Org/Qwen-Image_ComfyUI](https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main/split_files/text_encoders) |
+| `qwen_image_vae.safetensors` | `models/vae` | the same file as the Krea 2 one above |
+| `qwen-image-edit-2511-multiple-angles-lora.safetensors` | `models/loras` | [fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA](https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA) |
+| `Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors` | `models/loras` | [lightx2v/Qwen-Image-Edit-2511-Lightning](https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning) |
+| `bfs_head_swap_v1.1_krea2.safetensors` and the body swap file | `models/loras` | [Alissonerdx/BFS-Best-Face-Swap](https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/tree/main) |
+
 ## Performance
 
 Measured on a 5090. A classic single KSampler pass runs about 17 seconds. A full chain, meaning a
