@@ -26,6 +26,7 @@ import folder_paths
 import nodes
 
 from . import workspace as _ws
+from . import live_preview as _live
 
 
 def _active_auto_prompt(pc):
@@ -743,9 +744,13 @@ class RedNodePaintRender:
             if passes > 1:
                 print(f"[RedNode Paint] pass {i + 1} of {passes}, denoise {denoise:.2f}",
                       flush=True)
-            out = nodes.common_ksampler(model, (seed + i) % (2 ** 64), steps, cfg,
-                                        sampler_name, scheduler, pos, neg, latent,
-                                        denoise=denoise)[0]
+            # every step streams a small frame to the Paint tab's result pane and
+            # to any Live Preview node, tagged with this node (the workspace's id
+            # on the built-in paint door) and the run (live_preview.py)
+            out = _live.sampled(unique_id, nodes.common_ksampler)(
+                model, (seed + i) % (2 ** 64), steps, cfg,
+                sampler_name, scheduler, pos, neg, latent,
+                denoise=denoise)[0]
             if i + 1 >= passes:
                 break
             if work_mask is None:

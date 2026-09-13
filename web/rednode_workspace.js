@@ -414,6 +414,14 @@ css.textContent = `
    image's own height drove the pane, so the whole tab jumped the first time you
    generated and then sat somewhere different from where you left it. */
 .rn-ws-presult img{position:absolute;max-width:100%;max-height:100%;display:block}
+/* THE LIVE FRAME over the result pane while a paint run samples: the picture
+   forming where the result will land, swapped for the result the moment it does.
+   Under the progress bar, over the last result. */
+.rn-ws-presult img.rn-ws-plive{position:absolute;inset:0;width:100%;height:100%;
+  max-width:none;max-height:none;object-fit:contain;z-index:6;background:#111316}
+.rn-ws-plive-tag{position:absolute;top:8px;right:6px;z-index:7;background:#000c;
+  color:#ffd58a;font-size:10.5px;padding:2px 7px;border-radius:4px;pointer-events:none;
+  font-variant-numeric:tabular-nums}
 .rn-ws-pgen-progress{position:absolute;left:0;right:0;top:0;height:4px;z-index:8;
   overflow:hidden;background:#35151bcc;opacity:0;pointer-events:none;
   transition:opacity .15s}
@@ -5211,10 +5219,57 @@ function bindPaintProgress(node, promptId) {
   syncPaintProgress(node);
 }
 
+// The live frame in the result pane. Updated in place: a redraw of the whole
+// tab per step would destroy whatever dropdown is open under the pointer.
+function showPaintLiveFrame(node, d) {
+  node._rnPaintLive = { src: String(d.data), step: Number(d.step) || 0,
+                        total: Number(d.total) || 0 };
+  const pane = node._rnRootEl?.querySelector?.(".rn-ws-presult");
+  if (!pane) return;                       // another tab is up; drawn when Paint is
+  paintLiveOverlay(node, pane);
+}
+
+function paintLiveOverlay(node, pane) {
+  const live = node._rnPaintLive;
+  let img = pane.querySelector(".rn-ws-plive");
+  let tag = pane.querySelector(".rn-ws-plive-tag");
+  if (!live) {
+    img?.remove();
+    tag?.remove();
+    return;
+  }
+  if (!img) {
+    img = document.createElement("img");
+    img.className = "rn-ws-plive";
+    pane.appendChild(img);
+  }
+  if (!tag) {
+    tag = document.createElement("span");
+    tag.className = "rn-ws-plive-tag";
+    pane.appendChild(tag);
+  }
+  if (img.src !== live.src) img.src = live.src;
+  tag.textContent = live.total ? `rendering ${live.step} / ${live.total}` : "rendering";
+}
+
+function clearPaintLive(node) {
+  if (!node?._rnPaintLive) return;
+  node._rnPaintLive = null;
+  const pane = node._rnRootEl?.querySelector?.(".rn-ws-presult");
+  if (pane) paintLiveOverlay(node, pane);
+}
+
 function finishPaintProgress(promptId, failed = false, message = "") {
   const id = String(promptId || "");
   const node = paintProgressRuns.get(id);
   paintProgressRuns.delete(id);
+  // the run is over: the frame comes off so the result shows the moment it lands
+  for (const n of allNodes()) {
+    if (n?.type === NODE_NAME && n._rnPaintLive
+        && (n === node || String(n._rnPaintProgress?.promptId || "") === id)) {
+      clearPaintLive(n);
+    }
+  }
   const waiter = paintRunWaiters.get(id);
   paintRunWaiters.delete(id);
   waiter?.resolve?.({ ok: !failed, message: String(message || "") });
@@ -7172,6 +7227,7 @@ function paintBody(node, body) {
   right.appendChild(paintProgress);
   node._rnPaintProgressEl = { root: paintProgress, fill: paintProgressFill };
   syncPaintProgress(node);
+  if (node._rnPaintLive) paintLiveOverlay(node, right);
   if (shownResult) {
     // the pane shows the picked history entry if one is picked, else what was last put
     // here on purpose. The pick is display state only: Use last result and the mask
@@ -12479,6 +12535,18 @@ app.registerExtension({
     refreshAutoStatus();
     refreshPostPresets();
     refreshLoraPresets();
+    // THE LIVE FRAMES of a paint run (live_preview.py): matched by the run the
+    // tab queued, or by this node's own id when the run was not bound, and only
+    // while the tab says a paint run is active. Drawn over the result pane.
+    api.addEventListener?.("rednode-live-frame", (e) => {
+      const d = e?.detail || {};
+      if (!d.data) return;
+      const byRun = paintProgressRuns.get(String(d.prompt_id || ""));
+      const node = byRun || allNodes().find((n) => n?.type === NODE_NAME
+        && String(n.id) === String(d.node) && n._rnPaintProgress?.active);
+      if (!node || !node._rnPaintProgress?.active) return;
+      showPaintLiveFrame(node, d);
+    });
     api.addEventListener?.("progress", (e) => {
       const d = e?.detail || {};
       const node = paintProgressRuns.get(String(d.prompt_id || ""));

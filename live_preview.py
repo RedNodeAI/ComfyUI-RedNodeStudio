@@ -152,6 +152,15 @@ def sampled(node_id, fn, label=""):
         orig = lp.prepare_callback
         nid = str(node_id) if node_id is not None else ""
         failed = [False]
+        # the run this belongs to, so a panel that queued a run can match the
+        # frames by run rather than by which node in the chain happens to sample
+        pid = ""
+        try:
+            from comfy_execution.utils import get_executing_context
+            ctx = get_executing_context()
+            pid = str(getattr(ctx, "prompt_id", "") or "") if ctx else ""
+        except Exception:
+            pid = ""
 
         def prepare(model, steps, *pa, **pk):
             base = orig(model, steps, *pa, **pk)
@@ -164,8 +173,8 @@ def sampled(node_id, fn, label=""):
                 if failed[0]:
                     return
                 try:
-                    _send({"node": nid, "step": int(step) + 1, "total": int(total),
-                           "label": label, "decoder": how,
+                    _send({"node": nid, "prompt_id": pid, "step": int(step) + 1,
+                           "total": int(total), "label": label, "decoder": how,
                            "data": frame_data(prev, x0)})
                 except Exception as exc:
                     failed[0] = True
