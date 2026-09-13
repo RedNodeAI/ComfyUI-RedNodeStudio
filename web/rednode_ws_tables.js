@@ -234,6 +234,34 @@ export const POST_FX = [
       { key: "radius", label: "Radius", min: 0.1, max: 10, step: 0.1, def: 1.0,
         hint: "Unsharp only. How far from an edge the halo reaches." },
     ] },
+  // NOT an effect: the settings for the depth map the two depth effects share.
+  // Drawn as a card so it lives beside them, with no switch of its own.
+  { id: "depth", label: "Depth", settings: true, cost: "depth model",
+    blurb: "Depth of field and haze need to know what is near and what is far. The "
+         + "node works that out itself with the estimator chosen here; nothing to "
+         + "wire. The depth input on the node is only for a map of your own.",
+    controls: [
+      { key: "estimator", label: "Estimator", choice: ["auto", "depth_anything_v2",
+                                                       "depth_anything", "midas", "zoe"],
+        labels: { auto: "Auto (first installed)", depth_anything_v2: "Depth Anything V2",
+                  depth_anything: "Depth Anything", midas: "MiDaS", zoe: "ZoeDepth" },
+        step: 1, def: "auto",
+        hint: "Which depth estimator makes the map. All four come with "
+            + "comfyui_controlnet_aux. Auto takes the first one installed, Depth "
+            + "Anything V2 first; one that is not installed falls back to that "
+            + "with a console line." },
+      { key: "model", label: "Model", choice: ["auto", "vitl", "vitb", "vits", "vitg"],
+        labels: { auto: "Auto (the estimator's default)", vitl: "Large (vitl)",
+                  vitb: "Base (vitb)", vits: "Small (vits)", vitg: "Giant (vitg)" },
+        step: 1, def: "auto",
+        hint: "The Depth Anything V2 checkpoint. Large is its default and the usual "
+            + "choice; Small is quick and coarse; Giant is the best map and the "
+            + "slowest download. Other estimators ignore this." },
+      { key: "resolution", label: "Resolution", min: 256, max: 2048, step: 64, def: 512,
+        hint: "The size the estimator works at, long edge. 512 is quick and enough for "
+            + "a soft blur or haze; 1024 keeps edges cleaner on a big frame at the "
+            + "cost of seconds." },
+    ] },
   { id: "haze", label: "Atmospheric haze", depth: true, cost: "depth model",
     blurb: "Distance washes out towards the air's own colour and loses contrast. "
          + "This is most of what makes a background read as far away, and it is "

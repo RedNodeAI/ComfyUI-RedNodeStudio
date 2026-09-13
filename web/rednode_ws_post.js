@@ -386,7 +386,8 @@ export function postBody(node, body) {
   head.className = "rn-ws-row";
   const hint = document.createElement("span");
   hint.className = "hint";
-  const live = POST_FX.filter((fx) => cfg.post[fx.id].on).map((fx) => fx.label);
+  const live = POST_FX.filter((fx) => !fx.settings && cfg.post[fx.id].on)
+                      .map((fx) => fx.label);
   hint.textContent = (live.length
     ? `Runs in this order: ${live.join(", ")}. `
     : "Nothing is on yet. ")
@@ -410,7 +411,7 @@ export function postBody(node, body) {
     arr.textContent = open[fx.id] ? "▾" : "▸";
     const ttl = document.createElement("span");
     ttl.className = "ttl";
-    ttl.textContent = fx.label.toUpperCase() + (b.on ? "" : ": off");
+    ttl.textContent = fx.label.toUpperCase() + (b.on || fx.settings ? "" : ": off");
     h.append(arr, ttl);
     // an effect that costs real time says so on its own card, because the place
     // somebody asks "why did that take twenty seconds" is right here
@@ -421,7 +422,8 @@ export function postBody(node, body) {
       cost.title = fx.cost === "depth model"
         ? "This one needs a depth map, so switching it on loads a depth model. That "
         + "is seconds, not milliseconds, and it is usually the reason a grade feels "
-        + "slow. Wire a depth image into the node to reuse one you already have."
+        + "slow. The Depth card picks the estimator and its resolution; wire a depth "
+        + "image into the node to reuse one you already have."
         : "Cost climbs steeply with the sliders. At the shipped values it is about a "
         + "tenth of a second; with sigma and the radius multiplier at maximum it is "
         + "several seconds on a 1 MP frame.";
@@ -451,25 +453,29 @@ export function postBody(node, body) {
     });
     sect.appendChild(h);
 
+    // a settings card (the Depth card) has no switch: it is never "on", it
+    // describes what the effects that need it do
     const onRow = document.createElement("div");
     onRow.className = "rn-ws-row";
-    const onB = document.createElement("button");
-    onB.className = "rn-ws-on" + (b.on ? " on" : "");
-    onB.textContent = b.on ? "ON" : "OFF";
-    onB.title = fx.blurb;
-    onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
-    onRow.appendChild(onB);
+    if (!fx.settings) {
+      const onB = document.createElement("button");
+      onB.className = "rn-ws-on" + (b.on ? " on" : "");
+      onB.textContent = b.on ? "ON" : "OFF";
+      onB.title = fx.blurb;
+      onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
+      onRow.appendChild(onB);
+    }
     if (fx.depth) {
       const chip = document.createElement("span");
       chip.className = "rn-ws-vram med";
       chip.textContent = "Uses depth";
-      chip.title = "This effect works out what is near and what is far. The Post "
-                 + "Process node does that for you using whichever depth estimator "
-                 + "you have installed, so there is nothing to wire. The depth input "
-                 + "is only there if you would rather supply your own map.";
+      chip.title = "This effect works out what is near and what is far. The node "
+                 + "does that for you with the estimator set on the Depth card, so "
+                 + "there is nothing to wire. The depth input is only there if you "
+                 + "would rather supply your own map.";
       onRow.appendChild(chip);
     }
-    sect.appendChild(onRow);
+    if (!fx.settings || fx.depth) sect.appendChild(onRow);
     // the explanation only takes space while the card is open, and stays whole in
     // the tooltip either way, so a shut card is just a name and a switch
     if (open[fx.id] && cfg.post_ui.hints) {
@@ -522,7 +528,8 @@ export function postBody(node, body) {
           for (const opt of c.choice) {
             const o = document.createElement("option");
             o.value = opt;
-            o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+            // a stored key can read as words when the table says how
+            o.textContent = c.labels?.[opt] ?? (opt.charAt(0).toUpperCase() + opt.slice(1));
             o.selected = b[c.key] === opt;
             sel.appendChild(o);
           }

@@ -80,6 +80,10 @@ DEFAULTS = {
                 "dark_intensity": 0.4, "light_intensity": 0.0},
     "sharpen": {"on": False, "mode": "lucy", "iterations": 1, "kernel_size": 3,
                 "amount": 0.5, "radius": 1.0},
+    # THE DEPTH CARD: not an effect, the settings for the depth map the two depth
+    # effects share. Which estimator, which Depth Anything V2 checkpoint, and the
+    # working resolution. "auto" is whichever is installed, and its own default file.
+    "depth": {"on": False, "estimator": "auto", "model": "auto", "resolution": 512},
     "dof": {"on": False, "focus": 0.35, "range": 0.15, "blur": 6.0, "flip_depth": False},
     "haze": {"on": False, "strength": 0.35, "start": 0.45, "lift": 0.12,
              "flip_depth": False},
@@ -98,6 +102,16 @@ DEFAULTS = {
 }
 
 BLEND_MODES = ("soft light", "overlay", "normal", "linear light")
+# the Depth card's choices: panel keys to the estimator node each one means, and
+# the Depth Anything V2 checkpoints by their short names
+DEPTH_ESTIMATORS = {
+    "depth_anything_v2": "DepthAnythingV2Preprocessor",
+    "depth_anything": "DepthAnythingPreprocessor",
+    "midas": "MiDaS-DepthMapPreprocessor",
+    "zoe": "Zoe-DepthMapPreprocessor",
+}
+DEPTH_MODELS = {"vitg": "depth_anything_v2_vitg.pth", "vitl": "depth_anything_v2_vitl.pth",
+                "vitb": "depth_anything_v2_vitb.pth", "vits": "depth_anything_v2_vits.pth"}
 SHARPEN_MODES = ("lucy", "unsharp")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 
@@ -631,6 +645,12 @@ def parse_post(data):
     out["aberration"]["direction"] = (out["aberration"]["direction"]
                                       if out["aberration"]["direction"] in CA_DIRECTIONS
                                       else "horizontal")
+    out["depth"]["estimator"] = (out["depth"]["estimator"]
+                                 if out["depth"]["estimator"] in DEPTH_ESTIMATORS
+                                 else "auto")
+    out["depth"]["model"] = (out["depth"]["model"]
+                             if out["depth"]["model"] in DEPTH_MODELS else "auto")
+    out["depth"]["resolution"] = max(128, min(2048, out["depth"]["resolution"]))
     out["sharpen"]["iterations"] = max(1, min(20, out["sharpen"]["iterations"]))
     out["sharpen"]["kernel_size"] = max(1, min(31, out["sharpen"]["kernel_size"]))
     out["clarity"]["radius"] = max(1, min(64, out["clarity"]["radius"]))
@@ -810,25 +830,45 @@ LAST_ROLLS = {}
 # that out takes a neural net rather than maths on the pixels. Rather than make
 # you wire a second node for it, drive whichever depth estimator you have
 # installed, exactly as the auto prompt drives WD14 and JoyCaption.
-DEPTH_NODES = ("DepthAnythingV2Preprocessor", "DepthAnythingPreprocessor",
-               "MiDaS-DepthMapPreprocessor", "Zoe-DepthMapPreprocessor")
+DEPTH_NODES = tuple(DEPTH_ESTIMATORS.values())
 
 
-def _depth_node():
+def _depth_node(want="auto"):
+    """The estimator class and name: the one the Depth card asks for when it is
+    installed, else the first installed one, with a line saying which."""
     try:
         import nodes
     except Exception:
         return None, ""
+    maps = getattr(nodes, "NODE_CLASS_MAPPINGS", {})
+    if want and want != "auto":
+        name = DEPTH_ESTIMATORS.get(want, "")
+        cls = maps.get(name)
+        if cls is not None:
+            return cls, name
+        print("[RedNode Post] the Depth card asks for %s, which is not installed; "
+              "using whichever estimator is" % (name or want), flush=True)
     for name in DEPTH_NODES:
-        cls = getattr(nodes, "NODE_CLASS_MAPPINGS", {}).get(name)
+        cls = maps.get(name)
         if cls is not None:
             return cls, name
     return None, ""
 
 
-def auto_depth(image, resolution=512):
-    """A depth map for `image` from the installed estimator, or None."""
-    cls, name = _depth_node()
+def auto_depth(image, resolution=512, settings=None):
+    """A depth map for `image` from the installed estimator, or None.
+
+    `settings` is the Depth card: which estimator, which Depth Anything V2
+    checkpoint and the working resolution. Without it the first installed
+    estimator runs at its own defaults, which is what this did before the card.
+    """
+    st = settings if isinstance(settings, dict) else {}
+    want = str(st.get("estimator") or "auto")
+    try:
+        resolution = int(st.get("resolution") or resolution)
+    except (TypeError, ValueError):
+        pass
+    cls, name = _depth_node(want)
     if cls is None:
         print("[RedNode Post] depth of field and haze need a depth map. Install "
               "comfyui_controlnet_aux (it brings Depth Anything V2) or wire one into "
@@ -838,15 +878,21 @@ def auto_depth(image, resolution=512):
         fn = getattr(cls(), cls.FUNCTION)
         accepted = set(inspect.signature(fn).parameters)
         kwargs = {"image": image, "resolution": int(resolution)}
-        # every wrapper names its checkpoint argument differently, so only fill it
-        # when the signature asks and let its own default stand otherwise
+        # the checkpoint choice is Depth Anything V2's vocabulary; every other
+        # wrapper names its file differently or has none, so it is left to them
+        model = str(st.get("model") or "auto")
+        ckpt = ""
+        if model in DEPTH_MODELS and name == "DepthAnythingV2Preprocessor":
+            ckpt = DEPTH_MODELS[model]
+            kwargs["ckpt_name"] = ckpt
         result = fn(**{k: v for k, v in kwargs.items() if k in accepted})
         if isinstance(result, dict):
             result = result.get("result", (None,))
         out = result[0] if isinstance(result, (list, tuple)) else result
         if out is None:
             return None
-        print(f"[RedNode Post] depth map made with {name}", flush=True)
+        print(f"[RedNode Post] depth map made with {name} at {int(resolution)}"
+              + (f", {ckpt}" if ckpt else ""), flush=True)
         return out
     except Exception as e:
         print(f"[RedNode Post] the installed depth estimator failed ({e}); skipping "
@@ -947,7 +993,7 @@ class RedNodePostProcess:
         extra = []
         if any(cfg[n].get("on") for n in DEPTH_EFFECTS):
             _t0 = time.time()
-            depth = auto_depth(image)
+            depth = auto_depth(image, settings=cfg.get("depth"))
             extra.append(("depth map", time.time() - _t0))
         ran = []
         LAST_ROLLS.clear()
@@ -983,9 +1029,9 @@ class RedNodePostFX:
                 "config": ("STRING", {"default": "{}", "multiline": True}),
             },
             "optional": {
-                "depth": ("IMAGE", {"tooltip": "OPTIONAL. Depth of field and haze work out "
-                                    "what is near and far by themselves; wire this only to "
-                                    "supply your own depth map"}),
+                "depth": ("IMAGE", {"tooltip": "OPTIONAL. The node makes its own depth "
+                                    "map, set up on the panel's Depth card; wire this "
+                                    "only to supply a map of your own"}),
             },
         }
 
@@ -1014,7 +1060,7 @@ class RedNodePostFX:
         if not any(cfg[n].get("on") for n in ORDER):
             return (image,)
         if depth is None and any(cfg[n].get("on") for n in DEPTH_EFFECTS):
-            depth = auto_depth(image)
+            depth = auto_depth(image, settings=cfg.get("depth"))
         ran = []
         LAST_ROLLS.clear()
         out = apply_post(image, cfg, depth=depth, on_effect=ran.append, rolls=LAST_ROLLS)
