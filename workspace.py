@@ -1015,6 +1015,12 @@ def parse_config(config_json):
     # now renders once.
     if isinstance(pin.get("passes"), (int, float)) and not isinstance(pin.get("passes"), bool):
         paint_cfg["passes"] = max(1, min(PAINT_PASS_MAX, int(pin["passes"])))
+    # the live frame's long edge while a paint run samples: 0 is the stream's
+    # default (512), -1 the decoder's own size; set on the Paint tab's header
+    try:
+        paint_cfg["live_px"] = max(-1, min(4096, int(pin.get("live_px") or 0)))
+    except (TypeError, ValueError):
+        paint_cfg["live_px"] = 0
     # Which LoRAs the paint branch carries: the main stack's ("main", the default and
     # exactly what every workflow did before this existed) or the model choice's own
     # paint stack applied to the raw wired model ("paint"). Two options, your

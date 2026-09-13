@@ -713,6 +713,7 @@ class RedNodePaintRender:
         cfg = float(pc.get("cfg", cfg))
         denoise = max(0.01, float(pc["denoise"]))
         passes = max(1, min(_ws.PAINT_PASS_MAX, int(pc.get("passes", passes))))
+        live_px = int(pc.get("live_px", 0) or 0)     # the Paint tab's live frame size
 
         # THE LOW-DENOISE CHAIN, DONE HERE INSTEAD OF BY HAND. Settling a shape means
         # running the same small denoise over the last result three or four times, and
@@ -749,7 +750,8 @@ class RedNodePaintRender:
             # on the built-in paint door) and the run (live_preview.py)
             out = _live.sampled(unique_id, nodes.common_ksampler,
                                 label=("pass %d of %d" % (i + 1, passes))
-                                      if passes > 1 else "")(
+                                      if passes > 1 else "",
+                                size=live_px or None)(
                 model, (seed + i) % (2 ** 64), steps, cfg,
                 sampler_name, scheduler, pos, neg, latent,
                 denoise=denoise)[0]

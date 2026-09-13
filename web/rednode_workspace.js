@@ -1038,6 +1038,8 @@ export function readCfg(node) {
   // value that changes nothing: the chain only starts at two
   d.paint.passes = Math.max(1, Math.min(PASS_MAX,
     typeof d.paint.passes === "number" ? Math.round(d.paint.passes) : 1));
+  // the live frame's long edge while a paint run samples: 0 = the default 512
+  if (![0, 512, 768, 1024, 1536, -1].includes(d.paint.live_px)) d.paint.live_px = 0;
   // two options: the main tab's LoRAs or this renderer's paint stack.
   // "none" existed for a day and folds into "main"; wire the raw model for bare.
   if (d.paint.lora_mode !== "main" && d.paint.lora_mode !== "paint") {
@@ -6128,7 +6130,26 @@ function paintBody(node, body) {
     e.stopPropagation();
     openSizesMenu(node, sizesB, fs);
   };
-  tsWrap.append(sizesB);
+  // THE LIVE FRAME SIZE: how big the picture-forming frames over the result pane
+  // are decoded, for paint runs only. Bigger is sharper on a big node and costs a
+  // little more per step to decode and send; the default is the stream's 512.
+  const liveSel = document.createElement("select");
+  liveSel.className = "rn-ws-select";
+  liveSel.style.cssText = "height:24px;padding:0 6px;font-size:11.5px";
+  for (const [v, l] of [[0, "Live 512 px"], [768, "Live 768 px"], [1024, "Live 1024 px"],
+                        [1536, "Live 1536 px"], [-1, "Live full size"]]) {
+    const o = document.createElement("option");
+    o.value = String(v);
+    o.textContent = l;
+    o.selected = (P.live_px || 0) === v;
+    liveSel.appendChild(o);
+  }
+  liveSel.title = "The size of the live frames drawn over the result pane while a paint "
+                + "run samples, decoded by the small VAE each step. 512 is the stream's "
+                + "default and quick; bigger is sharper on a large node and costs a "
+                + "little per step; full size is the decoder's own output.";
+  liveSel.onchange = () => { P.live_px = parseInt(liveSel.value, 10) || 0; writeCfg(node); };
+  tsWrap.append(liveSel, sizesB);
   row.append(on, hint, tsWrap, fsBtn);
   body.appendChild(row);
 

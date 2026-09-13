@@ -125,19 +125,23 @@ def our_previewer(model):
     return prev, how
 
 
-def frame_data(previewer, x0):
-    """One step's estimate as a small JPEG data URI."""
+def frame_data(previewer, x0, size=None):
+    """One step's estimate as a JPEG data URI. `size` is the long edge: None or 0
+    is FRAME_MAX, a positive number is that, -1 is the decoder's own output
+    untouched (the Paint tab's "full size", the sharpest and the most bytes)."""
     if getattr(x0, "is_nested", False):
         x0 = x0.tensors[0]
     _fmt, img, _max = previewer.decode_latent_to_preview_image("JPEG", x0)
     img = img.copy()
-    img.thumbnail((FRAME_MAX, FRAME_MAX))
+    edge = int(size) if size else FRAME_MAX
+    if edge > 0:
+        img.thumbnail((edge, edge))
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=FRAME_QUALITY)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def sampled(node_id, fn, label=""):
+def sampled(node_id, fn, label="", size=None):
     """`fn` (core's common_ksampler, or anything that builds its callback through
     latent_preview.prepare_callback) wrapped so every step also streams a frame
     tagged with `node_id`. The original prepare_callback goes back in a finally.
@@ -175,7 +179,7 @@ def sampled(node_id, fn, label=""):
                 try:
                     _send({"node": nid, "prompt_id": pid, "step": int(step) + 1,
                            "total": int(total), "label": label, "decoder": how,
-                           "data": frame_data(prev, x0)})
+                           "data": frame_data(prev, x0, size)})
                 except Exception as exc:
                     failed[0] = True
                     print("[RedNode Live Preview] frame decode failed (%s); no more "
