@@ -510,7 +510,8 @@ function openFullscreen(node) {
   ttl.textContent = "RedNode Image Review";
   const hint = document.createElement("span");
   hint.className = "hint";
-  hint.textContent = "Esc closes. Arrows and the wheel walk the history. Right-click for the menu.";
+  hint.textContent = "Esc closes. Wheel over the picture zooms, drag moves it; wheel over "
+                   + "the strip scrolls it. Arrows walk the history. Right-click for the menu.";
   const x = document.createElement("button");
   x.className = "rn-rv-fsx";
   x.textContent = "Close  (Esc)";
@@ -529,18 +530,17 @@ function openFullscreen(node) {
                  : Math.max(0, Math.min(h.length - 1, at + dir));
     render(node);
   };
-  // In the room there is no canvas under the pointer to zoom, so the plain wheel
-  // walks the history, the way a photo viewer's does. Shift+wheel still scrolls the
-  // strip, as it does on the node.
+  // The wheel means two things in the room, by where the pointer is. Over the
+  // strip it scrolls the strip, as shift+wheel does on the node. Over the picture
+  // it zooms, and that listener is on the picture itself (roomZoom); it stops the
+  // event, so nothing here can also act on it. Anywhere else it does nothing, and
+  // never reaches the canvas underneath.
   ov.addEventListener("wheel", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.shiftKey) {
-      const strip = fshost.querySelector(".rn-rv-strip");
-      if (strip) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
-      return;
-    }
-    if (e.deltaY) step(e.deltaY > 0 ? 1 : -1);
+    const strip = fshost.querySelector(".rn-rv-strip");
+    const over = e.target === strip || e.target?.closest?.(".rn-rv-strip") === strip;
+    if (strip && over) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
   }, { passive: false });
   arrowKeys(fshost, step);
 
@@ -581,6 +581,63 @@ function openFullscreen(node) {
   document.addEventListener("keydown", onKey, true);
   node._rnFsClose = close;
   render(node);
+}
+
+// Zoom and pan inside the room. The wheel over the picture zooms about the
+// pointer, a drag moves it while zoomed, and a new picture starts back at 1:1.
+// It is a transform on the img alone, so the corner tags, the batch count and
+// the right-click menu stay exactly where they were.
+function roomZoom(node, main, img, view) {
+  const key = view + ":" + (img.src || "");
+  if (node._rnZoomKey !== key) {
+    node._rnZoomKey = key;
+    node._rnZoom = { s: 1, x: 0, y: 0 };
+  }
+  const z = node._rnZoom;
+  const apply = () => {
+    img.style.transform = z.s === 1 ? "" : `translate(${z.x}px, ${z.y}px) scale(${z.s})`;
+    main.style.cursor = z.s > 1 ? "grab" : "";
+  };
+  apply();
+  main.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // the point under the pointer stays under the pointer: measured from the
+    // picture's centre, which is where the transform is anchored
+    const r = main.getBoundingClientRect();
+    const px = e.clientX - (r.left + r.width / 2);
+    const py = e.clientY - (r.top + r.height / 2);
+    let s2 = Math.max(1, Math.min(8, z.s * (e.deltaY < 0 ? 1.25 : 0.8)));
+    if (s2 <= 1.001) s2 = 1;
+    if (s2 === z.s) return;
+    const k = s2 / z.s;
+    z.x = px - (px - z.x) * k;
+    z.y = py - (py - z.y) * k;
+    z.s = s2;
+    if (s2 === 1) { z.x = 0; z.y = 0; }
+    apply();
+  }, { passive: false });
+  main.addEventListener("pointerdown", (e) => {
+    if (z.s === 1 || e.button) return;            // 1:1 has nowhere to go; left only
+    e.preventDefault();
+    e.stopPropagation();
+    let lx = e.clientX, ly = e.clientY;
+    main.style.cursor = "grabbing";
+    const move = (ev) => {
+      z.x += ev.clientX - lx;
+      z.y += ev.clientY - ly;
+      lx = ev.clientX;
+      ly = ev.clientY;
+      apply();
+    };
+    const up = () => {
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", up, true);
+      apply();
+    };
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", up, true);
+  });
 }
 
 // ---- render ----------------------------------------------------------------
@@ -638,6 +695,7 @@ function render(node) {
       if (node._rnStatsEl) node._rnStatsEl.textContent = statsLine(entry);
     };
     main.appendChild(img);
+    if (node._rnFsPrev) roomZoom(node, main, img, view);
     const corner = document.createElement("div");
     corner.className = "rn-rv-corner";
     const tag = document.createElement("span");
