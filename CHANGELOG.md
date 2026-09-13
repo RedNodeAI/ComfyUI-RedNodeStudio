@@ -75,6 +75,14 @@ things that only made one image when they should have made several.
 - Save Video announces its clip as animated, so the file shows in ComfyUI's
   outputs instead of only on the console
 
+### Example workflows
+
+- RedNodeStudio_V1.3 replaces the 1.2 Ultima file: the whole rig with the
+  Detailer's passes and the SeedVR2 upscale on the node, the Post FX chain and
+  three Image Reviews
+- RedNode_MultiAngle replaces the earlier multi-angle file: the Camera Studio
+  drives a Qwen-Image-Edit-2511 re-shoot, and Krea 2 finishes the frame
+
 ### Fixes worth naming
 
 - The socket tuck sits on its own row above the tabs; it used to wrap onto a

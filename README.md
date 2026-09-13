@@ -18,7 +18,7 @@ Search **RedNode Studio** in ComfyUI Manager, or clone it:
 git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Then open **[RedNode Studio Ultima](example_workflows/RedNodeStudio_Ultima_V1.2.json)** in ComfyUI's
+Then open **[RedNode Studio](example_workflows/RedNodeStudio_V1.3.json)** in ComfyUI's
 template browser. It is the complete rig, and ComfyUI Manager offers its additional node
 dependencies when you load it.
 
@@ -87,8 +87,8 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 
 ## Quick start
 
-Open the template browser and load **RedNode Studio Ultima**, or open
-`example_workflows/RedNodeStudio_Ultima_V1.2.json` directly. It is the whole rig wired up, and
+Open the template browser and load **RedNode Studio**, or open
+`example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and
 it reads left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you
 open it.
 
@@ -312,7 +312,7 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_Ultima_V1.2.json` is the full rig and the one to start with: a single
+- `RedNodeStudio_V1.3.json` is the full rig and the one to start with: a single
   workspace panel drives the models, the prompts and the sampler, with painting, identity
   edit, the detailer passes, a SeedVR2 upscale and the grading chain around it. The rigs and
   the Prompts tab are options rather than requirements, so a graph wired the old way keeps
@@ -321,7 +321,7 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
   Krea2-BBOX-Prompter. Manager installs packs but not models, so the upscaler's two files are
   yours to fetch: `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and
   `ema_vae_fp16.safetensors`.
-- `RedNode_MultiAngle_QwenEdit2511.json` re-shoots an existing photo from another viewpoint:
+- `RedNode_MultiAngle.json` re-shoots an existing photo from another viewpoint:
   the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
   Krea 2 finishes the frame.
 
