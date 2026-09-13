@@ -6,7 +6,7 @@ grading in one tabbed node, samples the render itself, and hands the result to a
 lists its passes instead of wiring them. Everything else in the pack, the routing, the review,
 the saving, the stage comparison, exists to keep the canvas small around that.
 
-![Painting a region in the panel, with the result beside it](images/paint.webp)
+![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
 **59 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
@@ -57,6 +57,8 @@ the full screen button and the same panel takes the whole window. The socket tuc
 row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
 forty sockets is no taller than its panel.
 
+![The Models tab: two rigs, the sampler numbers, the built-in sampler chosen](images/workspace-models.webp)
+
 **Models.** A rig is a model with its CLIP and VAE, its sampler numbers, its detailer steps, a
 second sampler pair for image to image runs, and which LoRA set it carries. Keep several and switch
 the active one; a Detailer pass can name any of them, so a face can be detailed by a different
@@ -65,7 +67,7 @@ an external one, holds the seed, and can keep two rigs in RAM at once so a two-r
 reloading. The footer carries the UI scale, the resize long edge, the studio preset and the VRAM
 tier, which clamps the expensive dials for a smaller card.
 
-![Prompt keywords and the library they expand from](images/prompt.webp)
+![The Prompts tab: a Krea 2 row in the frame editor, with the prompt preview](images/prompt.webp)
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
@@ -73,21 +75,27 @@ box for any other model. The auto prompt captions the references through a local
 with a length budget, a converter for gender and style swaps, and a saved prompts button.
 Wildcards and `@keyword` macros resolve on the run's seed.
 
+![The Camera tab: a set loaded, two subjects, the key and rim lights, the camera controls](images/camera-stage.webp)
+
 **Camera.** The stage from the camera section below, on its own tab, with a master switch. It has
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
 LoRAs, and a separate one for the Img2Img tab's re-angle.
 
-![The LoRA stack, grouped, with a random strength range](images/lora-stack.webp)
+![The LoRAs tab: Main and a named set, grouped slots, a random range, the row menu](images/lora-stack.webp)
 
 **LoRAs.** The main stack, plus named sets on their own sub-tabs. Rows drag by their grip, switch
 off by their eye, and group under titles; a strength can be a random range with the roll shown
 after the run. A rig picks its set by name, and so can a Detailer pass or a paint pass. The Paint
 tab has a stack of its own.
 
+![The Latent tab: the canvas, and two refine passes with a denoise and a scale each](images/latent.webp)
+
 **Latent.** The canvas size, with aspect presets, a random size, and an auto latent that follows
 the camera's frame at a pixel budget. Refine passes run on the blank canvas: pass 1 generates, and
 every pass after it treats what pass 1 made as its source, at a Refine dial or a denoise and a
 scale per pass with a Ramp, so a draft-small-then-climb run needs no second node.
+
+![The Img2Img tab: source, pass, RE-ANGLE, SWAP and the auto prompt](images/img2img.webp)
 
 **Img2Img.** A source picture, the pass over it, and two stages that run before the pass.
 Denoise is a full-width bar, and with several passes each one can have its own denoise and its
@@ -95,6 +103,8 @@ own scale. RE-ANGLE re-shoots the source from another viewpoint with the multi-a
 from three bands or from the Camera tab's studio, and a switch stops after the re-shot so the rig
 never enters VRAM beside the edit model. SWAP puts the Subject's face, head or whole person onto
 the picture before the pass finishes it.
+
+![The Paint tab in full screen: the mask, the result, and the paint settings](images/paint.webp)
 
 **Paint.** Mask a region, set the denoise, queue. It composites back by itself, and it runs on
 whichever renderer you point it at: a rig from the Models tab, the pack's own Paint Render, or an
@@ -114,18 +124,22 @@ signal. Right-click a picture for the gallery menu.
 **Masks.** The subject boost mask, which rides into the identity edit and is sized against the
 Subject picture, and the edit mask that confines the pass.
 
-![The grading chain and the image it produced](images/post-fx.webp)
+![The Post tab: saved looks, the effect cards, the Depth card](images/post-fx.webp)
 
 **Post.** The grading chain, fifteen effects in physical camera order, with looks you can save and
 random ranges on any dial. Depth of field and haze make their own depth map; the Depth card picks
 the estimator, the checkpoint and the resolution. RedNode Post Process finds these settings by
 itself when it sits at the end of the graph.
 
+![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
+
 **Advanced.** The workspace's preferences for this install rather than this workflow: the paint
 layout, the mask overlay, whether prompts echo to the console, and a button to unload the caption
 models.
 
 ## The Detailer
+
+![The Detailer: two sampler passes, a face detailer and an upscale, with a Live Preview watching](images/detailer.webp)
 
 RedNode Studio Detailer is the post-render work as a list, read top to bottom, with no wires
 between the passes. Each pass is a card: what it is, which rig runs it, what it aims at, and three
@@ -152,7 +166,7 @@ output into a Stage View strip, so a chain can be read step by step.
 
 ## Watching a render
 
-![Previous runs, still there](images/review.webp)
+![A Live Preview mid-render: pass 1 of 2, step 3 of 8](images/live-preview.webp)
 
 **RedNode Live Preview** shows the picture forming. Wire an image output into it and every step of
 that node's render lands on it, decoded by the small VAE, with a bar and the pass it belongs to,
@@ -165,7 +179,9 @@ it in a strip, right-click for Copy, Keep, Name and Rerun with the same seed or 
 click the picture for a full screen room where the wheel zooms and a drag pans. A run that made
 several pictures, a camera path or a batch, shows them in a column beside the big one.
 
-![The save browser, filing drafts and keepers](images/save-browser.webp)
+![The Image Review's full screen room, the history strip along the bottom](images/review.webp)
+
+![The Save node: the naming pattern, drafts and keepers, recent saves](images/save-browser.webp)
 
 **RedNode Save** files by date, preset, seed, model or size, splits drafts from keepers, and keeps
 a browser to cull a session without leaving the graph. The Review and the Save node share the
@@ -203,6 +219,8 @@ path and lights. Load one and adjust, rather than building a room from nothing e
 path renders one image per shot, so an orbit from -60 to +60 is a single queue and one scene from
 six viewpoints. That holds on the built-in sampler and on an engine rig; an external sampler gets
 one conditioning, and the tab says so when a path meets one.
+
+![The lights: key and rim with size, height, exposure and colour, and the paragraph they write](images/camera-lights.webp)
 
 Lights sit on the same stage, each with a size and a distance, and both of those do work.
 Illuminance falls off with the square of the distance, and how hard a shadow reads is really the
