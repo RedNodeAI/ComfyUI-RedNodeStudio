@@ -75,8 +75,6 @@ box for any other model. The auto prompt captions the references through a local
 with a length budget, a converter for gender and style swaps, and a saved prompts button.
 Wildcards and `@keyword` macros resolve on the run's seed.
 
-![The Camera tab: a set loaded, two subjects, the key and rim lights, the camera controls](images/camera-stage.webp)
-
 **Camera.** The stage from the camera section below, on its own tab, with a master switch. It has
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
 LoRAs, and a separate one for the Img2Img tab's re-angle.
@@ -208,6 +206,8 @@ canvas of Get and Set nodes with named channels. The wires that are not there ar
 
 ## The camera stage
 
+![The stage from above: two subjects, the camera, its path, and the sets and camera controls beside it](images/camera-stage.webp)
+
 RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
 size of the room, then move the camera. What comes out of it is not "wide shot": it is the physical
 camera language the model already answers to, a lens length, a height, a distance and an angle,
@@ -220,7 +220,7 @@ path renders one image per shot, so an orbit from -60 to +60 is a single queue a
 six viewpoints. That holds on the built-in sampler and on an engine rig; an external sampler gets
 one conditioning, and the tab says so when a path meets one.
 
-![The lights: key and rim with size, height, exposure and colour, and the paragraph they write](images/camera-lights.webp)
+![The lights: key and rim, each with size, height, exposure and colour, the light rigs, and the paragraph the stage writes](images/camera-lights.webp)
 
 Lights sit on the same stage, each with a size and a distance, and both of those do work.
 Illuminance falls off with the square of the distance, and how hard a shadow reads is really the
