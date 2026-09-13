@@ -1,8 +1,10 @@
 # RedNode Studio
 
-A complete visual workspace and workflow-control rig for ComfyUI: reference management,
-painting, wireless controls, LoRA stacking, prompt tools, stage comparison, image review and
-post-processing in one pack.
+One panel that runs the whole picture, and the nodes around it. The Studio Workspace holds the
+models, the prompts, the camera, the LoRAs, the references, the canvas, the painting and the
+grading in one tabbed node, samples the render itself, and hands the result to a Detailer that
+lists its passes instead of wiring them. Everything else in the pack, the routing, the review,
+the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![Painting a region in the panel, with the result beside it](images/paint.webp)
 
@@ -11,6 +13,7 @@ post-processing in one pack.
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
 - Run moodboard and identity-preserving Krea 2 workflows from one interface.
+- Watch every step of a render as it forms, decoded by the small VAE.
 
 Search **RedNode Studio** in ComfyUI Manager, or clone it:
 
@@ -18,73 +21,9 @@ Search **RedNode Studio** in ComfyUI Manager, or clone it:
 git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
 ```
 
-Then open **[RedNode Studio](example_workflows/RedNodeStudio_V1.3.json)** in ComfyUI's
-template browser. It is the complete rig, and ComfyUI Manager offers its additional node
-dependencies when you load it.
-
-## What it looks like
-
-The panel above is the Paint tab: mask a region, set the denoise, queue. It composites back by
-itself, and it runs on whichever sampler you point it at. Auto-mask the subject or the background
-if you would rather not paint by hand.
-
-![A full pipeline, grouped by stage](images/graph.webp)
-
-**A whole pipeline stays readable.** Stages live in subgraphs and groups, so the canvas stays this
-small however much is in it. Groups switch on and off from one panel, and branches you did not pick
-never execute.
-
-![One panel driving nodes with no wires, including into a subgraph](images/wireless.webp)
-
-**Wireless controls.** Drive other nodes' dropdowns, sliders and toggles from one panel, including
-nodes inside subgraphs. The wires that are not there are the point.
-
-![The save browser, filing drafts and keepers](images/save-browser.webp)
-
-**Saving that files itself.** Name and folder built from date, preset, seed, model or size, drafts
-split from keepers, and a browser to cull a session without leaving the graph.
-
-![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
-
-**References and dials in one panel.** Galleries per role, subject, scene, moodboard and more, with
-the fidelity and identity dials under them and captioning built in.
-
-![The LoRA stack, grouped, with a random strength range](images/lora-stack.webp)
-
-**LoRA management in one node.** Grouped slots, per-slot strength, random ranges, trigger words and
-saved stacks.
-
-![Prompt keywords and the library they expand from](images/prompt.webp)
-
-**Prompt tooling.** Highlighting, `@keyword` macros from a shared library, and a seeded wildcard
-engine.
-
-![The grading chain and the image it produced](images/post-fx.webp)
-
-**Grade without leaving the graph.** Thirteen effects in the chain, on any image, with or without
-the workspace.
-
-![Previous runs, still there](images/review.webp)
-
-**A preview that remembers.** Browse previous runs instead of losing them to the next queue.
-
-**Watch the picture form.** RedNode Live Preview shows every step of a render as it happens, decoded
-by the small VAE, with a bar and the pass it belongs to, then the finished frame. Wire the
-workspace's image output in, or the Detailer's to watch its passes. The same frames appear over the
-Paint tab's result pane while a paint run samples.
-
-![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
-
-**Compare any two points in the graph with a wipe.** Tap a stage anywhere, then drag to see what
-changed between them.
-
 ## Install
 
-Search for **RedNode Studio** in ComfyUI Manager, or clone it:
-
-```
-git clone https://github.com/RedNodeAI/ComfyUI-RedNodeStudio.git ComfyUI/custom_nodes/ComfyUI-RedNodeStudio
-```
+Search for **RedNode Studio** in ComfyUI Manager, or clone it with the line above.
 
 Restart ComfyUI. Everything registers under the `krea2` and `RedNode` categories in the node menu.
 
@@ -93,22 +32,231 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
-`example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and
-it reads left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you
-open it.
+`example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and it reads
+left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you open it.
 
-If you would rather build it yourself, the short version is:
+If you would rather build it yourself, the graph is short:
 
-1. Add **RedNode Studio (Krea 2)**. It replaces your positive `CLIPTextEncode` and outputs a
-   matched positive and negative pair.
-2. Wire `clip` in, put your instruction in the prompt box, pick a preset.
-3. Feed `subject_image` with the face you want kept, and `moodboard_style` with whatever should
-   set the look.
-4. Connect `output_latent` to your sampler's latent input. That gives you the v1.2 fit geometry.
+1. Add **RedNode Studio Workspace**. On its Models tab, make a rig: the model, its CLIP, its VAE,
+   and the sampler numbers. Choose **Built-in sampler** and the node renders on its own.
+2. Write the prompt on the Prompts tab, and put a reference on the Subject tab if there is a face
+   to keep.
+3. Wire the workspace's `image` output into **RedNode Studio Detailer**, then into **RedNode Post
+   FX**, then into **RedNode Save** and **RedNode Image Review**. Add a **RedNode Live Preview**
+   on the same output to watch the render form.
 
-Once that runs, add **RedNode Studio Workspace** and wire its `workspace` output into the studio's
-`workspace` input. The workspace takes over as the front end: image galleries, masks, dials,
-captioning, painting and grading, all in one panel.
+That is one node doing the work and four watching it. The **External sampler** setting is the
+other route: the workspace then hands out the model, the conditioning and the latent as sockets,
+and your own KSampler does the sampling, which is exactly what every workflow did before the
+built-in one existed.
+
+## The Workspace
+
+Fourteen tabs, in four groups. The strip sits on the panel and the panel sits on the node; press
+the full screen button and the same panel takes the whole window. The socket tuck, the plug on the
+row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
+forty sockets is no taller than its panel.
+
+**Models.** A rig is a model with its CLIP and VAE, its sampler numbers, its detailer steps, a
+second sampler pair for image to image runs, and which LoRA set it carries. Keep several and switch
+the active one; a Detailer pass can name any of them, so a face can be detailed by a different
+model from the one that rendered the frame. The same tab chooses between the built-in sampler and
+an external one, holds the seed, and can keep two rigs in RAM at once so a two-rig chain stops
+reloading. The footer carries the UI scale, the resize long edge, the studio preset and the VRAM
+tier, which clamps the expensive dials for a smaller card.
+
+![Prompt keywords and the library they expand from](images/prompt.webp)
+
+**Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
+the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
+box for any other model. The auto prompt captions the references through a local vision model,
+with a length budget, a converter for gender and style swaps, and a saved prompts button.
+Wildcards and `@keyword` macros resolve on the run's seed.
+
+**Camera.** The stage from the camera section below, on its own tab, with a master switch. It has
+two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
+LoRAs, and a separate one for the Img2Img tab's re-angle.
+
+![The LoRA stack, grouped, with a random strength range](images/lora-stack.webp)
+
+**LoRAs.** The main stack, plus named sets on their own sub-tabs. Rows drag by their grip, switch
+off by their eye, and group under titles; a strength can be a random range with the roll shown
+after the run. A rig picks its set by name, and so can a Detailer pass or a paint pass. The Paint
+tab has a stack of its own.
+
+**Latent.** The canvas size, with aspect presets, a random size, and an auto latent that follows
+the camera's frame at a pixel budget. Refine passes run on the blank canvas: pass 1 generates, and
+every pass after it treats what pass 1 made as its source, at a Refine dial or a denoise and a
+scale per pass with a Ramp, so a draft-small-then-climb run needs no second node.
+
+**Img2Img.** A source picture, the pass over it, and two stages that run before the pass.
+Denoise is a full-width bar, and with several passes each one can have its own denoise and its
+own scale. RE-ANGLE re-shoots the source from another viewpoint with the multi-angle edit model,
+from three bands or from the Camera tab's studio, and a switch stops after the re-shot so the rig
+never enters VRAM beside the edit model. SWAP puts the Subject's face, head or whole person onto
+the picture before the pass finishes it.
+
+**Paint.** Mask a region, set the denoise, queue. It composites back by itself, and it runs on
+whichever renderer you point it at: a rig from the Models tab, the pack's own Paint Render, or an
+outside chain through Paint Out and Paint In. Auto-mask the subject or the background rather than
+painting by hand, paint in colour to steer the fill, and run the low-denoise chain as passes in
+one Generate. While it samples, the picture forms over the result pane, step by step, at a frame
+size the tab chooses. Every result stays in a history, and one click sends the keeper through the
+post chain and into the save tree.
+
+![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
+
+**Moodboard, Subject, People, Scene.** Galleries per role, with the fidelity and identity dials
+under them and captioning built in. Subject is the face to keep; People are the extra subjects;
+Scene is a place rebuilt as in-context latents; Moodboard batches several pictures into one style
+signal. Right-click a picture for the gallery menu.
+
+**Masks.** The subject boost mask, which rides into the identity edit and is sized against the
+Subject picture, and the edit mask that confines the pass.
+
+![The grading chain and the image it produced](images/post-fx.webp)
+
+**Post.** The grading chain, fifteen effects in physical camera order, with looks you can save and
+random ranges on any dial. Depth of field and haze make their own depth map; the Depth card picks
+the estimator, the checkpoint and the resolution. RedNode Post Process finds these settings by
+itself when it sits at the end of the graph.
+
+**Advanced.** The workspace's preferences for this install rather than this workflow: the paint
+layout, the mask overlay, whether prompts echo to the console, and a button to unload the caption
+models.
+
+## The Detailer
+
+RedNode Studio Detailer is the post-render work as a list, read top to bottom, with no wires
+between the passes. Each pass is a card: what it is, which rig runs it, what it aims at, and three
+boxes under that. Sampling holds steps, CFG, sampler, scheduler and a start and end step window,
+where anything left empty inherits the rig's own numbers. Strength holds Scale and Denoise as bars
+and the Repeat count, and a repeat above one offers a denoise and a scale per round with a Ramp.
+Prompt holds the LoRA stack switch and its set, the four Krea 2 references, a LoRA for this pass
+only, which Prompts-tab row it reads, and a box that wins over all of that when it has words.
+
+Three kinds of pass:
+
+- **Sampler**: the whole frame refined at a denoise, an image to image over what arrived. Its
+  scale sticks, so 0.5 then 2.0 across two passes is the shrink-and-regrow chain.
+- **Detailer**: SAM3 segments a target, face, hair, hands, eyes, clothes or background, the crop
+  renders at a working resolution, and goes back under a feathered mask. The SAM file and its
+  precision are picked once on the node.
+- **Upscale**: SeedVR2 at a size, 720p, 1080p, 2K, 1440p or 4K as a pixel budget, with the short
+  edge worked out from the frame's own aspect. The loader dials sit on the card.
+
+Duplicate a pass with the button beside its delete and nudge one number, which is how a chain
+gets built. Group titles fold and switch a set of passes at once. Premade layouts ship, the face
+identity chain among them, and your own save by name. Taps record the input, every pass and the
+output into a Stage View strip, so a chain can be read step by step.
+
+## Watching a render
+
+![Previous runs, still there](images/review.webp)
+
+**RedNode Live Preview** shows the picture forming. Wire an image output into it and every step of
+that node's render lands on it, decoded by the small VAE, with a bar and the pass it belongs to,
+then the finished frame. Both the workspace's built-in sampler and the Detailer's passes stream,
+whatever ComfyUI's own preview setting is. For Krea 2 the sharp version needs
+`lighttaew2_1.safetensors` in `models/vae_approx`; without it the frames are the colour smear.
+
+**RedNode Image Review** is a preview that remembers: the newest picture on top and the runs before
+it in a strip, right-click for Copy, Keep, Name and Rerun with the same seed or fresh ones. Double
+click the picture for a full screen room where the wheel zooms and a drag pans. A run that made
+several pictures, a camera path or a batch, shows them in a column beside the big one.
+
+![The save browser, filing drafts and keepers](images/save-browser.webp)
+
+**RedNode Save** files by date, preset, seed, model or size, splits drafts from keepers, and keeps
+a browser to cull a session without leaving the graph. The Review and the Save node share the
+run's id, so keeping the picture you are looking at needs no wire.
+
+![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
+
+**RedNode Stage Tap and Stage View** photograph any point in the graph and compare two of them with
+a wipe. The Detailer's Taps feed the same strip.
+
+## Keeping the canvas small
+
+![A full pipeline, grouped by stage](images/graph.webp)
+
+Stages live in subgraphs and groups, so the canvas stays this small however much is in it. Group
+Control switches groups on and off from one panel, Group Modes names whole configurations, and
+branches you did not pick never execute.
+
+![One panel driving nodes with no wires, including into a subgraph](images/wireless.webp)
+
+Control Panel drives other nodes' dropdowns, sliders and toggles from one node, including nodes
+inside subgraphs. Palette and Router route the graph by colour. Sender and Grabber replace a
+canvas of Get and Set nodes with named channels. The wires that are not there are the point.
+
+## The camera stage
+
+RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
+size of the room, then move the camera. What comes out of it is not "wide shot": it is the physical
+camera language the model already answers to, a lens length, a height, a distance and an angle,
+worked out from where you actually put things. The tab has its own switch like the others, so the
+whole camera leaves the prompt in one click when you want the words to do the framing instead.
+
+Fifteen setups ship with it, and a set carries the whole stage at once: camera, subjects, room size,
+path and lights. Load one and adjust, rather than building a room from nothing every time. A camera
+path renders one image per shot, so an orbit from -60 to +60 is a single queue and one scene from
+six viewpoints. That holds on the built-in sampler and on an engine rig; an external sampler gets
+one conditioning, and the tab says so when a path meets one.
+
+Lights sit on the same stage, each with a size and a distance, and both of those do work.
+Illuminance falls off with the square of the distance, and how hard a shadow reads is really the
+light's angular size from where the subject is standing, so a wide source close in and a small one
+across the room come out as different words. Those words describe light and never fixtures: name a
+lamp in a prompt and you get a lamp in the picture, so the wording stays on what the light is doing
+to the scene. Exposure runs in stops either side of a centred zero, darker one way and brighter the
+other, and colour runs in mireds either side of neutral daylight, warm one way and cool the other.
+
+RedNode Camera LoRAs turns that same geometry into slider strengths. Four camera sliders, zoom,
+height, orbit and back, each one off, auto or manual. On auto the slider follows the stage, so
+pushing the camera in moves zoom with it and there is no second number to keep in sync. The two
+lighting sliders work the same way off the exposure and colour dials. Every slot is empty until you
+pick a file, and the node is happy with none of them.
+
+Three of the sliders are mine, trained for Krea 2, and they are attached to the
+[v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0):
+`camera_height_krea2_rednode`, `camera_orbit_krea2_rednode` and `camera_back_krea2_rednode`. Free to
+use and share, just not to sell. The zoom slider and the colour temperature slider are Loraholic's,
+on Civitai: [zoom](https://civitai.com/models/2717832) and
+[colour temperature](https://civitai.com/models/2760910). The brightness slider is PornMaster Krea2
+Light Slider, also on Civitai. They all go in `models/loras`.
+
+## The prompt frame
+
+Word order sets the framing. Open a prompt with the person and you get a close shot. Put the room
+first and the camera pulls back, same words. That is most of what "wide" and "close" actually mean
+to the model, and it is the first thing to go once a prompt is long enough to be useful.
+
+RedNode Prompt Frame splits the writing into Subject and Surroundings and puts a framing dial
+between them. Portrait, Half body, Balanced, Full scene, Roomscale. The two tight steps lead with
+the subject and open it with "A close view of" or "A three-quarter view of". Balanced and wider lead
+with the surroundings and set the subject inside them, then add a scale cue at the two widest steps,
+"seen full length" and "small in the distance". Your wording is never rewritten. Only the order and
+the joining words change.
+
+At Full scene and Roomscale a subject with nowhere to stand can drop out of the picture entirely.
+Two dropdowns build a placement, "beside the doorway", or type your own and it overrides both.
+
+Style blocks, twenty lighting setups and a brightness ramp slot in around that text at fixed
+positions. The second output is a notice line, and it does real work: it says when the style already
+lights its own scene and the lighting dropdown will fight it, when a wide framing has no placement,
+when the prompt has run past the 90 to 150 word working range, and when Portrait framing carries
+surroundings long enough to pull the camera back on their own. Wildcards and @keywords resolve in
+the finished text, seeded, the same as the Prompt Box.
+
+The panel builds its preview by asking the node, so what it shows on the canvas is what renders.
+The same editor is what a Krea 2 prompt row on the Workspace's Prompts tab is.
+
+RedNode Describe To Boxes fills those boxes from a picture. It sends the image to a local Ollama
+vision model, asks for five labelled sections, and hands back Subject, Surroundings and Light and
+colour on separate outputs, with the raw reply on a fourth in case the split came back malformed.
+Ollama is the only engine verified so far. The vision model is released from VRAM as soon as the
+reply lands, so it does not sit on top of your checkpoint for the rest of the queue.
 
 ## The Krea 2 system
 
@@ -137,87 +285,23 @@ To use it you need:
 - `qwen_image_vae`
 - For editing, a krea2_edit LoRA at strength 1.0 through LoraLoaderModelOnly
 
+The Workspace folds the studio in: a Krea 2 rig encodes through the identity system with the tab
+images loaded, so the references never need a wire. **RedNode Studio (Krea 2)** is the same encode
+as a node of its own, for a classic graph: it replaces the positive `CLIPTextEncode`, takes the
+references on sockets, and outputs a matched positive and negative pair.
+
 Companion to the [Forge Neo version](https://github.com/RedNodeAI/forge-neo-krea2-toolkit), same
 algorithms and same knobs.
 
-## The prompt frame
-
-Word order sets the framing. Open a prompt with the person and you get a close shot. Put the room
-first and the camera pulls back, same words. That is most of what "wide" and "close" actually mean
-to the model, and it is the first thing to go once a prompt is long enough to be useful.
-
-RedNode Prompt Frame splits the writing into Subject and Surroundings and puts a framing dial
-between them. Portrait, Half body, Balanced, Full scene, Roomscale. The two tight steps lead with
-the subject and open it with "A close view of" or "A three-quarter view of". Balanced and wider lead
-with the surroundings and set the subject inside them, then add a scale cue at the two widest steps,
-"seen full length" and "small in the distance". Your wording is never rewritten. Only the order and
-the joining words change.
-
-At Full scene and Roomscale a subject with nowhere to stand can drop out of the picture entirely.
-Two dropdowns build a placement, "beside the doorway", or type your own and it overrides both.
-
-Style blocks, twenty lighting setups and a brightness ramp slot in around that text at fixed
-positions. The second output is a notice line, and it does real work: it says when the style already
-lights its own scene and the lighting dropdown will fight it, when a wide framing has no placement,
-when the prompt has run past the 90 to 150 word working range, and when Portrait framing carries
-surroundings long enough to pull the camera back on their own. Wildcards and @keywords resolve in
-the finished text, seeded, the same as the Prompt Box.
-
-The panel builds its preview by asking the node, so what it shows on the canvas is what renders.
-
-RedNode Describe To Boxes fills those boxes from a picture. It sends the image to a local Ollama
-vision model, asks for five labelled sections, and hands back Subject, Surroundings and Light and
-colour on separate outputs, with the raw reply on a fourth in case the split came back malformed.
-Ollama is the only engine verified so far. The vision model is released from VRAM as soon as the
-reply lands, so it does not sit on top of your checkpoint for the rest of the queue.
-
-## The camera stage
-
-RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
-size of the room, then move the camera. What comes out of it is not "wide shot": it is the physical
-camera language the model already answers to, a lens length, a height, a distance and an angle,
-worked out from where you actually put things. The tab has its own switch like the others, so the
-whole camera leaves the prompt in one click when you want the words to do the framing instead.
-
-Fifteen setups ship with it, and a set carries the whole stage at once: camera, subjects, room size,
-path and lights. Load one and adjust, rather than building a room from nothing every time. A camera
-path renders one image per shot, so an orbit from -60 to +60 is a single queue and one scene from
-six viewpoints.
-
-Lights sit on the same stage, each with a size and a distance, and both of those do work.
-Illuminance falls off with the square of the distance, and how hard a shadow reads is really the
-light's angular size from where the subject is standing, so a wide source close in and a small one
-across the room come out as different words. Those words describe light and never fixtures: name a
-lamp in a prompt and you get a lamp in the picture, so the wording stays on what the light is doing
-to the scene. Exposure runs in stops either side of a centred zero, darker one way and brighter the
-other, and colour runs in mireds either side of neutral daylight, warm one way and cool the other.
-
-RedNode Camera LoRAs turns that same geometry into slider strengths. Four camera sliders, zoom,
-height, orbit and back, each one off, auto or manual. On auto the slider follows the stage, so
-pushing the camera in moves zoom with it and there is no second number to keep in sync. The two
-lighting sliders work the same way off the exposure and colour dials. Every slot is empty until you
-pick a file, and the node is happy with none of them.
-
-Three of the sliders are mine, trained for Krea 2, and they are attached to the
-[v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0):
-`camera_height_krea2_rednode`, `camera_orbit_krea2_rednode` and `camera_back_krea2_rednode`. Free to
-use and share, just not to sell. The zoom slider and the colour temperature slider are Loraholic's,
-on Civitai: [zoom](https://civitai.com/models/2717832) and
-[colour temperature](https://civitai.com/models/2760910). The brightness slider is PornMaster Krea2
-Light Slider, also on Civitai. They all go in `models/loras`.
-
 ## The nodes
-
-Every node carries its own description and tooltips inside ComfyUI, so hover anything you
-are unsure about.
 
 ### Studio and workspace
 
 | Node | What it does |
 |---|---|
-| RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. Start here. |
-| RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round, pick which Prompts-tab row it reads, and a SeedVR2 upscale pass (720p to 4K) sits in the same list; the SAM file and precision are picked on the node. |
 | RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. The Latent tab runs refine passes on a blank canvas, the Img2Img tab's RE-ANGLE can stop after the re-shot so the rig stays out of VRAM, a rig can name a second sampler pair for image to image runs, and a camera path renders one image per shot on the built-in sampler and on an engine rig. |
+| RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round, pick which Prompts-tab row it reads, and a SeedVR2 upscale pass (720p to 4K) sits in the same list; the SAM file and precision are picked on the node. |
+| RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. The studio the Workspace folds in, for a classic graph. |
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
 
 RedNode Studio Preset Save and Preset Load still ship and still work, but the Workspace covers
@@ -319,8 +403,8 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
 
 - `RedNodeStudio_V1.3.json` is the full rig and the one to start with: a single
   workspace panel drives the models, the prompts and the sampler, with painting, identity
-  edit, the detailer passes, a SeedVR2 upscale and the grading chain around it. The rigs and
-  the Prompts tab are options rather than requirements, so a graph wired the old way keeps
+  edit, the Detailer's passes and its SeedVR2 upscale, and the grading chain around it. The rigs
+  and the Prompts tab are options rather than requirements, so a graph wired the old way keeps
   working. It pulls in a few other packs and ComfyUI Manager offers them when you open it:
   SeedVR2 Video Upscaler, pysssss custom-scripts, easy-use, comfyui-krea-moodboards and
   Krea2-BBOX-Prompter. Manager installs packs but not models, so the upscaler's two files are
@@ -330,10 +414,11 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
   the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
   Krea 2 finishes the frame.
 
-One optional pack matters to the STUDIO itself rather than to a workflow:
-**ComfyUI-Easy-Sam3** gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in
-`models/sam3`). Without it the pack runs fine and a detailer pass says so and passes the picture
-through untouched, rather than failing.
+Two optional packs matter to the STUDIO itself rather than to a workflow. **ComfyUI-Easy-Sam3**
+gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in `models/sam3`). Without
+it the pack runs fine and a detailer pass says so and passes the picture through untouched, rather
+than failing. **ComfyUI-SeedVR2_VideoUpscaler** is what the Detailer's upscale pass runs on, and
+an upscale pass without it passes the picture through the same way.
 
 Baked-in settings worth knowing: ModelSamplingAuraFlow shift 1.15 (ComfyUI's stock Krea 2 default,
 the node is there as a handle), Euler with the simple scheduler, turbo at 8 steps and CFG 1. With
@@ -418,6 +503,3 @@ ethanfel and ostris for the Krea 2 vision-conditioning recipes. Krea.ai for Krea
 the Krea Community License.
 
 Not affiliated with Krea.ai.
-
-On Civitai, with release zips and showcase images:
-[civitai.com/models/2794961](https://civitai.com/models/2794961/krea-2-moodboard-identity-edit-comfyui-nodes-forge-neo)
