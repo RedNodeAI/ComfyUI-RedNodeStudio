@@ -23,7 +23,10 @@ css.textContent = `
   font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden}
 .rn-lp-main{flex:1;min-height:100px;display:flex;align-items:center;justify-content:center;
   background:#111316;border-radius:6px;overflow:hidden;position:relative}
-.rn-lp-main img{max-width:100%;max-height:100%;object-fit:contain}
+/* The frame FILLS the pane, aspect kept: a streamed frame is 512px on its long
+   edge and a node is often bigger, so capping at natural size left a small
+   picture in a large box. contain scales it up as far as the pane allows. */
+.rn-lp-main img{width:100%;height:100%;object-fit:contain}
 .rn-lp-tag{position:absolute;top:5px;left:5px;background:#000c;color:#d4ffe4;font-size:10.5px;
   padding:2px 7px;border-radius:4px;pointer-events:none;font-variant-numeric:tabular-nums}
 .rn-lp-tag.live{color:#ffd58a}
