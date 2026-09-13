@@ -466,11 +466,10 @@ goes. ComfyUI Manager installs the packs; the files are yours to fetch.
 | `camera_back_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_back_krea2_rednode.safetensors) |
 | Zoom slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2717832) |
 | Colour temperature slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2760910) |
-| PornMaster Krea2 Light Slider V1, the brightness slider | `models/loras` | Civitai, search by name |
 
-The three camera files are mine: free to use and share, not to sell. The other three are their
-authors' and are only ever linked. Every slider slot is optional; the Camera LoRAs card is happy
-with none of them.
+The three camera files are mine: free to use and share, not to sell. The two Loraholic sliders
+are theirs and are only ever linked. Every slider slot is optional; the Camera LoRAs card is happy
+with none of them, and the brightness slot takes whichever light slider you pick.
 
 ### The Detailer
 
