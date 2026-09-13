@@ -131,7 +131,8 @@ function render(node) {
   const tag = document.createElement("span");
   tag.className = "rn-lp-tag " + (s.kind === "live" ? "live" : s.kind === "wait" ? "wait" : "");
   tag.textContent = s.kind === "live"
-    ? (s.total ? `rendering ${s.step} / ${s.total}` : "rendering")
+    ? (s.label ? `${s.label} · ` : "")
+      + (s.total ? `rendering ${s.step} / ${s.total}` : "rendering")
       + (s.decoder ? ` · ${String(s.decoder).replace(/\.safetensors$/i, "")}` : "")
     : s.kind === "done" ? "done"
     : s.kind === "wait" ? "waiting for the run" : "";
@@ -206,6 +207,7 @@ api.addEventListener("rednode-live-frame", (e) => {
     s.step = Number(d.step) || 0;
     s.total = Number(d.total) || 0;
     s.decoder = d.decoder || "";
+    s.label = d.label || "";
     s.kind = "live";
     render(n);
   }

@@ -2818,7 +2818,12 @@ class RedNodeStudioWorkspace:
                         # decoded by the pack's own tiny decoder, to any Live
                         # Preview node wired to this one (live_preview.py)
                         from . import live_preview as _live
-                        _out = _live.sampled(unique_id, _core.common_ksampler)(
+                        _lbl = " · ".join(x for x in [
+                            ("shot %d of %d" % (_si + 1, len(_shot_list))
+                             if _si is not None and len(_shot_list) > 1 else ""),
+                            ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
+                        ] if x)
+                        _out = _live.sampled(unique_id, _core.common_ksampler, label=_lbl)(
                             _model_i, _seed + _p, rig_steps, rig_cfg, rig_sampler,
                             rig_scheduler, _pos_i, negative, _out,
                             denoise=_dnp)[0]

@@ -718,6 +718,10 @@ class RedNodeStudioDetailer:
             for r in range(max(1, reps)):
                 rseed = seed + i + r * 131
                 sr = round_stage(s, r)          # this round's denoise and scale
+                # what the streamed frames say they are (live_preview.py)
+                self._rn_live_label = "%s %d of %d" % (
+                    "detailer" if s["type"] == "detailer" else "pass", i, len(stages)) \
+                    + (" · round %d of %d" % (r + 1, reps) if reps > 1 else "")
                 if s["type"] == "sampler":
                     if use_picture:
                         pic = self._resize(out, sr["scale"])
@@ -795,7 +799,8 @@ class RedNodeStudioDetailer:
                   % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]),
                   flush=True)
         lat = {"samples": vae.encode(work[:, :, :, :3])}
-        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample)(
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
+                            label=getattr(self, "_rn_live_label", ""))(
             model, seed, steps, cfg_v, sampler, scheduler, pos,
             neg, lat, s["denoise"], start, end)
         img = vae.decode(out["samples"])
@@ -861,7 +866,8 @@ class RedNodeStudioDetailer:
             # swap lands on the face it is looking at, not on the whole frame
             pos, neg = encode_for(work)
         lat = {"samples": vae.encode(work)}
-        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample)(
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
+                            label=getattr(self, "_rn_live_label", ""))(
             model, seed, steps, cfg_v, sampler, scheduler, pos,
             neg, lat, s["denoise"], start, end)
         rendered = vae.decode(out["samples"])

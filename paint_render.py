@@ -747,7 +747,9 @@ class RedNodePaintRender:
             # every step streams a small frame to the Paint tab's result pane and
             # to any Live Preview node, tagged with this node (the workspace's id
             # on the built-in paint door) and the run (live_preview.py)
-            out = _live.sampled(unique_id, nodes.common_ksampler)(
+            out = _live.sampled(unique_id, nodes.common_ksampler,
+                                label=("pass %d of %d" % (i + 1, passes))
+                                      if passes > 1 else "")(
                 model, (seed + i) % (2 ** 64), steps, cfg,
                 sampler_name, scheduler, pos, neg, latent,
                 denoise=denoise)[0]

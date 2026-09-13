@@ -5223,7 +5223,7 @@ function bindPaintProgress(node, promptId) {
 // tab per step would destroy whatever dropdown is open under the pointer.
 function showPaintLiveFrame(node, d) {
   node._rnPaintLive = { src: String(d.data), step: Number(d.step) || 0,
-                        total: Number(d.total) || 0 };
+                        total: Number(d.total) || 0, label: String(d.label || "") };
   const pane = node._rnRootEl?.querySelector?.(".rn-ws-presult");
   if (!pane) return;                       // another tab is up; drawn when Paint is
   paintLiveOverlay(node, pane);
@@ -5249,7 +5249,8 @@ function paintLiveOverlay(node, pane) {
     pane.appendChild(tag);
   }
   if (img.src !== live.src) img.src = live.src;
-  tag.textContent = live.total ? `rendering ${live.step} / ${live.total}` : "rendering";
+  tag.textContent = (live.label ? `${live.label} · ` : "")
+                  + (live.total ? `rendering ${live.step} / ${live.total}` : "rendering");
 }
 
 function clearPaintLive(node) {
