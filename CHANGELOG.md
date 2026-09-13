@@ -78,8 +78,8 @@ things that only made one image when they should have made several.
 ### Example workflows
 
 - RedNodeStudio_V1.3 replaces the 1.2 Ultima file: the whole rig with the
-  Detailer's passes and the SeedVR2 upscale on the node, the Post FX chain and
-  three Image Reviews
+  Detailer's passes and the SeedVR2 upscale on the node, the Post FX chain,
+  three Image Reviews and two Live Previews watching the render and the passes
 - RedNode_MultiAngle replaces the earlier multi-angle file: the Camera Studio
   drives a Qwen-Image-Edit-2511 re-shoot, and Krea 2 finishes the frame
 

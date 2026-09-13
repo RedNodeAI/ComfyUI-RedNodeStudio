@@ -1,65 +1,157 @@
 {
-  "id": "a215b3ce-3c08-4ec7-bafb-4e96cade0a6f",
+  "id": "2c243531-a640-4186-8b2b-8e846d1ebf0f",
   "revision": 0,
-  "last_node_id": 8967,
-  "last_link_id": 75283,
+  "last_node_id": 37,
+  "last_link_id": 51,
   "nodes": [
     {
-      "id": 30,
-      "type": "RedNodeImageReview",
+      "id": 4,
+      "type": "Krea2BackgroundEffect",
       "pos": [
-        -7273.07620921364,
-        160.94886434572058
+        -10091.093007558857,
+        343.1693929766795
       ],
       "size": [
-        265.1004845942134,
-        400.4027813801001
+        448.3498998853638,
+        765.5150356698183
       ],
       "flags": {},
-      "order": 6,
+      "order": 0,
       "mode": 0,
       "inputs": [
         {
-          "label": "images",
-          "localized_name": "images",
-          "name": "images",
-          "type": "IMAGE",
-          "link": 42
+          "label": "prompt_in",
+          "localized_name": "prompt_in",
+          "name": "prompt_in",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt_in"
+          },
+          "link": null
+        },
+        {
+          "label": "enable_effect",
+          "localized_name": "enable_effect",
+          "name": "enable_effect",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "enable_effect"
+          },
+          "link": null
+        },
+        {
+          "label": "category",
+          "localized_name": "category",
+          "name": "category",
+          "type": "STRING",
+          "widget": {
+            "name": "category"
+          },
+          "link": null
+        },
+        {
+          "label": "preset",
+          "localized_name": "preset",
+          "name": "preset",
+          "type": "STRING",
+          "widget": {
+            "name": "preset"
+          },
+          "link": null
+        },
+        {
+          "label": "mode",
+          "localized_name": "mode",
+          "name": "mode",
+          "type": "STRING",
+          "widget": {
+            "name": "mode"
+          },
+          "link": null
+        },
+        {
+          "label": "custom_preset",
+          "localized_name": "custom_preset",
+          "name": "custom_preset",
+          "type": "STRING",
+          "widget": {
+            "name": "custom_preset"
+          },
+          "link": null
+        },
+        {
+          "label": "style_boost",
+          "localized_name": "style_boost",
+          "name": "style_boost",
+          "type": "STRING",
+          "widget": {
+            "name": "style_boost"
+          },
+          "link": null
         }
       ],
       "outputs": [
         {
-          "label": "images",
-          "localized_name": "images",
-          "name": "images",
-          "type": "IMAGE",
+          "label": "prompt_out",
+          "localized_name": "prompt_out",
+          "name": "prompt_out",
+          "type": "STRING",
+          "links": [
+            5
+          ]
+        },
+        {
+          "label": "background_text",
+          "localized_name": "background_text",
+          "name": "background_text",
+          "type": "STRING",
           "links": []
         }
       ],
-      "title": "Detailer",
+      "title": "Scene",
       "properties": {
-        "cnr_id": "rednode-studio",
-        "ver": "1.0.0",
-        "Node name for S&R": "RedNodeImageReview",
-        "rn_review": [],
+        "aux_id": "ukr8b3g-cmyk/Krea2-BBOX-Prompter",
+        "ver": "1b2b6bee2f8dbf4548cae94b4ec5145c8b82af82",
+        "Node name for S&R": "Krea2BackgroundEffect",
+        "k2cfEffectState": {
+          "version": "v15",
+          "widgets_values": [
+            "",
+            false,
+            "Background",
+            "Capsule Hotel Pod Row",
+            "Preset",
+            "",
+            ""
+          ],
+          "saved_at": 1789314042542
+        },
         "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
+          "widget_ue_connectable": {
+            "prompt_in": true
+          },
+          "version": "7.8",
+          "input_ue_unconnectable": {}
         }
       },
       "widgets_values": [
+        "",
+        false,
+        "Background",
+        "Capsule Hotel Pod Row",
+        "Preset",
+        "",
         ""
       ],
-      "color": "#233",
-      "bgcolor": "#355"
+      "color": "#2a363b",
+      "bgcolor": "#3f5159"
     },
     {
       "id": 2,
       "type": "KreaMoodboardVisualBrowser",
       "pos": [
-        -10472.023940214242,
-        209.8670911588944
+        -10544.070039990425,
+        541.9771795704395
       ],
       "size": [
         427.1458602259663,
@@ -68,7 +160,7 @@
       "flags": {
         "collapsed": false
       },
-      "order": 0,
+      "order": 1,
       "mode": 4,
       "inputs": [
         {
@@ -209,157 +301,15 @@
       "bgcolor": "#3f5159"
     },
     {
-      "id": 4,
-      "type": "Krea2BackgroundEffect",
-      "pos": [
-        -10015.36704213014,
-        210.76118728344974
-      ],
-      "size": [
-        447.1963260190232,
-        727.4435773302006
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [
-        {
-          "label": "prompt_in",
-          "localized_name": "prompt_in",
-          "name": "prompt_in",
-          "type": "STRING",
-          "widget": {
-            "name": "prompt_in"
-          },
-          "link": null
-        },
-        {
-          "label": "enable_effect",
-          "localized_name": "enable_effect",
-          "name": "enable_effect",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "enable_effect"
-          },
-          "link": null
-        },
-        {
-          "label": "category",
-          "localized_name": "category",
-          "name": "category",
-          "type": "STRING",
-          "widget": {
-            "name": "category"
-          },
-          "link": null
-        },
-        {
-          "label": "preset",
-          "localized_name": "preset",
-          "name": "preset",
-          "type": "STRING",
-          "widget": {
-            "name": "preset"
-          },
-          "link": null
-        },
-        {
-          "label": "mode",
-          "localized_name": "mode",
-          "name": "mode",
-          "type": "STRING",
-          "widget": {
-            "name": "mode"
-          },
-          "link": null
-        },
-        {
-          "label": "custom_preset",
-          "localized_name": "custom_preset",
-          "name": "custom_preset",
-          "type": "STRING",
-          "widget": {
-            "name": "custom_preset"
-          },
-          "link": null
-        },
-        {
-          "label": "style_boost",
-          "localized_name": "style_boost",
-          "name": "style_boost",
-          "type": "STRING",
-          "widget": {
-            "name": "style_boost"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "prompt_out",
-          "localized_name": "prompt_out",
-          "name": "prompt_out",
-          "type": "STRING",
-          "links": [
-            5
-          ]
-        },
-        {
-          "label": "background_text",
-          "localized_name": "background_text",
-          "name": "background_text",
-          "type": "STRING",
-          "links": []
-        }
-      ],
-      "title": "Scene",
-      "properties": {
-        "aux_id": "ukr8b3g-cmyk/Krea2-BBOX-Prompter",
-        "ver": "1b2b6bee2f8dbf4548cae94b4ec5145c8b82af82",
-        "Node name for S&R": "Krea2BackgroundEffect",
-        "k2cfEffectState": {
-          "version": "v15",
-          "widgets_values": [
-            "",
-            false,
-            "Background",
-            "Capsule Hotel Pod Row",
-            "Preset",
-            "",
-            ""
-          ],
-          "saved_at": 1789312797186
-        },
-        "ue_properties": {
-          "widget_ue_connectable": {
-            "prompt_in": true
-          },
-          "version": "7.8",
-          "input_ue_unconnectable": {}
-        }
-      },
-      "widgets_values": [
-        "",
-        false,
-        "Background",
-        "Capsule Hotel Pod Row",
-        "Preset",
-        "",
-        ""
-      ],
-      "color": "#2a363b",
-      "bgcolor": "#3f5159"
-    },
-    {
       "id": 7,
       "type": "RedNodeImageReview",
       "pos": [
-        -7571.133500134305,
-        158.59314003748986
+        -7593.007132673631,
+        19.049656699738236
       ],
       "size": [
-        284.4629299060143,
-        407.304573703704
+        278.9471036547611,
+        404.94064387331
       ],
       "flags": {},
       "order": 4,
@@ -403,18 +353,66 @@
       "bgcolor": "#355"
     },
     {
-      "id": 8967,
-      "type": "RedNodePostFX",
+      "id": 35,
+      "type": "RedNodeLivePreview",
       "pos": [
-        -6190.586165977713,
-        110.78613242374186
+        -6134.135686699842,
+        116.55536517878289
       ],
       "size": [
-        701.9773931330301,
-        1129.402772727898
+        370.2014997995084,
+        688.4645971472125
       ],
       "flags": {},
-      "order": 7,
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 49
+        }
+      ],
+      "outputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeLivePreview",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        ""
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 29,
+      "type": "RedNodeStudioAdvanced",
+      "pos": [
+        -6994.155963630087,
+        93.56453355350665
+      ],
+      "size": [
+        842.594891456496,
+        1132.851821414561
+      ],
+      "flags": {},
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -422,14 +420,16 @@
           "localized_name": "image",
           "name": "image",
           "type": "IMAGE",
-          "link": 75281
+          "link": 39
         },
         {
-          "label": "depth",
-          "localized_name": "depth",
-          "name": "depth",
-          "shape": 7,
-          "type": "IMAGE",
+          "label": "config",
+          "localized_name": "config",
+          "name": "config",
+          "type": "STRING",
+          "widget": {
+            "name": "config"
+          },
           "link": null
         }
       ],
@@ -440,43 +440,52 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            75282,
-            75283
+            42,
+            45,
+            49
           ]
+        },
+        {
+          "label": "report",
+          "localized_name": "report",
+          "name": "report",
+          "type": "STRING",
+          "links": null
         }
       ],
+      "title": "RedNode Studio Detailer",
       "properties": {
         "cnr_id": "rednode-studio",
         "ver": "1.0.0",
-        "Node name for S&R": "RedNodePostFX",
+        "Node name for S&R": "RedNodeStudioAdvanced",
         "ue_properties": {
           "widget_ue_connectable": {},
           "input_ue_unconnectable": {},
           "version": "7.8"
-        }
+        },
+        "rn_adv_folds": {}
       },
       "widgets_values": [
-        "{\"post\":{\"denoise\":{\"on\":true,\"sigma\":0.67,\"threshold\":0.05,\"radius_multiplier\":1.149,\"rand\":{}},\"color\":{\"on\":true,\"brightness\":0.95,\"contrast\":1.11,\"saturation\":1.16,\"temperature\":-0.02,\"tint\":0,\"black_point\":-0.01,\"rand\":{}},\"clarity\":{\"on\":true,\"radius\":22,\"offset\":2,\"strength\":0.4,\"blend_mode\":\"soft light\",\"blend_if_dark\":50,\"blend_if_light\":157,\"dark_intensity\":0.4,\"light_intensity\":0,\"rand\":{}},\"sharpen\":{\"on\":true,\"mode\":\"lucy\",\"iterations\":3,\"kernel_size\":3,\"amount\":1.24,\"radius\":1.09,\"rand\":{}},\"dof\":{\"on\":false,\"focus\":0.24,\"range\":0.21,\"blur\":0.86,\"flip_depth\":0,\"rand\":{}},\"haze\":{\"on\":false,\"strength\":0.14,\"start\":0.36,\"lift\":0.04,\"flip_depth\":0,\"rand\":{}},\"light_wrap\":{\"on\":true,\"strength\":0.17,\"radius\":2.5,\"threshold\":0.7,\"rand\":{}},\"diffusion\":{\"on\":true,\"strength\":0.07,\"radius\":4,\"black_lift\":0.03,\"rand\":{}},\"rolloff\":{\"on\":true,\"knee\":0.14,\"strength\":0.2,\"rand\":{}},\"bloom\":{\"on\":true,\"intensity\":0.13,\"threshold\":0.36,\"smoothing\":0.23,\"radius_multiplier\":1,\"saturation\":0.85,\"exposure\":1,\"rand\":{}},\"halation\":{\"on\":true,\"strength\":0.18,\"threshold\":0.7,\"radius\":2.7,\"warmth\":0.7,\"rand\":{\"strength\":[0.25,0.46]}},\"distortion\":{\"on\":false,\"amount\":0,\"edge_softness\":0,\"rand\":{}},\"aberration\":{\"on\":true,\"amount\":0.51,\"red_shift\":1,\"green_shift\":-1,\"blue_shift\":-3,\"direction\":\"horizontal\",\"rand\":{}},\"grain\":{\"on\":true,\"power\":0.063,\"scale\":1,\"saturation\":0.69,\"seed\":0,\"rand\":{}},\"vignette\":{\"on\":true,\"amount\":0.09,\"feather\":0.6,\"rand\":{}},\"depth\":{\"on\":false,\"rand\":{},\"estimator\":\"depth_anything_v2\",\"model\":\"vitb\",\"resolution\":1024}},\"look_thumb\":76,\"post_ui\":{\"precision\":\"default\",\"hints\":true,\"order\":[]},\"tabs\":{\"i2i\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"prompt_only\":false,\"denoise\":0.7,\"reangle\":{\"on\":false,\"camera\":\"bands\",\"azimuth\":\"front-right quarter view\",\"elevation\":\"eye-level shot\",\"distance\":\"medium shot\",\"nudge\":false,\"collapse\":true,\"extra\":\"\",\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_angles\":\"\",\"lora_light\":\"\",\"lora_angles_strength\":1,\"lora_light_strength\":1,\"steps\":4,\"cfg\":1,\"sampler\":\"euler\",\"scheduler\":\"simple\",\"shift\":3.1,\"cfg_norm\":true,\"seed\":0,\"seed_random\":true},\"swap\":{\"on\":false,\"mode\":\"head\",\"reference\":\"subject\",\"order\":\"auto\",\"prompt\":\"\",\"keep_size\":false,\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_swap\":\"\",\"lora_light\":\"None\",\"lora_swap_strength\":1,\"lora_light_strength\":1,\"steps\":16,\"cfg\":2,\"sampler\":\"er_sde\",\"scheduler\":\"beta\",\"shift\":3,\"cfg_norm\":false,\"seed\":0,\"seed_random\":true},\"scale\":1,\"passes\":1,\"pass_custom\":false,\"pass_denoise\":[],\"scale_custom\":false,\"pass_scale\":[],\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":true,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject2\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject3\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"scene\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"scene_view\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"moodboard\":{\"images\":[],\"sel\":[],\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"style\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":[]}},\"group\":\"all\"},\"boost_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"},\"edit_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"}},\"dials\":{},\"resize\":1024,\"studio_preset\":\"\",\"latent\":{\"w\":1024,\"h\":1024,\"batch\":1,\"on\":false,\"random\":false,\"source\":\"tab\",\"scale\":1,\"passes\":1,\"refine\":0.45,\"pass_custom\":false,\"scale_custom\":false},\"vram_tier\":\"high\",\"loras\":{\"on\":true,\"slots\":[],\"ui\":{},\"seed\":0},\"paint_loras\":{\"slots\":[],\"ui\":{},\"seed\":0},\"camera\":{\"on\":true},\"lora_sets\":[],\"models\":{\"rigs\":[],\"sampler_mode\":\"external\",\"hold_two\":false,\"seed\":0,\"seed_random\":true,\"active\":0},\"prompts\":{\"rows\":[]},\"paint\":{\"on\":false,\"source\":\"\",\"mask\":\"\",\"auto_mask\":\"\",\"keep_mask\":false,\"region_shape\":\"auto\",\"region_floor\":false,\"renderer_profiles\":{},\"denoise\":0.6,\"passes\":1,\"lora_mode\":\"main\",\"lora_set\":\"\",\"brush\":48,\"feather\":4,\"mask_size\":1024,\"prompt\":\"\",\"auto_prompt\":\"\",\"use_subject\":false,\"use_scene\":false,\"use_moodboard\":false,\"fit_whole\":true,\"adv_open\":false,\"renderer\":\"\",\"invert\":false,\"use_loras\":false,\"loras_mode\":\"wired\",\"negative\":\"\",\"mask_only\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false}},\"ui_scale\":1,\"auto\":{\"model\":\"\",\"url\":\"\",\"threshold\":0.35,\"character_threshold\":0.85,\"temperature\":0.2,\"seed\":0,\"num_ctx\":0,\"num_predict\":0,\"top_k\":0,\"top_p\":0,\"keep_alive\":0,\"wd14_model\":\"\",\"exclude_tags\":\"\",\"replace_underscore\":false,\"think\":false,\"wd14_unload\":true,\"frank\":false,\"joy_quant\":\"\",\"joy_style\":\"\",\"joy_length\":\"\",\"joy_memory\":\"auto\",\"style_lock\":\"off\",\"joy_mode_prompts\":true},\"use_dials\":true,\"thumbs\":{\"i2i\":96,\"subject\":96,\"subject2\":96,\"subject3\":96,\"scene\":96,\"moodboard\":96},\"thumb\":96}",
-        "{\"post\":{\"denoise\":{\"on\":true,\"sigma\":0.67,\"threshold\":0.05,\"radius_multiplier\":1.149,\"rand\":{}},\"color\":{\"on\":true,\"brightness\":0.95,\"contrast\":1.11,\"saturation\":1.16,\"temperature\":-0.02,\"tint\":0,\"black_point\":-0.01,\"rand\":{}},\"clarity\":{\"on\":true,\"radius\":22,\"offset\":2,\"strength\":0.4,\"blend_mode\":\"soft light\",\"blend_if_dark\":50,\"blend_if_light\":157,\"dark_intensity\":0.4,\"light_intensity\":0,\"rand\":{}},\"sharpen\":{\"on\":true,\"mode\":\"lucy\",\"iterations\":3,\"kernel_size\":3,\"amount\":1.24,\"radius\":1.09,\"rand\":{}},\"dof\":{\"on\":false,\"focus\":0.24,\"range\":0.21,\"blur\":0.86,\"flip_depth\":0,\"rand\":{}},\"haze\":{\"on\":false,\"strength\":0.14,\"start\":0.36,\"lift\":0.04,\"flip_depth\":0,\"rand\":{}},\"light_wrap\":{\"on\":true,\"strength\":0.17,\"radius\":2.5,\"threshold\":0.7,\"rand\":{}},\"diffusion\":{\"on\":true,\"strength\":0.07,\"radius\":4,\"black_lift\":0.03,\"rand\":{}},\"rolloff\":{\"on\":true,\"knee\":0.14,\"strength\":0.2,\"rand\":{}},\"bloom\":{\"on\":true,\"intensity\":0.13,\"threshold\":0.36,\"smoothing\":0.23,\"radius_multiplier\":1,\"saturation\":0.85,\"exposure\":1,\"rand\":{}},\"halation\":{\"on\":true,\"strength\":0.18,\"threshold\":0.7,\"radius\":2.7,\"warmth\":0.7,\"rand\":{\"strength\":[0.25,0.46]}},\"distortion\":{\"on\":false,\"amount\":0,\"edge_softness\":0,\"rand\":{}},\"aberration\":{\"on\":true,\"amount\":0.51,\"red_shift\":1,\"green_shift\":-1,\"blue_shift\":-3,\"direction\":\"horizontal\",\"rand\":{}},\"grain\":{\"on\":true,\"power\":0.063,\"scale\":1,\"saturation\":0.69,\"seed\":0,\"rand\":{}},\"vignette\":{\"on\":true,\"amount\":0.09,\"feather\":0.6,\"rand\":{}},\"depth\":{\"on\":false,\"rand\":{},\"estimator\":\"depth_anything_v2\",\"model\":\"vitb\",\"resolution\":1024}},\"look_thumb\":76,\"post_ui\":{\"precision\":\"default\",\"hints\":true,\"order\":[]},\"tabs\":{\"i2i\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"prompt_only\":false,\"denoise\":0.7,\"reangle\":{\"on\":false,\"camera\":\"bands\",\"azimuth\":\"front-right quarter view\",\"elevation\":\"eye-level shot\",\"distance\":\"medium shot\",\"nudge\":false,\"collapse\":true,\"extra\":\"\",\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_angles\":\"\",\"lora_light\":\"\",\"lora_angles_strength\":1,\"lora_light_strength\":1,\"steps\":4,\"cfg\":1,\"sampler\":\"euler\",\"scheduler\":\"simple\",\"shift\":3.1,\"cfg_norm\":true,\"seed\":0,\"seed_random\":true},\"swap\":{\"on\":false,\"mode\":\"head\",\"reference\":\"subject\",\"order\":\"auto\",\"prompt\":\"\",\"keep_size\":false,\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_swap\":\"\",\"lora_light\":\"None\",\"lora_swap_strength\":1,\"lora_light_strength\":1,\"steps\":16,\"cfg\":2,\"sampler\":\"er_sde\",\"scheduler\":\"beta\",\"shift\":3,\"cfg_norm\":false,\"seed\":0,\"seed_random\":true},\"scale\":1,\"passes\":1,\"pass_custom\":false,\"pass_denoise\":[],\"scale_custom\":false,\"pass_scale\":[],\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":true,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject2\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject3\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"scene\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"scene_view\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"moodboard\":{\"images\":[],\"sel\":[],\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"style\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":[]}},\"group\":\"all\"},\"boost_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"},\"edit_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"}},\"dials\":{},\"resize\":1024,\"studio_preset\":\"\",\"latent\":{\"w\":1024,\"h\":1024,\"batch\":1,\"on\":false,\"random\":false,\"source\":\"tab\",\"scale\":1,\"passes\":1,\"refine\":0.45,\"pass_custom\":false,\"scale_custom\":false},\"vram_tier\":\"high\",\"loras\":{\"on\":true,\"slots\":[],\"ui\":{},\"seed\":0},\"paint_loras\":{\"slots\":[],\"ui\":{},\"seed\":0},\"camera\":{\"on\":true},\"lora_sets\":[],\"models\":{\"rigs\":[],\"sampler_mode\":\"external\",\"hold_two\":false,\"seed\":0,\"seed_random\":true,\"active\":0},\"prompts\":{\"rows\":[]},\"paint\":{\"on\":false,\"source\":\"\",\"mask\":\"\",\"auto_mask\":\"\",\"keep_mask\":false,\"region_shape\":\"auto\",\"region_floor\":false,\"renderer_profiles\":{},\"denoise\":0.6,\"passes\":1,\"lora_mode\":\"main\",\"lora_set\":\"\",\"brush\":48,\"feather\":4,\"mask_size\":1024,\"prompt\":\"\",\"auto_prompt\":\"\",\"use_subject\":false,\"use_scene\":false,\"use_moodboard\":false,\"fit_whole\":true,\"adv_open\":false,\"renderer\":\"\",\"invert\":false,\"use_loras\":false,\"loras_mode\":\"wired\",\"negative\":\"\",\"mask_only\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false}},\"ui_scale\":1,\"auto\":{\"model\":\"\",\"url\":\"\",\"threshold\":0.35,\"character_threshold\":0.85,\"temperature\":0.2,\"seed\":0,\"num_ctx\":0,\"num_predict\":0,\"top_k\":0,\"top_p\":0,\"keep_alive\":0,\"wd14_model\":\"\",\"exclude_tags\":\"\",\"replace_underscore\":false,\"think\":false,\"wd14_unload\":true,\"frank\":false,\"joy_quant\":\"\",\"joy_style\":\"\",\"joy_length\":\"\",\"joy_memory\":\"auto\",\"style_lock\":\"off\",\"joy_mode_prompts\":true},\"use_dials\":true,\"thumbs\":{\"i2i\":96,\"subject\":96,\"subject2\":96,\"subject3\":96,\"scene\":96,\"moodboard\":96},\"thumb\":96}"
+        "{\"stages\": [{\"on\": true, \"type\": \"sampler\", \"rig\": \"Krea2\", \"denoise\": 0.25, \"steps\": 4, \"prompt\": \"\", \"loras\": true, \"crop_res\": 1280, \"repeat\": 1, \"scale\": 1, \"sampler\": \"euler\", \"pass_custom\": false, \"pass_denoise\": [0.3, 0.3], \"scale_custom\": false, \"pass_scale\": [1.2, 1.2], \"lora_set\": \"Set 2\"}, {\"on\": false, \"type\": \"sampler\", \"rig\": \"Krea2\", \"denoise\": 0.35, \"steps\": 4, \"prompt\": \"\", \"crop_res\": 1280, \"sampler\": \"euler\", \"scale\": 1.2, \"lora_set\": \"\"}, {\"type\": \"detailer\", \"on\": true, \"rig\": \"Krea2\", \"target\": \"face\", \"steps\": 4, \"denoise\": 0.46, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"threshold\": 0.5, \"feather\": 8, \"padding\": 0.35, \"use_subject\": false, \"prompt\": \"\", \"crop_res\": 1536, \"repeat\": 1, \"sam_model\": \"sam3.pt\"}, {\"on\": true, \"type\": \"upscale\", \"size\": \"2K\", \"dit_model\": \"\", \"vae_model\": \"\", \"attention\": \"\", \"blocks_to_swap\": 36, \"offload\": \"cpu\", \"cache_model\": false, \"tiled\": true, \"tile\": 1024, \"tile_overlap\": 128, \"color_fix\": \"lab\", \"max_edge\": 0, \"input_noise\": 0, \"latent_noise\": 0}], \"seed\": 0, \"seed_random\": true, \"taps\": false, \"sam_model\": \"\", \"sam_precision\": \"\"}"
       ],
-      "color": "#432",
-      "bgcolor": "#653"
+      "color": "#222",
+      "bgcolor": "#000"
     },
     {
       "id": 33,
       "type": "RedNodeImageReview",
       "pos": [
-        -7555.615820963144,
-        606.3847169150902
+        -7584.056930197329,
+        803.9122047162003
       ],
       "size": [
-        530.7261448714589,
-        680.8384948362851
+        525.9982250926741,
+        654.0472099344906
       ],
       "flags": {
         "collapsed": false
       },
-      "order": 8,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -484,7 +493,7 @@
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 75282
+          "link": 44
         }
       ],
       "outputs": [
@@ -515,18 +524,18 @@
       "bgcolor": "#355"
     },
     {
-      "id": 8,
-      "type": "RedNodeSave",
+      "id": 34,
+      "type": "RedNodeLivePreview",
       "pos": [
-        -5450.833320721713,
-        102.59624166028442
+        -7583.514004618716,
+        466.0000582482872
       ],
       "size": [
-        1291.6064667111432,
-        1245.0475693178942
+        541.2166770365347,
+        299.9273630288483
       ],
       "flags": {},
-      "order": 9,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -534,7 +543,105 @@
           "localized_name": "images",
           "name": "images",
           "type": "IMAGE",
-          "link": 75283
+          "link": 47
+        }
+      ],
+      "outputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeLivePreview",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        ""
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 30,
+      "type": "RedNodeImageReview",
+      "pos": [
+        -7300.913720509484,
+        23.393791328290284
+      ],
+      "size": [
+        252.62911876131693,
+        394.43607966598154
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 42
+        }
+      ],
+      "outputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": []
+        }
+      ],
+      "title": "Detailer",
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeImageReview",
+        "rn_review": [],
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        ""
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 8,
+      "type": "RedNodeSave",
+      "pos": [
+        -4788.529438361032,
+        186.960832320127
+      ],
+      "size": [
+        972.0655244057721,
+        1084.601168901391
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 46
         },
         {
           "label": "seed",
@@ -582,81 +689,11 @@
       "bgcolor": "#533"
     },
     {
-      "id": 29,
-      "type": "RedNodeStudioAdvanced",
-      "pos": [
-        -6955.738710214534,
-        108.49197086901236
-      ],
-      "size": [
-        738.7637214564083,
-        1145.4374238401062
-      ],
-      "flags": {},
-      "order": 5,
-      "mode": 4,
-      "inputs": [
-        {
-          "label": "image",
-          "localized_name": "image",
-          "name": "image",
-          "type": "IMAGE",
-          "link": 39
-        },
-        {
-          "label": "config",
-          "localized_name": "config",
-          "name": "config",
-          "type": "STRING",
-          "widget": {
-            "name": "config"
-          },
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "label": "image",
-          "localized_name": "image",
-          "name": "image",
-          "type": "IMAGE",
-          "links": [
-            42,
-            75281
-          ]
-        },
-        {
-          "label": "report",
-          "localized_name": "report",
-          "name": "report",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "title": "RedNode Studio Detailer",
-      "properties": {
-        "cnr_id": "rednode-studio",
-        "ver": "1.0.0",
-        "Node name for S&R": "RedNodeStudioAdvanced",
-        "ue_properties": {
-          "widget_ue_connectable": {},
-          "input_ue_unconnectable": {},
-          "version": "7.8"
-        },
-        "rn_adv_folds": {}
-      },
-      "widgets_values": [
-        "{\"stages\": [{\"type\": \"detailer\", \"on\": true, \"rig\": \"\", \"target\": \"face\", \"steps\": 4, \"denoise\": 0.5, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"threshold\": 0.5, \"feather\": 8, \"padding\": 0.35, \"use_subject\": true, \"prompt\": \"\", \"crop_res\": 1536}, {\"on\": true, \"type\": \"sampler\", \"rig\": \"\", \"denoise\": 0.3, \"steps\": 0, \"prompt\": \"\", \"scale\": 1}, {\"on\": true, \"type\": \"upscale\", \"size\": \"4K\", \"dit_model\": \"seedvr2_ema_7b_sharp-Q4_K_M.gguf\", \"vae_model\": \"\", \"attention\": \"\", \"blocks_to_swap\": 36, \"offload\": \"cpu\", \"cache_model\": false, \"tiled\": true, \"tile\": 1024, \"tile_overlap\": 128, \"color_fix\": \"lab\", \"max_edge\": 0, \"input_noise\": 0, \"latent_noise\": 0}], \"seed\": 0, \"seed_random\": true, \"taps\": false, \"sam_model\": \"\", \"sam_precision\": \"\"}"
-      ],
-      "color": "#222",
-      "bgcolor": "#000"
-    },
-    {
       "id": 3,
       "type": "Krea2BBOXPromptEffect",
       "pos": [
-        -9538.922036835644,
-        211.51704018386764
+        -9632.523557471406,
+        215.37653174985093
       ],
       "size": [
         404.96561541028314,
@@ -767,13 +804,13 @@
           "widgets_values": [
             "",
             false,
-            "Light",
-            "Backlight",
+            "All",
+            "Milky Portrait",
             "Preset",
             "",
-            "Anime"
+            ""
           ],
-          "saved_at": 1789312797186
+          "saved_at": 1789314042543
         },
         "ue_properties": {
           "widget_ue_connectable": {
@@ -786,25 +823,85 @@
       "widgets_values": [
         "",
         false,
-        "Light",
-        "Backlight",
+        "All",
+        "Milky Portrait",
         "Preset",
         "",
-        "Anime"
+        ""
       ],
       "color": "#2a363b",
       "bgcolor": "#3f5159"
     },
     {
+      "id": 32,
+      "type": "RedNodePostFX",
+      "pos": [
+        -5703.618880809648,
+        154.73671326739736
+      ],
+      "size": [
+        856.8958978180281,
+        1048.0686803145363
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "image",
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 45
+        },
+        {
+          "label": "depth",
+          "localized_name": "depth",
+          "name": "depth",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "image",
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            44,
+            46
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodePostFX",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "{\"post\":{\"denoise\":{\"on\":true,\"sigma\":0.67,\"threshold\":0.05,\"radius_multiplier\":1.149},\"color\":{\"on\":true,\"brightness\":0.95,\"contrast\":1.11,\"saturation\":1.16,\"temperature\":-0.02,\"tint\":0,\"black_point\":-0.01},\"clarity\":{\"on\":true,\"radius\":22,\"offset\":2,\"strength\":0.4,\"blend_mode\":\"soft light\",\"blend_if_dark\":50,\"blend_if_light\":157,\"dark_intensity\":0.4,\"light_intensity\":0},\"sharpen\":{\"on\":true,\"mode\":\"lucy\",\"iterations\":3,\"kernel_size\":3,\"amount\":1.24,\"radius\":1.09},\"dof\":{\"on\":false,\"focus\":0.24,\"range\":0.21,\"blur\":0.86,\"flip_depth\":false},\"haze\":{\"on\":false,\"strength\":0.14,\"start\":0.36,\"lift\":0.04,\"flip_depth\":false},\"light_wrap\":{\"on\":true,\"strength\":0.17,\"radius\":2.5,\"threshold\":0.7},\"diffusion\":{\"on\":true,\"strength\":0.07,\"radius\":4,\"black_lift\":0.03},\"rolloff\":{\"on\":true,\"knee\":0.14,\"strength\":0.2},\"bloom\":{\"on\":true,\"intensity\":0.13,\"threshold\":0.36,\"smoothing\":0.23,\"radius_multiplier\":1,\"saturation\":0.85,\"exposure\":1},\"halation\":{\"on\":true,\"strength\":0.18,\"threshold\":0.7,\"radius\":2.7,\"warmth\":0.7,\"rand\":{\"strength\":[0.25,0.46]}},\"distortion\":{\"on\":false,\"amount\":0,\"edge_softness\":0},\"aberration\":{\"on\":true,\"amount\":0.51,\"red_shift\":1,\"green_shift\":-1,\"blue_shift\":-3,\"direction\":\"horizontal\"},\"grain\":{\"on\":true,\"power\":0.063,\"scale\":1,\"saturation\":0.69,\"seed\":0},\"vignette\":{\"on\":true,\"amount\":0.09,\"feather\":0.6}},\"look_thumb\":76,\"post_ui\":{\"precision\":\"default\",\"hints\":true,\"order\":[]},\"tabs\":{\"i2i\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"prompt_only\":false,\"denoise\":0.7,\"reangle\":{\"on\":false,\"camera\":\"bands\",\"azimuth\":\"front-right quarter view\",\"elevation\":\"eye-level shot\",\"distance\":\"medium shot\",\"nudge\":false,\"collapse\":true,\"extra\":\"\",\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_angles\":\"\",\"lora_light\":\"\",\"lora_angles_strength\":1,\"lora_light_strength\":1,\"steps\":4,\"cfg\":1,\"sampler\":\"euler\",\"scheduler\":\"simple\",\"shift\":3.1,\"cfg_norm\":true,\"seed\":0,\"seed_random\":true},\"swap\":{\"on\":false,\"mode\":\"head\",\"reference\":\"subject\",\"order\":\"auto\",\"prompt\":\"\",\"keep_size\":false,\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_swap\":\"\",\"lora_light\":\"None\",\"lora_swap_strength\":1,\"lora_light_strength\":1,\"steps\":16,\"cfg\":2,\"sampler\":\"er_sde\",\"scheduler\":\"beta\",\"shift\":3,\"cfg_norm\":false,\"seed\":0,\"seed_random\":true},\"scale\":1,\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":true,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject2\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject3\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"scene\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"scene_view\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"moodboard\":{\"images\":[],\"sel\":[],\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"style\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":[]}},\"group\":\"all\"},\"boost_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"},\"edit_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"}},\"dials\":{},\"resize\":1024,\"studio_preset\":\"\",\"latent\":{\"w\":1024,\"h\":1024,\"batch\":1,\"on\":false,\"random\":false,\"source\":\"tab\",\"scale\":1},\"vram_tier\":\"high\",\"loras\":{\"on\":true,\"slots\":[],\"ui\":{},\"seed\":0},\"paint_loras\":{\"slots\":[],\"ui\":{},\"seed\":0},\"camera\":{\"on\":true},\"lora_sets\":[],\"models\":{\"rigs\":[],\"sampler_mode\":\"external\",\"hold_two\":false,\"seed\":0,\"seed_random\":true,\"active\":0},\"prompts\":{\"rows\":[]},\"paint\":{\"on\":false,\"source\":\"\",\"mask\":\"\",\"auto_mask\":\"\",\"keep_mask\":false,\"region_shape\":\"auto\",\"region_floor\":false,\"renderer_profiles\":{},\"denoise\":0.6,\"passes\":1,\"lora_mode\":\"main\",\"lora_set\":\"\",\"brush\":48,\"feather\":4,\"mask_size\":1024,\"prompt\":\"\",\"auto_prompt\":\"\",\"use_subject\":false,\"use_scene\":false,\"use_moodboard\":false,\"fit_whole\":true,\"adv_open\":false,\"renderer\":\"\",\"invert\":false,\"use_loras\":false,\"loras_mode\":\"wired\",\"negative\":\"\",\"mask_only\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false}},\"ui_scale\":1,\"auto\":{\"model\":\"\",\"url\":\"\",\"threshold\":0.35,\"character_threshold\":0.85,\"temperature\":0.2,\"seed\":0,\"num_ctx\":0,\"num_predict\":0,\"top_k\":0,\"top_p\":0,\"keep_alive\":0,\"wd14_model\":\"\",\"exclude_tags\":\"\",\"replace_underscore\":false,\"think\":false,\"wd14_unload\":true,\"frank\":false,\"joy_quant\":\"\",\"joy_style\":\"\",\"joy_length\":\"\",\"joy_memory\":\"auto\",\"style_lock\":\"off\",\"joy_mode_prompts\":true},\"use_dials\":true,\"thumbs\":{\"i2i\":96,\"subject\":96,\"subject2\":96,\"subject3\":96,\"scene\":96,\"moodboard\":96},\"thumb\":96}",
+        "{\"post\":{\"denoise\":{\"on\":true,\"sigma\":0.67,\"threshold\":0.05,\"radius_multiplier\":1.149},\"color\":{\"on\":true,\"brightness\":0.95,\"contrast\":1.11,\"saturation\":1.16,\"temperature\":-0.02,\"tint\":0,\"black_point\":-0.01},\"clarity\":{\"on\":true,\"radius\":22,\"offset\":2,\"strength\":0.4,\"blend_mode\":\"soft light\",\"blend_if_dark\":50,\"blend_if_light\":157,\"dark_intensity\":0.4,\"light_intensity\":0},\"sharpen\":{\"on\":true,\"mode\":\"lucy\",\"iterations\":3,\"kernel_size\":3,\"amount\":1.24,\"radius\":1.09},\"dof\":{\"on\":false,\"focus\":0.24,\"range\":0.21,\"blur\":0.86,\"flip_depth\":false},\"haze\":{\"on\":false,\"strength\":0.14,\"start\":0.36,\"lift\":0.04,\"flip_depth\":false},\"light_wrap\":{\"on\":true,\"strength\":0.17,\"radius\":2.5,\"threshold\":0.7},\"diffusion\":{\"on\":true,\"strength\":0.07,\"radius\":4,\"black_lift\":0.03},\"rolloff\":{\"on\":true,\"knee\":0.14,\"strength\":0.2},\"bloom\":{\"on\":true,\"intensity\":0.13,\"threshold\":0.36,\"smoothing\":0.23,\"radius_multiplier\":1,\"saturation\":0.85,\"exposure\":1},\"halation\":{\"on\":true,\"strength\":0.18,\"threshold\":0.7,\"radius\":2.7,\"warmth\":0.7,\"rand\":{\"strength\":[0.25,0.46]}},\"distortion\":{\"on\":false,\"amount\":0,\"edge_softness\":0},\"aberration\":{\"on\":true,\"amount\":0.51,\"red_shift\":1,\"green_shift\":-1,\"blue_shift\":-3,\"direction\":\"horizontal\"},\"grain\":{\"on\":true,\"power\":0.063,\"scale\":1,\"saturation\":0.69,\"seed\":0},\"vignette\":{\"on\":true,\"amount\":0.09,\"feather\":0.6}},\"look_thumb\":76,\"post_ui\":{\"precision\":\"default\",\"hints\":true,\"order\":[]},\"tabs\":{\"i2i\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"prompt_only\":false,\"denoise\":0.7,\"reangle\":{\"on\":false,\"camera\":\"bands\",\"azimuth\":\"front-right quarter view\",\"elevation\":\"eye-level shot\",\"distance\":\"medium shot\",\"nudge\":false,\"collapse\":true,\"extra\":\"\",\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_angles\":\"\",\"lora_light\":\"\",\"lora_angles_strength\":1,\"lora_light_strength\":1,\"steps\":4,\"cfg\":1,\"sampler\":\"euler\",\"scheduler\":\"simple\",\"shift\":3.1,\"cfg_norm\":true,\"seed\":0,\"seed_random\":true},\"swap\":{\"on\":false,\"mode\":\"head\",\"reference\":\"subject\",\"order\":\"auto\",\"prompt\":\"\",\"keep_size\":false,\"unet\":\"\",\"clip\":\"\",\"vae\":\"\",\"lora_swap\":\"\",\"lora_light\":\"None\",\"lora_swap_strength\":1,\"lora_light_strength\":1,\"steps\":16,\"cfg\":2,\"sampler\":\"er_sde\",\"scheduler\":\"beta\",\"shift\":3,\"cfg_norm\":false,\"seed\":0,\"seed_random\":true},\"scale\":1,\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":true,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject2\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"subject3\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"scene\":{\"images\":[],\"sel\":0,\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"scene_view\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"conv\":{\"gender\":\"off\",\"style\":\"off\",\"act\":\"off\",\"remove_cum\":false,\"shave\":false,\"rules\":\"\",\"lock\":false,\"lock_lighting\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":0}},\"group\":\"all\"},\"moodboard\":{\"images\":[],\"sel\":[],\"on\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"style\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"groups\":{\"all\":{\"images\":[],\"sel\":[]}},\"group\":\"all\"},\"boost_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"},\"edit_mask\":{\"images\":[],\"sel\":0,\"on\":false,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"subject\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false},\"mask\":\"\",\"src\":\"\"}},\"dials\":{},\"resize\":1024,\"studio_preset\":\"\",\"latent\":{\"w\":1024,\"h\":1024,\"batch\":1,\"on\":false,\"random\":false,\"source\":\"tab\",\"scale\":1},\"vram_tier\":\"high\",\"loras\":{\"on\":true,\"slots\":[],\"ui\":{},\"seed\":0},\"paint_loras\":{\"slots\":[],\"ui\":{},\"seed\":0},\"camera\":{\"on\":true},\"lora_sets\":[],\"models\":{\"rigs\":[],\"sampler_mode\":\"external\",\"hold_two\":false,\"seed\":0,\"seed_random\":true,\"active\":0},\"prompts\":{\"rows\":[]},\"paint\":{\"on\":false,\"source\":\"\",\"mask\":\"\",\"auto_mask\":\"\",\"keep_mask\":false,\"region_shape\":\"auto\",\"region_floor\":false,\"renderer_profiles\":{},\"denoise\":0.6,\"passes\":1,\"lora_mode\":\"main\",\"lora_set\":\"\",\"brush\":48,\"feather\":4,\"mask_size\":1024,\"prompt\":\"\",\"auto_prompt\":\"\",\"use_subject\":false,\"use_scene\":false,\"use_moodboard\":false,\"fit_whole\":true,\"adv_open\":false,\"renderer\":\"\",\"invert\":false,\"use_loras\":false,\"loras_mode\":\"wired\",\"negative\":\"\",\"mask_only\":true,\"auto\":{\"on\":false,\"ollama\":true,\"wd14\":true,\"mode\":\"i2i\",\"combine\":\"append\",\"length\":0,\"fixed\":true,\"joy\":false,\"qwen\":false,\"clipgen\":false}},\"ui_scale\":1,\"auto\":{\"model\":\"\",\"url\":\"\",\"threshold\":0.35,\"character_threshold\":0.85,\"temperature\":0.2,\"seed\":0,\"num_ctx\":0,\"num_predict\":0,\"top_k\":0,\"top_p\":0,\"keep_alive\":0,\"wd14_model\":\"\",\"exclude_tags\":\"\",\"replace_underscore\":false,\"think\":false,\"wd14_unload\":true,\"frank\":false,\"joy_quant\":\"\",\"joy_style\":\"\",\"joy_length\":\"\",\"joy_memory\":\"auto\",\"style_lock\":\"off\",\"joy_mode_prompts\":true},\"use_dials\":true,\"thumbs\":{\"i2i\":96,\"subject\":96,\"subject2\":96,\"subject3\":96,\"scene\":96,\"moodboard\":96},\"thumb\":96}"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
       "id": 1,
       "type": "RedNodeStudioWorkspace",
       "pos": [
-        -9111.90731862706,
-        98.07581970527606
+        -9161.283555235414,
+        94.40109226773822
       ],
       "size": [
-        1499.7026035678718,
-        1168.8679682863972
+        1502.9245693488892,
+        1157.9602601142983
       ],
       "flags": {},
       "order": 3,
@@ -818,7 +915,7 @@
           "type": "CLIP",
           "pos": [
             16,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -830,7 +927,7 @@
           "type": "LATENT",
           "pos": [
             29,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -842,7 +939,7 @@
           "type": "MODEL",
           "pos": [
             42,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -854,7 +951,7 @@
           "type": "VAE",
           "pos": [
             55,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -866,7 +963,7 @@
           "type": "STRING",
           "pos": [
             68,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -878,7 +975,7 @@
           "type": "STRING",
           "pos": [
             81,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -890,7 +987,7 @@
           "type": "STRING",
           "pos": [
             94,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -902,7 +999,7 @@
           "type": "STRING",
           "pos": [
             107,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -914,7 +1011,7 @@
           "type": "MASK",
           "pos": [
             120,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -926,7 +1023,7 @@
           "type": "MASK",
           "pos": [
             133,
-            1161.8679682863972
+            1150.9602601142983
           ],
           "link": null
         },
@@ -936,10 +1033,6 @@
           "name": "style_in",
           "shape": 7,
           "type": "STRING",
-          "pos": [
-            146,
-            1161.8679682863972
-          ],
           "link": 4
         },
         {
@@ -949,8 +1042,8 @@
           "shape": 7,
           "type": "STRING",
           "pos": [
-            159,
-            1161.8679682863972
+            146,
+            1150.9602601142983
           ],
           "link": null
         },
@@ -960,10 +1053,6 @@
           "name": "surroundings_in",
           "shape": 7,
           "type": "STRING",
-          "pos": [
-            172,
-            1161.8679682863972
-          ],
           "link": 5
         },
         {
@@ -972,10 +1061,6 @@
           "name": "light_and_colour_in",
           "shape": 7,
           "type": "STRING",
-          "pos": [
-            185,
-            1161.8679682863972
-          ],
           "link": 3
         },
         {
@@ -985,8 +1070,8 @@
           "shape": 7,
           "type": "IMAGE",
           "pos": [
-            198,
-            1161.8679682863972
+            159,
+            1150.9602601142983
           ],
           "link": null
         },
@@ -1008,8 +1093,8 @@
           "name": "workspace",
           "type": "KREA2_WORKSPACE",
           "pos": [
-            1483.7026035678718,
-            1161.8679682863972
+            1486.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1019,8 +1104,8 @@
           "name": "subject_image",
           "type": "IMAGE",
           "pos": [
-            1470.7026035678718,
-            1161.8679682863972
+            1473.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1030,8 +1115,8 @@
           "name": "scene_image",
           "type": "IMAGE",
           "pos": [
-            1457.7026035678718,
-            1161.8679682863972
+            1460.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1041,8 +1126,8 @@
           "name": "moodboard_style",
           "type": "IMAGE",
           "pos": [
-            1444.7026035678718,
-            1161.8679682863972
+            1447.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1052,8 +1137,8 @@
           "name": "extra_subjects",
           "type": "KREA2_SOURCES",
           "pos": [
-            1431.7026035678718,
-            1161.8679682863972
+            1434.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1063,8 +1148,8 @@
           "name": "subject_boost_mask",
           "type": "MASK",
           "pos": [
-            1418.7026035678718,
-            1161.8679682863972
+            1421.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1074,8 +1159,8 @@
           "name": "edit_mask",
           "type": "MASK",
           "pos": [
-            1405.7026035678718,
-            1161.8679682863972
+            1408.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1085,8 +1170,8 @@
           "name": "settings",
           "type": "KREA2_SETTINGS",
           "pos": [
-            1392.7026035678718,
-            1161.8679682863972
+            1395.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1096,8 +1181,8 @@
           "name": "output_latent",
           "type": "LATENT",
           "pos": [
-            1379.7026035678718,
-            1161.8679682863972
+            1382.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1107,8 +1192,8 @@
           "name": "style_strength",
           "type": "FLOAT",
           "pos": [
-            1366.7026035678718,
-            1161.8679682863972
+            1369.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1118,8 +1203,8 @@
           "name": "studio_preset",
           "type": "STRING",
           "pos": [
-            1353.7026035678718,
-            1161.8679682863972
+            1356.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1129,8 +1214,8 @@
           "name": "subject_prompt",
           "type": "STRING",
           "pos": [
-            1340.7026035678718,
-            1161.8679682863972
+            1343.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1140,8 +1225,8 @@
           "name": "scene_prompt",
           "type": "STRING",
           "pos": [
-            1327.7026035678718,
-            1161.8679682863972
+            1330.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1151,8 +1236,8 @@
           "name": "moodboard_prompt",
           "type": "STRING",
           "pos": [
-            1314.7026035678718,
-            1161.8679682863972
+            1317.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1162,8 +1247,8 @@
           "name": "i2i_image",
           "type": "IMAGE",
           "pos": [
-            1301.7026035678718,
-            1161.8679682863972
+            1304.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1173,8 +1258,8 @@
           "name": "i2i_prompt",
           "type": "STRING",
           "pos": [
-            1288.7026035678718,
-            1161.8679682863972
+            1291.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1184,8 +1269,8 @@
           "name": "denoise",
           "type": "FLOAT",
           "pos": [
-            1275.7026035678718,
-            1161.8679682863972
+            1278.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1195,8 +1280,8 @@
           "name": "post_process",
           "type": "KREA2_POST",
           "pos": [
-            1262.7026035678718,
-            1161.8679682863972
+            1265.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1206,8 +1291,8 @@
           "name": "model",
           "type": "MODEL",
           "pos": [
-            1249.7026035678718,
-            1161.8679682863972
+            1252.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1217,8 +1302,8 @@
           "name": "lora_keywords",
           "type": "STRING",
           "pos": [
-            1236.7026035678718,
-            1161.8679682863972
+            1239.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1228,8 +1313,8 @@
           "name": "clip",
           "type": "CLIP",
           "pos": [
-            1223.7026035678718,
-            1161.8679682863972
+            1226.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1239,8 +1324,8 @@
           "name": "paint_prompt",
           "type": "STRING",
           "pos": [
-            1210.7026035678718,
-            1161.8679682863972
+            1213.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1250,8 +1335,8 @@
           "name": "paint_model",
           "type": "MODEL",
           "pos": [
-            1197.7026035678718,
-            1161.8679682863972
+            1200.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1261,8 +1346,8 @@
           "name": "vae",
           "type": "VAE",
           "pos": [
-            1184.7026035678718,
-            1161.8679682863972
+            1187.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1272,8 +1357,8 @@
           "name": "steps",
           "type": "INT",
           "pos": [
-            1171.7026035678718,
-            1161.8679682863972
+            1174.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1283,8 +1368,8 @@
           "name": "cfg",
           "type": "FLOAT",
           "pos": [
-            1158.7026035678718,
-            1161.8679682863972
+            1161.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1294,8 +1379,8 @@
           "name": "sampler_name",
           "type": "COMBO",
           "pos": [
-            1145.7026035678718,
-            1161.8679682863972
+            1148.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1305,8 +1390,8 @@
           "name": "scheduler",
           "type": "COMBO",
           "pos": [
-            1132.7026035678718,
-            1161.8679682863972
+            1135.9245693488892,
+            1150.9602601142983
           ],
           "links": []
         },
@@ -1316,8 +1401,8 @@
           "name": "detailer_steps",
           "type": "INT",
           "pos": [
-            1119.7026035678718,
-            1161.8679682863972
+            1122.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1327,8 +1412,8 @@
           "name": "positive",
           "type": "CONDITIONING",
           "pos": [
-            1106.7026035678718,
-            1161.8679682863972
+            1109.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1338,8 +1423,8 @@
           "name": "negative",
           "type": "CONDITIONING",
           "pos": [
-            1093.7026035678718,
-            1161.8679682863972
+            1096.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1348,12 +1433,9 @@
           "localized_name": "image",
           "name": "image",
           "type": "IMAGE",
-          "pos": [
-            1080.7026035678718,
-            1161.8679682863972
-          ],
           "links": [
-            7
+            7,
+            47
           ]
         },
         {
@@ -1362,8 +1444,8 @@
           "name": "result_latent",
           "type": "LATENT",
           "pos": [
-            1067.7026035678718,
-            1161.8679682863972
+            1083.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1372,10 +1454,6 @@
           "localized_name": "seed",
           "name": "seed",
           "type": "INT",
-          "pos": [
-            1054.7026035678718,
-            1161.8679682863972
-          ],
           "links": [
             43
           ]
@@ -1386,8 +1464,8 @@
           "name": "prompt_text",
           "type": "STRING",
           "pos": [
-            1041.7026035678718,
-            1161.8679682863972
+            1070.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         },
@@ -1397,8 +1475,8 @@
           "name": "negative_text",
           "type": "STRING",
           "pos": [
-            1028.7026035678718,
-            1161.8679682863972
+            1057.9245693488892,
+            1150.9602601142983
           ],
           "links": null
         }
@@ -1412,9 +1490,7 @@
             "boost_mask": false,
             "edit_mask": false
           },
-          "_rnAutoOpen": {
-            "i2i": true
-          },
+          "_rnAutoOpen": {},
           "_rnConvOpen": {},
           "_rnDialsOpen": {},
           "_rnPaintBoxes": {
@@ -1447,7 +1523,7 @@
           "input_ue_unconnectable": {},
           "version": "7.8"
         },
-        "rn_tucked": 2,
+        "rn_tucked": 1,
         "rn_tab": "prompts",
         "rn_prompt_folds": {
           "0": false,
@@ -1465,12 +1541,13 @@
           "3:studio_open": false
         },
         "rn_paint_mode": "mask",
-        "rn_paint_colour": "#f3ad82"
+        "rn_paint_colour": "#f3ad82",
+        "rn_lora_set": ""
       },
       "widgets_values": [
-        "{\"tabs\": {\"subject\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": false, \"wd14\": false, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": false, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0, \"inject_row\": \"\", \"inject_slot\": \"subject\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"subject2\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"subject3\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"scene\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"scene_view\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"moodboard\": {\"images\": [], \"sel\": [], \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": []}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"style\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"boost_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"edit_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"i2i\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"i2i\", \"combine\": \"append\", \"fixed\": true, \"joy\": true, \"qwen\": false, \"clipgen\": false, \"length\": 120, \"inject_row\": \"Krea 2 Prompt\", \"inject_slot\": \"prompt\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": true, \"lock_lighting\": true}, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"prompt_only\": false, \"denoise\": 0.3, \"scale\": 1, \"canvas\": \"gallery\", \"passes\": 1, \"reangle\": {\"on\": false, \"camera\": \"studio\", \"azimuth\": \"front-right quarter view\", \"elevation\": \"eye-level shot\", \"distance\": \"medium shot\", \"nudge\": false, \"collapse\": true, \"extra\": \"\", \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_angles\": \"\", \"lora_light\": \"\", \"lora_angles_strength\": 1, \"lora_light_strength\": 1, \"steps\": 4, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"shift\": 3.1, \"cfg_norm\": true, \"seed\": 0, \"seed_random\": true, \"studio\": \"{\\\"camera\\\":{\\\"pos\\\":[0.2,3.85,1.7],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":52,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":33.288517977018785,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}, \"swap\": {\"on\": false, \"mode\": \"face\", \"reference\": \"subject\", \"order\": \"auto\", \"prompt\": \"\", \"keep_size\": false, \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_swap\": \"\", \"lora_light\": \"None\", \"lora_swap_strength\": 1, \"lora_light_strength\": 1, \"steps\": 16, \"cfg\": 2, \"sampler\": \"er_sde\", \"scheduler\": \"beta\", \"shift\": 3, \"cfg_norm\": false, \"seed\": 0, \"seed_random\": true}, \"pass_custom\": true, \"pass_denoise\": [0.45], \"scale_custom\": false, \"pass_scale\": []}}, \"dials\": {\"picture_labels\": false, \"ref_t0_modulation\": true, \"style_strength\": 1, \"style_detail_px\": 768, \"reference_fidelity\": 6.55, \"hide_style_refs\": false, \"transfer\": \"subject\", \"edit_mask_feather\": 2, \"style_directive\": true, \"subject_likeness_px\": 1088, \"boosts_off\": true, \"likeness_vs_obedience\": 960, \"boost_blocks\": \"all\", \"scene_fidelity\": 2.1, \"echo_prompts\": false, \"attention\": \"pytorch\", \"identity_end\": 1, \"caption_passthrough\": true, \"fit_mode\": \"fit\", \"identity_start\": 0, \"isolate_refs\": true}, \"resize\": 1024, \"use_dials\": true, \"thumb\": 180, \"studio_preset\": \"custom (use settings)\", \"auto\": {\"model\": \"huihui_ai/qwen3-vl-abliterated:8b-instruct\", \"url\": \"\", \"threshold\": 0.6, \"character_threshold\": 0.9, \"temperature\": 0.7, \"seed\": 0, \"num_ctx\": 0, \"num_predict\": 0, \"top_k\": 0, \"top_p\": 0, \"wd14_model\": \"wd-eva02-large-tagger-v3\", \"exclude_tags\": \"\", \"replace_underscore\": true, \"think\": false, \"keep_alive\": 0, \"wd14_unload\": true, \"frank\": true, \"joy_quant\": \"Balanced (8-bit)\", \"joy_style\": \"Descriptive\", \"joy_length\": \"medium\", \"joy_memory\": \"Clear After Run\", \"style_lock\": \"scrub\", \"joy_mode_prompts\": true, \"instruction\": \"\", \"question\": \"\"}, \"latent\": {\"w\": 1216, \"h\": 832, \"batch\": 1, \"on\": true, \"random\": false, \"scale\": 1, \"source\": \"tab\", \"aspect\": \"3:2\", \"mp\": 1, \"passes\": 1, \"refine\": 0.45, \"pass_custom\": false, \"scale_custom\": false}, \"post\": {\"denoise\": {\"on\": false, \"sigma\": 0.67, \"threshold\": 0.05, \"radius_multiplier\": 1.149, \"rand\": {}}, \"color\": {\"on\": false, \"brightness\": 0.95, \"contrast\": 1.25, \"saturation\": 1.21, \"temperature\": 0.04, \"tint\": 0, \"black_point\": -0.01, \"rand\": {}}, \"clarity\": {\"on\": false, \"radius\": 22, \"offset\": 2, \"strength\": 0.4, \"blend_mode\": \"soft light\", \"blend_if_dark\": 50, \"blend_if_light\": 157, \"dark_intensity\": 0.4, \"light_intensity\": 0, \"rand\": {}}, \"sharpen\": {\"on\": false, \"mode\": \"lucy\", \"iterations\": 3, \"kernel_size\": 3, \"amount\": 1.24, \"radius\": 1.09, \"rand\": {}}, \"dof\": {\"on\": false, \"focus\": 0.24, \"range\": 0.21, \"blur\": 0.86, \"flip_depth\": 0, \"rand\": {}}, \"haze\": {\"on\": false, \"strength\": 0.14, \"start\": 0.36, \"lift\": 0.04, \"flip_depth\": 0, \"rand\": {}}, \"light_wrap\": {\"on\": false, \"strength\": 0.17, \"radius\": 2.5, \"threshold\": 0.7, \"rand\": {}}, \"diffusion\": {\"on\": false, \"strength\": 0.07, \"radius\": 4, \"black_lift\": 0.03, \"rand\": {}}, \"rolloff\": {\"on\": false, \"knee\": 0.14, \"strength\": 0.2, \"rand\": {}}, \"bloom\": {\"on\": false, \"intensity\": 0.13, \"threshold\": 0.36, \"smoothing\": 0.23, \"radius_multiplier\": 1, \"saturation\": 0.85, \"exposure\": 1, \"rand\": {}}, \"halation\": {\"on\": false, \"strength\": 0.18, \"threshold\": 0.7, \"radius\": 2.7, \"warmth\": 0.7, \"rand\": {\"strength\": [0.25, 0.46]}}, \"distortion\": {\"on\": false, \"amount\": 0, \"edge_softness\": 0, \"rand\": {}}, \"aberration\": {\"on\": false, \"amount\": 0.51, \"red_shift\": 1, \"green_shift\": -1, \"blue_shift\": -3, \"direction\": \"horizontal\", \"rand\": {}}, \"grain\": {\"on\": false, \"power\": 0.03, \"scale\": 1, \"saturation\": 0.58, \"seed\": 0, \"rand\": {}}, \"vignette\": {\"on\": false, \"amount\": 0.09, \"feather\": 0.6, \"rand\": {}}, \"depth\": {\"on\": false, \"rand\": {}, \"estimator\": \"auto\", \"model\": \"auto\", \"resolution\": 512}}, \"look_thumb\": 180, \"post_ui\": {\"precision\": \"2\", \"hints\": true, \"order\": [\"denoise\", \"color\", \"dof\", \"halation\", \"haze\", \"clarity\", \"bloom\", \"sharpen\", \"light_wrap\", \"diffusion\", \"rolloff\", \"distortion\", \"aberration\", \"grain\", \"vignette\"]}, \"vram_tier\": \"high\", \"loras\": {\"on\": false, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Text Refusal Reduction\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2775340, \"version_id\": 3125118, \"hash\": \"84ec722ddab93f6489c5315bca25de5dd1a7b7ec5045a3c4ce2f97f62e54e8e6\", \"name\": \"Krea2 TextFusion Refusal-Reduction LoRA\"}, \"name\": \"Krea2_TextFusion_Refusal_Reduction.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"KreaKult\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"KreaKult_V1_E10.safetensors\", \"enabled\": false, \"strength\": 0.32, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": \"Aesthetic Quality Modifiers\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2-masterpieces-v51.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"masterpiece, very aesthetic\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": null, \"note\": \"Some reason -2 makes skin better\", \"label_color\": null, \"civitai\": null, \"name\": \"Detailer-KREA2.safetensors\", \"enabled\": false, \"strength\": 0.4, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}], \"ui\": {\"loaded_from\": \"Simple\", \"filter\": \"Krea 2\"}, \"seed\": 0}, \"paint\": {\"on\": false, \"source\": \"\", \"mask\": \"\", \"auto_mask\": \"\", \"keep_mask\": false, \"region_shape\": \"auto\", \"denoise\": 0.5, \"brush\": 220, \"feather\": 8, \"mask_size\": 1536, \"prompt\": \"\", \"auto_prompt\": \"\", \"use_subject\": true, \"use_scene\": false, \"use_moodboard\": false, \"fit_whole\": false, \"adv_open\": false, \"renderer\": \"rig:XL\", \"invert\": false, \"use_loras\": false, \"loras_mode\": \"wired\", \"negative\": \"\", \"mask_only\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"i2i\", \"combine\": \"append\", \"length\": 0, \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false}, \"cfg\": 5.9, \"steps\": 27, \"renderer_name\": \"\", \"renderer_kind\": \"\", \"seed\": 1112664100, \"brush_shape\": \"round\", \"region_floor\": false, \"renderer_profiles\": {\"Krea 2\": {\"cfg\": 1, \"steps\": 7}, \"Choice Any Latent\": {\"cfg\": 5.5, \"steps\": 29}, \"RedNode Router (advanced sw\\u2026\": {\"cfg\": 5.5, \"steps\": 29}, \"Full Workflow Paint\": {\"cfg\": 5.5, \"steps\": 29}, \"XL\": {\"cfg\": 5.5, \"steps\": 29}, \"ZTurbo\": {\"cfg\": 1, \"steps\": 4}, \"ZTurbo #8598\": {\"cfg\": 1, \"steps\": 9}, \"SDXL\": {\"cfg\": 6.3, \"steps\": 27}, \"Krea 2 Painting\": {\"cfg\": 1, \"steps\": 8}, \"Krea2 Workspace\": {\"cfg\": 1, \"steps\": 4}, \"IMPORT OWN\": {\"cfg\": 1.2, \"steps\": 4}, \"Built-in: Krea2\": {\"cfg\": 1, \"steps\": 5}, \"Built-in: XL\": {\"cfg\": 6.7, \"steps\": 27}, \"rig:Krea2\": {\"cfg\": 1, \"steps\": 4}, \"rig:XL\": {\"cfg\": 5.2, \"steps\": 27}}, \"seed_random\": true, \"scale_top\": 0.7, \"passes\": 1, \"lora_mode\": \"paint\", \"scale\": 0.9, \"colour\": \"\", \"lora_set\": \"\"}, \"ui_scale\": 1, \"thumbs\": {\"i2i\": 180, \"subject\": 240, \"subject2\": 180, \"subject3\": 180, \"scene\": 240, \"moodboard\": 240}, \"paint_loras\": {\"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Text Refusal Reduction\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2775340, \"version_id\": 3125118, \"hash\": \"84ec722ddab93f6489c5315bca25de5dd1a7b7ec5045a3c4ce2f97f62e54e8e6\", \"name\": \"Krea2 TextFusion Refusal-Reduction LoRA\"}, \"name\": \"Krea2_TextFusion_Refusal_Reduction.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": null, \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2filterbypass3.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 4}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 5.6, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"KreaKult\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"KreaKult_V1_E10.safetensors\", \"enabled\": false, \"strength\": 0.32, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Dark - Light Slider\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"PornMaster_Krea2_Light_Slider_V1.safetensors\", \"enabled\": false, \"strength\": -1.14, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -5, \"scale_max\": 5}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": \"Aesthetic Quality Modifiers\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2-masterpieces-v51.safetensors\", \"enabled\": false, \"strength\": 0.26, \"clip_strength\": null, \"trigger\": \"masterpiece, very aesthetic\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": null, \"note\": \"Some reason -2 makes skin better\", \"label_color\": null, \"civitai\": null, \"name\": \"Detailer-KREA2.safetensors\", \"enabled\": false, \"strength\": 0.26, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}], \"ui\": {\"loaded_from\": \"Small Penis - MoodMix 70 GOOD 2.5\"}, \"seed\": 0}, \"models\": {\"rigs\": [{\"name\": \"Krea2\", \"checkpoint\": \"\", \"unet\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"clip\": \"qwen3VLInstruct4bHeretic_v10.safetensors\", \"clip_type\": \"krea2\", \"vae\": \"wan_2.1_vae_fp32.safetensors\", \"steps\": 8, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"detailer_steps\": 4, \"rescue\": false, \"rescue_base\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"rescue_lora\": \"krea2_identity_edit_v1_2.safetensors\", \"kind\": \"\", \"denoise\": 1, \"rescue_strength\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}, {\"name\": \"XL\", \"checkpoint\": \"JANKUTrainedChenkinNoobai_v777.safetensors\", \"unet\": \"\", \"clip\": \"\", \"clip_type\": \"stable_diffusion\", \"vae\": \"sdxl_vae.safetensors\", \"steps\": 29, \"cfg\": 6, \"sampler\": \"euler_ancestral\", \"scheduler\": \"karras\", \"detailer_steps\": 29, \"kind\": \"\", \"denoise\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}], \"active\": 0, \"sampler_mode\": \"internal\", \"seed\": 87815469119277, \"seed_random\": true, \"hold_two\": true}, \"prompts\": {\"rows\": [{\"name\": \"Krea2\", \"rig\": \"Krea2\", \"kind\": \"krea2\", \"text\": \"In the middle of it,.\", \"negative\": \"\", \"frame\": {\"style\": \"None\", \"style_extra\": \"\", \"subject\": \"\", \"surroundings\": \"\", \"framing\": \"Balanced\", \"framing_push\": \"Off\", \"placement_where\": \"None\", \"placement_what\": \"None\", \"placement\": \"\", \"lighting\": \"None\", \"brightness\": 0, \"light_and_colour\": \"\", \"camera_height\": \"Eye level\", \"camera\": \"\"}, \"auto\": {}, \"rigs\": [\"Krea2\", \"XL\"]}, {\"name\": \"XL\", \"rig\": \"\", \"kind\": \"plain\", \"text\": \"\", \"negative\": \"\", \"rigs\": [], \"frame\": {}}]}, \"camera\": {\"on\": true}, \"lora_sets\": []}",
+        "{\"tabs\": {\"subject\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": false, \"wd14\": false, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": false, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0, \"inject_row\": \"\", \"inject_slot\": \"subject\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"subject2\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"subject3\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"scene\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"scene_view\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"moodboard\": {\"images\": [], \"sel\": [], \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": []}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"style\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"boost_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"edit_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"i2i\": {\"images\": [], \"sel\": 0, \"on\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"i2i\", \"combine\": \"append\", \"fixed\": true, \"joy\": true, \"qwen\": false, \"clipgen\": false, \"length\": 120, \"inject_row\": \"Krea 2 Prompt\", \"inject_slot\": \"prompt\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": true, \"lock_lighting\": true}, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"prompt_only\": false, \"denoise\": 0.45, \"scale\": 1, \"canvas\": \"gallery\", \"passes\": 1, \"reangle\": {\"on\": false, \"camera\": \"bands\", \"azimuth\": \"front-right quarter view\", \"elevation\": \"eye-level shot\", \"distance\": \"medium shot\", \"nudge\": false, \"collapse\": true, \"extra\": \"\", \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_angles\": \"\", \"lora_light\": \"\", \"lora_angles_strength\": 1, \"lora_light_strength\": 1, \"steps\": 4, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"shift\": 3.1, \"cfg_norm\": true, \"seed\": 0, \"seed_random\": true, \"studio\": \"{\\\"camera\\\":{\\\"pos\\\":[0,1.85,3],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":35,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":0,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}, \"swap\": {\"on\": false, \"mode\": \"head\", \"reference\": \"subject\", \"order\": \"auto\", \"prompt\": \"\", \"keep_size\": false, \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_swap\": \"\", \"lora_light\": \"None\", \"lora_swap_strength\": 1, \"lora_light_strength\": 1, \"steps\": 16, \"cfg\": 2, \"sampler\": \"er_sde\", \"scheduler\": \"beta\", \"shift\": 3, \"cfg_norm\": false, \"seed\": 0, \"seed_random\": true}, \"pass_custom\": true, \"pass_denoise\": [0.45], \"scale_custom\": false, \"pass_scale\": []}}, \"dials\": {\"picture_labels\": false, \"ref_t0_modulation\": true, \"style_strength\": 1, \"style_detail_px\": 768, \"reference_fidelity\": 6.55, \"hide_style_refs\": false, \"transfer\": \"subject\", \"edit_mask_feather\": 2, \"style_directive\": true, \"subject_likeness_px\": 1088, \"boosts_off\": true, \"likeness_vs_obedience\": 960, \"boost_blocks\": \"all\", \"scene_fidelity\": 2.1, \"echo_prompts\": false, \"attention\": \"pytorch\", \"identity_end\": 1, \"caption_passthrough\": true, \"fit_mode\": \"fit\", \"identity_start\": 0, \"isolate_refs\": true}, \"resize\": 1024, \"use_dials\": true, \"thumb\": 180, \"studio_preset\": \"custom (use settings)\", \"auto\": {\"model\": \"huihui_ai/qwen3-vl-abliterated:8b-instruct\", \"url\": \"\", \"threshold\": 0.6, \"character_threshold\": 0.9, \"temperature\": 0.7, \"seed\": 0, \"num_ctx\": 0, \"num_predict\": 0, \"top_k\": 0, \"top_p\": 0, \"wd14_model\": \"wd-eva02-large-tagger-v3\", \"exclude_tags\": \"\", \"replace_underscore\": true, \"think\": false, \"keep_alive\": 0, \"wd14_unload\": true, \"frank\": true, \"joy_quant\": \"Balanced (8-bit)\", \"joy_style\": \"Descriptive\", \"joy_length\": \"medium\", \"joy_memory\": \"Clear After Run\", \"style_lock\": \"scrub\", \"joy_mode_prompts\": true, \"instruction\": \"\", \"question\": \"\"}, \"latent\": {\"w\": 896, \"h\": 1152, \"batch\": 1, \"on\": true, \"random\": false, \"scale\": 1, \"source\": \"tab\", \"aspect\": \"3:4\", \"mp\": 1, \"passes\": 2, \"refine\": 0.45, \"pass_custom\": false, \"scale_custom\": true, \"pass_scale\": [1, 1.35], \"pass_denoise\": [1, 0.45]}, \"post\": {\"denoise\": {\"on\": false, \"sigma\": 0.67, \"threshold\": 0.05, \"radius_multiplier\": 1.149}, \"color\": {\"on\": false, \"brightness\": 0.95, \"contrast\": 1.25, \"saturation\": 1.21, \"temperature\": 0.04, \"tint\": 0, \"black_point\": -0.01}, \"clarity\": {\"on\": false, \"radius\": 22, \"offset\": 2, \"strength\": 0.4, \"blend_mode\": \"soft light\", \"blend_if_dark\": 50, \"blend_if_light\": 157, \"dark_intensity\": 0.4, \"light_intensity\": 0}, \"sharpen\": {\"on\": false, \"mode\": \"lucy\", \"iterations\": 3, \"kernel_size\": 3, \"amount\": 1.24, \"radius\": 1.09}, \"depth\": {\"on\": false, \"estimator\": \"auto\", \"model\": \"auto\", \"resolution\": 512}, \"dof\": {\"on\": false, \"focus\": 0.24, \"range\": 0.21, \"blur\": 0.86, \"flip_depth\": false}, \"haze\": {\"on\": false, \"strength\": 0.14, \"start\": 0.36, \"lift\": 0.04, \"flip_depth\": false}, \"light_wrap\": {\"on\": false, \"strength\": 0.17, \"radius\": 2.5, \"threshold\": 0.7}, \"diffusion\": {\"on\": false, \"strength\": 0.07, \"radius\": 4, \"black_lift\": 0.03}, \"rolloff\": {\"on\": false, \"knee\": 0.14, \"strength\": 0.2}, \"bloom\": {\"on\": false, \"intensity\": 0.13, \"threshold\": 0.36, \"smoothing\": 0.23, \"radius_multiplier\": 1, \"saturation\": 0.85, \"exposure\": 1}, \"halation\": {\"on\": false, \"strength\": 0.18, \"threshold\": 0.7, \"radius\": 2.7, \"warmth\": 0.7, \"rand\": {\"strength\": [0.25, 0.46]}}, \"distortion\": {\"on\": false, \"amount\": 0, \"edge_softness\": 0}, \"aberration\": {\"on\": false, \"amount\": 0.51, \"red_shift\": 1, \"green_shift\": -1, \"blue_shift\": -3, \"direction\": \"horizontal\"}, \"grain\": {\"on\": false, \"power\": 0.03, \"scale\": 1, \"saturation\": 0.58, \"seed\": 0}, \"vignette\": {\"on\": false, \"amount\": 0.09, \"feather\": 0.6}}, \"look_thumb\": 180, \"post_ui\": {\"precision\": \"2\", \"hints\": true, \"order\": [\"denoise\", \"color\", \"dof\", \"halation\", \"haze\", \"clarity\", \"bloom\", \"sharpen\", \"light_wrap\", \"diffusion\", \"rolloff\", \"distortion\", \"aberration\", \"grain\", \"vignette\"]}, \"vram_tier\": \"high\", \"loras\": {\"on\": true, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"filter\": \"Krea 2\", \"dirty\": false}, \"seed\": 0}, \"paint\": {\"on\": false, \"source\": \"\", \"mask\": \"\", \"auto_mask\": \"\", \"keep_mask\": false, \"region_shape\": \"auto\", \"denoise\": 0.33, \"brush\": 357, \"feather\": 12, \"mask_size\": 1536, \"prompt\": \"\", \"auto_prompt\": \"\", \"use_subject\": false, \"use_scene\": false, \"use_moodboard\": false, \"fit_whole\": false, \"adv_open\": false, \"renderer\": \"rig:Krea2\", \"invert\": false, \"use_loras\": false, \"loras_mode\": \"wired\", \"negative\": \"\", \"mask_only\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"i2i\", \"combine\": \"append\", \"length\": 0, \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false}, \"cfg\": 1, \"steps\": 4, \"renderer_name\": \"\", \"renderer_kind\": \"\", \"seed\": 1112664100, \"brush_shape\": \"round\", \"region_floor\": false, \"renderer_profiles\": {\"Krea 2\": {\"cfg\": 1, \"steps\": 7}, \"Choice Any Latent\": {\"cfg\": 5.5, \"steps\": 29}, \"RedNode Router (advanced sw\\u2026\": {\"cfg\": 5.5, \"steps\": 29}, \"Full Workflow Paint\": {\"cfg\": 5.5, \"steps\": 29}, \"XL\": {\"cfg\": 5.5, \"steps\": 29}, \"ZTurbo\": {\"cfg\": 1, \"steps\": 4}, \"ZTurbo #8598\": {\"cfg\": 1, \"steps\": 9}, \"SDXL\": {\"cfg\": 6.3, \"steps\": 27}, \"Krea 2 Painting\": {\"cfg\": 1, \"steps\": 8}, \"Krea2 Workspace\": {\"cfg\": 1, \"steps\": 4}, \"IMPORT OWN\": {\"cfg\": 1.2, \"steps\": 4}, \"Built-in: Krea2\": {\"cfg\": 1, \"steps\": 5}, \"Built-in: XL\": {\"cfg\": 6.7, \"steps\": 27}, \"rig:Krea2\": {\"cfg\": 1, \"steps\": 4}, \"rig:XL\": {\"cfg\": 5.9, \"steps\": 27}}, \"seed_random\": true, \"scale_top\": 0.7, \"passes\": 1, \"lora_mode\": \"paint\", \"scale\": 0.9, \"colour\": \"\", \"lora_set\": \"\", \"live_px\": 0}, \"ui_scale\": 1, \"thumbs\": {\"i2i\": 180, \"subject\": 240, \"subject2\": 180, \"subject3\": 180, \"scene\": 240, \"moodboard\": 240}, \"paint_loras\": {\"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"dirty\": false}, \"seed\": 0}, \"models\": {\"rigs\": [{\"name\": \"Krea2\", \"checkpoint\": \"\", \"unet\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"clip\": \"qwen3VLInstruct4bHeretic_v10.safetensors\", \"clip_type\": \"krea2\", \"vae\": \"wan_2.1_vae_fp32.safetensors\", \"steps\": 8, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"detailer_steps\": 4, \"rescue\": false, \"rescue_base\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"rescue_lora\": \"krea2_identity_edit_v1_2.safetensors\", \"kind\": \"\", \"denoise\": 1, \"rescue_strength\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}, {\"name\": \"XL\", \"checkpoint\": \"JANKUTrainedChenkinNoobai_v777.safetensors\", \"unet\": \"\", \"clip\": \"\", \"clip_type\": \"stable_diffusion\", \"vae\": \"sdxl_vae.safetensors\", \"steps\": 29, \"cfg\": 6, \"sampler\": \"euler_ancestral\", \"scheduler\": \"karras\", \"detailer_steps\": 29, \"kind\": \"\", \"denoise\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}], \"active\": 0, \"sampler_mode\": \"internal\", \"seed\": 87815469119277, \"seed_random\": true, \"hold_two\": true}, \"prompts\": {\"rows\": [{\"name\": \"Krea2\", \"rig\": \"Krea2\", \"kind\": \"krea2\", \"text\": \"A very high resolution colour photograph. Every surface holds fine micro-detail, the tonal range runs from open shadow to held highlight without clipping, geometry is perfectly undistorted, colour is natural and neutral. Grey cloud, out of focus. In the middle of it, a woman in her thirties, dark hair pushed back, a worn red waterproof jacket zipped to the chin, wind-reddened cheeks, a faint scar through one eyebrow. One small light in darkness, most of the frame falling to near black, only the essential shapes catching any light. The frame is dark and underexposed, deep shadow covering most of it. Overcast daylight, muted palette of slate, rust and bone.\", \"negative\": \"\", \"frame\": {\"style\": \"Photo: ultra detailed\", \"style_extra\": \"\", \"subject\": \"a woman in her thirties, dark hair pushed back, a worn red waterproof jacket zipped to the chin, wind-reddened cheeks, a faint scar through one eyebrow\", \"surroundings\": \"grey cloud, out of focus\", \"framing\": \"Balanced\", \"framing_push\": \"Off\", \"placement_where\": \"None\", \"placement_what\": \"None\", \"placement\": \"\", \"lighting\": \"Low key\", \"brightness\": -2, \"light_and_colour\": \"overcast daylight, muted palette of slate, rust and bone\", \"camera_height\": \"Eye level\", \"camera\": \"\"}, \"auto\": {}, \"rigs\": [\"Krea2\", \"XL\"]}, {\"name\": \"XL\", \"rig\": \"\", \"kind\": \"plain\", \"text\": \"\", \"negative\": \"\", \"rigs\": [], \"frame\": {\"camera\": \"{\\\"camera\\\":{\\\"pos\\\":[0,1.56,3],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":41,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":0,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}}]}, \"camera\": {\"on\": true}, \"lora_sets\": [{\"name\": \"Set 2\", \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"dirty\": false}, \"seed\": 0}]}",
         "custom (live)",
-        "{\"tabs\": {\"subject\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": false, \"wd14\": false, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": false, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0, \"inject_row\": \"\", \"inject_slot\": \"subject\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"subject2\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"subject3\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"scene\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"scene_view\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"moodboard\": {\"images\": [], \"sel\": [], \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": []}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"style\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"boost_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"edit_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"i2i\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"i2i\", \"combine\": \"append\", \"fixed\": true, \"joy\": true, \"qwen\": false, \"clipgen\": false, \"length\": 120, \"inject_row\": \"Krea 2 Prompt\", \"inject_slot\": \"prompt\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": true, \"lock_lighting\": true}, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"prompt_only\": false, \"denoise\": 0.3, \"scale\": 1, \"canvas\": \"gallery\", \"passes\": 1, \"reangle\": {\"on\": false, \"camera\": \"studio\", \"azimuth\": \"front-right quarter view\", \"elevation\": \"eye-level shot\", \"distance\": \"medium shot\", \"nudge\": false, \"collapse\": true, \"extra\": \"\", \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_angles\": \"\", \"lora_light\": \"\", \"lora_angles_strength\": 1, \"lora_light_strength\": 1, \"steps\": 4, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"shift\": 3.1, \"cfg_norm\": true, \"seed\": 0, \"seed_random\": true, \"studio\": \"{\\\"camera\\\":{\\\"pos\\\":[0.2,3.85,1.7],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":52,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":33.288517977018785,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}, \"swap\": {\"on\": false, \"mode\": \"face\", \"reference\": \"subject\", \"order\": \"auto\", \"prompt\": \"\", \"keep_size\": false, \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_swap\": \"\", \"lora_light\": \"None\", \"lora_swap_strength\": 1, \"lora_light_strength\": 1, \"steps\": 16, \"cfg\": 2, \"sampler\": \"er_sde\", \"scheduler\": \"beta\", \"shift\": 3, \"cfg_norm\": false, \"seed\": 0, \"seed_random\": true}, \"pass_custom\": true, \"pass_denoise\": [0.45], \"scale_custom\": false, \"pass_scale\": []}}, \"dials\": {\"picture_labels\": false, \"ref_t0_modulation\": true, \"style_strength\": 1, \"style_detail_px\": 768, \"reference_fidelity\": 6.55, \"hide_style_refs\": false, \"transfer\": \"subject\", \"edit_mask_feather\": 2, \"style_directive\": true, \"subject_likeness_px\": 1088, \"boosts_off\": true, \"likeness_vs_obedience\": 960, \"boost_blocks\": \"all\", \"scene_fidelity\": 2.1, \"echo_prompts\": false, \"attention\": \"pytorch\", \"identity_end\": 1, \"caption_passthrough\": true, \"fit_mode\": \"fit\", \"identity_start\": 0, \"isolate_refs\": true}, \"resize\": 1024, \"use_dials\": true, \"thumb\": 180, \"studio_preset\": \"custom (use settings)\", \"auto\": {\"model\": \"huihui_ai/qwen3-vl-abliterated:8b-instruct\", \"url\": \"\", \"threshold\": 0.6, \"character_threshold\": 0.9, \"temperature\": 0.7, \"seed\": 0, \"num_ctx\": 0, \"num_predict\": 0, \"top_k\": 0, \"top_p\": 0, \"wd14_model\": \"wd-eva02-large-tagger-v3\", \"exclude_tags\": \"\", \"replace_underscore\": true, \"think\": false, \"keep_alive\": 0, \"wd14_unload\": true, \"frank\": true, \"joy_quant\": \"Balanced (8-bit)\", \"joy_style\": \"Descriptive\", \"joy_length\": \"medium\", \"joy_memory\": \"Clear After Run\", \"style_lock\": \"scrub\", \"joy_mode_prompts\": true, \"instruction\": \"\", \"question\": \"\"}, \"latent\": {\"w\": 1216, \"h\": 832, \"batch\": 1, \"on\": true, \"random\": false, \"scale\": 1, \"source\": \"tab\", \"aspect\": \"3:2\", \"mp\": 1, \"passes\": 1, \"refine\": 0.45, \"pass_custom\": false, \"scale_custom\": false}, \"post\": {\"denoise\": {\"on\": false, \"sigma\": 0.67, \"threshold\": 0.05, \"radius_multiplier\": 1.149, \"rand\": {}}, \"color\": {\"on\": false, \"brightness\": 0.95, \"contrast\": 1.25, \"saturation\": 1.21, \"temperature\": 0.04, \"tint\": 0, \"black_point\": -0.01, \"rand\": {}}, \"clarity\": {\"on\": false, \"radius\": 22, \"offset\": 2, \"strength\": 0.4, \"blend_mode\": \"soft light\", \"blend_if_dark\": 50, \"blend_if_light\": 157, \"dark_intensity\": 0.4, \"light_intensity\": 0, \"rand\": {}}, \"sharpen\": {\"on\": false, \"mode\": \"lucy\", \"iterations\": 3, \"kernel_size\": 3, \"amount\": 1.24, \"radius\": 1.09, \"rand\": {}}, \"dof\": {\"on\": false, \"focus\": 0.24, \"range\": 0.21, \"blur\": 0.86, \"flip_depth\": 0, \"rand\": {}}, \"haze\": {\"on\": false, \"strength\": 0.14, \"start\": 0.36, \"lift\": 0.04, \"flip_depth\": 0, \"rand\": {}}, \"light_wrap\": {\"on\": false, \"strength\": 0.17, \"radius\": 2.5, \"threshold\": 0.7, \"rand\": {}}, \"diffusion\": {\"on\": false, \"strength\": 0.07, \"radius\": 4, \"black_lift\": 0.03, \"rand\": {}}, \"rolloff\": {\"on\": false, \"knee\": 0.14, \"strength\": 0.2, \"rand\": {}}, \"bloom\": {\"on\": false, \"intensity\": 0.13, \"threshold\": 0.36, \"smoothing\": 0.23, \"radius_multiplier\": 1, \"saturation\": 0.85, \"exposure\": 1, \"rand\": {}}, \"halation\": {\"on\": false, \"strength\": 0.18, \"threshold\": 0.7, \"radius\": 2.7, \"warmth\": 0.7, \"rand\": {\"strength\": [0.25, 0.46]}}, \"distortion\": {\"on\": false, \"amount\": 0, \"edge_softness\": 0, \"rand\": {}}, \"aberration\": {\"on\": false, \"amount\": 0.51, \"red_shift\": 1, \"green_shift\": -1, \"blue_shift\": -3, \"direction\": \"horizontal\", \"rand\": {}}, \"grain\": {\"on\": false, \"power\": 0.03, \"scale\": 1, \"saturation\": 0.58, \"seed\": 0, \"rand\": {}}, \"vignette\": {\"on\": false, \"amount\": 0.09, \"feather\": 0.6, \"rand\": {}}, \"depth\": {\"on\": false, \"rand\": {}, \"estimator\": \"auto\", \"model\": \"auto\", \"resolution\": 512}}, \"look_thumb\": 180, \"post_ui\": {\"precision\": \"2\", \"hints\": true, \"order\": [\"denoise\", \"color\", \"dof\", \"halation\", \"haze\", \"clarity\", \"bloom\", \"sharpen\", \"light_wrap\", \"diffusion\", \"rolloff\", \"distortion\", \"aberration\", \"grain\", \"vignette\"]}, \"vram_tier\": \"high\", \"loras\": {\"on\": false, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Text Refusal Reduction\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2775340, \"version_id\": 3125118, \"hash\": \"84ec722ddab93f6489c5315bca25de5dd1a7b7ec5045a3c4ce2f97f62e54e8e6\", \"name\": \"Krea2 TextFusion Refusal-Reduction LoRA\"}, \"name\": \"Krea2_TextFusion_Refusal_Reduction.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"KreaKult\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"KreaKult_V1_E10.safetensors\", \"enabled\": false, \"strength\": 0.32, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": \"Aesthetic Quality Modifiers\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2-masterpieces-v51.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"masterpiece, very aesthetic\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": null, \"note\": \"Some reason -2 makes skin better\", \"label_color\": null, \"civitai\": null, \"name\": \"Detailer-KREA2.safetensors\", \"enabled\": false, \"strength\": 0.4, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}], \"ui\": {\"loaded_from\": \"Simple\", \"filter\": \"Krea 2\"}, \"seed\": 0}, \"paint\": {\"on\": false, \"source\": \"\", \"mask\": \"\", \"auto_mask\": \"\", \"keep_mask\": false, \"region_shape\": \"auto\", \"denoise\": 0.5, \"brush\": 220, \"feather\": 8, \"mask_size\": 1536, \"prompt\": \"\", \"auto_prompt\": \"\", \"use_subject\": true, \"use_scene\": false, \"use_moodboard\": false, \"fit_whole\": false, \"adv_open\": false, \"renderer\": \"rig:XL\", \"invert\": false, \"use_loras\": false, \"loras_mode\": \"wired\", \"negative\": \"\", \"mask_only\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"i2i\", \"combine\": \"append\", \"length\": 0, \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false}, \"cfg\": 5.9, \"steps\": 27, \"renderer_name\": \"\", \"renderer_kind\": \"\", \"seed\": 1112664100, \"brush_shape\": \"round\", \"region_floor\": false, \"renderer_profiles\": {\"Krea 2\": {\"cfg\": 1, \"steps\": 7}, \"Choice Any Latent\": {\"cfg\": 5.5, \"steps\": 29}, \"RedNode Router (advanced sw\\u2026\": {\"cfg\": 5.5, \"steps\": 29}, \"Full Workflow Paint\": {\"cfg\": 5.5, \"steps\": 29}, \"XL\": {\"cfg\": 5.5, \"steps\": 29}, \"ZTurbo\": {\"cfg\": 1, \"steps\": 4}, \"ZTurbo #8598\": {\"cfg\": 1, \"steps\": 9}, \"SDXL\": {\"cfg\": 6.3, \"steps\": 27}, \"Krea 2 Painting\": {\"cfg\": 1, \"steps\": 8}, \"Krea2 Workspace\": {\"cfg\": 1, \"steps\": 4}, \"IMPORT OWN\": {\"cfg\": 1.2, \"steps\": 4}, \"Built-in: Krea2\": {\"cfg\": 1, \"steps\": 5}, \"Built-in: XL\": {\"cfg\": 6.7, \"steps\": 27}, \"rig:Krea2\": {\"cfg\": 1, \"steps\": 4}, \"rig:XL\": {\"cfg\": 5.2, \"steps\": 27}}, \"seed_random\": true, \"scale_top\": 0.7, \"passes\": 1, \"lora_mode\": \"paint\", \"scale\": 0.9, \"colour\": \"\", \"lora_set\": \"\"}, \"ui_scale\": 1, \"thumbs\": {\"i2i\": 180, \"subject\": 240, \"subject2\": 180, \"subject3\": 180, \"scene\": 240, \"moodboard\": 240}, \"paint_loras\": {\"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Text Refusal Reduction\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2775340, \"version_id\": 3125118, \"hash\": \"84ec722ddab93f6489c5315bca25de5dd1a7b7ec5045a3c4ce2f97f62e54e8e6\", \"name\": \"Krea2 TextFusion Refusal-Reduction LoRA\"}, \"name\": \"Krea2_TextFusion_Refusal_Reduction.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": null, \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2filterbypass3.safetensors\", \"enabled\": true, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 4}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 5.6, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"KreaKult\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"KreaKult_V1_E10.safetensors\", \"enabled\": false, \"strength\": 0.32, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Dark - Light Slider\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"PornMaster_Krea2_Light_Slider_V1.safetensors\", \"enabled\": false, \"strength\": -1.14, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -5, \"scale_max\": 5}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": \"Aesthetic Quality Modifiers\", \"note\": null, \"label_color\": null, \"civitai\": null, \"name\": \"krea2-masterpieces-v51.safetensors\", \"enabled\": false, \"strength\": 0.26, \"clip_strength\": null, \"trigger\": \"masterpiece, very aesthetic\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"lora\", \"color\": \"#1e5233\", \"label\": null, \"note\": \"Some reason -2 makes skin better\", \"label_color\": null, \"civitai\": null, \"name\": \"Detailer-KREA2.safetensors\", \"enabled\": false, \"strength\": 0.26, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}], \"ui\": {\"loaded_from\": \"Small Penis - MoodMix 70 GOOD 2.5\"}, \"seed\": 0}, \"models\": {\"rigs\": [{\"name\": \"Krea2\", \"checkpoint\": \"\", \"unet\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"clip\": \"qwen3VLInstruct4bHeretic_v10.safetensors\", \"clip_type\": \"krea2\", \"vae\": \"wan_2.1_vae_fp32.safetensors\", \"steps\": 8, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"detailer_steps\": 4, \"rescue\": false, \"rescue_base\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"rescue_lora\": \"krea2_identity_edit_v1_2.safetensors\", \"kind\": \"\", \"denoise\": 1, \"rescue_strength\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}, {\"name\": \"XL\", \"checkpoint\": \"JANKUTrainedChenkinNoobai_v777.safetensors\", \"unet\": \"\", \"clip\": \"\", \"clip_type\": \"stable_diffusion\", \"vae\": \"sdxl_vae.safetensors\", \"steps\": 29, \"cfg\": 6, \"sampler\": \"euler_ancestral\", \"scheduler\": \"karras\", \"detailer_steps\": 29, \"kind\": \"\", \"denoise\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}], \"active\": 0, \"sampler_mode\": \"internal\", \"seed\": 87815469119277, \"seed_random\": true, \"hold_two\": true}, \"prompts\": {\"rows\": [{\"name\": \"Krea2\", \"rig\": \"Krea2\", \"kind\": \"krea2\", \"text\": \"In the middle of it,.\", \"negative\": \"\", \"frame\": {\"style\": \"None\", \"style_extra\": \"\", \"subject\": \"\", \"surroundings\": \"\", \"framing\": \"Balanced\", \"framing_push\": \"Off\", \"placement_where\": \"None\", \"placement_what\": \"None\", \"placement\": \"\", \"lighting\": \"None\", \"brightness\": 0, \"light_and_colour\": \"\", \"camera_height\": \"Eye level\", \"camera\": \"\"}, \"auto\": {}, \"rigs\": [\"Krea2\", \"XL\"]}, {\"name\": \"XL\", \"rig\": \"\", \"kind\": \"plain\", \"text\": \"\", \"negative\": \"\", \"rigs\": [], \"frame\": {}}]}, \"camera\": {\"on\": true}, \"lora_sets\": []}"
+        "{\"tabs\": {\"subject\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": false, \"wd14\": false, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": false, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0, \"inject_row\": \"\", \"inject_slot\": \"subject\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"subject2\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"subject3\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"scene\": {\"images\": [], \"sel\": 0, \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"scene_view\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": false, \"lock_lighting\": false}}, \"moodboard\": {\"images\": [], \"sel\": [], \"on\": false, \"groups\": {\"all\": {\"images\": [], \"sel\": []}}, \"group\": \"all\", \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"style\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}}, \"boost_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"edit_mask\": {\"images\": [], \"sel\": 0, \"on\": false, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"subject\", \"combine\": \"append\", \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false, \"length\": 0}, \"mask\": \"\", \"src\": \"\"}, \"i2i\": {\"images\": [], \"sel\": 0, \"on\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": false, \"mode\": \"i2i\", \"combine\": \"append\", \"fixed\": true, \"joy\": true, \"qwen\": false, \"clipgen\": false, \"length\": 120, \"inject_row\": \"Krea 2 Prompt\", \"inject_slot\": \"prompt\"}, \"conv\": {\"gender\": \"off\", \"style\": \"off\", \"act\": \"off\", \"remove_cum\": false, \"shave\": false, \"rules\": \"\", \"lock\": true, \"lock_lighting\": true}, \"groups\": {\"all\": {\"images\": [], \"sel\": 0}}, \"group\": \"all\", \"prompt_only\": false, \"denoise\": 0.45, \"scale\": 1, \"canvas\": \"gallery\", \"passes\": 1, \"reangle\": {\"on\": false, \"camera\": \"bands\", \"azimuth\": \"front-right quarter view\", \"elevation\": \"eye-level shot\", \"distance\": \"medium shot\", \"nudge\": false, \"collapse\": true, \"extra\": \"\", \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_angles\": \"\", \"lora_light\": \"\", \"lora_angles_strength\": 1, \"lora_light_strength\": 1, \"steps\": 4, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"shift\": 3.1, \"cfg_norm\": true, \"seed\": 0, \"seed_random\": true, \"studio\": \"{\\\"camera\\\":{\\\"pos\\\":[0,1.85,3],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":35,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":0,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}, \"swap\": {\"on\": false, \"mode\": \"head\", \"reference\": \"subject\", \"order\": \"auto\", \"prompt\": \"\", \"keep_size\": false, \"unet\": \"\", \"clip\": \"\", \"vae\": \"\", \"lora_swap\": \"\", \"lora_light\": \"None\", \"lora_swap_strength\": 1, \"lora_light_strength\": 1, \"steps\": 16, \"cfg\": 2, \"sampler\": \"er_sde\", \"scheduler\": \"beta\", \"shift\": 3, \"cfg_norm\": false, \"seed\": 0, \"seed_random\": true}, \"pass_custom\": true, \"pass_denoise\": [0.45], \"scale_custom\": false, \"pass_scale\": []}}, \"dials\": {\"picture_labels\": false, \"ref_t0_modulation\": true, \"style_strength\": 1, \"style_detail_px\": 768, \"reference_fidelity\": 6.55, \"hide_style_refs\": false, \"transfer\": \"subject\", \"edit_mask_feather\": 2, \"style_directive\": true, \"subject_likeness_px\": 1088, \"boosts_off\": true, \"likeness_vs_obedience\": 960, \"boost_blocks\": \"all\", \"scene_fidelity\": 2.1, \"echo_prompts\": false, \"attention\": \"pytorch\", \"identity_end\": 1, \"caption_passthrough\": true, \"fit_mode\": \"fit\", \"identity_start\": 0, \"isolate_refs\": true}, \"resize\": 1024, \"use_dials\": true, \"thumb\": 180, \"studio_preset\": \"custom (use settings)\", \"auto\": {\"model\": \"huihui_ai/qwen3-vl-abliterated:8b-instruct\", \"url\": \"\", \"threshold\": 0.6, \"character_threshold\": 0.9, \"temperature\": 0.7, \"seed\": 0, \"num_ctx\": 0, \"num_predict\": 0, \"top_k\": 0, \"top_p\": 0, \"wd14_model\": \"wd-eva02-large-tagger-v3\", \"exclude_tags\": \"\", \"replace_underscore\": true, \"think\": false, \"keep_alive\": 0, \"wd14_unload\": true, \"frank\": true, \"joy_quant\": \"Balanced (8-bit)\", \"joy_style\": \"Descriptive\", \"joy_length\": \"medium\", \"joy_memory\": \"Clear After Run\", \"style_lock\": \"scrub\", \"joy_mode_prompts\": true, \"instruction\": \"\", \"question\": \"\"}, \"latent\": {\"w\": 896, \"h\": 1152, \"batch\": 1, \"on\": true, \"random\": false, \"scale\": 1, \"source\": \"tab\", \"aspect\": \"3:4\", \"mp\": 1, \"passes\": 2, \"refine\": 0.45, \"pass_custom\": false, \"scale_custom\": true, \"pass_scale\": [1, 1.35], \"pass_denoise\": [1, 0.45]}, \"post\": {\"denoise\": {\"on\": false, \"sigma\": 0.67, \"threshold\": 0.05, \"radius_multiplier\": 1.149}, \"color\": {\"on\": false, \"brightness\": 0.95, \"contrast\": 1.25, \"saturation\": 1.21, \"temperature\": 0.04, \"tint\": 0, \"black_point\": -0.01}, \"clarity\": {\"on\": false, \"radius\": 22, \"offset\": 2, \"strength\": 0.4, \"blend_mode\": \"soft light\", \"blend_if_dark\": 50, \"blend_if_light\": 157, \"dark_intensity\": 0.4, \"light_intensity\": 0}, \"sharpen\": {\"on\": false, \"mode\": \"lucy\", \"iterations\": 3, \"kernel_size\": 3, \"amount\": 1.24, \"radius\": 1.09}, \"depth\": {\"on\": false, \"estimator\": \"auto\", \"model\": \"auto\", \"resolution\": 512}, \"dof\": {\"on\": false, \"focus\": 0.24, \"range\": 0.21, \"blur\": 0.86, \"flip_depth\": false}, \"haze\": {\"on\": false, \"strength\": 0.14, \"start\": 0.36, \"lift\": 0.04, \"flip_depth\": false}, \"light_wrap\": {\"on\": false, \"strength\": 0.17, \"radius\": 2.5, \"threshold\": 0.7}, \"diffusion\": {\"on\": false, \"strength\": 0.07, \"radius\": 4, \"black_lift\": 0.03}, \"rolloff\": {\"on\": false, \"knee\": 0.14, \"strength\": 0.2}, \"bloom\": {\"on\": false, \"intensity\": 0.13, \"threshold\": 0.36, \"smoothing\": 0.23, \"radius_multiplier\": 1, \"saturation\": 0.85, \"exposure\": 1}, \"halation\": {\"on\": false, \"strength\": 0.18, \"threshold\": 0.7, \"radius\": 2.7, \"warmth\": 0.7, \"rand\": {\"strength\": [0.25, 0.46]}}, \"distortion\": {\"on\": false, \"amount\": 0, \"edge_softness\": 0}, \"aberration\": {\"on\": false, \"amount\": 0.51, \"red_shift\": 1, \"green_shift\": -1, \"blue_shift\": -3, \"direction\": \"horizontal\"}, \"grain\": {\"on\": false, \"power\": 0.03, \"scale\": 1, \"saturation\": 0.58, \"seed\": 0}, \"vignette\": {\"on\": false, \"amount\": 0.09, \"feather\": 0.6}}, \"look_thumb\": 180, \"post_ui\": {\"precision\": \"2\", \"hints\": true, \"order\": [\"denoise\", \"color\", \"dof\", \"halation\", \"haze\", \"clarity\", \"bloom\", \"sharpen\", \"light_wrap\", \"diffusion\", \"rolloff\", \"distortion\", \"aberration\", \"grain\", \"vignette\"]}, \"vram_tier\": \"high\", \"loras\": {\"on\": true, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"filter\": \"Krea 2\", \"dirty\": false}, \"seed\": 0}, \"paint\": {\"on\": false, \"source\": \"\", \"mask\": \"\", \"auto_mask\": \"\", \"keep_mask\": false, \"region_shape\": \"auto\", \"denoise\": 0.33, \"brush\": 357, \"feather\": 12, \"mask_size\": 1536, \"prompt\": \"\", \"auto_prompt\": \"\", \"use_subject\": false, \"use_scene\": false, \"use_moodboard\": false, \"fit_whole\": false, \"adv_open\": false, \"renderer\": \"rig:Krea2\", \"invert\": false, \"use_loras\": false, \"loras_mode\": \"wired\", \"negative\": \"\", \"mask_only\": true, \"auto\": {\"on\": false, \"ollama\": true, \"wd14\": true, \"mode\": \"i2i\", \"combine\": \"append\", \"length\": 0, \"fixed\": true, \"joy\": false, \"qwen\": false, \"clipgen\": false}, \"cfg\": 1, \"steps\": 4, \"renderer_name\": \"\", \"renderer_kind\": \"\", \"seed\": 1112664100, \"brush_shape\": \"round\", \"region_floor\": false, \"renderer_profiles\": {\"Krea 2\": {\"cfg\": 1, \"steps\": 7}, \"Choice Any Latent\": {\"cfg\": 5.5, \"steps\": 29}, \"RedNode Router (advanced sw\\u2026\": {\"cfg\": 5.5, \"steps\": 29}, \"Full Workflow Paint\": {\"cfg\": 5.5, \"steps\": 29}, \"XL\": {\"cfg\": 5.5, \"steps\": 29}, \"ZTurbo\": {\"cfg\": 1, \"steps\": 4}, \"ZTurbo #8598\": {\"cfg\": 1, \"steps\": 9}, \"SDXL\": {\"cfg\": 6.3, \"steps\": 27}, \"Krea 2 Painting\": {\"cfg\": 1, \"steps\": 8}, \"Krea2 Workspace\": {\"cfg\": 1, \"steps\": 4}, \"IMPORT OWN\": {\"cfg\": 1.2, \"steps\": 4}, \"Built-in: Krea2\": {\"cfg\": 1, \"steps\": 5}, \"Built-in: XL\": {\"cfg\": 6.7, \"steps\": 27}, \"rig:Krea2\": {\"cfg\": 1, \"steps\": 4}, \"rig:XL\": {\"cfg\": 5.9, \"steps\": 27}}, \"seed_random\": true, \"scale_top\": 0.7, \"passes\": 1, \"lora_mode\": \"paint\", \"scale\": 0.9, \"colour\": \"\", \"lora_set\": \"\", \"live_px\": 0}, \"ui_scale\": 1, \"thumbs\": {\"i2i\": 180, \"subject\": 240, \"subject2\": 180, \"subject3\": 180, \"scene\": 240, \"moodboard\": 240}, \"paint_loras\": {\"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"dirty\": false}, \"seed\": 0}, \"models\": {\"rigs\": [{\"name\": \"Krea2\", \"checkpoint\": \"\", \"unet\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"clip\": \"qwen3VLInstruct4bHeretic_v10.safetensors\", \"clip_type\": \"krea2\", \"vae\": \"wan_2.1_vae_fp32.safetensors\", \"steps\": 8, \"cfg\": 1, \"sampler\": \"euler\", \"scheduler\": \"simple\", \"detailer_steps\": 4, \"rescue\": false, \"rescue_base\": \"krea2TurboOfficialComfy_krea2TurboFp8.safetensors\", \"rescue_lora\": \"krea2_identity_edit_v1_2.safetensors\", \"kind\": \"\", \"denoise\": 1, \"rescue_strength\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}, {\"name\": \"XL\", \"checkpoint\": \"JANKUTrainedChenkinNoobai_v777.safetensors\", \"unet\": \"\", \"clip\": \"\", \"clip_type\": \"stable_diffusion\", \"vae\": \"sdxl_vae.safetensors\", \"steps\": 29, \"cfg\": 6, \"sampler\": \"euler_ancestral\", \"scheduler\": \"karras\", \"detailer_steps\": 29, \"kind\": \"\", \"denoise\": 1, \"lora_set\": \"\", \"i2i_sampler\": \"\", \"i2i_scheduler\": \"\"}], \"active\": 0, \"sampler_mode\": \"internal\", \"seed\": 87815469119277, \"seed_random\": true, \"hold_two\": true}, \"prompts\": {\"rows\": [{\"name\": \"Krea2\", \"rig\": \"Krea2\", \"kind\": \"krea2\", \"text\": \"A very high resolution colour photograph. Every surface holds fine micro-detail, the tonal range runs from open shadow to held highlight without clipping, geometry is perfectly undistorted, colour is natural and neutral. Grey cloud, out of focus. In the middle of it, a woman in her thirties, dark hair pushed back, a worn red waterproof jacket zipped to the chin, wind-reddened cheeks, a faint scar through one eyebrow. One small light in darkness, most of the frame falling to near black, only the essential shapes catching any light. The frame is dark and underexposed, deep shadow covering most of it. Overcast daylight, muted palette of slate, rust and bone.\", \"negative\": \"\", \"frame\": {\"style\": \"Photo: ultra detailed\", \"style_extra\": \"\", \"subject\": \"a woman in her thirties, dark hair pushed back, a worn red waterproof jacket zipped to the chin, wind-reddened cheeks, a faint scar through one eyebrow\", \"surroundings\": \"grey cloud, out of focus\", \"framing\": \"Balanced\", \"framing_push\": \"Off\", \"placement_where\": \"None\", \"placement_what\": \"None\", \"placement\": \"\", \"lighting\": \"Low key\", \"brightness\": -2, \"light_and_colour\": \"overcast daylight, muted palette of slate, rust and bone\", \"camera_height\": \"Eye level\", \"camera\": \"\"}, \"auto\": {}, \"rigs\": [\"Krea2\", \"XL\"]}, {\"name\": \"XL\", \"rig\": \"\", \"kind\": \"plain\", \"text\": \"\", \"negative\": \"\", \"rigs\": [], \"frame\": {\"camera\": \"{\\\"camera\\\":{\\\"pos\\\":[0,1.56,3],\\\"target\\\":0,\\\"target_height\\\":null,\\\"focal_mm\\\":41,\\\"roll_deg\\\":0,\\\"aperture\\\":0,\\\"lock\\\":true,\\\"aim\\\":[0,0,0]},\\\"subjects\\\":[{\\\"name\\\":\\\"the subject\\\",\\\"pos\\\":[0,0,0],\\\"height\\\":1.7,\\\"facing_deg\\\":0,\\\"kind\\\":\\\"person\\\",\\\"size\\\":[0.6,0.6],\\\"locked\\\":false,\\\"rel\\\":null}],\\\"output\\\":\\\"krea2\\\",\\\"join\\\":\\\"lead\\\",\\\"auto_latent\\\":false,\\\"latent_mp\\\":1,\\\"latent_batch\\\":1,\\\"zoom_lora\\\":\\\"\\\",\\\"zoom_mode\\\":\\\"off\\\",\\\"zoom_strength\\\":0,\\\"cam_loras\\\":{\\\"zoom\\\":{\\\"name\\\":\\\"zoom_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"height\\\":{\\\"name\\\":\\\"camera_height_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"orbit\\\":{\\\"name\\\":\\\"camera_orbit_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"back\\\":{\\\"name\\\":\\\"camera_back_krea2_rednode.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"light_loras\\\":{\\\"brightness\\\":{\\\"name\\\":\\\"PornMaster_Krea2_Light_Slider_V1.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0},\\\"colour\\\":{\\\"name\\\":\\\"color_temp_krea2_loraholic.safetensors\\\",\\\"mode\\\":\\\"off\\\",\\\"strength\\\":0}},\\\"path\\\":{\\\"mode\\\":\\\"off\\\",\\\"shots\\\":10,\\\"b\\\":null,\\\"orbit_from\\\":0,\\\"orbit_to\\\":180},\\\"stage_zoom\\\":\\\"normal\\\",\\\"lights\\\":[]}\"}}]}, \"camera\": {\"on\": true}, \"lora_sets\": [{\"name\": \"Set 2\", \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#7f2230\", \"label\": \"Identity Edit V1.2\", \"note\": null, \"label_color\": \"#e8ecf1\", \"civitai\": {\"model_id\": 2761113, \"version_id\": 3139172, \"hash\": \"6adf9a69cc9502d286db7b69964d37da7e9cfe4b05b4d004bc275f087d3fd3cf\", \"name\": \"Krea 2 Identity Edit\"}, \"name\": \"krea2_identity_edit_v1_2.safetensors\", \"enabled\": false, \"strength\": 1, \"clip_strength\": null, \"trigger\": \"\", \"random\": false, \"rand_step\": 0, \"rand_min\": 0, \"rand_max\": 2, \"scale_min\": -2, \"scale_max\": 2}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"lora\", \"color\": \"#14514f\", \"label\": \"Zoom\", \"note\": \"Creative Lora, great for making images feel diffrent\", \"label_color\": null, \"civitai\": {\"model_id\": 2717832, \"version_id\": 3153611, \"hash\": \"65404882e6c41d23219bac2894a0916d4b02fd61d6a16ff25174258ca1f6f1dc\", \"name\": \"Zoom Slider - (Krea2 + ZIT)\"}, \"name\": \"zoom_krea2_loraholic.safetensors\", \"enabled\": false, \"strength\": 3.88, \"clip_strength\": null, \"trigger\": \"\", \"random\": true, \"rand_step\": 0, \"rand_min\": -1.51, \"rand_max\": 2.23, \"scale_min\": -10, \"scale_max\": 10}], \"ui\": {\"loaded_from\": \"Rednode_Default_Lora\", \"dirty\": false}, \"seed\": 0}]}"
       ],
       "color": "#222",
       "bgcolor": "#000"
@@ -1534,26 +1611,42 @@
       "INT"
     ],
     [
-      75281,
-      29,
-      0,
-      8967,
-      0,
-      "IMAGE"
-    ],
-    [
-      75282,
-      8967,
+      44,
+      32,
       0,
       33,
       0,
       "IMAGE"
     ],
     [
-      75283,
-      8967,
+      45,
+      29,
+      0,
+      32,
+      0,
+      "IMAGE"
+    ],
+    [
+      46,
+      32,
       0,
       8,
+      0,
+      "IMAGE"
+    ],
+    [
+      47,
+      1,
+      31,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      49,
+      29,
+      0,
+      35,
       0,
       "IMAGE"
     ]
@@ -1563,12 +1656,72 @@
       "id": 1,
       "title": "Image Previews",
       "bounding": [
-        -7575.549776610423,
-        84.40529414322707,
-        577.5740519909959,
-        1212.8179176081483
+        -7608.127455738279,
+        -66.26173940434477,
+        573.1718630281057,
+        1546.003533660409
       ],
       "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Detailer",
+      "bounding": [
+        -7004.846911151536,
+        18.666057681373477,
+        1259.0881284077004,
+        1212.851821414561
+      ],
+      "color": "#88A",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "RedNode Post FX",
+      "bounding": [
+        -5729.552549348764,
+        67.93217109255976,
+        900.939087288285,
+        1201.1410172737635
+      ],
+      "color": "#8A8",
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "Save",
+      "bounding": [
+        -4812.634943407882,
+        109.01379433183607,
+        995.3251311596728,
+        1195.8363841656856
+      ],
+      "color": "#A88",
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "Prompt Styles",
+      "bounding": [
+        -10554.070039990425,
+        145.37653174985095,
+        1336.5120979293024,
+        1144.3566737502874
+      ],
+      "color": "#444",
+      "flags": {}
+    },
+    {
+      "id": 6,
+      "title": "RedNode Studio Workspace",
+      "bounding": [
+        -9179.659034018541,
+        7.8956111502633535,
+        1535.4880537803274,
+        1274.0091463248139
+      ],
+      "color": "#444",
       "flags": {}
     }
   ],
@@ -1576,15 +1729,15 @@
   "extra": {
     "ue_links": [],
     "k2cf_state_id": "k2cf_1786555167201_137fb2d29rd",
-    "anomalous_hashes": {},
-    "links_added_by_ue": [],
     "ds": {
-      "scale": 0.7627768444385656,
+      "scale": 0.9229599817707329,
       "offset": [
-        8645.789331394919,
-        319.88626827182424
+        9561.031047199469,
+        78.02368092878514
       ]
-    }
+    },
+    "anomalous_hashes": {},
+    "links_added_by_ue": []
   },
   "version": 0.4
 }
