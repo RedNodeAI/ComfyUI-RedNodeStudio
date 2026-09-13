@@ -411,9 +411,17 @@ class RedNodeSaveVideo:
         print(f"[RedNode Save Video] {'keeper' if cfg['keep'] else 'draft'}: {rel} "
               f"({len(frames)} frames at {rate:g} fps, {len(frames) / rate:.2f}s)",
               flush=True)
-        # ComfyUI's own gallery only shows images, so the ui payload stays empty and
-        # the console line is the receipt. The path output is for wiring onward.
-        return {"ui": {"images": []}, "result": (images, path)}
+        # THIS PAYLOAD IS HOW COMFYUI LEARNS THE FILE EXISTS, and nothing else tells
+        # it. The list was empty on the grounds that the gallery only drew stills and
+        # the console line was the receipt; the gallery grew video, the empty list
+        # stayed, and the clips were on disk but missing from the outputs. Same shape
+        # core's SaveVideo sends, `animated` included, which is what marks the entry
+        # as a clip rather than a still. The path output still wires onward.
+        sub, name = os.path.split(rel)
+        return {"ui": {"images": [{"filename": name, "subfolder": sub,
+                                   "type": "output"}],
+                       "animated": (True,)},
+                "result": (images, path)}
 
 
 NODE_CLASS_MAPPINGS = {"RedNodeSaveVideo": RedNodeSaveVideo}

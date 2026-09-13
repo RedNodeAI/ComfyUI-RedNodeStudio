@@ -17,6 +17,7 @@ prefers a container a browser will actually play, which rules out anything exoti
 however well ffmpeg handles it.
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -30,6 +31,10 @@ from .save_video import (CONTAINER_EXT, SILENT_CONTAINERS, _ffmpeg_exe, encode_f
 # What a browser plays without a plugin or a codec pack. mp4 first because every
 # browser has h264; webp is the one that needs no encoder at all, so it is the floor.
 PREVIEW_CONTAINERS = ("mp4", "webp")
+
+# The panel's own settings, same shape and same blob as RedNode Save Video's, so the
+# two nodes' frame rate dials are the same control and not a lookalike.
+REVIEW_DEFAULTS = {"fps": 16.0}
 
 # How many of this session's preview clips stay on disk. ComfyUI clears its temp folder
 # on startup, but a long session of a hundred takes should not leave a hundred videos
@@ -150,15 +155,25 @@ class RedNodeVideoReview:
                                "the path output of RedNode Save Video. Wire it and the "
                                "file that was just filed is what plays, with nothing "
                                "encoded twice."}),
-                "fps": ("FLOAT", {"default": 16.0, "min": 0.1, "max": 240.0,
-                        "step": 0.1, "tooltip":
-                        "playback rate for the preview. Wire it from whatever made "
-                        "the frames and the preview matches the real thing. A wired "
-                        "video path carries its own rate, so this is ignored then."}),
+                # A socket, not a widget, exactly as RedNode Save Video has it: the
+                # panel's dial is the setting and a wired rate beats it, so the two
+                # can never disagree. It was a number box stepping 0.1 across a 240
+                # range, which is a tenth of a frame per notch and 16.3 fps by accident.
+                "fps": ("FLOAT", {"forceInput": True, "tooltip":
+                        "wire the frame rate from whatever made the frames, and it "
+                        "wins over the panel's own dial. A wired video path carries "
+                        "its own rate, so both are ignored then."}),
                 "audio": ("AUDIO", {"tooltip": "sound to play with the preview"}),
                 "loop": ("BOOLEAN", {"default": True, "tooltip":
                          "whether the player loops. A short clip is easier to judge "
                          "looping, and a long one is easier to judge once."}),
+                # Last on purpose: a workflow saved before the panel existed holds
+                # [fps, loop] here, and the web file carries those two values across
+                # into their new homes rather than letting them land shifted by one.
+                "config": ("STRING", {"default": json.dumps(REVIEW_DEFAULTS),
+                           "multiline": True,
+                           "tooltip": "the panel's settings; edited through the node, "
+                                      "not by hand"}),
             },
             "hidden": {"prompt": "PROMPT"},
         }
@@ -175,9 +190,22 @@ class RedNodeVideoReview:
                    "filed. Previewing frames files nothing: it goes to ComfyUI's temp "
                    "folder, so this is the node to leave wired while you iterate.")
 
-    def review(self, images=None, video_path=None, fps=16.0, audio=None, loop=True,
-               prompt=None):
-        rate = max(0.1, min(240.0, float(fps or 16.0)))
+    def review(self, images=None, video_path=None, fps=None, audio=None, loop=True,
+               config="{}", prompt=None):
+        try:
+            raw = json.loads(config or "{}")
+        except (ValueError, TypeError):
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        # a wired rate wins over the dial, the same order Save Video uses. A config
+        # blob is text and can be anything: a rate that will not read as a number is
+        # worth a default, never a failed run.
+        try:
+            rate = float(fps if fps is not None else raw.get("fps") or 16.0)
+        except (TypeError, ValueError):
+            rate = 16.0
+        rate = max(0.1, min(240.0, rate))
         tmp_dir = folder_paths.get_temp_directory()
         os.makedirs(tmp_dir, exist_ok=True)
 
