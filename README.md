@@ -67,8 +67,6 @@ an external one, holds the seed, and can keep two rigs in RAM at once so a two-r
 reloading. The footer carries the UI scale, the resize long edge, the studio preset and the VRAM
 tier, which clamps the expensive dials for a smaller card.
 
-![The Prompts tab: a Krea 2 row in the frame editor, with the prompt preview](images/prompt.webp)
-
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
 box for any other model. The auto prompt captions the references through a local vision model,
@@ -245,6 +243,8 @@ on Civitai: [zoom](https://civitai.com/models/2717832) and
 Light Slider, also on Civitai. They all go in `models/loras`.
 
 ## The prompt frame
+
+![The frame editor: Style, Subject, Surroundings, Light and colour, the framing dial, and the preview it writes](images/prompt.webp)
 
 Word order sets the framing. Open a prompt with the person and you get a close shot. Put the room
 first and the camera pulls back, same words. That is most of what "wide" and "close" actually mean
