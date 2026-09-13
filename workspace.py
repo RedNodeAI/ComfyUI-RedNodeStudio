@@ -2383,6 +2383,15 @@ class RedNodeStudioWorkspace:
                           flush=True)
         except Exception as _ze:
             print("[RedNode Workspace] camera LoRAs skipped: %s" % _ze, flush=True)
+        # A PATH RENDERS ONLY IN THE BUILT-IN SAMPLER: the shots are rendered
+        # inside this node, one each. An external sampler gets one conditioning
+        # and one canvas, so a path there is shot 1 and nothing else, which
+        # reads as "the path only made one image" unless it is said here.
+        if len(_shot_states) > 1 and cfg["models"]["sampler_mode"] != "internal":
+            print("[RedNode Workspace] camera path: %d shots, but the sampler is "
+                  "external, so only shot 1 leaves this node; the built-in sampler "
+                  "(Models tab) renders every shot as a batch" % len(_shot_states),
+                  flush=True)
         _base_lc = lc                       # the tab's own stack, no camera slots
         if _cam_slots:
             lc = dict(lc, on=True, slots=list(lc["slots"]) + _cam_slots)

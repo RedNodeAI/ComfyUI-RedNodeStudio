@@ -2371,6 +2371,23 @@ function cameraBody(node, body) {
     setState = (st) => { R.studio = st ? JSON.stringify(st) : ""; };
     afterChange = () => { writeCfg(node); };
   }
+  // A PATH NEEDS THE BUILT-IN SAMPLER: its shots are rendered inside this
+  // node, one each. On the external sampler the node hands out one conditioning,
+  // so only shot 1 renders, and that reads as a broken path unless it is said
+  // right here, where the path is set.
+  if (sub === "prompt" && cfg.models?.sampler_mode !== "internal") {
+    const p = (getState() || {}).path || {};
+    const n = Math.max(1, Math.round(Number(p.shots) || 1));
+    if (p.mode && p.mode !== "off" && n > 1) {
+      const warn = document.createElement("div");
+      warn.className = "rn-ws-note rn-ws-pathwarn";
+      warn.style.cssText = "color:#f0c58a";
+      warn.textContent = "This path has " + n + " shots, but the Models tab is on the "
+        + "external sampler, which gets one conditioning: only shot 1 renders. Switch "
+        + "to the built-in sampler there to render every shot as a batch.";
+      body.appendChild(warn);
+    }
+  }
   const host = document.createElement("div");
   host.className = "rn-pf-studio";
   host.style.width = "100%";
@@ -9560,7 +9577,9 @@ function modelsBody(node, page) {
   smSeg.className = "rn-ws-seg";
   for (const [value, label, tip] of [
     ["external", "External sampler", "Wire your own KSampler: model, clip and the "
-                                     + "five settings above come out as sockets."],
+                                     + "five settings above come out as sockets. A camera "
+                                     + "path renders its shots only with the built-in "
+                                     + "sampler; here it is shot 1."],
     ["internal", "Built-in sampler", "The node runs comfy core's KSampler and the "
                                      + "VAE decode itself: positive, negative and "
                                      + "the finished image come out as sockets."],
