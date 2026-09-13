@@ -123,6 +123,10 @@ css.textContent = `
 .rn-ws-host .rn-ws-foot option{font-size:11px}
 .rn-ws-host{display:flex;flex-direction:column;gap:0;flex:1 1 auto;min-height:0;
   box-sizing:border-box}
+/* The socket tuck rides its own thin row ABOVE the strip. It used to be the last
+   item of the wrapping strip, so once the tabs filled the width it wrapped onto a
+   stray line between the tabs and the box, the one place it must never be. */
+.rn-ws-toprow{display:flex;justify-content:flex-end;flex:none;padding-bottom:6px}
 .rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
 .rn-ws-tab{background:#15171b;border:1px solid #2a2e35;border-radius:7px;
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 15px;display:flex;
@@ -11762,8 +11766,11 @@ export function render(node) {
     applyTuck(node);
     render(node);
   };
-  tabs.appendChild(tuck);
-  host.appendChild(tabs);
+  // its own row, above the tabs: the strip stays pure tabs and sits on the box
+  const toprow = document.createElement("div");
+  toprow.className = "rn-ws-toprow";
+  toprow.appendChild(tuck);
+  host.append(toprow, tabs);
 
   const body = document.createElement("div");
   body.className = "rn-ws-body"
