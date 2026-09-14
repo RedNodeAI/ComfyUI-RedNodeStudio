@@ -357,7 +357,7 @@ def resolve_sampling(stage, rig):
     if sampler not in comfy.samplers.KSampler.SAMPLERS:
         sampler = "euler"
     scheduler = stage["scheduler"] or rig.get("scheduler", "simple")
-    if scheduler not in comfy.samplers.KSampler.SCHEDULERS:
+    if not _dials.scheduler_ok(scheduler):
         scheduler = "simple"
     start = min(stage["start_step"], max(0, int(steps) - 1))
     end = stage["end_step"] or None

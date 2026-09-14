@@ -68,7 +68,9 @@ reloading. Each rig also folds away a set of sampler dials, all off by default: 
 on the model, Detail Daemon (a sigma nudge over the run for finer detail without more steps),
 Seed Variance (a jitter on the conditioning early in the run, so one seed lands on different
 compositions) and densify the tail (extra steps only in the last part of the schedule). They ride
-the built-in sampler and every Detailer pass on that rig. The footer carries the UI scale, the resize long edge, the studio preset, a Draft switch that makes the Detailer and the Post chain pass the picture through for fast rerolls, and the VRAM
+the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
+pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock KSampler on the
+scheduler socket is handed simple when a rig names one of those. The footer carries the UI scale, the resize long edge, the studio preset, a Draft switch that makes the Detailer and the Post chain pass the picture through for fast rerolls, and the VRAM
 tier, which clamps the expensive dials for a smaller card.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either

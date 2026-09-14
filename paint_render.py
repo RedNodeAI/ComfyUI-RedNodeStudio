@@ -27,6 +27,7 @@ import nodes
 
 from . import workspace as _ws
 from . import live_preview as _live
+from . import sampler_dials as _dials
 
 
 def _active_auto_prompt(pc):
@@ -748,13 +749,15 @@ class RedNodePaintRender:
             # every step streams a small frame to the Paint tab's result pane and
             # to any Live Preview node, tagged with this node (the workspace's id
             # on the built-in paint door) and the run (live_preview.py)
-            out = _live.sampled(unique_id, nodes.common_ksampler,
+            # through the sampler dials' entry: with nothing on it is core's
+            # common_ksampler; an extra scheduler name on the rig builds its schedule
+            out = _live.sampled(unique_id, _dials.sample_with_dials,
                                 label=("pass %d of %d" % (i + 1, passes))
                                       if passes > 1 else "",
                                 size=live_px or None)(
                 model, (seed + i) % (2 ** 64), steps, cfg,
                 sampler_name, scheduler, pos, neg, latent,
-                denoise=denoise)[0]
+                denoise=denoise)
             if i + 1 >= passes:
                 break
             if work_mask is None:

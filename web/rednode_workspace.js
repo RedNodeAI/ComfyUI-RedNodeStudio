@@ -9066,6 +9066,8 @@ async function fetchModelLists() {
   };
   return MODEL_LISTS;
 }
+// schedule shapes the pack builds itself (sampler_dials.py); a rig may name them
+const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 
 function modelsBody(node, page) {
   const cfg = node._rnCfg;
@@ -9687,8 +9689,13 @@ function modelsBody(node, page) {
   } else {
     selRow("Sampler", "sampler", L.samplers || [],
            "Comes out typed, so it wires straight into a KSampler's sampler_name.");
-    selRow("Scheduler", "scheduler", L.schedulers || [],
-           "Wires straight into a KSampler's scheduler.");
+    // the pack's own three shapes ride the rig's dropdown after core's list: the
+    // built-in sampler runs them, a stock KSampler on the socket gets "simple"
+    selRow("Scheduler", "scheduler", [...(L.schedulers || []), ...RIG_EXTRA_SCHEDULERS],
+           "Wires straight into a KSampler's scheduler. beta57, bong_tangent and "
+           + "hyperbolic are this pack's own shapes: the built-in sampler and the "
+           + "Detailer run them, and the scheduler socket hands a stock KSampler "
+           + "simple instead.");
     // A SECOND PAIR, for image to image runs only. Blank is what every rig saved
     // before this had, and blank means the pair above, so nothing moves unasked.
     const i2iRow = (label, key, items, hint) => {

@@ -83,6 +83,56 @@ def parse_dials(r):
     }
 
 
+# ------------------------------------------------------------------ extra schedulers
+# Three schedule shapes core does not ship, chosen off Lonecat's Krea 2 graph, where
+# they run on every render: a beta curve at 0.5 / 0.7 (RES4LYF's usual pair), an
+# arctangent sigmoid after RES4LYF's bong tangent, and a tanh hyperbolic. Each is a
+# unit curve of positions into the model's own sigma table, indexed the way core's
+# beta scheduler indexes, so shift and the flow range come from the model, not from
+# here. A rig names them like any scheduler; the sockets hand a stock KSampler
+# "simple" instead, since core would reject the name.
+EXTRA_SCHEDULERS = ("beta57", "bong_tangent", "hyperbolic")
+
+
+def scheduler_ok(name):
+    return name in comfy.samplers.KSampler.SCHEDULERS or name in EXTRA_SCHEDULERS
+
+
+def unit_curve(name, steps):
+    """`steps` positions from 1 (all noise) down toward 0, one per step."""
+    steps = max(1, int(steps))
+    if name == "beta57":
+        import scipy.stats
+        ts = 1.0 - np.linspace(0.0, 1.0, steps, endpoint=False)
+        return np.clip(scipy.stats.beta.ppf(ts, 0.5, 0.7), 0.0, 1.0)
+    if name == "bong_tangent":
+        slope, pivot = 0.2, 0.6 * steps
+        x = np.arange(steps, dtype=np.float64)
+        s_ = ((2.0 / math.pi) * np.arctan(-slope * (x - pivot)) + 1.0) / 2.0
+        lo, hi = float(s_[-1]), float(s_[0])
+        return (s_ - lo) / max(1e-9, hi - lo) if steps > 1 else np.ones(1)
+    if name == "hyperbolic":
+        k = 1.0
+        x = np.linspace(0.0, 1.0, steps, endpoint=False)
+        return (np.tanh(k * (1.0 - 2.0 * x)) + math.tanh(k)) / (2.0 * math.tanh(k))
+    raise KeyError(name)
+
+
+def extra_sigmas(model, name, steps):
+    """The schedule for an extra name, read off the model's sigma table like core's
+    beta scheduler: a position per step, duplicates dropped, a final 0."""
+    ms = model.get_model_object("model_sampling")
+    total = len(ms.sigmas) - 1
+    idx = np.rint(unit_curve(name, steps) * total).astype(int)
+    sigs, last = [], -1
+    for i in idx:
+        if i != last:
+            sigs.append(float(ms.sigmas[int(i)]))
+        last = i
+    sigs.append(0.0)
+    return torch.FloatTensor(sigs)
+
+
 def any_on(dials):
     d = dials or {}
     return bool((d.get("dd") or {}).get("on") or (d.get("variance") or {}).get("on")
@@ -122,7 +172,16 @@ def detail_schedule(steps, start, end, bias, amount, exponent, start_offset,
 
 # ------------------------------------------------------------------ schedules
 def rig_sigmas(model, sampler, scheduler, steps, denoise=1.0):
-    """The schedule core's KSampler would run, denoise trim included."""
+    """The schedule core's KSampler would run, denoise trim included; an extra
+    scheduler name builds its own with the same trim rule."""
+    if scheduler in EXTRA_SCHEDULERS:
+        steps = max(1, int(steps))
+        if denoise is None or denoise > 0.9999:
+            return extra_sigmas(model, scheduler, steps)
+        if denoise <= 0.0:
+            return torch.FloatTensor([])
+        new_steps = int(steps / denoise)
+        return extra_sigmas(model, scheduler, new_steps)[-(steps + 1):]
     ks = comfy.samplers.KSampler(model, steps=max(1, int(steps)), device=model.load_device,
                                  sampler=sampler, scheduler=scheduler, denoise=denoise,
                                  model_options=model.model_options)
@@ -283,7 +342,7 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
     is built the way core builds it, densified if asked, the model clone gets the
     wrapper, and the run goes through ksample."""
     dials = dials or {}
-    if sigmas is None and not any_on(dials):
+    if sigmas is None and not any_on(dials) and scheduler not in EXTRA_SCHEDULERS:
         # only the keywords that differ from core's defaults travel, so a caller
         # (or a test's stand-in) that knows only denoise= keeps working
         kw = {"denoise": denoise}
@@ -325,5 +384,7 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
               "for the first %.0f%% of steps" % (dials["variance"]["percent"] * 100,
                                                  dials["variance"]["strength"],
                                                  dials["variance"]["window"] * 100), flush=True)
-    return ksample(m, seed, len(sigmas) - 1, cfg, sampler, scheduler, positive, negative,
+    # core's KSampler only needs the name for a schedule it is not building
+    core_sched = scheduler if scheduler in comfy.samplers.KSampler.SCHEDULERS else "simple"
+    return ksample(m, seed, len(sigmas) - 1, cfg, sampler, core_sched, positive, negative,
                    latent, sigmas=sigmas, disable_noise=disable_noise)

@@ -1780,8 +1780,8 @@ class RedNodeStudioWorkspace:
             cfg_v = 1.0
         sampler = (rec.get("sampler") if rec.get("sampler")
                    in comfy.samplers.KSampler.SAMPLERS else "euler")
-        scheduler = (rec.get("scheduler") if rec.get("scheduler")
-                     in comfy.samplers.KSampler.SCHEDULERS else "simple")
+        scheduler = (rec.get("scheduler") if _dials.scheduler_ok(rec.get("scheduler"))
+                     else "simple")
         print("[RedNode Workspace] pass rig %r: %d steps, cfg %.1f, %s/%s"
               % (name, steps, cfg_v, sampler, scheduler), flush=True)
         return model, steps, cfg_v, sampler, scheduler, dials
@@ -1879,8 +1879,8 @@ class RedNodeStudioWorkspace:
         rig_detailer = _ar["detailer_steps"]
         rig_sampler = (_ar["sampler"] if _ar["sampler"]
                        in comfy.samplers.KSampler.SAMPLERS else "euler")
-        rig_scheduler = (_ar["scheduler"] if _ar["scheduler"]
-                         in comfy.samplers.KSampler.SCHEDULERS else "simple")
+        rig_scheduler = (_ar["scheduler"] if _dials.scheduler_ok(_ar["scheduler"])
+                         else "simple")
         target = cfg["resize"]
         tabs = cfg["tabs"]
 
@@ -2096,7 +2096,7 @@ class RedNodeStudioWorkspace:
             elif _i2i_s:
                 print("[RedNode Workspace] the rig's i2i sampler %r is not one this "
                       "build has, so the main sampler is used" % _i2i_s, flush=True)
-            if _i2i_c and _i2i_c in comfy.samplers.KSampler.SCHEDULERS:
+            if _i2i_c and _dials.scheduler_ok(_i2i_c):
                 if _i2i_c != rig_scheduler:
                     _swapped.append("scheduler %s -> %s" % (rig_scheduler, _i2i_c))
                 rig_scheduler = _i2i_c
@@ -3196,7 +3196,12 @@ class RedNodeStudioWorkspace:
                 rig_vae,
                 # APPENDED: the active rig's sampler settings, so a stock KSampler
                 # wired to these five needs no Sampler Config and no channels.
-                rig_steps, rig_cfg, rig_sampler, rig_scheduler, rig_detailer,
+                rig_steps, rig_cfg, rig_sampler,
+                # an extra scheduler is the built-in sampler's; a stock KSampler on the
+                # socket would reject the name, so it is handed "simple"
+                (rig_scheduler if rig_scheduler in comfy.samplers.KSampler.SCHEDULERS
+                 else "simple"),
+                rig_detailer,
                 # APPENDED: the folded-in Studio's conditioning, and the embedded
                 # sampler's picture. The whole classic chain, one node. The two
                 # render products block when nothing rendered (paint run,
