@@ -129,7 +129,7 @@ signal. Right-click a picture for the gallery menu.
 **Masks.** The subject boost mask, which rides into the identity edit and is sized against the
 Subject picture, and the edit mask that confines the pass.
 
-![The Post tab: saved looks, the effect cards, the Depth card](images/post-fx.webp)
+![The Post tab: saved looks, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
 
 **Post.** The grading chain, seventeen effects in physical camera order, with looks you can save and
 random ranges on any dial. Depth of field and haze make their own depth map; the Depth card picks
@@ -137,7 +137,9 @@ the estimator, the checkpoint and the resolution. Match reference moves the fram
 Moodboard, Subject or Scene picture with skin held back, and LUT applies a .cube file from
 models/luts. Every card has a Limit row: whole frame, subject only or background only, through
 the pack's own auto-mask, with the Mask card setting the source and the feather. RedNode Post
-Process finds these settings by itself when it sits at the end of the graph.
+Process finds these settings by itself when it sits at the end of the graph. The tab is a list of
+the chain on the left, an eye per effect to switch it on, and the selected effect's controls on the
+right, one at a time.
 
 ![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
 

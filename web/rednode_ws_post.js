@@ -190,24 +190,11 @@ export function openPostCog(node, anchor) {
   hrow.append(hlab, hb);
   m.appendChild(hrow);
 
-  const sep = document.createElement("div");
-  sep.className = "sep";
-  m.appendChild(sep);
-  const reset = document.createElement("button");
-  reset.textContent = "Reset the card layout";
-  reset.title = "Put the cards back in the order the chain actually runs in.";
-  reset.onclick = () => {
-    cfg.post_ui.order = [];
-    postWrite(node);
-    m.remove();
-    postRender(node);
-  };
-  m.appendChild(reset);
   const foot = document.createElement("div");
   foot.className = "note";
   foot.style.whiteSpace = "normal";
-  foot.textContent = "Card order is layout only. The chain always runs in grading "
-                   + "order, so rearranging cannot change your result.";
+  foot.textContent = "The list runs top to bottom in grading order: repair, the air, the "
+                   + "lens, the film.";
   m.appendChild(foot);
 
   document.body.appendChild(m);
@@ -357,321 +344,348 @@ export function looksSection(node, body) {
   body.appendChild(sect);
 }
 
+// The chain list on the left, one editor on the right. The list shows every
+// effect in the order the chain runs, under the four stages, with an eye per row
+// to switch it on; the editor shows the selected effect's controls, big enough to
+// read. One effect open at a time is the point: the old grid of every card at
+// once was a wall of sliders. The two settings cards sit at the foot of the list.
+const FX_GROUPS = [
+  ["GRADE", ["denoise", "color", "match", "lut", "clarity", "sharpen"]],
+  ["AIR", ["haze"]],
+  ["LENS", ["distortion", "dof", "aberration", "bloom", "light_wrap", "diffusion", "vignette"]],
+  ["FILM", ["halation", "rolloff", "grain"]],
+  ["SETTINGS", ["depth", "mask"]],
+];
+
+function fxGroups() {
+  const known = new Set(FX_GROUPS.flatMap(([, ids]) => ids));
+  const extra = POST_FX.map((fx) => fx.id).filter((id) => !known.has(id));
+  const groups = FX_GROUPS.map(([label, ids]) => [label, ids.filter((id) => POST_FX.some((fx) => fx.id === id))]);
+  if (extra.length) groups.splice(groups.length - 1, 0, ["MORE", extra]);
+  return groups;
+}
+
+// one control of the selected effect: a choice, a random range, or a slider;
+// right-click on a slider flips it to a range and back
+function renderControl(node, cfg, fx, b, c) {
+  const cell = document.createElement("div");
+  cell.className = "rn-ws-fxc";
+  const isRand = !c.choice && Array.isArray(b.rand[c.key]);
+  const step = c.choice ? c.step : fxStep(cfg, c);
+  const lab = document.createElement("span");
+  lab.className = "lab" + (isRand ? " rnd" : "");
+  lab.textContent = c.label;
+  lab.title = c.hint + (c.choice ? "" : isRand
+    ? "\n\nRandom range is ON: a value is drawn between the handles every "
+      + "queue. Right-click to go back to one fixed value."
+    : "\n\nRight-click to make this a random range.");
+  cell.appendChild(lab);
+  if (!c.choice) {
+    cell.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isRand) delete b.rand[c.key];
+      else {
+        const span = (c.max - c.min) * 0.15;
+        b.rand[c.key] = [
+          snapStep(b[c.key] - span, c.min, c.max, step),
+          snapStep(b[c.key] + span, c.min, c.max, step),
+        ];
+      }
+      postWrite(node);
+      postRender(node);
+    });
+  }
+  const line = document.createElement("div");
+  line.className = "line";
+  if (c.choice) {
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    // a dynamic choice lists a model folder: the LUT card's .cube files
+    let opts = c.choice;
+    if (c.dynamic === "luts") {
+      if (postLuts === null) { postLuts = []; fetchLuts(node); }
+      opts = ["", ...postLuts];
+      if (b[c.key] && !opts.includes(b[c.key])) opts.push(b[c.key]);
+    }
+    for (const opt of opts) {
+      const o = document.createElement("option");
+      o.value = opt;
+      // a stored key can read as words when the table says how
+      o.textContent = c.dynamic ? (opt || "(none)")
+        : (c.labels?.[opt] ?? (opt.charAt(0).toUpperCase() + opt.slice(1)));
+      o.selected = b[c.key] === opt;
+      sel.appendChild(o);
+    }
+    sel.title = c.hint;
+    sel.onchange = () => { b[c.key] = sel.value; postWrite(node); postRender(node); };
+    line.appendChild(sel);
+    if (c.dynamic === "luts") {
+      const rf = document.createElement("button");
+      rf.className = "rn-ws-btn";
+      rf.textContent = "Refresh";
+      rf.title = "Re-read models/luts.";
+      rf.onclick = () => { postLuts = null; fetchLuts(node); };
+      line.appendChild(rf);
+    }
+  } else if (isRand) {
+    // two handles over one band, the same idea as the LoRA stack's random
+    // strength: the run draws between them, the tick shows what it drew
+    const box = document.createElement("div");
+    box.className = "rn-ws-rng";
+    const track = document.createElement("div");
+    track.className = "track";
+    const fil = document.createElement("div");
+    fil.className = "fil";
+    box.append(track, fil);
+    const mk = (v) => {
+      const r = document.createElement("input");
+      r.type = "range";
+      r.min = c.min; r.max = c.max; r.step = step;
+      r.value = v;
+      return r;
+    };
+    const rLo = mk(b.rand[c.key][0]);
+    const rHi = mk(b.rand[c.key][1]);
+    const val = document.createElement("input");
+    val.className = "val rng";
+    val.readOnly = true;
+    const pos = (v) => ((v - c.min) / Math.max(1e-9, c.max - c.min)) * 100;
+    const rolled = postLastRolls?.[fx.id]?.[c.key];
+    const paint = () => {
+      const a = parseFloat(rLo.value), z = parseFloat(rHi.value);
+      fil.style.left = pos(a) + "%";
+      fil.style.width = Math.max(0.5, pos(z) - pos(a)) + "%";
+      val.value = a + " ~ " + z;
+      val.title = "Random range " + a + " to " + z + ". A value is drawn every queue.";
+    };
+    rLo.addEventListener("input", () => {
+      if (parseFloat(rLo.value) > parseFloat(rHi.value)) rLo.value = rHi.value;
+      b.rand[c.key][0] = snapStep(rLo.value, c.min, c.max, step);
+      paint();
+    });
+    rHi.addEventListener("input", () => {
+      if (parseFloat(rHi.value) < parseFloat(rLo.value)) rHi.value = rLo.value;
+      b.rand[c.key][1] = snapStep(rHi.value, c.min, c.max, step);
+      paint();
+    });
+    for (const r of [rLo, rHi]) r.addEventListener("change", () => postWrite(node));
+    box.append(rLo, rHi);
+    paint();
+    if (rolled !== undefined) {
+      const tick = document.createElement("div");
+      tick.className = "tick";
+      tick.style.left = pos(rolled) + "%";
+      tick.title = "Last roll: " + rolled;
+      box.appendChild(tick);
+      val.value = String(rolled);
+      val.className = "val rolled";
+      val.title = "Rolled " + rolled + " last run (range "
+                + b.rand[c.key][0] + " to " + b.rand[c.key][1] + ").";
+    }
+    line.append(box, val);
+  } else {
+    const range = document.createElement("input");
+    range.type = "range";
+    range.min = c.min; range.max = c.max; range.step = step;
+    range.value = b[c.key];
+    range.title = c.hint;
+    const val = document.createElement("input");
+    val.className = "val";
+    val.value = String(b[c.key]);
+    val.title = c.hint;
+    const apply = (v) => {
+      const num = snapStep(v, c.min, c.max, step);
+      if (num === null) return;
+      b[c.key] = num;
+      range.value = num; val.value = String(num);
+      postWrite(node);
+    };
+    range.addEventListener("input", () => apply(range.value));
+    val.addEventListener("change", () => apply(val.value));
+    line.append(range, val);
+  }
+  cell.appendChild(line);
+  return cell;
+}
+
 export function postBody(node, body) {
   const cfg = node._rnCfg;
-  if (!node._rnFxOpen) {
-    node._rnFxOpen = {};
-    for (const fx of POST_FX) node._rnFxOpen[fx.id] = true;   // laid out to be read
+  const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
+  if (!node._rnFxSel || !byId[node._rnFxSel]) {
+    // open on the first effect that is on, else the first effect
+    const on = POST_FX.find((fx) => !fx.settings && cfg.post[fx.id]?.on);
+    node._rnFxSel = (on || POST_FX.find((fx) => !fx.settings) || POST_FX[0]).id;
   }
-  const open = node._rnFxOpen;
 
   const bar = document.createElement("div");
   bar.className = "rn-ws-row";
-  const allOpen = POST_FX.every((fx) => open[fx.id]);
-  const fold = document.createElement("button");
-  fold.className = "rn-ws-btn";
-  fold.style.width = "auto";
-  fold.style.padding = "0 10px";
-  fold.textContent = allOpen ? "Collapse all" : "Expand all";
-  fold.title = allOpen
-    ? "Shrink every card to its name and switch, so the whole chain fits in a glance."
-    : "Open every card again.";
-  fold.onclick = () => {
-    for (const fx of POST_FX) open[fx.id] = !allOpen;
-    postRender(node);
-  };
-  bar.appendChild(fold);
-
   const cog = document.createElement("button");
   cog.className = "rn-ws-cog";
   cog.textContent = "⚙";
-  cog.title = "Settings for this tab: slider precision, explanations, card layout.";
+  cog.title = "Settings for this tab: slider precision and the explanations.";
   cog.onclick = () => openPostCog(node, cog);
   bar.appendChild(cog);
   const note = document.createElement("span");
   note.className = "rn-ws-note";
-  note.textContent = "Drag a card's title to rearrange the layout.";
+  note.textContent = "The eye switches an effect on; click its name to edit it. The list "
+                   + "is the order the chain runs in.";
   bar.appendChild(note);
   body.appendChild(bar);
   looksSection(node, body);
 
-  const head = document.createElement("div");
-  head.className = "rn-ws-row";
-  const hint = document.createElement("span");
-  hint.className = "hint";
-  const live = POST_FX.filter((fx) => !fx.settings && cfg.post[fx.id].on)
-                      .map((fx) => fx.label);
-  hint.textContent = (live.length
-    ? `Runs in this order: ${live.join(", ")}. `
-    : "Nothing is on yet. ")
-    + "To use it: add a RedNode Post Process node (Add Node, image, krea2), wire "
-    + "your VAE Decode's IMAGE into its image input, and its image output into "
-    + "Save Image. It finds this tab by itself, so no other wire is needed.";
-  head.append(hint);
-  body.appendChild(head);
-
-  const cards = document.createElement("div");
-  cards.className = "rn-ws-fxwrap";
-  const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
-  for (const fx of cardOrder(cfg).map((id) => byId[id])) {
-    const b = cfg.post[fx.id];
-    const sect = document.createElement("div");
-    sect.className = "rn-ws-sect rn-ws-fx";
-    const h = document.createElement("div");
-    h.className = "head";
-    const arr = document.createElement("span");
-    arr.className = "arr";
-    arr.textContent = open[fx.id] ? "▾" : "▸";
-    const ttl = document.createElement("span");
-    ttl.className = "ttl";
-    ttl.textContent = fx.label.toUpperCase() + (b.on || fx.settings ? "" : ": off");
-    h.append(arr, ttl);
-    // an effect that costs real time says so on its own card, because the place
-    // somebody asks "why did that take twenty seconds" is right here
-    if (fx.cost) {
-      const cost = document.createElement("span");
-      cost.className = "rn-ws-cost";
-      cost.textContent = fx.cost;
-      cost.title = fx.cost === "depth model"
-        ? "This one needs a depth map, so switching it on loads a depth model. That "
-        + "is seconds, not milliseconds, and it is usually the reason a grade feels "
-        + "slow. The Depth card picks the estimator and its resolution; wire a depth "
-        + "image into the node to reuse one you already have."
-        : "Cost climbs steeply with the sliders. At the shipped values it is about a "
-        + "tenth of a second; with sigma and the radius multiplier at maximum it is "
-        + "several seconds on a 1 MP frame.";
-      h.appendChild(cost);
-    }
-    h.onclick = () => { open[fx.id] = !open[fx.id]; postRender(node); };
-    // drag a card by its title to rearrange the LAYOUT. The chain always runs in
-    // grading order server-side, so this cannot break the result.
-    h.draggable = true;
-    h.title = "Click to fold. Drag to move this card; the layout only, the "
-            + "processing order never changes.";
-    h.addEventListener("dragstart", (e) => {
-      dragFx = fx.id;
-      e.dataTransfer?.setData?.("text/plain", fx.id);
-    });
-    h.addEventListener("dragover", (e) => e.preventDefault());
-    h.addEventListener("drop", (e) => {
-      e.preventDefault();
-      if (!dragFx || dragFx === fx.id) return;
-      const ids = cardOrder(cfg);
-      ids.splice(ids.indexOf(dragFx), 1);
-      ids.splice(ids.indexOf(fx.id), 0, dragFx);
-      cfg.post_ui.order = ids;
-      dragFx = null;
-      postWrite(node);
-      postRender(node);
-    });
-    sect.appendChild(h);
-
-    // a settings card (the Depth card) has no switch: it is never "on", it
-    // describes what the effects that need it do
-    const onRow = document.createElement("div");
-    onRow.className = "rn-ws-row";
-    if (!fx.settings) {
-      const onB = document.createElement("button");
-      onB.className = "rn-ws-on" + (b.on ? " on" : "");
-      onB.textContent = b.on ? "ON" : "OFF";
-      onB.title = fx.blurb;
-      onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
-      onRow.appendChild(onB);
-    }
-    if (fx.depth) {
-      const chip = document.createElement("span");
-      chip.className = "rn-ws-vram med";
-      chip.textContent = "Uses depth";
-      chip.title = "This effect works out what is near and what is far. The node "
-                 + "does that for you with the estimator set on the Depth card, so "
-                 + "there is nothing to wire. The depth input is only there if you "
-                 + "would rather supply your own map.";
-      onRow.appendChild(chip);
-    }
-    if (!fx.settings || fx.depth) sect.appendChild(onRow);
-    // the explanation only takes space while the card is open, and stays whole in
-    // the tooltip either way, so a shut card is just a name and a switch
-    if (open[fx.id] && cfg.post_ui.hints) {
-      const blurb = document.createElement("div");
-      blurb.className = "blurb";
-      blurb.textContent = fx.blurb;
-      blurb.title = fx.blurb;
-      sect.appendChild(blurb);
-    }
-
-    if (open[fx.id]) {
-      const grid = document.createElement("div");
-      grid.className = "rn-ws-fxgrid";
-      for (const c of fx.controls) {
-        const cell = document.createElement("div");
-        cell.className = "rn-ws-fxc";
-        const isRand = !c.choice && Array.isArray(b.rand[c.key]);
-        const step = c.choice ? c.step : fxStep(cfg, c);
-        const lab = document.createElement("span");
-        lab.className = "lab" + (isRand ? " rnd" : "");
-        lab.textContent = c.label;
-        // right-click flips a control between one value and a random range; a
-        // dice button on every row would be clutter
-        lab.title = c.hint + (c.choice ? "" : isRand
-          ? "\n\nRandom range is ON: a value is drawn between the handles every "
-            + "queue. Right-click to go back to one fixed value."
-          : "\n\nRight-click to make this a random range.");
-        cell.appendChild(lab);
-        if (!c.choice) {
-          cell.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (isRand) delete b.rand[c.key];
-            else {
-              const span = (c.max - c.min) * 0.15;
-              b.rand[c.key] = [
-                snapStep(b[c.key] - span, c.min, c.max, step),
-                snapStep(b[c.key] + span, c.min, c.max, step),
-              ];
-            }
-            postWrite(node);
-            postRender(node);
-          });
-        }
-        const line = document.createElement("div");
-        line.className = "line";
-        if (c.choice) {
-          const sel = document.createElement("select");
-          sel.className = "rn-ws-res";
-          // a dynamic choice lists a model folder: the LUT card's .cube files
-          let opts = c.choice;
-          if (c.dynamic === "luts") {
-            if (postLuts === null) { postLuts = []; fetchLuts(node); }
-            opts = ["", ...postLuts];
-            if (b[c.key] && !opts.includes(b[c.key])) opts.push(b[c.key]);
-          }
-          for (const opt of opts) {
-            const o = document.createElement("option");
-            o.value = opt;
-            // a stored key can read as words when the table says how
-            o.textContent = c.dynamic ? (opt || "(none)")
-              : (c.labels?.[opt] ?? (opt.charAt(0).toUpperCase() + opt.slice(1)));
-            o.selected = b[c.key] === opt;
-            sel.appendChild(o);
-          }
-          sel.title = c.hint;
-          sel.onchange = () => { b[c.key] = sel.value; postWrite(node); postRender(node); };
-          line.appendChild(sel);
-          if (c.dynamic === "luts") {
-            const rf = document.createElement("button");
-            rf.className = "rn-ws-btn";
-            rf.textContent = "Refresh";
-            rf.title = "Re-read models/luts.";
-            rf.onclick = () => { postLuts = null; fetchLuts(node); };
-            line.appendChild(rf);
-          }
-        } else if (isRand) {
-          // two handles over one band, the same idea as the LoRA stack's random
-          // strength: the run draws between them, the tick shows what it drew
-          const box = document.createElement("div");
-          box.className = "rn-ws-rng";
-          const track = document.createElement("div");
-          track.className = "track";
-          const fil = document.createElement("div");
-          fil.className = "fil";
-          box.append(track, fil);
-          const mk = (v) => {
-            const r = document.createElement("input");
-            r.type = "range";
-            r.min = c.min; r.max = c.max; r.step = step;
-            r.value = v;
-            return r;
-          };
-          const rLo = mk(b.rand[c.key][0]);
-          const rHi = mk(b.rand[c.key][1]);
-          const val = document.createElement("input");
-          val.className = "val rng";
-          val.readOnly = true;
-          const pos = (v) => ((v - c.min) / Math.max(1e-9, c.max - c.min)) * 100;
-          const rolled = postLastRolls?.[fx.id]?.[c.key];
-          const paint = () => {
-            const a = parseFloat(rLo.value), z = parseFloat(rHi.value);
-            fil.style.left = pos(a) + "%";
-            fil.style.width = Math.max(0.5, pos(z) - pos(a)) + "%";
-            val.value = a + " ~ " + z;
-            val.title = "Random range " + a + " to " + z
-                      + ". A value is drawn every queue.";
-          };
-          rLo.addEventListener("input", () => {
-            if (parseFloat(rLo.value) > parseFloat(rHi.value)) rLo.value = rHi.value;
-            b.rand[c.key][0] = snapStep(rLo.value, c.min, c.max, step);
-            paint();
-          });
-          rHi.addEventListener("input", () => {
-            if (parseFloat(rHi.value) < parseFloat(rLo.value)) rHi.value = rLo.value;
-            b.rand[c.key][1] = snapStep(rHi.value, c.min, c.max, step);
-            paint();
-          });
-          for (const r of [rLo, rHi]) r.addEventListener("change", () => postWrite(node));
-          box.append(rLo, rHi);
-          paint();
-          if (rolled !== undefined) {
-            const tick = document.createElement("div");
-            tick.className = "tick";
-            tick.style.left = pos(rolled) + "%";
-            tick.title = "Last roll: " + rolled;
-            box.appendChild(tick);
-            val.value = String(rolled);
-            val.className = "val rolled";
-            val.title = "Rolled " + rolled + " last run (range "
-                      + b.rand[c.key][0] + " to " + b.rand[c.key][1] + ").";
-          }
-          line.append(box, val);
-        } else {
-          const range = document.createElement("input");
-          range.type = "range";
-          range.min = c.min; range.max = c.max; range.step = step;
-          range.value = b[c.key];
-          range.title = c.hint;
-          const val = document.createElement("input");
-          val.className = "val";
-          val.value = String(b[c.key]);
-          val.title = c.hint;
-          const apply = (v) => {
-            const num = snapStep(v, c.min, c.max, step);
-            if (num === null) return;
-            b[c.key] = num;
-            range.value = num; val.value = String(num);
-            postWrite(node);
-          };
-          range.addEventListener("input", () => apply(range.value));
-          val.addEventListener("change", () => apply(val.value));
-          line.append(range, val);
-        }
-        cell.appendChild(line);
-        grid.appendChild(cell);
+  const split = document.createElement("div");
+  split.className = "rn-ws-fxsplit";
+  const list = document.createElement("div");
+  list.className = "rn-ws-fxlist";
+  for (const [label, ids] of fxGroups()) {
+    const band = document.createElement("div");
+    band.className = "rn-ws-fxband";
+    band.textContent = label;
+    list.appendChild(band);
+    for (const id of ids) {
+      const fx = byId[id];
+      const b = cfg.post[fx.id];
+      const row = document.createElement("div");
+      row.className = "rn-ws-fxrow" + (node._rnFxSel === fx.id ? " sel" : "")
+                    + (b.on && !fx.settings ? " on" : "");
+      if (fx.settings) {
+        const gear = document.createElement("span");
+        gear.className = "rn-ws-eye gear";
+        gear.textContent = "⚙";
+        gear.title = "Settings, not an effect: it never runs on its own.";
+        row.appendChild(gear);
+      } else {
+        const eye = document.createElement("button");
+        eye.className = "rn-ws-eye" + (b.on ? " on" : "");
+        eye.textContent = b.on ? "●" : "○";
+        eye.title = (b.on ? "On. Click to switch off." : "Off. Click to switch on.")
+                  + "\n\n" + fx.blurb;
+        eye.onclick = (e) => {
+          e.stopPropagation();
+          b.on = !b.on;
+          postWrite(node);
+          postRender(node);
+        };
+        row.appendChild(eye);
       }
-      sect.appendChild(grid);
-      // LIMIT: the card's result only on the subject or the background, through the
-      // mask the Mask card describes. The settings cards have nothing to limit.
-      if (!fx.settings) {
-        const lrow = document.createElement("div");
-        lrow.className = "rn-ws-row rn-ws-fxlimit";
-        const llab = document.createElement("span");
-        llab.className = "lab";
-        llab.textContent = "Limit";
-        const lsel = document.createElement("select");
-        lsel.className = "rn-ws-res";
-        for (const [v, txt] of [["off", "Whole frame"], ["subject", "Subject only"],
-                                ["background", "Background only"]]) {
-          const o = document.createElement("option");
-          o.value = v; o.textContent = txt; o.selected = (b.limit || "off") === v;
-          lsel.appendChild(o);
-        }
-        lsel.title = "Where this card applies. Subject and background come from the mask "
-                   + "the Mask card describes, softened by its feather; the rest of the "
-                   + "frame is left exactly as it was before this card.";
-        lsel.onchange = () => { b.limit = lsel.value; postWrite(node); postRender(node); };
-        lrow.append(llab, lsel);
-        sect.appendChild(lrow);
+      const nm = document.createElement("span");
+      nm.className = "rn-ws-fxname";
+      nm.textContent = fx.label;
+      row.appendChild(nm);
+      if (!fx.settings && b.limit && b.limit !== "off") {
+        const pill = document.createElement("span");
+        pill.className = "rn-ws-fxlimitpill";
+        pill.textContent = b.limit;
+        pill.title = "Limited to the " + b.limit + ".";
+        row.appendChild(pill);
       }
+      row.title = fx.blurb;
+      row.onclick = () => { node._rnFxSel = fx.id; postRender(node); };
+      list.appendChild(row);
     }
-    cards.appendChild(sect);
   }
-  body.appendChild(cards);
+  split.appendChild(list);
+
+  // the editor: the selected effect, its switch, its controls, its limit
+  const fx = byId[node._rnFxSel];
+  const b = cfg.post[fx.id];
+  const edit = document.createElement("div");
+  edit.className = "rn-ws-fxedit";
+  const h = document.createElement("div");
+  h.className = "head";
+  const ttl = document.createElement("span");
+  ttl.className = "ttl";
+  ttl.textContent = fx.label.toUpperCase();
+  h.appendChild(ttl);
+  if (!fx.settings) {
+    const onB = document.createElement("button");
+    onB.className = "rn-ws-on" + (b.on ? " on" : "");
+    onB.textContent = b.on ? "ON" : "OFF";
+    onB.title = fx.blurb;
+    onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
+    h.appendChild(onB);
+  }
+  // an effect that costs real time says so here, because this is where somebody
+  // asks "why did that take twenty seconds"; the chips sit after the switch
+  if (fx.depth) {
+    const chip = document.createElement("span");
+    chip.className = "rn-ws-vram med";
+    chip.textContent = "Uses depth";
+    chip.title = "This effect works out what is near and what is far. The node does "
+               + "that for you with the estimator set on the Depth card, so there is "
+               + "nothing to wire. The depth input is only there if you would rather "
+               + "supply your own map.";
+    h.appendChild(chip);
+  }
+  if (fx.cost) {
+    const cost = document.createElement("span");
+    cost.className = "rn-ws-cost";
+    cost.textContent = fx.cost;
+    cost.title = fx.cost === "depth model"
+      ? "This one needs a depth map, so switching it on loads a depth model. That "
+      + "is seconds, not milliseconds, and it is usually the reason a grade feels "
+      + "slow. The Depth card picks the estimator and its resolution; wire a depth "
+      + "image into the node to reuse one you already have."
+      : "Cost climbs steeply with the sliders. At the shipped values it is about a "
+      + "tenth of a second; with sigma and the radius multiplier at maximum it is "
+      + "several seconds on a 1 MP frame.";
+    h.appendChild(cost);
+  }
+  edit.appendChild(h);
+  if (cfg.post_ui.hints) {
+    const blurb = document.createElement("div");
+    blurb.className = "blurb";
+    blurb.textContent = fx.blurb;
+    blurb.title = fx.blurb;
+    edit.appendChild(blurb);
+  }
+  const grid = document.createElement("div");
+  grid.className = "rn-ws-fxgrid";
+  for (const c of fx.controls) grid.appendChild(renderControl(node, cfg, fx, b, c));
+  edit.appendChild(grid);
+  // LIMIT: the effect's result only on the subject or the background, through the
+  // mask the Mask card describes, with that card's feather beside it
+  if (!fx.settings) {
+    const lrow = document.createElement("div");
+    lrow.className = "rn-ws-row rn-ws-fxlimit";
+    const llab = document.createElement("span");
+    llab.className = "lab";
+    llab.textContent = "Limit";
+    const lsel = document.createElement("select");
+    lsel.className = "rn-ws-res";
+    for (const [v, txt] of [["off", "Whole frame"], ["subject", "Subject only"],
+                            ["background", "Background only"]]) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = txt; o.selected = (b.limit || "off") === v;
+      lsel.appendChild(o);
+    }
+    lsel.title = "Where this effect applies. Subject and background come from the mask "
+               + "the Mask card describes, softened by its feather; the rest of the frame "
+               + "is left exactly as it was before this effect.";
+    lsel.onchange = () => { b.limit = lsel.value; postWrite(node); postRender(node); };
+    lrow.append(llab, lsel);
+    if ((b.limit || "off") !== "off" && cfg.post.mask) {
+      const flab = document.createElement("span");
+      flab.className = "lab";
+      flab.textContent = "Feather";
+      const finp = document.createElement("input");
+      finp.type = "number";
+      finp.className = "val";
+      finp.min = 0; finp.max = 64; finp.step = 1;
+      finp.value = String(cfg.post.mask.feather ?? 12);
+      finp.title = "The mask's edge softness in pixels, shared by every limited effect "
+                 + "(the Mask card's feather).";
+      finp.addEventListener("change", () => {
+        const v = Math.max(0, Math.min(64, Math.round(Number(finp.value) || 0)));
+        cfg.post.mask.feather = v;
+        finp.value = String(v);
+        postWrite(node);
+      });
+      lrow.append(flab, finp);
+    }
+    edit.appendChild(lrow);
+  }
+  split.appendChild(edit);
+  body.appendChild(split);
 }
