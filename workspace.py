@@ -563,6 +563,20 @@ def _pass_list(raw, on, base, lo, hi, n, first=None):
     return use, out
 
 
+def _pass_names(raw, on, n):
+    """(switch, one rig name per pass): "" means the run's own rig. The same
+    repeat rule as _pass_list, so raising the pass count keeps the names chosen."""
+    use = bool(on) and isinstance(raw, list) and bool(raw)
+    out = []
+    for i in range(max(1, int(n))):
+        v = ""
+        if use:
+            pick = raw[i] if i < len(raw) else raw[-1]
+            v = str(pick)[:48] if isinstance(pick, str) else ""
+        out.append(v)
+    return use, out
+
+
 def parse_config(config_json):
     """Normalised config: {tabs: {name: {on, images, sel, mask}}, dials: {...}, resize, use_dials}."""
     try:
@@ -644,6 +658,15 @@ def parse_config(config_json):
                 tabs[name]["scale"], 0.25, 3.0, tabs[name]["passes"])
             if tabs[name]["scale_custom"]:
                 tabs[name]["scale"] = tabs[name]["pass_scale"][0]
+            # A RIG PER PASS and STEPS PER PASS: the relay a HighNoise / LowNoise
+            # pair wants, pass 1 drafting on one rig and pass 2 finishing on the
+            # other at a denoise just under 1. "" is the run's rig, 0 its steps.
+            tabs[name]["rig_custom"], tabs[name]["pass_rig"] = _pass_names(
+                t.get("pass_rig"), t.get("rig_custom"), tabs[name]["passes"])
+            tabs[name]["steps_custom"], _st = _pass_list(
+                t.get("pass_steps"), t.get("steps_custom"), 0.0, 0.0, 200.0,
+                tabs[name]["passes"])
+            tabs[name]["pass_steps"] = [int(round(v)) for v in _st]
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
@@ -730,6 +753,13 @@ def parse_config(config_json):
     latent_cfg["scale_custom"], latent_cfg["pass_scale"] = _pass_list(
         lat_in.get("pass_scale"), lat_in.get("scale_custom"),
         1.0, 0.25, 3.0, latent_cfg["passes"])
+    # a rig and a step count per pass, as on the Img2Img tab: the relay
+    latent_cfg["rig_custom"], latent_cfg["pass_rig"] = _pass_names(
+        lat_in.get("pass_rig"), lat_in.get("rig_custom"), latent_cfg["passes"])
+    latent_cfg["steps_custom"], _lst = _pass_list(
+        lat_in.get("pass_steps"), lat_in.get("steps_custom"), 0.0, 0.0, 200.0,
+        latent_cfg["passes"])
+    latent_cfg["pass_steps"] = [int(round(v)) for v in _lst]
     # the LoRAs tab: the stack the panel edits, in the same shape the LoRA Stack
     # node's hidden widget uses, so one panel implementation serves both
     lin = data.get("loras") if isinstance(data.get("loras"), dict) else {}
@@ -1697,6 +1727,48 @@ class RedNodeStudioWorkspace:
                 camera=cam_json,
                 seed=run_seed)
         return text
+
+    @staticmethod
+    def _pass_rig(cfg, name):
+        """Another Models-tab rig for one pass of the built-in sampler: its model
+        with its own LoRA set applied, and its sampler numbers. None when there is
+        nothing to load, so the pass falls back to the run's rig and says so.
+
+        The camera LoRAs are not re-applied on it: they are tuned for the run's
+        model, and a relay's second rig is the same family anyway. The rig cache
+        keeps one model unless Hold two is on, so the console asks for it.
+        """
+        rec = next((r for r in cfg["models"]["rigs"] if r.get("name") == name), None)
+        if rec is None:
+            print("[RedNode Workspace] no rig named %r for this pass; the run's rig "
+                  "carries on" % name, flush=True)
+            return None
+        _nm, model, _clip, _vae = load_active_rig(cfg, name)
+        if model is None:
+            print("[RedNode Workspace] pass rig %r has no model to load; the run's "
+                  "rig carries on" % name, flush=True)
+            return None
+        if not cfg["models"].get("hold_two"):
+            print("[RedNode Workspace] pass rig %r: turn on Hold two rigs on the Models "
+                  "tab to keep both models loaded between queues" % name, flush=True)
+        lc = lora_set_cfg(cfg, rec.get("lora_set") or "", "Workspace pass rig")
+        if lc.get("on", True) and lc.get("slots"):
+            model, _c, _w, _applied = _lora.apply_stack(
+                model, None, _lora.CUSTOM_SENTINEL,
+                json.dumps({"ui": lc.get("ui") or {}, "slots": lc["slots"]}),
+                int(lc.get("seed", 0) or 0), None, tag="Workspace pass rig LoRAs")
+        steps = int(rec.get("steps") or 8)
+        try:
+            cfg_v = float(rec.get("cfg", 1.0) or 1.0)
+        except (TypeError, ValueError):
+            cfg_v = 1.0
+        sampler = (rec.get("sampler") if rec.get("sampler")
+                   in comfy.samplers.KSampler.SAMPLERS else "euler")
+        scheduler = (rec.get("scheduler") if rec.get("scheduler")
+                     in comfy.samplers.KSampler.SCHEDULERS else "simple")
+        print("[RedNode Workspace] pass rig %r: %d steps, cfg %.1f, %s/%s"
+              % (name, steps, cfg_v, sampler, scheduler), flush=True)
+        return model, steps, cfg_v, sampler, scheduler
 
     def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
                     rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
@@ -2827,7 +2899,9 @@ class RedNodeStudioWorkspace:
                             and _lc_pass.get("source") == "tab"
                             and int(_lc_pass.get("passes", 1)) > 1
                             and (_lc_pass.get("pass_custom")
-                                 or _lc_pass.get("scale_custom")))
+                                 or _lc_pass.get("scale_custom")
+                                 or _lc_pass.get("rig_custom")
+                                 or _lc_pass.get("steps_custom")))
                 if _i2i_run:
                     _npass = int(it.get("passes", 1))
                 elif _lat_run:
@@ -2923,9 +2997,36 @@ class RedNodeStudioWorkspace:
                                           "resized (%s); it runs at %d x %d instead"
                                           % (_p + 1, _re_exc, int(_sm.shape[-1]) * 8,
                                              int(_sm.shape[-2]) * 8), flush=True)
+                        # A RIG PER PASS: this pass samples on another Models-tab
+                        # rig, its own LoRA set and sampler numbers with it. The
+                        # conditioning stays the run's, which is right for a
+                        # HighNoise / LowNoise pair (one text encoder between them).
+                        # STEPS PER PASS on top: a relay drafts in one step and
+                        # finishes in ten.
+                        _model_p, _steps_p, _cfg_p = _model_i, rig_steps, rig_cfg
+                        _sampler_p, _sched_p, _rig_p = rig_sampler, rig_scheduler, ""
+                        if _pass_cfg and _pass_cfg.get("rig_custom"):
+                            _rl = _pass_cfg.get("pass_rig") or []
+                            _rig_p = str(_rl[min(_p, len(_rl) - 1)] if _rl else "")
+                        if _rig_p and _rig_p != str(_ar.get("name") or ""):
+                            _got = self._pass_rig(cfg, _rig_p)
+                            if _got is None:
+                                _rig_p = ""
+                            else:
+                                _model_p, _steps_p, _cfg_p, _sampler_p, _sched_p = _got
+                        else:
+                            _rig_p = ""
+                        if _pass_cfg and _pass_cfg.get("steps_custom"):
+                            _sl = _pass_cfg.get("pass_steps") or []
+                            _sv = int(_sl[min(_p, len(_sl) - 1)]) if _sl else 0
+                            if _sv > 0:
+                                _steps_p = _sv
                         if _npass > 1:
-                            print("[RedNode Workspace] %s pass %d of %d, denoise "
-                                  "%.2f" % (_pass_what, _p + 1, _npass, _dnp), flush=True)
+                            print("[RedNode Workspace] %s pass %d of %d, denoise %.2f%s%s"
+                                  % (_pass_what, _p + 1, _npass, _dnp,
+                                     (", rig %r" % _rig_p) if _rig_p else "",
+                                     (", %d steps" % _steps_p) if _steps_p != rig_steps else ""),
+                                  flush=True)
                         # every step of this call also streams a small frame,
                         # decoded by the pack's own tiny decoder, to any Live
                         # Preview node wired to this one (live_preview.py)
@@ -2934,10 +3035,11 @@ class RedNodeStudioWorkspace:
                             ("shot %d of %d" % (_si + 1, len(_shot_list))
                              if _si is not None and len(_shot_list) > 1 else ""),
                             ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
+                            _rig_p,
                         ] if x)
                         _out = _live.sampled(unique_id, _core.common_ksampler, label=_lbl)(
-                            _model_i, _seed + _p, rig_steps, rig_cfg, rig_sampler,
-                            rig_scheduler, _pos_i, negative, _out,
+                            _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
+                            _sched_p, _pos_i, negative, _out,
                             denoise=_dnp)[0]
                     _last_out = _out
                     if _v is not None:

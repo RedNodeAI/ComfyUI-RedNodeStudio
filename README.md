@@ -89,7 +89,10 @@ tab has a stack of its own.
 **Latent.** The canvas size, with aspect presets, a random size, and an auto latent that follows
 the camera's frame at a pixel budget. Refine passes run on the blank canvas: pass 1 generates, and
 every pass after it treats what pass 1 made as its source, at a Refine dial or a denoise and a
-scale per pass with a Ramp, so a draft-small-then-climb run needs no second node.
+scale per pass with a Ramp, so a draft-small-then-climb run needs no second node. A rig and a step
+count per pass are there too, which is how a HighNoise and LowNoise pair relays: pass 1 drafts on
+one rig in a step or two, pass 2 finishes on the other at a denoise just under 1, with Hold two
+rigs keeping both models loaded. The Img2Img tab's passes have the same two sections.
 
 ![The Img2Img tab: source, pass, RE-ANGLE, SWAP and the auto prompt](images/img2img.webp)
 

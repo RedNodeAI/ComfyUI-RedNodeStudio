@@ -887,6 +887,11 @@ export function readCfg(node) {
       t.pass_denoise = Array.isArray(t.pass_denoise)
         ? t.pass_denoise.map((v) => Math.max(0, Math.min(1, Number(v) || 0)))
         : [];
+      t.rig_custom = !!t.rig_custom;
+      t.pass_rig = Array.isArray(t.pass_rig) ? t.pass_rig.map((v) => String(v || "")) : [];
+      t.steps_custom = !!t.steps_custom;
+      t.pass_steps = Array.isArray(t.pass_steps)
+        ? t.pass_steps.map((v) => Math.max(0, Math.min(200, Math.round(Number(v) || 0)))) : [];
       t.scale_custom = !!t.scale_custom;
       t.pass_scale = Array.isArray(t.pass_scale)
         ? t.pass_scale.map((v) => Math.max(0.25, Math.min(3, Number(v) || 1)))
@@ -1110,6 +1115,11 @@ export function readCfg(node) {
   d.latent.refine = Math.max(0, Math.min(1, d.latent.refine));
   d.latent.pass_custom = !!d.latent.pass_custom;
   d.latent.scale_custom = !!d.latent.scale_custom;
+  d.latent.rig_custom = !!d.latent.rig_custom;
+  d.latent.pass_rig = Array.isArray(d.latent.pass_rig) ? d.latent.pass_rig.map((v) => String(v || "")) : [];
+  d.latent.steps_custom = !!d.latent.steps_custom;
+  d.latent.pass_steps = Array.isArray(d.latent.pass_steps)
+    ? d.latent.pass_steps.map((v) => Math.max(0, Math.min(200, Math.round(Number(v) || 0)))) : [];
   d.auto = d.auto && typeof d.auto === "object" ? d.auto : {};
   if (typeof d.auto.model !== "string") d.auto.model = "";
   if (typeof d.auto.url !== "string") d.auto.url = "";
@@ -10724,10 +10734,15 @@ function latentBody(node, body) {
              + "the usual climb: 0.5x to 1x over four passes without setting each.",
   });
   passCard.append(lscl.row, lscl.box);
+  const lrig = perPassRigs(node, L);
+  const lstp = perPassSteps(node, L);
+  passCard.append(lrig.row, lrig.box, lstp.row, lstp.box);
 
   const lsync = () => {
     const dOn = lden.sync();
     lscl.sync();
+    lrig.sync();
+    lstp.sync();
     rrow.style.display = (nP > 1 && !dOn) ? "" : "none";
   };
   lsync();
@@ -10866,6 +10881,98 @@ function perPassSection(node, t, o) {
   return { box, row, build, sync };
 }
 
+// The rig a pass runs on: "(this rig)" is the run's own, any other name from the
+// Models tab hands that pass to that rig, its own LoRA set and sampler numbers with
+// it. The relay a HighNoise / LowNoise pair wants is pass 1 on one and pass 2 on
+// the other at a denoise just under 1; Hold two rigs keeps both models resident.
+function perPassRigs(node, t) {
+  const box = document.createElement("div");
+  box.style.cssText = "display:flex;flex-direction:column;gap:6px";
+  const names = () => (((node._rnCfg || {}).models || {}).rigs || [])
+    .map((r) => String(r.name || "")).filter(Boolean);
+  const list = () => {
+    const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+    const src = Array.isArray(t.pass_rig) ? t.pass_rig : [];
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push(String((i < src.length ? src[i] : (src.length ? src[src.length - 1] : "")) || ""));
+    }
+    return out;
+  };
+  const build = () => {
+    box.replaceChildren();
+    const l = list();
+    if (t.rig_custom) t.pass_rig = l.slice();
+    l.forEach((v, i) => {
+      const r = document.createElement("div");
+      r.className = "rn-ws-row";
+      const lab = document.createElement("span");
+      lab.className = "rn-ws-note";
+      lab.style.minWidth = "54px";
+      lab.textContent = "Pass " + (i + 1);
+      const sel = document.createElement("select");
+      sel.style.flex = "1";
+      for (const [val, txt] of [["", "(this rig)"], ...names().map((nm) => [nm, nm])]) {
+        const o = document.createElement("option");
+        o.value = val; o.textContent = txt; o.selected = val === v;
+        sel.appendChild(o);
+      }
+      sel.title = "Which Models-tab rig samples this pass. Its own LoRA set and sampler "
+                + "numbers come with it; the conditioning stays the run's, so keep the "
+                + "same text encoder on both.";
+      sel.onchange = () => { t.pass_rig[i] = sel.value; writeCfg(node); };
+      r.append(lab, sel);
+      box.appendChild(r);
+    });
+  };
+  build();
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (t.rig_custom ? " on" : "");
+  sw.title = t.rig_custom
+    ? "On: each pass names its rig. A HighNoise / LowNoise pair is pass 1 on one at a "
+      + "step or two, pass 2 on the other at a denoise just under 1. Turn on Hold two "
+      + "rigs so both stay loaded."
+    : "Off: every pass runs on the run's rig. Switch on to hand a pass to another rig "
+      + "from the Models tab.";
+  sw.onclick = () => {
+    t.rig_custom = !t.rig_custom;
+    if (t.rig_custom) t.pass_rig = list();
+    writeCfg(node);
+    render(node);
+  };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = "Rig per pass";
+  row.append(sw, lab);
+  const sync = () => {
+    const many = Math.max(1, Math.round(Number(t.passes) || 1)) > 1;
+    const on = !!t.rig_custom && many;
+    box.style.display = on ? "" : "none";
+    row.style.display = many ? "" : "none";
+    return on;
+  };
+  return { box, row, build, sync };
+}
+
+// The step count per pass rides perPassSection: 0 is the rig's own count.
+function perPassSteps(node, t) {
+  return perPassSection(node, t, {
+    key: "pass_steps", flag: "steps_custom", base: "pass_steps_dial",
+    min: 0, max: 60, step: 1, accent: "#e0a84a",
+    label: "Steps per pass",
+    fmt: (v) => (Number(v) > 0 ? Math.round(Number(v)) + " steps" : "rig's steps"),
+    barTitle: "How many steps this pass samples. 0 is the rig's own count. A relay "
+            + "drafts in one or two steps and finishes at the full count.",
+    onTitle: "On: each pass runs its own step count, 0 meaning the rig's. Switch off "
+           + "to run every pass at the rig's steps.",
+    offTitle: "Off: every pass runs the rig's step count. Switch on to give a pass its "
+            + "own, which a one-step draft ahead of a finishing pass needs.",
+    rampTitle: "Space the passes evenly between the first bar and the last.",
+  });
+}
+
 function i2iPassRow(node, body, tabName) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
@@ -10995,9 +11102,14 @@ function i2iPassRow(node, body, tabName) {
                + "the usual climb: 1x to 2x over four passes without setting each one.",
     });
 
+    const rig = perPassRigs(node, t);
+    const stp = perPassSteps(node, t);
+
     const syncHalves = () => {
       drow.style.display = den.sync() ? "none" : "";
       srow.style.display = scl.sync() ? "none" : "";
+      rig.sync();
+      stp.sync();
     };
     syncHalves();
 
@@ -11040,7 +11152,8 @@ function i2iPassRow(node, body, tabName) {
     pWrap.append(pLab, pInp);
     syncPass();
     row.append(pWrap);
-    pcard.append(row, drow, den.box, den.row, srow, scl.box, scl.row);
+    pcard.append(row, drow, den.box, den.row, srow, scl.box, scl.row,
+                 rig.row, rig.box, stp.row, stp.box);
   } else {
     pcard.appendChild(row);
   }
