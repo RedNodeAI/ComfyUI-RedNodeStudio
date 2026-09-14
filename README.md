@@ -461,7 +461,11 @@ goes. ComfyUI Manager installs the packs; the files are yours to fetch.
 |---|---|---|
 | `qwen3vl_4b_fp8_scaled.safetensors` (or the bf16) | `models/text_encoders` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/text_encoders) |
 | `qwen_image_vae.safetensors` | `models/vae` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/vae) |
-| `krea2_identity_edit_v1_2.safetensors`, the identity edit LoRA | `models/loras` | [conradlocke/krea2-identity-edit](https://huggingface.co/conradlocke/krea2-identity-edit) |
+| `krea2_identity_edit_v1_2.safetensors`, the identity edit LoRA by lbouaraba | `models/loras` | [Civitai](https://civitai.com/models/2761113) or [Hugging Face](https://huggingface.co/conradlocke/krea2-identity-edit) |
+
+The identity edit LoRA only behaves on the official Krea 2 Turbo; on other Krea 2 checkpoints the face
+drifts. Keep one rig on the official Turbo and point the face passes at it: a Detailer card names its
+rig, so the rest of the picture can render on any model and the face still lands on Turbo.
 
 ### Camera and light sliders
 
