@@ -64,7 +64,11 @@ second sampler pair for image to image runs, and which LoRA set it carries. Keep
 the active one; a Detailer pass can name any of them, so a face can be detailed by a different
 model from the one that rendered the frame. The same tab chooses between the built-in sampler and
 an external one, holds the seed, and can keep two rigs in RAM at once so a two-rig chain stops
-reloading. The footer carries the UI scale, the resize long edge, the studio preset and the VRAM
+reloading. Each rig also folds away a set of sampler dials, all off by default: an AuraFlow shift
+on the model, Detail Daemon (a sigma nudge over the run for finer detail without more steps),
+Seed Variance (a jitter on the conditioning early in the run, so one seed lands on different
+compositions) and densify the tail (extra steps only in the last part of the schedule). They ride
+the built-in sampler and every Detailer pass on that rig. The footer carries the UI scale, the resize long edge, the studio preset and the VRAM
 tier, which clamps the expensive dials for a smaller card.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
@@ -92,7 +96,9 @@ every pass after it treats what pass 1 made as its source, at a Refine dial or a
 scale per pass with a Ramp, so a draft-small-then-climb run needs no second node. A rig and a step
 count per pass are there too, which is how a HighNoise and LowNoise pair relays: pass 1 drafts on
 one rig in a step or two, pass 2 finishes on the other at a denoise just under 1, with Hold two
-rigs keeping both models loaded. The Img2Img tab's passes have the same two sections.
+rigs keeping both models loaded. Continue the noise between passes makes the passes segments of
+one schedule instead, each carrying the last one's leftover noise on with none added, which is
+how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same sections.
 
 ![The Img2Img tab: source, pass, RE-ANGLE, SWAP and the auto prompt](images/img2img.webp)
 
@@ -598,6 +604,8 @@ unused, every patched path returns exactly what stock ComfyUI returns.
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 [lbouaraba/ComfyUI-Krea2Edit](https://github.com/lbouaraba/comfyui-krea2edit), Apache-2.0, the
 identity-edit dual-conditioning recipe this reimplements.
+[Jonseed/ComfyUI-Detail-Daemon](https://github.com/Jonseed/ComfyUI-Detail-Daemon), MIT, the
+detail curve the rig's Detail Daemon dial re-implements.
 [nova452/ComfyUI-ConditioningKrea2Rebalance](https://github.com/nova452/ComfyUI-ConditioningKrea2Rebalance)
 and [huwhitememes/comfyui-krea2-conditioning](https://github.com/huwhitememes/comfyui-krea2-conditioning),
 Apache-2.0, the per-layer rebalance mechanic and its RMS-renormalized variant.

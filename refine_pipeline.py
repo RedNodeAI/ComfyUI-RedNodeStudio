@@ -37,6 +37,7 @@ import nodes as _core
 
 from . import workspace as _ws
 from . import live_preview as _live
+from . import sampler_dials as _dials
 from .paint_render import _bbox, _encode_text, _workspace_cfg, grow_to_aspect, \
     region_aspect
 
@@ -613,6 +614,11 @@ class RedNodeStudioDetailer:
                 continue
             rig = _rig_settings(ws_cfg, s["rig"])
             steps, cfg_v, sampler, scheduler, start, end = resolve_sampling(s, rig)
+            # the rig's sampler dials ride every pass on it: its shift on the model
+            # now, Detail Daemon, Seed Variance and densify at the sampler call
+            self._rn_dials = rig.get("dials") or {}
+            if self._rn_dials.get("shift"):
+                model = _dials.apply_shift(model, self._rn_dials["shift"])
             # THE STACK, unless this pass says raw: the main LoRAs tab applied to
             # model AND clip, the same halves the rest of the pack learned to keep
             # together the hard way
@@ -808,15 +814,14 @@ class RedNodeStudioDetailer:
                   % (", ".join(map(str, missed)), n, whys[missed[0] - 1]), flush=True)
         return torch.cat(outs, 0), why
 
-    @staticmethod
-    def _ksample(model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
+    def _ksample(self, model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
                  denoise, start, end):
-        return _core.common_ksampler(
+        return _dials.sample_with_dials(
             model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
-            denoise=max(0.01, denoise),
+            denoise=max(0.01, denoise), dials=getattr(self, "_rn_dials", None),
             start_step=start if start > 0 else None,
             last_step=end,
-            force_full_denoise=end is not None)[0]
+            force_full_denoise=end is not None)
 
     @staticmethod
     def _resize(img, scale):

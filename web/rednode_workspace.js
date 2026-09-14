@@ -888,6 +888,7 @@ export function readCfg(node) {
         ? t.pass_denoise.map((v) => Math.max(0, Math.min(1, Number(v) || 0)))
         : [];
       t.rig_custom = !!t.rig_custom;
+      t.handoff_continue = !!t.handoff_continue;
       t.pass_rig = Array.isArray(t.pass_rig) ? t.pass_rig.map((v) => String(v || "")) : [];
       t.steps_custom = !!t.steps_custom;
       t.pass_steps = Array.isArray(t.pass_steps)
@@ -984,6 +985,11 @@ export function readCfg(node) {
     }
     if (typeof r.steps !== "number") r.steps = 8;
     if (typeof r.cfg !== "number") r.cfg = 1.0;
+    // sampler dials, all off until switched on (sampler_dials.py parses them)
+    if (typeof r.shift !== "number") r.shift = 0;
+    for (const k of ["dd", "variance", "densify"]) {
+      if (!r[k] || typeof r[k] !== "object") r[k] = {};
+    }
     if (typeof r.sampler !== "string") r.sampler = "euler";
     if (typeof r.scheduler !== "string") r.scheduler = "simple";
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
@@ -1116,6 +1122,7 @@ export function readCfg(node) {
   d.latent.pass_custom = !!d.latent.pass_custom;
   d.latent.scale_custom = !!d.latent.scale_custom;
   d.latent.rig_custom = !!d.latent.rig_custom;
+  d.latent.handoff_continue = !!d.latent.handoff_continue;
   d.latent.pass_rig = Array.isArray(d.latent.pass_rig) ? d.latent.pass_rig.map((v) => String(v || "")) : [];
   d.latent.steps_custom = !!d.latent.steps_custom;
   d.latent.pass_steps = Array.isArray(d.latent.pass_steps)
@@ -9693,6 +9700,7 @@ function modelsBody(node, page) {
               + "the + on the LoRAs tab.");
     pill(body, "LoRA set", sel,
          "Which LoRAs-tab set this rig renders with. Main = the first tab there.");
+    dialsCard(node, rig, body);
   }
 
   // The embedded sampler: comfy core's KSampler run inside the node. External is
@@ -10736,13 +10744,15 @@ function latentBody(node, body) {
   passCard.append(lscl.row, lscl.box);
   const lrig = perPassRigs(node, L);
   const lstp = perPassSteps(node, L);
-  passCard.append(lrig.row, lrig.box, lstp.row, lstp.box);
+  const lcont = continueRow(node, L);
+  passCard.append(lrig.row, lrig.box, lstp.row, lstp.box, lcont.row);
 
   const lsync = () => {
     const dOn = lden.sync();
     lscl.sync();
     lrig.sync();
     lstp.sync();
+    lcont.sync();
     rrow.style.display = (nP > 1 && !dOn) ? "" : "none";
   };
   lsync();
@@ -10973,6 +10983,214 @@ function perPassSteps(node, t) {
   });
 }
 
+// SAMPLER DIALS per rig (sampler_dials.py), every one off by default and folded
+// away: AuraFlow shift on the model, Detail Daemon's sigma nudge, Seed Variance's
+// conditioning jitter, densify the tail of the schedule. They ride the built-in
+// sampler and every Detailer pass on this rig.
+function dialsCard(node, rig, body) {
+  // a rig made before the dials existed, or one the test harness hands over raw
+  if (typeof rig.shift !== "number") rig.shift = 0;
+  for (const k of ["dd", "variance", "densify"]) {
+    if (!rig[k] || typeof rig[k] !== "object") rig[k] = {};
+  }
+  const folds = (node._rnCardFolds ||= {});
+  const key = "dials:" + (rig.name || "");
+  const open = !!folds[key];
+  const head = document.createElement("div");
+  head.className = "rn-ws-row";
+  head.style.cursor = "pointer";
+  const arrow = document.createElement("span");
+  arrow.className = "rn-ws-note";
+  arrow.textContent = open ? "\u25be" : "\u25b8";
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  const on = [rig.shift > 0 ? "shift " + Number(rig.shift).toFixed(2) : "",
+              rig.dd.on ? "detail daemon" : "", rig.variance.on ? "seed variance" : "",
+              rig.densify.on ? "densify" : ""].filter(Boolean);
+  lab.textContent = "Sampler dials" + (on.length ? ": " + on.join(", ") : "");
+  lab.title = "Extra sampler controls for this rig, all off by default. They ride the "
+            + "built-in sampler and every Detailer pass on this rig.";
+  head.append(arrow, lab);
+  head.onclick = () => { folds[key] = !open; render(node); };
+  body.appendChild(head);
+  if (!open) return;
+
+  const box = document.createElement("div");
+  box.className = "rn-ws-dials";
+  box.style.cssText = "display:flex;flex-direction:column;gap:6px;padding:4px 0 6px 14px";
+  const bar = (parent, label, get, set, min, max, step, fmt, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const l = document.createElement("span");
+    l.className = "rn-ws-note";
+    l.style.minWidth = "84px";
+    l.textContent = label;
+    const rg = document.createElement("input");
+    rg.type = "range";
+    rg.min = min; rg.max = max; rg.step = step;
+    rg.value = get();
+    rg.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#e0a84a";
+    rg.title = hint;
+    const v = document.createElement("span");
+    v.className = "rn-ws-note";
+    v.textContent = fmt(get());
+    rg.addEventListener("input", () => {
+      set(snapStep(rg.value, min, max, step));
+      v.textContent = fmt(get());
+      writeCfg(node);
+    });
+    row.append(l, rg, v);
+    parent.appendChild(row);
+    return row;
+  };
+  const sw = (parent, label, get, set, hint) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-row";
+    const b = document.createElement("button");
+    b.className = "rn-ws-sw" + (get() ? " on" : "");
+    b.title = hint;
+    b.onclick = () => { set(!get()); writeCfg(node); render(node); };
+    const l = document.createElement("span");
+    l.className = "rn-ws-note";
+    l.textContent = label;
+    row.append(b, l);
+    parent.appendChild(row);
+    return row;
+  };
+  const f2 = (x) => Number(x).toFixed(2);
+  const pct = (x) => Math.round(Number(x) * 100) + "%";
+
+  // SHIFT
+  const srow = document.createElement("div");
+  srow.className = "rn-ws-row";
+  const slab = document.createElement("span");
+  slab.className = "rn-ws-note";
+  slab.style.minWidth = "84px";
+  slab.textContent = "Shift";
+  const sinp = document.createElement("input");
+  sinp.type = "number";
+  sinp.step = "0.05"; sinp.min = "0"; sinp.max = "100";
+  sinp.value = String(rig.shift || 0);
+  sinp.style.width = "72px";
+  sinp.title = "AuraFlow shift on this rig's model, the ModelSamplingAuraFlow patch. 0 "
+             + "leaves the model as it loads; Krea 2 graphs often run 1.7 to 3. Higher "
+             + "spends more steps at high noise, which favours composition over detail.";
+  sinp.addEventListener("change", () => {
+    const v = parseFloat(sinp.value);
+    rig.shift = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+    sinp.value = String(rig.shift);
+    writeCfg(node); render(node);
+  });
+  const snote = document.createElement("span");
+  snote.className = "rn-ws-note";
+  snote.textContent = rig.shift > 0 ? "" : "0 = model default";
+  srow.append(slab, sinp, snote);
+  box.appendChild(srow);
+
+  // DETAIL DAEMON
+  const dd = rig.dd;
+  sw(box, "Detail Daemon", () => !!dd.on, (v) => { dd.on = v; },
+     "The model is told a slightly smaller sigma than the schedule's at each step, by a "
+     + "curve over the run, so it paints finer detail late without more steps. Off by "
+     + "default. Re-implemented from the MIT description of Jonseed's Detail Daemon.");
+  if (dd.on) {
+    bar(box, "Amount", () => dd.amount ?? 0.1, (v) => { dd.amount = v; }, -1, 1, 0.01, f2,
+        "How much detail. 0.1 is gentle, 0.3 strong; negative smooths instead.");
+    bar(box, "Start", () => dd.start ?? 0.2, (v) => { dd.start = v; }, 0, 1, 0.01, pct,
+        "Where in the run the nudge begins, as a share of the steps.");
+    bar(box, "End", () => dd.end ?? 0.8, (v) => { dd.end = v; }, 0, 1, 0.01, pct,
+        "Where it ends.");
+    const akey = "dials_adv:" + (rig.name || "");
+    const aopen = !!folds[akey];
+    const arow = document.createElement("div");
+    arow.className = "rn-ws-row";
+    arow.style.cursor = "pointer";
+    const aarr = document.createElement("span");
+    aarr.className = "rn-ws-note";
+    aarr.textContent = aopen ? "\u25be" : "\u25b8";
+    const alab = document.createElement("span");
+    alab.className = "rn-ws-note";
+    alab.textContent = "Advanced";
+    arow.append(aarr, alab);
+    arow.onclick = () => { folds[akey] = !aopen; render(node); };
+    box.appendChild(arow);
+    if (aopen) {
+      bar(box, "Bias", () => dd.bias ?? 0.5, (v) => { dd.bias = v; }, 0, 1, 0.01, f2,
+          "Where the peak sits between start and end. 0.5 is the middle.");
+      bar(box, "Exponent", () => dd.exponent ?? 1, (v) => { dd.exponent = v; }, 0, 10, 0.05, f2,
+          "The curve's shape. 1 is linear ramps; higher keeps the nudge small until near the peak.");
+      bar(box, "Start offset", () => dd.start_offset ?? 0, (v) => { dd.start_offset = v; }, -1, 1, 0.01, f2,
+          "The floor before the window: a nudge that is already on from step 1.");
+      bar(box, "End offset", () => dd.end_offset ?? 0, (v) => { dd.end_offset = v; }, -1, 1, 0.01, f2,
+          "The floor after the window.");
+      bar(box, "Fade", () => dd.fade ?? 0, (v) => { dd.fade = v; }, 0, 1, 0.05, f2,
+          "Scales the whole curve down. 0 is the full curve.");
+      sw(box, "Smooth", () => dd.smooth !== false, (v) => { dd.smooth = v; },
+         "Cosine-eased ramps up and down. Off is straight lines.");
+      bar(box, "CFG scale", () => dd.cfg_scale ?? 1, (v) => { dd.cfg_scale = v; }, 0, 30, 0.5, f2,
+          "The nudge is multiplied by this. The original node reads the sampler's cfg; a "
+          + "turbo at cfg 1 needs the number set here to feel anything. 0 = the sampler's cfg.");
+    }
+  }
+
+  // SEED VARIANCE
+  const va = rig.variance;
+  sw(box, "Seed Variance", () => !!va.on, (v) => { va.on = v; },
+     "For the first part of the run a share of the text conditioning's values are "
+     + "jittered, so the same seed and prompt land on a different composition; the "
+     + "clean conditioning is back for the rest. It does not touch the seed or the noise. "
+     + "Off by default.");
+  if (va.on) {
+    bar(box, "Values", () => va.percent ?? 0.3, (v) => { va.percent = v; }, 0, 1, 0.01, pct,
+        "The share of conditioning positions that get jitter.");
+    bar(box, "Strength", () => va.strength ?? 0.05, (v) => { va.strength = v; }, 0, 0.5, 0.005, f2,
+        "The jitter, as a fraction of the conditioning's own spread. 0.05 nudges, 0.2 wanders.");
+    bar(box, "Window", () => va.window ?? 0.3, (v) => { va.window = v; }, 0, 1, 0.01, pct,
+        "How far into the run the jitter applies. The first 30% decides composition.");
+  }
+
+  // DENSIFY
+  const de = rig.densify;
+  sw(box, "Densify the tail", () => !!de.on, (v) => { de.on = v; },
+     "The last part of the schedule resampled to more steps, so the detail band gets "
+     + "them and the rest of the run stays as it was. Off by default.");
+  if (de.on) {
+    bar(box, "Last", () => de.last ?? 0.3, (v) => { de.last = v; }, 0.05, 1, 0.05, pct,
+        "The share of the schedule that counts as the tail.");
+    bar(box, "Extra steps", () => de.extra ?? 4, (v) => { de.extra = v; }, 0, 30, 1, (x) => Math.round(Number(x)) + "",
+        "How many steps the tail gains.");
+  }
+  body.appendChild(box);
+}
+
+// CONTINUE THE NOISE between passes: the passes become segments of one schedule,
+// each picking up the last one's leftover noise with none added, the hand-off's
+// other form. Denoise per pass has no say while it is on.
+function continueRow(node, t) {
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const b = document.createElement("button");
+  b.className = "rn-ws-sw" + (t.handoff_continue ? " on" : "");
+  b.title = t.handoff_continue
+    ? "On: one schedule for all the passes, cut at each pass's step count; pass 1 "
+      + "leaves its noise and the next carries on from the cut with none added. Denoise "
+      + "per pass is ignored. Switch off to re-noise between passes as usual."
+    : "Off: every pass re-noises to its denoise. Switch on to hand the leftover noise "
+      + "from one pass to the next instead, which is how a HighNoise / LowNoise pair "
+      + "is meant to relay.";
+  b.onclick = () => { t.handoff_continue = !t.handoff_continue; writeCfg(node); render(node); };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = "Continue the noise between passes";
+  row.append(b, lab);
+  const sync = () => {
+    const many = Math.max(1, Math.round(Number(t.passes) || 1)) > 1;
+    row.style.display = many ? "" : "none";
+    return !!t.handoff_continue && many;
+  };
+  return { row, sync };
+}
+
 function i2iPassRow(node, body, tabName) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
@@ -11104,12 +11322,14 @@ function i2iPassRow(node, body, tabName) {
 
     const rig = perPassRigs(node, t);
     const stp = perPassSteps(node, t);
+    const cont = continueRow(node, t);
 
     const syncHalves = () => {
       drow.style.display = den.sync() ? "none" : "";
       srow.style.display = scl.sync() ? "none" : "";
       rig.sync();
       stp.sync();
+      cont.sync();
     };
     syncHalves();
 
@@ -11153,7 +11373,7 @@ function i2iPassRow(node, body, tabName) {
     syncPass();
     row.append(pWrap);
     pcard.append(row, drow, den.box, den.row, srow, scl.box, scl.row,
-                 rig.row, rig.box, stp.row, stp.box);
+                 rig.row, rig.box, stp.row, stp.box, cont.row);
   } else {
     pcard.appendChild(row);
   }

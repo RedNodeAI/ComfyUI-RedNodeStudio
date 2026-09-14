@@ -40,6 +40,7 @@ from .rednode import SETTINGS_TYPE
 from . import autoprompt
 from . import postprocess
 from . import lora_stack as _lora
+from . import sampler_dials as _dials
 from .prompt_tools import SWAP_MODES, STYLE_MODES, ACT_MODES, convert_text
 
 WORKSPACE_TYPE = "KREA2_WORKSPACE"
@@ -667,6 +668,10 @@ def parse_config(config_json):
                 t.get("pass_steps"), t.get("steps_custom"), 0.0, 0.0, 200.0,
                 tabs[name]["passes"])
             tabs[name]["pass_steps"] = [int(round(v)) for v in _st]
+            # CONTINUE THE NOISE: the passes are segments of ONE schedule, each
+            # picking up the last one's leftover noise with none added, the
+            # hand-off's other form. Denoise per pass has no say while it is on.
+            tabs[name]["handoff_continue"] = bool(t.get("handoff_continue"))
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
@@ -760,6 +765,7 @@ def parse_config(config_json):
         lat_in.get("pass_steps"), lat_in.get("steps_custom"), 0.0, 0.0, 200.0,
         latent_cfg["passes"])
     latent_cfg["pass_steps"] = [int(round(v)) for v in _lst]
+    latent_cfg["handoff_continue"] = bool(lat_in.get("handoff_continue"))
     # the LoRAs tab: the stack the panel edits, in the same shape the LoRA Stack
     # node's hidden widget uses, so one panel implementation serves both
     lin = data.get("loras") if isinstance(data.get("loras"), dict) else {}
@@ -896,6 +902,9 @@ def parse_config(config_json):
             # rig renders with. "" = Main. A Detailer pass or the paint pass on
             # this rig inherits it unless it names its own.
             "lora_set": str(r.get("lora_set") or "")[:48],
+            # SAMPLER DIALS, per rig, all off by default: AuraFlow shift, Detail
+            # Daemon, Seed Variance, densify the tail (sampler_dials.py)
+            "dials": _dials.parse_dials(r),
         })
     try:
         active = int(min_.get("active", 0))
@@ -1751,6 +1760,9 @@ class RedNodeStudioWorkspace:
         if not cfg["models"].get("hold_two"):
             print("[RedNode Workspace] pass rig %r: turn on Hold two rigs on the Models "
                   "tab to keep both models loaded between queues" % name, flush=True)
+        dials = rec.get("dials") or _dials.parse_dials(rec)
+        if dials.get("shift"):
+            model = _dials.apply_shift(model, dials["shift"])
         lc = lora_set_cfg(cfg, rec.get("lora_set") or "", "Workspace pass rig")
         if lc.get("on", True) and lc.get("slots"):
             model, _c, _w, _applied = _lora.apply_stack(
@@ -1768,7 +1780,7 @@ class RedNodeStudioWorkspace:
                      in comfy.samplers.KSampler.SCHEDULERS else "simple")
         print("[RedNode Workspace] pass rig %r: %d steps, cfg %.1f, %s/%s"
               % (name, steps, cfg_v, sampler, scheduler), flush=True)
-        return model, steps, cfg_v, sampler, scheduler
+        return model, steps, cfg_v, sampler, scheduler, dials
 
     def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
                     rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
@@ -1832,6 +1844,14 @@ class RedNodeStudioWorkspace:
         # outright. One rule, everywhere: wired wins, the rig fills.
         if vae is None and rig_vae is not None:
             vae = rig_vae
+        # the active rig's AuraFlow shift, on whatever model the run samples with
+        _rigs0 = cfg["models"]["rigs"]
+        _rig0 = _rigs0[cfg["models"]["active"]] if _rigs0 else {}
+        _shift0 = float(((_rig0.get("dials") or {}).get("shift")) or 0.0)
+        if model is not None and _shift0 > 0:
+            model = _dials.apply_shift(model, _shift0)
+            print("[RedNode Workspace] rig %r shift %.2f" % (_rig0.get("name") or "", _shift0),
+                  flush=True)
         # ONE SEED PER QUEUE, shared by the wildcard picks, the embedded sampler and
         # the built-in paint pass, so a single number reproduces the whole render and
         # Randomize re-rolls all of it together.
@@ -2901,7 +2921,8 @@ class RedNodeStudioWorkspace:
                             and (_lc_pass.get("pass_custom")
                                  or _lc_pass.get("scale_custom")
                                  or _lc_pass.get("rig_custom")
-                                 or _lc_pass.get("steps_custom")))
+                                 or _lc_pass.get("steps_custom")
+                                 or _lc_pass.get("handoff_continue")))
                 if _i2i_run:
                     _npass = int(it.get("passes", 1))
                 elif _lat_run:
@@ -2951,6 +2972,31 @@ class RedNodeStudioWorkspace:
                                  if _pass_cfg and _pass_cfg.get("scale_custom") else None)
                     _base_hw = (tuple(_out["samples"].shape[-2:])
                                 if _pass_cfg and _sc_steps and _out is not None else None)
+                    # CONTINUE THE NOISE: one schedule for all the passes, cut into
+                    # segments of each pass's step count; pass 1 leaves its noise
+                    # and every later pass carries on from the cut with none added
+                    _segs = None
+                    if _pass_cfg and _pass_cfg.get("handoff_continue") and _npass > 1:
+                        _cnt = []
+                        _sl0 = _pass_cfg.get("pass_steps") if _pass_cfg.get("steps_custom") else None
+                        for _q in range(_npass):
+                            _c = int(_sl0[min(_q, len(_sl0) - 1)]) if _sl0 else 0
+                            _cnt.append(_c if _c > 0 else int(rig_steps))
+                        try:
+                            _full = _dials.rig_sigmas(_model_i, rig_sampler, rig_scheduler,
+                                                      sum(_cnt), _dn)
+                            _de = (_ar.get("dials") or {}).get("densify") or {}
+                            if _de.get("on"):
+                                _full = _dials.densify(_full, _de.get("last", 0.3), _de.get("extra", 0))
+                            _segs = _dials.segments(_full, _cnt)
+                            print("[RedNode Workspace] continuing the noise across %d passes: "
+                                  "one schedule of %d steps, cut at %s"
+                                  % (_npass, len(_full) - 1,
+                                     ", ".join(str(len(s_) - 1) for s_ in _segs)), flush=True)
+                        except Exception as _se:
+                            print("[RedNode Workspace] could not build the shared schedule "
+                                  "(%s); the passes re-noise as usual" % _se, flush=True)
+                            _segs = None
                     for _p in range(max(1, _npass)):
                         _dnp = _dn
                         # On the Latent tab pass 1 is a generation and the rest are
@@ -3005,6 +3051,7 @@ class RedNodeStudioWorkspace:
                         # finishes in ten.
                         _model_p, _steps_p, _cfg_p = _model_i, rig_steps, rig_cfg
                         _sampler_p, _sched_p, _rig_p = rig_sampler, rig_scheduler, ""
+                        _dials_p = _ar.get("dials") or {}
                         if _pass_cfg and _pass_cfg.get("rig_custom"):
                             _rl = _pass_cfg.get("pass_rig") or []
                             _rig_p = str(_rl[min(_p, len(_rl) - 1)] if _rl else "")
@@ -3013,7 +3060,7 @@ class RedNodeStudioWorkspace:
                             if _got is None:
                                 _rig_p = ""
                             else:
-                                _model_p, _steps_p, _cfg_p, _sampler_p, _sched_p = _got
+                                _model_p, _steps_p, _cfg_p, _sampler_p, _sched_p, _dials_p = _got
                         else:
                             _rig_p = ""
                         if _pass_cfg and _pass_cfg.get("steps_custom"):
@@ -3037,10 +3084,12 @@ class RedNodeStudioWorkspace:
                             ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
                             _rig_p,
                         ] if x)
-                        _out = _live.sampled(unique_id, _core.common_ksampler, label=_lbl)(
+                        _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
                             _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
                             _sched_p, _pos_i, negative, _out,
-                            denoise=_dnp)[0]
+                            denoise=_dnp, dials=_dials_p,
+                            sigmas=(_segs[_p] if _segs is not None else None),
+                            disable_noise=bool(_segs is not None and _p > 0))
                     _last_out = _out
                     if _v is not None:
                         # the same courtesy the encode gets: past roughly 2
