@@ -9057,6 +9057,11 @@ async function fetchModelLists() {
   MODEL_LISTS = {
     checkpoints: await pull("CheckpointLoaderSimple", "ckpt_name"),
     unets: await pull("UNETLoader", "unet_name"),
+    // quantised files with loaders of their own (workspace.py UNET_LOADERS);
+    // an absent pack answers with an empty list, which the Loader row says
+    ggufs: await pull("UnetLoaderGGUF", "unet_name"),
+    int8s: await pull("OTUNetLoaderW8A8", "unet_name"),
+    int8_types: await pull("OTUNetLoaderW8A8", "model_type"),
     clips: await pull("CLIPLoader", "clip_name"),
     clip_types: await pull("CLIPLoader", "type"),
     vaes: await pull("VAELoader", "vae_name"),
@@ -9433,8 +9438,48 @@ function modelsBody(node, page) {
   } else {
   pickRow("Checkpoint", "checkpoint", () => L.checkpoints, "models",
           "A full checkpoint: model, CLIP and VAE in one file.");
-  pickRow("Diffusion model", "unet", () => L.unets, "models",
-          "A bare diffusion model; add CLIP and VAE below. Wins over the checkpoint's.");
+  pickRow("Diffusion model", "unet",
+          () => [...new Set([...(L.unets || []), ...(L.ggufs || []), ...(L.int8s || [])])],
+          "models",
+          "A bare diffusion model; add CLIP and VAE below. Wins over the checkpoint's. "
+          + ".gguf and INT8 files are listed too when their loader packs are installed.");
+  {
+    // WHICH LOADER the file goes through. By file name sends a .gguf through
+    // ComfyUI-GGUF and anything else through core; an INT8 W8A8 file is a
+    // .safetensors, so that loader has to be named here.
+    const absent = (list) => (MODEL_LISTS && !(list || []).length ? " (pack not installed)" : "");
+    const sel = document.createElement("select");
+    for (const [v, t] of [["", "By file name"], ["core", "Standard"],
+                          ["gguf", "GGUF" + absent(L.ggufs)],
+                          ["int8", "INT8 W8A8" + absent(L.int8s)]]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      o.selected = v === (rig.unet_loader || "");
+      sel.appendChild(o);
+    }
+    sel.title = "The loader the diffusion model goes through. By file name: a .gguf "
+              + "through ComfyUI-GGUF, anything else through the standard loader. "
+              + "INT8 W8A8 files look like any .safetensors, so pick that loader "
+              + "for one (ComfyUI-INT8-Fast). A pack that is not installed says so "
+              + "in the console when the rig loads.";
+    sel.onchange = () => { rig.unet_loader = sel.value; writeCfg(node); render(node); };
+    pill(body, "Loader", sel);
+    if ((rig.unet_loader || "") === "int8") {
+      const ts = document.createElement("select");
+      for (const t of ["", ...(L.int8_types || [])]) {
+        const o = document.createElement("option");
+        o.value = t;
+        o.textContent = t || "Loader default";
+        o.selected = t === (rig.int8_type || "");
+        ts.appendChild(o);
+      }
+      ts.title = "The INT8 loader's model type: which layers it keeps in full "
+               + "precision. Loader default unless the file's page says otherwise.";
+      ts.onchange = () => { rig.int8_type = ts.value; writeCfg(node); };
+      pill(body, "INT8 type", ts);
+    }
+  }
   pickRow("CLIP", "clip", () => L.clips, "clips",
           "The text encoder. Krea 2 wants qwen3vl with the type set to krea2. "
           + "LEAVE ON NONE with a checkpoint chosen and the checkpoint's own baked "
@@ -9467,8 +9512,11 @@ function modelsBody(node, page) {
     const from = (own, kind) => own ? "its own file"
       : (rig.checkpoint ? "the checkpoint's baked " + kind
                         : "nowhere, pick one");
+    const lk = rig.unet_loader || (/\.gguf$/i.test(rig.unet || "") ? "gguf" : "");
     src.textContent = "This rig resolves: model from "
       + (rig.unet ? "the diffusion model file"
+                    + (lk === "gguf" ? " through the GGUF loader"
+                       : lk === "int8" ? " through the INT8 loader" : "")
          : rig.checkpoint ? "the checkpoint" : "nowhere, pick one")
       + "; CLIP from " + from(rig.clip, "CLIP")
       + "; VAE from " + from(rig.vae, "VAE") + ".";

@@ -70,7 +70,10 @@ Seed Variance (a jitter on the conditioning early in the run, so one seed lands 
 compositions) and densify the tail (extra steps only in the last part of the schedule). They ride
 the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
 pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock KSampler on the
-scheduler socket is handed simple when a rig names one of those. The footer carries the UI scale, the resize long edge, the studio preset, a Draft switch that makes the Detailer and the Post chain pass the picture through for fast rerolls, and the VRAM
+scheduler socket is handed simple when a rig names one of those. A diffusion model file goes
+through the loader the rig names: by file name, a .gguf through ComfyUI-GGUF and anything else
+through the standard loader, or INT8 W8A8 outright through ComfyUI-INT8-Fast when that pack is
+installed; the file picker lists those packs' files beside the standard ones. The footer carries the UI scale, the resize long edge, the studio preset, a Draft switch that makes the Detailer and the Post chain pass the picture through for fast rerolls, and the VRAM
 tier, which clamps the expensive dials for a smaller card.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either

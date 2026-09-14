@@ -858,6 +858,13 @@ def parse_config(config_json):
             "name": str(r.get("name") or ""),
             "checkpoint": str(r.get("checkpoint") or ""),
             "unet": str(r.get("unet") or ""),
+            # WHICH LOADER the diffusion model file goes through: "" is by the
+            # file's name (.gguf through ComfyUI-GGUF, anything else core's
+            # UNETLoader); gguf, int8 and core name one outright. INT8 W8A8
+            # files are .safetensors, so that loader has to be named.
+            "unet_loader": (str(r.get("unet_loader"))
+                            if r.get("unet_loader") in ("gguf", "int8", "core") else ""),
+            "int8_type": str(r.get("int8_type") or ""),   # the INT8 loader's model_type
             "clip": str(r.get("clip") or ""),
             "clip_type": str(r.get("clip_type") or ""),
             "vae": str(r.get("vae") or ""),
@@ -1274,6 +1281,62 @@ def blocked():
     return ExecutionBlocker(None)
 
 
+# The loaders a diffusion model file can go through besides core's UNETLoader,
+# by NODE_CLASS_MAPPINGS the way SAM3 and SeedVR2 are called: node, its file
+# field, the pack to install. A quantised file that core cannot read has a
+# loader of its own; the rig names it or, for .gguf, the file's name does.
+UNET_LOADERS = {
+    "gguf": ("UnetLoaderGGUF", "unet_name", "ComfyUI-GGUF"),
+    "int8": ("OTUNetLoaderW8A8", "unet_name", "ComfyUI-INT8-Fast or ComfyUI-Flux2-INT8"),
+}
+
+
+def unet_loader_for(name, choice=""):
+    """Which loader a diffusion model file takes: the rig's explicit choice,
+    else by the file's name (.gguf through the GGUF pack, anything else core)."""
+    if choice in UNET_LOADERS:
+        return choice
+    if choice == "core":
+        return ""
+    return "gguf" if str(name).lower().endswith(".gguf") else ""
+
+
+def _load_unet(name, choice="", int8_type=""):
+    """A diffusion model through the loader it needs. A pack that is not
+    installed is named in the error, which load_active_rig prints."""
+    import nodes as _nodes
+    kind = unet_loader_for(name, choice)
+    if not kind:
+        return _nodes.UNETLoader().load_unet(unet_name=name, weight_dtype="default")[0]
+    node, field, pack = UNET_LOADERS[kind]
+    cls = (getattr(_nodes, "NODE_CLASS_MAPPINGS", None) or {}).get(node)
+    if cls is None:
+        raise RuntimeError("%r wants the %s loader (%s, node %s), which is not installed"
+                           % (name, kind.upper(), pack, node))
+    kw = {}
+    try:
+        # the node's own defaults under the file, so a version that grew a
+        # widget still calls; the INT8 loader's model_type is the rig's when set
+        it = cls.INPUT_TYPES()
+        merged = dict(it.get("required") or {})
+        merged.update(it.get("optional") or {})
+        for k, spec in merged.items():
+            if not (isinstance(spec, (tuple, list)) and spec):
+                continue
+            opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            if "default" in opts:
+                kw[k] = opts["default"]
+            elif isinstance(spec[0], list) and spec[0]:
+                kw[k] = spec[0][0]
+        if kind == "int8" and int8_type and "model_type" in merged:
+            kw["model_type"] = int8_type
+    except Exception:
+        pass
+    kw[field] = name
+    print("[RedNode Workspace] %s through %s" % (name, node), flush=True)
+    return getattr(cls(), cls.FUNCTION)(**kw)[0]
+
+
 def load_active_rig(cfg, name=""):
     """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
 
@@ -1309,7 +1372,8 @@ def load_active_rig(cfg, name=""):
     key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"],
            rig["vae"],
            (rig["rescue_base"], rig["rescue_lora"],
-            rig.get("rescue_strength", 1.0)) if _resc else None)
+            rig.get("rescue_strength", 1.0)) if _resc else None,
+           (rig.get("unet_loader") or "", rig.get("int8_type") or ""))
     if not any(key[:5]):
         return rig["name"], None, None, None
     for n, slot in enumerate(_RIG_CACHE["slots"]):
@@ -1330,8 +1394,8 @@ def load_active_rig(cfg, name=""):
             model, clip, vae = _nodes.CheckpointLoaderSimple().load_checkpoint(
                 ckpt_name=rig["checkpoint"])[:3]
         if rig["unet"]:
-            model = _nodes.UNETLoader().load_unet(
-                unet_name=rig["unet"], weight_dtype="default")[0]
+            model = _load_unet(rig["unet"], rig.get("unet_loader") or "",
+                               rig.get("int8_type") or "")
         if rig["clip"]:
             clip = _nodes.CLIPLoader().load_clip(
                 clip_name=rig["clip"],
