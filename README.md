@@ -207,7 +207,9 @@ canvas of Get and Set nodes with named channels. The wires that are not there ar
 ![The stage from above: two subjects, the camera, its path, and the sets and camera controls beside it](images/camera-stage.webp)
 
 RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
-size of the room, then move the camera. What comes out of it is not "wide shot": it is the physical
+size of the room, then move the camera. Every subject card carries a lock, a duplicate button and a
+remove button; a duplicate lands at the end of the list beside its original, unlocked, ready to drag
+into place. What comes out of it is not "wide shot": it is the physical
 camera language the model already answers to, a lens length, a height, a distance and an angle,
 worked out from where you actually put things. The tab has its own switch like the others, so the
 whole camera leaves the prompt in one click when you want the words to do the framing instead.

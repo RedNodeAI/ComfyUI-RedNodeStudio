@@ -1673,6 +1673,22 @@ export function buildStudio(host, S) {
         sel = Math.max(0, Math.min(sel, st.subjects.length - 1));
         write(); render();
       };
+      // DUPLICATE: a copy appended at the end so no letter or relation index
+      // moves, set half a metre beside the original and unlocked so it drags
+      // straight into place. Same name: the letter tells them apart until renamed.
+      const dupB = document.createElement("button");
+      dupB.textContent = "\u29c9";
+      dupB.title = "Duplicate this entry: every setting copied, added at the end, "
+                 + "placed just beside it, unlocked.";
+      dupB.onclick = (e) => {
+        e.stopPropagation();
+        const c = JSON.parse(JSON.stringify(s));
+        c.pos = [s.pos[0] + 0.5, s.pos[1], s.pos[2] + 0.5];
+        c.locked = false;
+        st.subjects.push(c);
+        sel = st.subjects.length - 1;
+        write(); render();
+      };
       const kindB = document.createElement("select");
       for (const v of ["person", "object", "wall", "window", "door"]) {
         const o = document.createElement("option");
@@ -1690,7 +1706,7 @@ export function buildStudio(host, S) {
         }
         write(); render();
       };
-      head.append(tag, kindB, nm, lockB, del);
+      head.append(tag, kindB, nm, lockB, dupB, del);
       box.appendChild(head);
       // LOCKED MEANS LOCKED: the geometry controls in the
       // list are disabled as well as the stage drag; the name, the lock and
