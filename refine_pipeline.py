@@ -723,14 +723,17 @@ class RedNodeStudioDetailer:
                     "detailer" if s["type"] == "detailer" else "pass", i, len(stages)) \
                     + (" · round %d of %d" % (r + 1, reps) if reps > 1 else "")
                 if s["type"] == "sampler":
-                    if use_picture:
-                        pic = self._resize(out, sr["scale"])
-                        if s.get("crop_res"):
-                            pic = self._resize(pic, s["crop_res"] / max(pic.shape[1], pic.shape[2]))
-                        pos, neg = _encode(pic)
-                    out = self._sample(out, model, pos, neg, vae, sr, rseed,
-                                       steps, cfg_v, sampler, scheduler, start,
-                                       end)
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        p, n = pos, neg
+                        if use_picture:
+                            pic = self._resize(frame, _sr["scale"])
+                            if s.get("crop_res"):
+                                pic = self._resize(pic, s["crop_res"] / max(pic.shape[1], pic.shape[2]))
+                            p, n = _encode(pic)
+                        return self._sample(frame, model, p, n, vae, _sr, _seed,
+                                            steps, cfg_v, sampler, scheduler,
+                                            start, end), None
+                    out, _ = self._each_frame(out, _one)
                     line = ("%s: rig %r, %d steps%s, cfg %.1f, %s/%s, denoise "
                             "%.2f" % (tag, rig_name, steps, window, cfg_v,
                                       sampler, scheduler, sr["denoise"]))
@@ -738,10 +741,12 @@ class RedNodeStudioDetailer:
                         line += ", scale %.2f -> %d x %d" % (
                             sr["scale"], out.shape[2], out.shape[1])
                 else:
-                    out, why = self._detail(out, model, pos, neg, vae, sr, rseed,
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        return self._detail(frame, model, pos, neg, vae, _sr, _seed,
                                             steps, cfg_v, sampler, scheduler,
                                             start, end,
                                             encode_for=_encode if use_picture else None)
+                    out, why = self._each_frame(out, _one)
                     line = "%s: %s on rig %r, %s" % (
                         tag, s["target"], rig_name,
                         why or ("%d steps%s, %s/%s, denoise %.2f"
@@ -761,6 +766,42 @@ class RedNodeStudioDetailer:
             tap(out, "Detailer out")
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
+
+    def _each_frame(self, image, fn):
+        """A batch goes through a pass one frame at a time.
+
+        Krea 2's VAE is the Wan video VAE: a batch of N images encoded in one
+        call is read as one clip of N frames and squeezed to (N-1)//4+1 latent
+        frames, so a 5-shot camera path became a 2-frame latent against
+        conditioning for one and the sampler died on the mismatch. Each frame
+        also wants its own detection: one SAM mask over five faces is a union
+        box, not a face. Returns the re-batched frames and the why of a pass
+        that missed on EVERY frame; a miss on some keeps those as they were.
+        """
+        n = image.shape[0]
+        if n <= 1:
+            return fn(image)
+        base = getattr(self, "_rn_live_label", "")
+        outs, whys = [], []
+        try:
+            for k in range(n):
+                self._rn_live_label = base + " \u00b7 image %d of %d" % (k + 1, n)
+                o, w = fn(image[k:k + 1])
+                outs.append(o)
+                whys.append(w)
+        finally:
+            self._rn_live_label = base
+        h, w = outs[0].shape[1], outs[0].shape[2]
+        outs = [o if o.shape[1:3] == (h, w)
+                else F.interpolate(o.permute(0, 3, 1, 2), size=(h, w), mode="bilinear",
+                                   align_corners=False).permute(0, 2, 3, 1)
+                for o in outs]
+        missed = [k + 1 for k, w in enumerate(whys) if w]
+        why = whys[0] if len(missed) == n else None
+        if why is None and missed:
+            print("[RedNode Detailer] passed through on image %s of %d: %s"
+                  % (", ".join(map(str, missed)), n, whys[missed[0] - 1]), flush=True)
+        return torch.cat(outs, 0), why
 
     @staticmethod
     def _ksample(model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
