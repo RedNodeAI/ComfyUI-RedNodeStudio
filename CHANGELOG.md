@@ -4,6 +4,83 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.4.0** - 2026-09-14
+
+The sampler learned some tricks, the Detailer grew four kinds of pass, the
+Post tab became a list beside one editor, and a Draft switch makes a seed
+cheap to judge.
+
+### Workspace
+
+- A Draft switch in the footer: on, the Detailer and the Post chain pass the
+  picture through, so a queue is the base render alone; off again, the next
+  queue renders the keeper in full
+- Sampler dials per rig, folded on the rig card: AuraFlow shift, Detail Daemon
+  (a sigma nudge over a step window), Seed Variance (a conditioning jitter for
+  the first steps) and a densified tail (extra steps in the last part of the
+  schedule). They ride the built-in sampler and every Detailer pass on the rig
+- Three schedule shapes of the pack's own on the scheduler list: beta57,
+  bong_tangent and hyperbolic. A stock KSampler on the scheduler socket is
+  handed simple when a rig names one
+- A rig and a step count per pass on the Latent and Img2Img tabs, and a
+  continue mode that hands the second pass the first pass's leftover noise:
+  the relay a HighNoise and LowNoise pair wants
+- A Loader choice under the rig's diffusion model: by file name (a .gguf
+  through ComfyUI-GGUF, anything else through core), or INT8 W8A8 through
+  its pack's loader; the picker lists those packs' files beside core's
+- Florence-2 (comfyui-florence2) as a fifth caption engine on every tab's
+  Auto prompt, with one model folder and task shared by every tab; Describe
+  To Boxes gains a Florence + Ollama engine
+- A Rewrite button beside Auto sort on the Prompt Frame, with a style tag
+  (keep, photoreal, cinematic, illustration): the boxes go through the Auto
+  Prompt's Ollama model as a writer and come back for editing
+- Save writes Civitai metadata with AutoV2 hashes, and plays a finish sound
+  when asked
+
+### Studio Detailer
+
+- A Blend bar beside Denoise on detailer passes: how much of the rendered
+  crop goes back; Feather sits on the card beside it
+- Free VRAM before a pass, a toggle on every card's header: every model
+  ComfyUI holds is unloaded before the pass runs
+- Tone lock, beside Repeat: the pass keeps its new detail and takes the tone
+  of the picture as it arrived, skin hue held; the drift fix for a long chain
+- The SeedVR2 upscale pass can aim at a region (SAM3's targets): the crop
+  goes through the upscaler and back at its own size, the frame keeps its
+  size. An out-of-memory halves the tiled VAE's tile and tries again
+- A Tiled upscale pass through Ultimate SD Upscale: the rig's model and the
+  pass's prompt over tiles, an upscale model first or a plain resize, opened
+  on 6 steps of deis at 0.25 denoise with 1024 tiles padded 128
+- A batch goes through each pass one frame at a time, so a camera path's
+  shots each get their own detection and their own render
+
+### Post FX
+
+- The Post tab is a chain list beside one editor: the list says what is on
+  and in what order, the editor shows the picked card's dials
+- A Limit on every card: subject, background or a mask, with a feather
+- A Mask card (the auto-mask source and its feather), a Match card (the
+  picture's colour moved onto a reference, AdaIN or linear, with a skin
+  hold) and a LUT card (.cube files from models/luts)
+
+### Camera Studio
+
+- Model and clip sockets through the stage, so it works in a plain graph;
+  the sliders are applied per shot
+- A duplicate button on subject cards
+
+### Review and Stage View
+
+- Up and down walk a batch in Image Review
+- Stage View: the taps keep a chosen size, the picture fills the box, the
+  wipe drags, a full screen room, and nothing drags out of the node
+
+### Examples
+
+- RedNode_Studio_Simple_Angles: the camera stage in a plain graph
+- RedNode_Studio_Pro_Grade: the V1.3 graph with a heavy grading flow's
+  settings on the pack's own controls
+
 **1.3.0** - 2026-09-13
 
 Watching the picture form, the Detailer as a proper list, and a handful of
