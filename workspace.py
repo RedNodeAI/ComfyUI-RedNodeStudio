@@ -3355,6 +3355,17 @@ try:
             str(data.get("url") or autoprompt.OLLAMA_URL))
         return web.json_response({"done": done})
 
+    @PromptServer.instance.routes.get("/rednode/luts")
+    async def _rednode_luts(request):
+        # the Post tab's LUT card lists models/luts through this; the folder is
+        # registered on first ask, so a fresh install gets an empty list, not a 500
+        try:
+            files = postprocess.lut_files()
+        except Exception as exc:
+            print("[RedNode Post] could not list models/luts: %s" % exc, flush=True)
+            files = []
+        return web.json_response({"files": files})
+
     @PromptServer.instance.routes.get("/rednode/post_presets")
     async def _rednode_post_presets(request):
         presets = postprocess.load_presets()

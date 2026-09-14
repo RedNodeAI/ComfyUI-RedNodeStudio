@@ -188,6 +188,42 @@ export const POST_FX = [
         hint: "Positive crushes the blacks for contrast. Negative lifts them into the "
             + "faded, milky film look." },
     ] },
+  { id: "match", label: "Match reference",
+    blurb: "Moves the frame's colour onto a reference picture's: per channel, the "
+         + "average and the spread. Skin is held back so faces keep their hue. On the "
+         + "Workspace the reference is a tab's picture; on the standalone node it is "
+         + "the reference input.",
+    controls: [
+      { key: "source", label: "Reference", def: "moodboard",
+        choice: ["moodboard", "subject", "scene", "wired"],
+        labels: { moodboard: "Moodboard tab", subject: "Subject tab", scene: "Scene tab",
+                  wired: "The reference input" },
+        step: 1,
+        hint: "Where the reference picture comes from. The tabs are the Workspace's; "
+            + "the standalone Post FX node uses whatever is wired into reference." },
+      { key: "method", label: "Method", def: "adain", choice: ["adain", "linear"],
+        labels: { adain: "Statistics (sRGB)", linear: "Statistics (linear light)" },
+        step: 1,
+        hint: "Both move the mean and the spread per channel. Linear light matches "
+            + "exposure more truthfully; sRGB is the usual look-transfer." },
+      { key: "strength", label: "Strength", min: 0, max: 1.5, step: 0.01, def: 1.0,
+        hint: "How far toward the reference. 1 is all the way; past it overdrives." },
+      { key: "skin_protect", label: "Skin protect", min: 0, max: 1, step: 0.01, def: 0.5,
+        hint: "Holds skin's hue and caps its saturation near the original's, so a cool "
+            + "grade does not turn a face grey. 0 grades everything alike." },
+    ] },
+  { id: "lut", label: "LUT",
+    blurb: "A .cube colour lookup from models/luts, the way grades are shared. "
+         + "Trilinear; strength past 1 overdrives the look.",
+    controls: [
+      { key: "file", label: "File", def: "", choice: [""], dynamic: "luts", step: 1,
+        hint: "A .cube file in models/luts. Drop files there and Refresh the list." },
+      { key: "strength", label: "Strength", min: 0, max: 2, step: 0.01, def: 1.0,
+        hint: "0 is off, 1 is the LUT as cut, 2 pushes its change twice as far." },
+      { key: "log", label: "Log", min: 0, max: 1, step: 1, def: 0,
+        hint: "For LUTs cut for log footage: a 2.2 gamma in and out around the "
+            + "lookup. Off for LUTs made for normal pictures, which is most of them." },
+    ] },
   { id: "clarity", label: "Clarity",
     blurb: "Local contrast: it thickens midtone detail without touching overall "
          + "brightness. This is the punch, not the sharpness.",
@@ -261,6 +297,24 @@ export const POST_FX = [
         hint: "The size the estimator works at, long edge. 512 is quick and enough for "
             + "a soft blur or haze; 1024 keeps edges cleaner on a big frame at the "
             + "cost of seconds." },
+    ] },
+  // NOT an effect either: where the subject mask comes from when a card is
+  // limited to the subject or the background, and how soft its edge is.
+  { id: "mask", label: "Mask", settings: true,
+    blurb: "Any card can be limited to the subject or the background with the Limit "
+         + "row at its foot. This is where the mask comes from: the pack's own "
+         + "auto-mask, the same one the Paint tab uses, or a mask wired into the "
+         + "standalone node.",
+    controls: [
+      { key: "source", label: "Source", choice: ["auto", "wired"],
+        labels: { auto: "Auto (the pack's mask)", wired: "The mask input" },
+        step: 1, def: "auto",
+        hint: "Auto runs the installed segmenter on the frame once per queue. Wired "
+            + "is the standalone node's mask input; the Workspace node has no input "
+            + "and always uses auto." },
+      { key: "feather", label: "Feather", min: 0, max: 64, step: 1, def: 12,
+        hint: "How soft the mask's edge is, in pixels, so a limited card does not "
+            + "cut a hard line round the subject." },
     ] },
   { id: "haze", label: "Atmospheric haze", depth: true, cost: "depth model",
     blurb: "Distance washes out towards the air's own colour and loses contrast. "

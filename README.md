@@ -131,10 +131,13 @@ Subject picture, and the edit mask that confines the pass.
 
 ![The Post tab: saved looks, the effect cards, the Depth card](images/post-fx.webp)
 
-**Post.** The grading chain, fifteen effects in physical camera order, with looks you can save and
+**Post.** The grading chain, seventeen effects in physical camera order, with looks you can save and
 random ranges on any dial. Depth of field and haze make their own depth map; the Depth card picks
-the estimator, the checkpoint and the resolution. RedNode Post Process finds these settings by
-itself when it sits at the end of the graph.
+the estimator, the checkpoint and the resolution. Match reference moves the frame's colour onto a
+Moodboard, Subject or Scene picture with skin held back, and LUT applies a .cube file from
+models/luts. Every card has a Limit row: whole frame, subject only or background only, through
+the pack's own auto-mask, with the Mask card setting the source and the feather. RedNode Post
+Process finds these settings by itself when it sits at the end of the graph.
 
 ![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
 
@@ -413,7 +416,7 @@ what they did. Treat them as legacy.
 
 | Node | What it does |
 |---|---|
-| RedNode Post Process | The Workspace Post tab's grading chain. Image in, graded image out. |
+| RedNode Post Process | The Workspace Post tab's grading chain. Image in, graded image out; the subject mask and the match reference are found by itself. |
 | RedNode Post FX (standalone) | The same chain with its own panel, for any image, no workspace needed. Depth of field and haze make their own depth map; the Depth card on the panel picks the estimator, the Depth Anything V2 checkpoint and the working resolution. |
 
 ### Moodboard and identity

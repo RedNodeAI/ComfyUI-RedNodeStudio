@@ -13,6 +13,19 @@ import { postWrite, postRender, readCfg, writeCfg, render } from "./rednode_work
 
 // the saved looks and the last graded frame, both fetched from the server
 let postPresets = [];
+// the .cube files in models/luts, fetched once per page for the LUT card's picker;
+// Refresh on the card asks again after files are dropped in
+let postLuts = null;
+async function fetchLuts(node) {
+  try {
+    const res = await api.fetchApi("/rednode/luts");
+    const d = await res.json();
+    postLuts = Array.isArray(d.files) ? d.files : [];
+  } catch (e) {
+    postLuts = [];
+  }
+  if (node) postRender(node);
+}
 let postLastThumb = "";
 let postLastRolls = {};
 
@@ -525,17 +538,33 @@ export function postBody(node, body) {
         if (c.choice) {
           const sel = document.createElement("select");
           sel.className = "rn-ws-res";
-          for (const opt of c.choice) {
+          // a dynamic choice lists a model folder: the LUT card's .cube files
+          let opts = c.choice;
+          if (c.dynamic === "luts") {
+            if (postLuts === null) { postLuts = []; fetchLuts(node); }
+            opts = ["", ...postLuts];
+            if (b[c.key] && !opts.includes(b[c.key])) opts.push(b[c.key]);
+          }
+          for (const opt of opts) {
             const o = document.createElement("option");
             o.value = opt;
             // a stored key can read as words when the table says how
-            o.textContent = c.labels?.[opt] ?? (opt.charAt(0).toUpperCase() + opt.slice(1));
+            o.textContent = c.dynamic ? (opt || "(none)")
+              : (c.labels?.[opt] ?? (opt.charAt(0).toUpperCase() + opt.slice(1)));
             o.selected = b[c.key] === opt;
             sel.appendChild(o);
           }
           sel.title = c.hint;
           sel.onchange = () => { b[c.key] = sel.value; postWrite(node); postRender(node); };
           line.appendChild(sel);
+          if (c.dynamic === "luts") {
+            const rf = document.createElement("button");
+            rf.className = "rn-ws-btn";
+            rf.textContent = "Refresh";
+            rf.title = "Re-read models/luts.";
+            rf.onclick = () => { postLuts = null; fetchLuts(node); };
+            line.appendChild(rf);
+          }
         } else if (isRand) {
           // two handles over one band, the same idea as the LoRA stack's random
           // strength: the run draws between them, the tick shows what it drew
@@ -618,6 +647,29 @@ export function postBody(node, body) {
         grid.appendChild(cell);
       }
       sect.appendChild(grid);
+      // LIMIT: the card's result only on the subject or the background, through the
+      // mask the Mask card describes. The settings cards have nothing to limit.
+      if (!fx.settings) {
+        const lrow = document.createElement("div");
+        lrow.className = "rn-ws-row rn-ws-fxlimit";
+        const llab = document.createElement("span");
+        llab.className = "lab";
+        llab.textContent = "Limit";
+        const lsel = document.createElement("select");
+        lsel.className = "rn-ws-res";
+        for (const [v, txt] of [["off", "Whole frame"], ["subject", "Subject only"],
+                                ["background", "Background only"]]) {
+          const o = document.createElement("option");
+          o.value = v; o.textContent = txt; o.selected = (b.limit || "off") === v;
+          lsel.appendChild(o);
+        }
+        lsel.title = "Where this card applies. Subject and background come from the mask "
+                   + "the Mask card describes, softened by its feather; the rest of the "
+                   + "frame is left exactly as it was before this card.";
+        lsel.onchange = () => { b.limit = lsel.value; postWrite(node); postRender(node); };
+        lrow.append(llab, lsel);
+        sect.appendChild(lrow);
+      }
     }
     cards.appendChild(sect);
   }

@@ -75,6 +75,14 @@ DEFAULTS = {
     "denoise": {"on": False, "sigma": 0.997, "threshold": 0.051, "radius_multiplier": 1.149},
     "color": {"on": False, "brightness": 1.0, "contrast": 1.0, "saturation": 1.0,
               "temperature": 0.0, "tint": 0.0, "black_point": 0.0},
+    # MATCH A REFERENCE: the picture's colour statistics moved onto a reference
+    # picture's (per-channel mean and spread), with skin held back so faces keep
+    # their hue. source names where the reference comes from: a Workspace tab
+    # for the wireless node, the reference input for the standalone one.
+    "match": {"on": False, "source": "moodboard", "method": "adain", "strength": 1.0,
+              "skin_protect": 0.5},
+    # A LUT: a .cube file from models/luts, trilinear, strength past 1 overdrives
+    "lut": {"on": False, "file": "", "strength": 1.0, "log": False},
     "clarity": {"on": False, "radius": 3, "offset": 2.0, "strength": 0.4,
                 "blend_mode": "soft light", "blend_if_dark": 50, "blend_if_light": 205,
                 "dark_intensity": 0.4, "light_intensity": 0.0},
@@ -84,6 +92,11 @@ DEFAULTS = {
     # effects share. Which estimator, which Depth Anything V2 checkpoint, and the
     # working resolution. "auto" is whichever is installed, and its own default file.
     "depth": {"on": False, "estimator": "auto", "model": "auto", "resolution": 512},
+    # THE MASK CARD: settings, not an effect. Any card can be limited to the
+    # subject or the background; this is where the mask comes from (the pack's
+    # own auto-mask, or the mask wired into the standalone node) and how soft
+    # its edge is, in pixels.
+    "mask": {"on": False, "source": "auto", "feather": 12},
     "dof": {"on": False, "focus": 0.35, "range": 0.15, "blur": 6.0, "flip_depth": False},
     "haze": {"on": False, "strength": 0.35, "start": 0.45, "lift": 0.12,
              "flip_depth": False},
@@ -102,6 +115,16 @@ DEFAULTS = {
 }
 
 BLEND_MODES = ("soft light", "overlay", "normal", "linear light")
+SETTINGS_CARDS = ("depth", "mask")
+LIMITS = ("off", "subject", "background")
+MATCH_METHODS = ("adain", "linear")
+MATCH_SOURCES = ("moodboard", "subject", "scene", "wired")
+MASK_SOURCES = ("auto", "wired")
+# every effect can be limited to the subject or the background; the settings
+# cards cannot, they are not effects
+for _n, _blk in DEFAULTS.items():
+    if _n not in SETTINGS_CARDS:
+        _blk["limit"] = "off"
 # the Depth card's choices: panel keys to the estimator node each one means, and
 # the Depth Anything V2 checkpoints by their short names
 DEPTH_ESTIMATORS = {
@@ -116,7 +139,7 @@ SHARPEN_MODES = ("lucy", "unsharp")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 
 # the chain order: repair, tone, detail, light, lens
-ORDER = ("denoise", "color", "clarity", "sharpen",          # repair and grade
+ORDER = ("denoise", "color", "match", "lut", "clarity", "sharpen",   # repair and grade
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
          "light_wrap", "diffusion", "vignette",              # ...and its glare
@@ -254,6 +277,248 @@ def color(img, brightness=1.0, contrast=1.0, saturation=1.0, temperature=0.0,
         # positive crushes the blacks, negative lifts them into a faded, milky look
         t = (t - bp) / max(1e-3, 1.0 - bp) if bp > 0 else t * (1.0 + bp) - bp
     return _clamp01(_nhwc(t))
+
+
+# ---------------------------------------------------------------------------
+# colour spaces for the match card's skin hold and the LUT's log toggle
+def _srgb_to_linear(t):
+    return torch.where(t <= 0.04045, t / 12.92, ((t.clamp(min=0) + 0.055) / 1.055) ** 2.4)
+
+
+def _linear_to_srgb(t):
+    return torch.where(t <= 0.0031308, t * 12.92, 1.055 * t.clamp(min=0) ** (1 / 2.4) - 0.055)
+
+
+def _rgb_to_hsv(t):
+    """NCHW in 0..1 to (h, s, v), each N1HW, h in turns."""
+    r, g, b = t[:, 0:1], t[:, 1:2], t[:, 2:3]
+    mx = t.max(1, keepdim=True)[0]
+    mn = t.min(1, keepdim=True)[0]
+    d = mx - mn
+    eps = 1e-8
+    s_ = torch.where(mx > eps, d / (mx + eps), torch.zeros_like(mx))
+    hr = ((g - b) / (d + eps)) % 6.0
+    hg = (b - r) / (d + eps) + 2.0
+    hb = (r - g) / (d + eps) + 4.0
+    h = torch.where(mx == r, hr, torch.where(mx == g, hg, hb))
+    h = torch.where(d > eps, h / 6.0, torch.zeros_like(h)) % 1.0
+    return h, s_, mx
+
+
+def _hsv_to_rgb(h, s_, v):
+    h6 = (h % 1.0) * 6.0
+    i = torch.floor(h6)
+    f = h6 - i
+    p = v * (1 - s_)
+    q = v * (1 - s_ * f)
+    t_ = v * (1 - s_ * (1 - f))
+    i = i.long() % 6
+    r = torch.where(i == 0, v, torch.where(i == 1, q, torch.where(i == 2, p,
+        torch.where(i == 3, p, torch.where(i == 4, t_, v)))))
+    g = torch.where(i == 0, t_, torch.where(i == 1, v, torch.where(i == 2, v,
+        torch.where(i == 3, q, p))))
+    b = torch.where(i == 0, p, torch.where(i == 1, p, torch.where(i == 2, t_,
+        torch.where(i == 3, v, torch.where(i == 4, v, q)))))
+    return torch.cat([r, g, b], 1)
+
+
+def _skin_weight(t):
+    """N1HW, 1 where the colour reads as skin: a hue window round 25 degrees, a
+    saturation band that excludes grey and neon, and enough brightness to be skin."""
+    h, s_, v = _rgb_to_hsv(t)
+    deg = h * 360.0
+    dh = torch.minimum((deg - 25.0).abs(), 360.0 - (deg - 25.0).abs())
+    w_h = (1.0 - dh / 30.0).clamp(0, 1)
+    w_s = ((s_ - 0.08) / 0.12).clamp(0, 1) * ((0.8 - s_) / 0.15).clamp(0, 1)
+    w_v = ((v - 0.15) / 0.2).clamp(0, 1)
+    return w_h * w_s * w_v
+
+
+def _skin_hold(before, after, protect):
+    """Give skin its hue back and cap its saturation near the original's, by the
+    skin weight times protect. Everything that is not skin keeps the new grade."""
+    if protect <= 0:
+        return after
+    w = _skin_weight(before) * float(protect)
+    h0, s0, _v0 = _rgb_to_hsv(before)
+    h1, s1, v1 = _rgb_to_hsv(after)
+    dh = ((h0 - h1 + 0.5) % 1.0) - 0.5              # the short way round the wheel
+    h2 = (h1 + dh * w) % 1.0
+    cap = s0 * 1.15
+    s2 = torch.where(s1 > cap, s1 + (cap - s1) * w, s1)
+    return _hsv_to_rgb(h2, s2, v1)
+
+
+_MATCH_SAID = {"no_ref": False}
+
+
+def match(img, reference=None, method="adain", strength=1.0, skin_protect=0.5,
+          source="moodboard"):
+    """Move the picture's per-channel mean and spread onto the reference's. adain
+    works in sRGB, linear in linear light. The reference's first frame is used."""
+    if reference is None or strength <= 0:
+        if reference is None and not _MATCH_SAID["no_ref"]:
+            print("[RedNode Post] match: no reference picture, the card passed the "
+                  "frame through", flush=True)
+            _MATCH_SAID["no_ref"] = True
+        return img
+    x = _nchw(img).float()
+    r = _nchw(reference[:1]).float().to(x.device)
+    if r.shape[1] > 3:
+        r = r[:, :3]
+    if x.shape[1] > 3:
+        x = x[:, :3]
+    lin = method == "linear"
+    xw, rw = (_srgb_to_linear(x), _srgb_to_linear(r)) if lin else (x, r)
+    mu_x, sd_x = xw.mean((2, 3), keepdim=True), xw.std((2, 3), keepdim=True) + 1e-6
+    mu_r, sd_r = rw.mean((2, 3), keepdim=True), rw.std((2, 3), keepdim=True) + 1e-6
+    y = (xw - mu_x) * (sd_r / sd_x) + mu_r
+    y = _linear_to_srgb(y.clamp(0, 1)) if lin else y
+    y = y.clamp(0, 1)
+    y = _skin_hold(x, y, skin_protect)
+    out = x + (y - x) * float(strength)
+    return _nhwc(_clamp01(out)).to(img.dtype)
+
+
+# ---------------------------------------------------------------- the LUT card
+_LUT_CACHE = {}
+
+
+def _ensure_lut_folder():
+    """models/luts as a ComfyUI model folder, registered once, so the file list
+    and get_full_path work the way they do for every other model kind."""
+    import folder_paths
+    if "luts" in folder_paths.folder_names_and_paths:
+        return
+    path = os.path.join(folder_paths.models_dir, "luts")
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        pass
+    folder_paths.folder_names_and_paths["luts"] = ([path], {".cube"})
+
+
+def lut_files():
+    import folder_paths
+    _ensure_lut_folder()
+    try:
+        return sorted(folder_paths.get_filename_list("luts"))
+    except Exception:
+        return []
+
+
+def _load_cube(path):
+    """A .cube file as (table[S, S, S, 3] indexed [b][g][r], domain_min, domain_max).
+    The file lists red fastest, which is what the reshape assumes."""
+    key = (path, os.path.getmtime(path))
+    if key in _LUT_CACHE:
+        return _LUT_CACHE[key]
+    size, dmin, dmax, rows = 0, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], []
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            up = line.upper()
+            if up.startswith("TITLE"):
+                continue
+            if up.startswith("LUT_3D_SIZE"):
+                size = int(line.split()[-1])
+                continue
+            if up.startswith("LUT_1D_SIZE"):
+                raise ValueError("1D LUTs are not supported, only LUT_3D_SIZE files")
+            if up.startswith("DOMAIN_MIN"):
+                dmin = [float(v) for v in line.split()[1:4]]
+                continue
+            if up.startswith("DOMAIN_MAX"):
+                dmax = [float(v) for v in line.split()[1:4]]
+                continue
+            parts = line.split()
+            if len(parts) >= 3:
+                try:
+                    rows.append([float(parts[0]), float(parts[1]), float(parts[2])])
+                except ValueError:
+                    continue
+    if size <= 1:
+        size = int(round(len(rows) ** (1.0 / 3.0)))
+    if size <= 1 or len(rows) < size ** 3:
+        raise ValueError("cube has %d rows for size %d" % (len(rows), size))
+    table = torch.tensor(rows[:size ** 3], dtype=torch.float32).view(size, size, size, 3)
+    _LUT_CACHE.clear()
+    _LUT_CACHE[key] = (table, torch.tensor(dmin), torch.tensor(dmax))
+    return _LUT_CACHE[key]
+
+
+def lut(img, file="", strength=1.0, log=False):
+    """Apply a .cube LUT, trilinear, from models/luts. strength blends and goes
+    past 1 as an overdrive; log applies a 2.2 gamma in and out for LUTs cut for
+    log footage."""
+    if not file or file == "None" or strength <= 0:
+        return img
+    import folder_paths
+    _ensure_lut_folder()
+    path = folder_paths.get_full_path("luts", file)
+    if path is None:
+        print("[RedNode Post] LUT %r is not in models/luts; the card passed the frame "
+              "through" % file, flush=True)
+        return img
+    try:
+        table, dmin, dmax = _load_cube(path)
+    except Exception as exc:
+        print("[RedNode Post] LUT %r could not be read (%s); passed through" % (file, exc),
+              flush=True)
+        return img
+    x = _nchw(img).float()
+    if x.shape[1] > 3:
+        x = x[:, :3]
+    src = x.clamp(0, 1) ** (1.0 / 2.2) if log else x.clamp(0, 1)
+    n, _c, h, w = src.shape
+    dev = x.device
+    lo = dmin.to(dev).view(1, 3, 1, 1)
+    hi = dmax.to(dev).view(1, 3, 1, 1)
+    rgb = ((src - lo) / (hi - lo).clamp(min=1e-6)).clamp(0, 1) * 2.0 - 1.0
+    # the volume is [1, 3, B, G, R]; grid_sample's last axis is (x, y, z) = (r, g, b)
+    vol = table.to(dev).permute(3, 0, 1, 2).unsqueeze(0).expand(n, -1, -1, -1, -1)
+    grid = torch.stack([rgb[:, 0], rgb[:, 1], rgb[:, 2]], -1).view(n, 1, h, w, 3)
+    out = F.grid_sample(vol, grid, mode="bilinear", padding_mode="border",
+                        align_corners=True)[:, :, 0]
+    if log:
+        out = out.clamp(0, 1) ** 2.2
+    res = x + (out - x) * float(strength)
+    return _nhwc(_clamp01(res)).to(img.dtype)
+
+
+# ---------------------------------------------------------------- the limit
+_LIMIT_SAID = {"no_mask": False}
+
+
+def limit_to(before, after, mask, limit, feather, name=""):
+    """The effect's result only where the mask says, the rest of the frame as it
+    was. mask is [1, H, W] with 1 for the subject; background is its inverse; the
+    edge is softened by `feather` pixels. No mask: the whole frame, said once."""
+    if limit not in ("subject", "background"):
+        return after
+    if mask is None:
+        if not _LIMIT_SAID["no_mask"]:
+            print("[RedNode Post] %s is limited to the %s but there is no mask; it ran "
+                  "on the whole frame" % (name or "a card", limit), flush=True)
+            _LIMIT_SAID["no_mask"] = True
+        return after
+    m = mask.float()
+    while m.ndim > 3:
+        m = m[0]
+    if m.ndim == 2:
+        m = m.unsqueeze(0)
+    m = m[:1].unsqueeze(0).to(after.device)                       # [1, 1, H, W]
+    if m.shape[-2:] != after.shape[1:3]:
+        m = F.interpolate(m, size=after.shape[1:3], mode="bilinear", align_corners=False)
+    if feather and feather > 0:
+        m = gaussian_blur(m, float(feather) / 2.0)
+    m = m.clamp(0, 1)
+    if limit == "background":
+        m = 1.0 - m
+    m = m.permute(0, 2, 3, 1).to(after.dtype)                     # [1, H, W, 1]
+    return before * (1.0 - m) + after * m
 
 
 def _blend(base, top, mode):
@@ -590,6 +855,7 @@ EFFECTS = {
     "sharpen": sharpen, "bloom": bloom, "halation": halation, "light_wrap": light_wrap,
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
+    "match": match, "lut": lut,
 }
 
 
@@ -651,6 +917,16 @@ def parse_post(data):
     out["depth"]["model"] = (out["depth"]["model"]
                              if out["depth"]["model"] in DEPTH_MODELS else "auto")
     out["depth"]["resolution"] = max(128, min(2048, out["depth"]["resolution"]))
+    out["mask"]["source"] = (out["mask"]["source"] if out["mask"]["source"] in MASK_SOURCES
+                             else "auto")
+    out["mask"]["feather"] = max(0, min(128, out["mask"]["feather"]))
+    out["match"]["method"] = (out["match"]["method"] if out["match"]["method"] in MATCH_METHODS
+                              else "adain")
+    out["match"]["source"] = (out["match"]["source"] if out["match"]["source"] in MATCH_SOURCES
+                              else "moodboard")
+    for name in out:
+        if name not in SETTINGS_CARDS and out[name].get("limit") not in LIMITS:
+            out[name]["limit"] = "off"
     out["sharpen"]["iterations"] = max(1, min(20, out["sharpen"]["iterations"]))
     out["sharpen"]["kernel_size"] = max(1, min(31, out["sharpen"]["kernel_size"]))
     out["clarity"]["radius"] = max(1, min(64, out["clarity"]["radius"]))
@@ -675,7 +951,30 @@ def roll_block(name, block):
 SLOW_CHAIN_SECONDS = 2.0
 
 
-def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timings=()):
+def needs_mask(cfg):
+    """True when any card that is on is limited to the subject or the background."""
+    return any(cfg[n].get("on") and cfg[n].get("limit") in ("subject", "background")
+               for n in ORDER)
+
+
+def auto_mask(image):
+    """The pack's own subject mask for the frame (automask.py), or None, said."""
+    try:
+        from . import automask
+        mask, used = automask.subject_mask(image)
+    except Exception as exc:
+        print("[RedNode Post] the auto mask failed (%s)" % exc, flush=True)
+        return None
+    if mask is None:
+        print("[RedNode Post] no segmenter answered for the mask; limited cards run on "
+              "the whole frame", flush=True)
+        return None
+    print("[RedNode Post] subject mask from %s" % used, flush=True)
+    return mask
+
+
+def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timings=(),
+               mask=None, reference=None):
     """Run the whole chain in grading order. Blocks that are off cost nothing."""
     cfg = parse_post(config)
     out = image
@@ -684,7 +983,7 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
         block = cfg[name]
         if not block.get("on"):
             continue
-        args = {k: v for k, v in block.items() if k not in ("on", "rand")}
+        args = {k: v for k, v in block.items() if k not in ("on", "rand", "limit")}
         drawn = roll_block(name, block)
         if drawn:
             args.update(drawn)
@@ -694,8 +993,16 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
             print(f"[RedNode Post] {name} rolled {shown}", flush=True)
         if name in DEPTH_EFFECTS:
             args["depth"] = depth
+        if name == "match":
+            args["reference"] = reference
         started = time.time()
-        out = EFFECTS[name](out, **args)
+        res = EFFECTS[name](out, **args)
+        # LIMITED TO THE SUBJECT OR THE BACKGROUND: the card's result only under
+        # the mask, softened by the Mask card's feather; the rest of the frame as
+        # it was before the card
+        res = limit_to(out, res, mask, block.get("limit", "off"),
+                       cfg["mask"]["feather"], name)
+        out = res
         timings.append((name, time.time() - started))
         if on_effect:
             on_effect(name)
@@ -920,6 +1227,12 @@ def post_from_prompt(prompt):
     The same wireless trick the Control Panel and Sampler Config use applies
     here: read the queued prompt and take the config straight off the workspace.
     """
+    got = workspaces_from_prompt(prompt)
+    return got[0] if got else None
+
+
+def workspaces_from_prompt(prompt):
+    """(post cfg, the workspace's raw config dict), the one with something on first."""
     if not isinstance(prompt, dict):
         return None
     found = []
@@ -930,17 +1243,34 @@ def post_from_prompt(prompt):
         if not isinstance(raw, str):
             continue
         try:
-            cfg = parse_post((json.loads(raw) or {}).get("post"))
+            data = json.loads(raw) or {}
+            cfg = parse_post(data.get("post"))
         except (ValueError, TypeError):
             continue
-        found.append(cfg)
+        found.append((cfg, data if isinstance(data, dict) else {}))
     if not found:
         return None
     # a workspace with something switched on wins over one sitting at defaults
-    for cfg in found:
+    for cfg, data in found:
         if any(cfg[n].get("on") for n in ORDER):
-            return cfg
+            return cfg, data
     return found[0]
+
+
+def tab_reference(ws_raw, name):
+    """The picture a Workspace tab has selected (moodboard, subject, scene), as an
+    IMAGE tensor, through the Detailer's tab reader; None when the tab is off."""
+    if name not in ("moodboard", "subject", "scene") or not isinstance(ws_raw, dict):
+        return None
+    try:
+        from . import workspace as _ws
+        from .refine_pipeline import RedNodeStudioDetailer
+        cfg = _ws.parse_config(json.dumps(ws_raw))
+        return RedNodeStudioDetailer._tab_tensor(cfg, name)
+    except Exception as exc:
+        print("[RedNode Post] could not read the %s tab for the match card (%s)" % (name, exc),
+              flush=True)
+        return None
 
 
 class RedNodePostProcess:
@@ -984,7 +1314,8 @@ class RedNodePostProcess:
         return json.dumps(cfg, sort_keys=True)
 
     def run(self, image, prompt=None):
-        cfg = post_from_prompt(prompt)
+        got = workspaces_from_prompt(prompt)
+        cfg, ws_raw = (got if got else (None, {}))
         if not cfg or not any(cfg[n].get("on") for n in ORDER):
             return (image,)
         # depth of field and haze need a depth map; make one rather than asking the
@@ -995,10 +1326,21 @@ class RedNodePostProcess:
             _t0 = time.time()
             depth = auto_depth(image, settings=cfg.get("depth"))
             extra.append(("depth map", time.time() - _t0))
+        # a card limited to the subject wants a mask: the pack's own auto-mask
+        mask = None
+        if needs_mask(cfg):
+            _t0 = time.time()
+            mask = auto_mask(image)
+            extra.append(("subject mask", time.time() - _t0))
+        # the match card's reference is a Workspace tab's picture
+        reference = None
+        if cfg["match"].get("on"):
+            reference = tab_reference(ws_raw, cfg["match"].get("source"))
         ran = []
         LAST_ROLLS.clear()
         out = apply_post(image, cfg, depth=depth, on_effect=ran.append,
-                         rolls=LAST_ROLLS, extra_timings=extra)
+                         rolls=LAST_ROLLS, extra_timings=extra, mask=mask,
+                         reference=reference)
         if ran:
             print(f"[RedNode Post] applied: {', '.join(ran)}", flush=True)
         # hand the panel a picture of the result: the Post tab shows it, and saving
@@ -1032,6 +1374,12 @@ class RedNodePostFX:
                 "depth": ("IMAGE", {"tooltip": "OPTIONAL. The node makes its own depth "
                                     "map, set up on the panel's Depth card; wire this "
                                     "only to supply a map of your own"}),
+                "mask": ("MASK", {"tooltip": "OPTIONAL. A subject mask for cards limited "
+                                  "to the subject or the background. Without it the "
+                                  "node makes its own with the pack's auto-mask; the "
+                                  "Mask card chooses which"}),
+                "reference": ("IMAGE", {"tooltip": "OPTIONAL. The picture the Match "
+                                        "reference card matches the frame's colour to"}),
             },
         }
 
@@ -1046,7 +1394,7 @@ class RedNodePostFX:
                    "camera order. Point it at any image; no Studio Workspace required.")
 
     @classmethod
-    def IS_CHANGED(cls, image=None, config="{}", depth=None):
+    def IS_CHANGED(cls, image=None, config="{}", depth=None, mask=None, reference=None):
         try:
             cfg = parse_post(own_post(config))
         except Exception:
@@ -1055,15 +1403,24 @@ class RedNodePostFX:
             return float("nan")
         return json.dumps(cfg, sort_keys=True)
 
-    def run(self, image, config="{}", depth=None):
+    def run(self, image, config="{}", depth=None, mask=None, reference=None):
         cfg = parse_post(own_post(config))
         if not any(cfg[n].get("on") for n in ORDER):
             return (image,)
         if depth is None and any(cfg[n].get("on") for n in DEPTH_EFFECTS):
             depth = auto_depth(image, settings=cfg.get("depth"))
+        if needs_mask(cfg):
+            if cfg["mask"].get("source") == "wired" and mask is None:
+                print("[RedNode Post FX] the Mask card says wired but nothing is wired "
+                      "into mask; making one instead", flush=True)
+            if mask is None or cfg["mask"].get("source") != "wired":
+                mask = mask if mask is not None else auto_mask(image)
+        else:
+            mask = None
         ran = []
         LAST_ROLLS.clear()
-        out = apply_post(image, cfg, depth=depth, on_effect=ran.append, rolls=LAST_ROLLS)
+        out = apply_post(image, cfg, depth=depth, on_effect=ran.append, rolls=LAST_ROLLS,
+                         mask=mask, reference=reference)
         if ran:
             print(f"[RedNode Post FX] applied: {', '.join(ran)}", flush=True)
         try:

@@ -1103,6 +1103,8 @@ export function readCfg(node) {
       ? d.post[fx.id] : {};
     b.on = !!b.on;
     b.rand = b.rand && typeof b.rand === "object" ? b.rand : {};
+    // any effect can be limited to the subject or the background; off by default
+    if (!fx.settings && !["off", "subject", "background"].includes(b.limit)) b.limit = "off";
     for (const c of fx.controls) {
       if (c.choice) { if (typeof b[c.key] !== "string") b[c.key] = c.def; }
       else if (typeof b[c.key] !== "number") b[c.key] = c.def;
