@@ -562,10 +562,12 @@ css.textContent = `
 .rn-ws-sect > .head .ttl{font-size:11.5px;font-weight:700;letter-spacing:.4px;opacity:.7;flex:1}
 .rn-ws-sect .rn-ws-dial{margin-left:12px}
 /* The Post tab: the chain list beside one editor. */
-.rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px}
-.rn-ws-fxlist{flex:none;width:172px;display:flex;flex-direction:column;border:1px solid #2a2e35;
-  border-radius:6px;background:#16181c;padding:2px 0 6px;max-height:560px;overflow-y:auto}
-.rn-ws-fxband{font-size:10px;letter-spacing:.09em;font-weight:700;opacity:.5;padding:9px 10px 3px}
+.rn-ws-fxsplit{display:flex;gap:18px;align-items:stretch;min-height:220px}
+.rn-ws-fxlist{flex:none;width:190px;display:flex;flex-direction:column;border:1px solid #2a2e35;
+  border-radius:6px;background:#16181c;padding:0 0 6px;max-height:760px;overflow-y:auto}
+.rn-ws-fxband{font-size:10.5px;letter-spacing:.12em;font-weight:700;color:#e0e4ea;
+  background:#252a32;border-left:2px solid #b8283c;padding:6px 10px;margin:6px 0 2px}
+.rn-ws-fxband:first-child{margin-top:0}
 .rn-ws-fxrow{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 8px;cursor:pointer;
   border-left:2px solid transparent;font-size:12px;color:#8d939b;white-space:nowrap}
 .rn-ws-fxrow.on{color:#e0e4ea}
@@ -579,7 +581,7 @@ css.textContent = `
 .rn-ws-fxlimitpill{margin-left:auto;font-size:9px;border:1px solid #6b5a2a;color:#d4b25f;
   border-radius:8px;padding:0 5px;line-height:14px}
 .rn-ws-fxedit{flex:1;min-width:0;border:1px solid #2a2e35;border-radius:6px;background:#16181c;
-  padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  padding:12px 16px 12px 18px;display:flex;flex-direction:column;gap:8px}
 .rn-ws-fxedit > .head{display:flex;align-items:center;gap:8px}
 .rn-ws-fxedit > .head .ttl{font-size:11.5px;font-weight:700;letter-spacing:.4px;opacity:.85}
 .rn-ws-fxedit .blurb{font-size:11px;opacity:.55;line-height:1.4;margin:0}

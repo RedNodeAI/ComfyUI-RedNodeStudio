@@ -585,6 +585,9 @@ export function postBody(node, body) {
       list.appendChild(row);
     }
   }
+  // the panel re-renders on every click, which rebuilt the list at the top and
+  // threw a scrolled reader back up; the position is kept on the node instead
+  list.addEventListener("scroll", () => { node._rnFxListScroll = list.scrollTop; });
   split.appendChild(list);
 
   // the editor: the selected effect, its switch, its controls, its limit
@@ -688,4 +691,9 @@ export function postBody(node, body) {
   }
   split.appendChild(edit);
   body.appendChild(split);
+  if (node._rnFxListScroll) {
+    list.scrollTop = node._rnFxListScroll;
+    // a list that is not yet laid out cannot scroll: try again once it is
+    setTimeout(() => { list.scrollTop = node._rnFxListScroll || 0; }, 0);
+  }
 }
