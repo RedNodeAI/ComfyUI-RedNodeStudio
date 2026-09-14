@@ -631,6 +631,119 @@ function section(title) {
   return s;
 }
 
+// ---- the finish sound ----------------------------------------------------------
+// One built-in tone, off by default, kept in node.properties (it changes nothing
+// about what is filed, so it is panel state, not config). "Every run" sounds once
+// per finished prompt. "When the queue empties" is for a batch: the next prompt
+// starts within a beat of this one ending, so the queue is checked, half a second
+// passes, and it is checked again; only an empty queue both times sounds, once.
+const SOUND_MODES = ["off", "run", "queue"];
+const SOUND_WORDS = { off: "Off", run: "Every run", queue: "When the queue empties" };
+const QUEUE_SETTLE_MS = 500;
+
+function soundMode(node) {
+  const m = node.properties?.rn_sound;
+  return SOUND_MODES.includes(m) ? m : "off";
+}
+
+function setSoundMode(node, mode) {
+  node.properties ||= {};
+  node.properties.rn_sound = SOUND_MODES.includes(mode) ? mode : "off";
+  render(node);
+}
+
+let audioCtx = null;
+function chime() {
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AC) return false;
+  try {
+    audioCtx ||= new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume?.();
+    const t0 = audioCtx.currentTime || 0;
+    // two rising notes, A5 then E6, short with a soft tail
+    for (const [freq, at] of [[880, 0], [1318.5, 0.14]]) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0 + at);
+      gain.gain.exponentialRampToValueAtTime(0.16, t0 + at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.32);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t0 + at);
+      osc.stop(t0 + at + 0.34);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function queueEmpty() {
+  try {
+    const r = await api.fetchApi("/queue");
+    const q = await r.json();
+    const running = Array.isArray(q?.queue_running) ? q.queue_running.length : 0;
+    const pending = Array.isArray(q?.queue_pending) ? q.queue_pending.length : 0;
+    return running + pending === 0;
+  } catch (e) {
+    return true;
+  }
+}
+
+const chimed = [];          // prompt ids already sounded, so two panels sound once
+let queueCheck = 0;         // bumped by every finish and every start; stale checks stop
+function runFinished(promptId) {
+  const modes = new Set(findNodes(NODE_NAME).map(soundMode));
+  const pid = promptId == null ? "" : String(promptId);
+  if (modes.has("run") && !chimed.includes(pid)) {
+    chimed.push(pid);
+    if (chimed.length > 50) chimed.shift();
+    chime();
+  }
+  if (modes.has("queue")) {
+    const mine = ++queueCheck;
+    (async () => {
+      if (!(await queueEmpty()) || mine !== queueCheck) return;
+      await new Promise((r) => setTimeout(r, QUEUE_SETTLE_MS));
+      if (mine !== queueCheck) return;      // another run started in the gap
+      if (await queueEmpty()) chime();
+    })();
+  }
+}
+
+function soundSection(node) {
+  const sect = section("When a run finishes");
+  const row = document.createElement("div");
+  row.className = "rn-sv-row rn-sv-sound";
+  const now = soundMode(node);
+  for (const m of SOUND_MODES) {
+    const b = document.createElement("button");
+    b.className = "rn-sv-btn" + (m === now ? " on" : "");
+    b.textContent = SOUND_WORDS[m];
+    b.title = m === "off" ? "No sound."
+            : m === "run" ? "One tone each time a run finishes."
+            : "One tone when the queue has been empty for half a second, so a batch "
+              + "sounds once at the end.";
+    b.onclick = () => {
+      setSoundMode(node, m);
+      // a click is what lets the page play audio at all, so the sound is heard
+      // here, once, as the setting goes on
+      if (m !== "off") chime();
+    };
+    row.appendChild(b);
+  }
+  const play = document.createElement("button");
+  play.className = "rn-sv-btn";
+  play.textContent = "Play";
+  play.title = "Hear the tone.";
+  play.onclick = () => chime();
+  row.appendChild(play);
+  sect.appendChild(row);
+  return sect;
+}
+
 function render(node) {
   const wrap = node._rnSaveEl;
   if (!wrap) return;
@@ -863,6 +976,8 @@ function render(node) {
     record.appendChild(warn);
   }
   wrap.appendChild(record);
+
+  wrap.appendChild(soundSection(node));
 
   const recent = section("Recent saves");
   // The actions for the LIST ITSELF live here. The clear existed for weeks on the
@@ -1326,6 +1441,10 @@ app.registerExtension({
     api.addEventListener?.("executed", (e) => {
       if (e?.detail?.output?.images) refresh();
     });
+    // the finish sound: a prompt that ran to the end; errors and interrupts stay
+    // silent, and a run starting makes any queue-empty check in flight stale
+    api.addEventListener?.("execution_success", (e) => runFinished(e?.detail?.prompt_id));
+    api.addEventListener?.("execution_start", () => { queueCheck++; });
     // another node kept or unkept something: the list here is now stale
     api.addEventListener?.("rednode.saved_changed", () => refresh());
     api.addEventListener?.("rednode.save_pending", (e) => {
