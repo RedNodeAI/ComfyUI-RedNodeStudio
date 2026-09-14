@@ -183,6 +183,8 @@ that node's render lands on it, decoded by the small VAE, with a bar and the pas
 then the finished frame. Both the workspace's built-in sampler and the Detailer's passes stream,
 whatever ComfyUI's own preview setting is. For Krea 2 the sharp version needs
 `lighttaew2_1.safetensors` in `models/vae_approx`; without it the frames are the colour smear.
+The bell in the pane's corner is a finish sound, off by default: every run, or once when the
+queue empties, so a batch sounds once at the end.
 
 **RedNode Image Review** is a preview that remembers: the newest picture on top and the runs before
 it in a strip, right-click for Copy, Keep, Name and Rerun with the same seed or fresh ones. Double
@@ -196,7 +198,10 @@ right arrows walk the history, up and down walk the frames of that column.
 
 **RedNode Save** files by date, preset, seed, model or size, splits drafts from keepers, and keeps
 a browser to cull a session without leaving the graph. The Review and the Save node share the
-run's id, so keeping the picture you are looking at needs no wire.
+run's id, so keeping the picture you are looking at needs no wire. Every file also carries the
+A1111 parameters text with the model and LoRA hashes, so a picture posted to Civitai lists what
+made it, with links; each model file is hashed once and the digest kept in a `.sha256` beside it.
+The Civitai metadata switch on the panel turns that off.
 
 ![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
 

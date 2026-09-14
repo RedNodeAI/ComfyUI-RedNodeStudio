@@ -53,6 +53,8 @@ DEFAULTS = {
     "format": "png",             # png | jpeg | webp
     "quality": 90,               # jpeg and webp only; png is lossless
     "compress": 4,               # png only: 0..9, file size against save time
+    "civitai": True,             # the A1111 parameters text with AutoV2 hashes, so
+                                 # Civitai lists the model and LoRAs under the picture
 }
 
 NUMBERING = ("counter", "time", "seed", "none")
@@ -587,6 +589,71 @@ def _from_workspace(cfg):
     if dials and cfg.get("use_dials", True):
         out["dials"] = dials
     return out
+
+
+# ---------------------------------------------------------------------------
+# the Civitai record: which files actually rendered, and the numbers they ran at
+def _active_rig(ws):
+    models = ws.get("models") if isinstance(ws, dict) and isinstance(ws.get("models"), dict) else {}
+    rigs = [r for r in (models.get("rigs") or []) if isinstance(r, dict)]
+    if not rigs:
+        return {}
+    try:
+        i = max(0, min(int(models.get("active", 0) or 0), len(rigs) - 1))
+    except (TypeError, ValueError):
+        i = 0
+    return rigs[i]
+
+
+def civitai_loras(prompt, ws):
+    """The LoRAs the picture was rendered with: every standalone loader and stack
+    in the graph, plus the Workspace's active rig's set (Main or a named set),
+    which is the one its sampler actually used. collect_meta lists the Main tab
+    whatever the rig chose; the record under a Civitai post has to be exact."""
+    out = []
+    for node in (prompt or {}).values() if isinstance(prompt, dict) else []:
+        if not isinstance(node, dict):
+            continue
+        cls = str(node.get("class_type") or "")
+        inputs = node.get("inputs") or {}
+        if "LoraLoader" in cls and isinstance(inputs.get("lora_name"), str):
+            out.append({"name": inputs["lora_name"],
+                        "strength": inputs.get("strength_model", inputs.get("strength", 1.0))})
+        elif cls == "RedNodeLoraStack":
+            out.extend(_slots_from(inputs.get("stack_json")))
+    chosen = None
+    if isinstance(ws, dict) and ws.get("models"):
+        try:
+            from .workspace import lora_set_cfg, rig_lora_set
+            chosen = lora_set_cfg(ws, rig_lora_set(ws))
+        except Exception:
+            chosen = None
+    if chosen is None and isinstance(ws, dict):
+        chosen = ws.get("loras") or {}
+    # a tab switched off rendered nothing, whatever its slots say
+    if isinstance(chosen, dict) and chosen.get("on", True):
+        out.extend(_slots_from(chosen))
+    return out
+
+
+def civitai_record(prompt, ws, meta):
+    """(resources, sampler) for the Civitai text. The sampler numbers come from a
+    KSampler in the graph when there is one, else from the Workspace's active rig,
+    which is what its built-in sampler ran with."""
+    from . import civitai_meta
+    rig = _active_rig(ws)
+    model, kind = meta.get("model") or "", "checkpoint"
+    if rig.get("checkpoint"):
+        model, kind = model or rig["checkpoint"], "checkpoint"
+    elif rig.get("unet"):
+        model, kind = model or rig["unet"], "unet"
+    sampler = dict(meta.get("sampler") or {})
+    if not sampler.get("steps") and rig:
+        for key in ("steps", "cfg", "sampler", "scheduler"):
+            if rig.get(key) not in (None, ""):
+                sampler[key] = rig[key]
+    res = civitai_meta.resources(model, kind, civitai_loras(prompt, ws))
+    return res, sampler
 
 
 # ---------------------------------------------------------------------------
@@ -1222,6 +1289,15 @@ class RedNodeSave:
             seed = seed_from_prompt(prompt)
         when = time.time()
         keep = cfg["keep"]
+        # the Civitai record's hashes are per file, not per image: once for the batch
+        civ_res, civ_sampler = None, None
+        if cfg["civitai"]:
+            try:
+                civ_res, civ_sampler = civitai_record(
+                    prompt, ws, collect_meta(prompt, {"preset": preset, "seed": seed}))
+            except Exception as exc:    # a record must never cost the save
+                print(f"[RedNode Save] no Civitai record this time: {exc}", flush=True)
+                civ_res = None
 
         results = []
         for image in images:
@@ -1234,6 +1310,11 @@ class RedNodeSave:
             folder, stem = build_path(cfg, ctx)
             path = final_path(out_dir, folder, stem, cfg, ctx)
 
+            civ_text = ""
+            if civ_res is not None:
+                from . import civitai_meta
+                civ_text = civitai_meta.parameters(meta, ctx, civ_res, civ_sampler)
+
             fmt = cfg["format"]
             if fmt == "png":
                 png_meta = None
@@ -1243,17 +1324,29 @@ class RedNodeSave:
                         png_meta.add_text("prompt", json.dumps(prompt))
                     for key, value in (extra_pnginfo or {}).items():
                         png_meta.add_text(key, json.dumps(value))
+                if civ_text:
+                    # the A1111 chunk Civitai and every gallery reads, plus the two
+                    # lists on their own for readers that want them without parsing
+                    png_meta = png_meta or PngInfo()
+                    png_meta.add_text("parameters", civ_text)
+                    png_meta.add_text("civitaiResources",
+                                      json.dumps(civitai_meta.civitai_resources(civ_res)))
+                    png_meta.add_text("hashes", json.dumps(civitai_meta.hashes(civ_res)))
                 # PNG has no quality: it is lossless, and every level below produces
                 # the identical image. What changes is the file size and how long the
                 # save takes, which is worth a control but not a "quality" one.
                 img.save(path, pnginfo=png_meta, compress_level=cfg["compress"])
             elif fmt == "jpeg":
                 # no alpha in a jpeg, and no embedded workflow either: nothing reads
-                # a ComfyUI graph back out of one, which is what the text record is for
-                img.convert("RGB").save(path, quality=cfg["quality"], optimize=True)
+                # a ComfyUI graph back out of one, which is what the text record is
+                # for. The Civitai text rides in EXIF, where A1111 puts it.
+                extra = {"exif": civitai_meta.exif_bytes(civ_text)} if civ_text else {}
+                img.convert("RGB").save(path, quality=cfg["quality"], optimize=True,
+                                        **extra)
             else:
+                extra = {"exif": civitai_meta.exif_bytes(civ_text)} if civ_text else {}
                 img.save(path, quality=cfg["quality"],
-                         lossless=cfg["quality"] >= 100)
+                         lossless=cfg["quality"] >= 100, **extra)
 
             base = os.path.splitext(path)[0]
             if cfg["write_text"]:

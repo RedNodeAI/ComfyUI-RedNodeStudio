@@ -24,7 +24,7 @@ const DEFAULTS = {
   root: "", subfolder: "%date%/%preset%", name: "%date%_%time%",
   numbering: "counter", pad: 4, split_drafts: true, keep: false,
   write_text: true, write_json: false, embed_png: true, prompts_folder: "",
-  format: "png", quality: 90, compress: 4,
+  format: "png", quality: 90, compress: 4, civitai: true,
 };
 
 const FORMATS = [
@@ -838,9 +838,14 @@ function render(node) {
                   + "which is more portable anyway.";
           b.onclick = () => {};
           return b;
-        })());
+        })(),
+    toggle(node, cfg, "civitai", "Civitai metadata",
+           "The A1111 parameters text inside the file (EXIF on a JPEG or WebP): prompt, "
+           + "steps, sampler, seed, size, and the model and LoRA hashes Civitai matches "
+           + "so they are listed under the picture with links. Each model file is "
+           + "hashed once, the first time, and the digest kept beside it."));
   record.appendChild(recRow);
-  if (!cfg.write_text && !cfg.write_json
+  if (!cfg.write_text && !cfg.write_json && !cfg.civitai
       && (cfg.format !== "png" || !cfg.embed_png)) {
     const clean = document.createElement("div");
     clean.className = "rn-sv-note";

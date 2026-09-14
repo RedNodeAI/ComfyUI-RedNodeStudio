@@ -34,6 +34,10 @@ css.textContent = `
 .rn-lp-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:#0008}
 .rn-lp-bar i{display:block;height:100%;width:0;background:#b8283c;transition:width .15s}
 .rn-lp-empty{opacity:.45;font-size:11.5px;text-align:center;line-height:1.5;padding:10px}
+.rn-lp-bell{position:absolute;top:4px;right:4px;background:#000a;color:#8a9099;border:0;
+  border-radius:4px;font:12px system-ui,sans-serif;padding:2px 6px;cursor:pointer;opacity:.6}
+.rn-lp-bell:hover{opacity:1}
+.rn-lp-bell.on{color:#ffd58a;opacity:1}
 `;
 let styled = false;
 function injectStyle() {
@@ -108,6 +112,88 @@ function showBlob(node, blob, fromId) {
   render(node);
 }
 
+// ---- the finish sound ----------------------------------------------------------
+// One built-in tone, off by default, kept in node.properties (it changes nothing
+// about the render, so it is panel state, not config). "Every run" sounds once per
+// finished prompt. "When the queue empties" is for a batch: the next prompt starts
+// within a beat of this one ending, so the queue is checked, half a second passes,
+// and it is checked again; only an empty queue both times sounds, once.
+const SOUND_MODES = ["off", "run", "queue"];
+const SOUND_WORDS = { off: "Off", run: "Every run", queue: "When the queue empties" };
+const QUEUE_SETTLE_MS = 500;
+
+function soundMode(node) {
+  const m = node.properties?.rn_sound;
+  return SOUND_MODES.includes(m) ? m : "off";
+}
+
+function setSoundMode(node, mode) {
+  node.properties ||= {};
+  node.properties.rn_sound = SOUND_MODES.includes(mode) ? mode : "off";
+  render(node);
+}
+
+let audioCtx = null;
+function chime() {
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AC) return false;
+  try {
+    audioCtx ||= new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume?.();
+    const t0 = audioCtx.currentTime || 0;
+    // two rising notes, A5 then E6, short with a soft tail
+    for (const [freq, at] of [[880, 0], [1318.5, 0.14]]) {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0 + at);
+      gain.gain.exponentialRampToValueAtTime(0.16, t0 + at + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.32);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(t0 + at);
+      osc.stop(t0 + at + 0.34);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function queueEmpty() {
+  try {
+    const r = await api.fetchApi("/queue");
+    const q = await r.json();
+    const running = Array.isArray(q?.queue_running) ? q.queue_running.length : 0;
+    const pending = Array.isArray(q?.queue_pending) ? q.queue_pending.length : 0;
+    return running + pending === 0;
+  } catch (e) {
+    return true;
+  }
+}
+
+const chimed = [];          // prompt ids already sounded, so two panels sound once
+let queueCheck = 0;         // bumped by every finish and every start; stale checks stop
+function runFinished(promptId) {
+  const modes = new Set(liveNodes().map(soundMode));
+  const pid = promptId == null ? "" : String(promptId);
+  if (modes.has("run") && !chimed.includes(pid)) {
+    chimed.push(pid);
+    if (chimed.length > 50) chimed.shift();
+    chime();
+  }
+  if (modes.has("queue")) {
+    const mine = ++queueCheck;
+    (async () => {
+      if (!(await queueEmpty()) || mine !== queueCheck) return;
+      await new Promise((r) => setTimeout(r, QUEUE_SETTLE_MS));
+      if (mine !== queueCheck) return;      // another run started in the gap
+      if (await queueEmpty()) chime();
+    })();
+  }
+}
+
 function render(node) {
   const root = node._rnRootEl;
   if (!root) return;
@@ -145,6 +231,20 @@ function render(node) {
     bar.appendChild(fill);
     main.appendChild(bar);
   }
+  const mode = soundMode(node);
+  const bell = document.createElement("button");
+  bell.className = "rn-lp-bell" + (mode === "off" ? "" : " on");
+  bell.textContent = mode === "off" ? "🔕" : "🔔";
+  bell.title = `Finish sound: ${SOUND_WORDS[mode].toLowerCase()}. Click to change; `
+             + "the node's right-click menu lists the choices.";
+  bell.onclick = () => {
+    const next = SOUND_MODES[(SOUND_MODES.indexOf(mode) + 1) % SOUND_MODES.length];
+    setSoundMode(node, next);
+    // a click is what lets the page play audio at all, so the sound is heard
+    // here, once, as the setting goes on
+    if (next !== "off") chime();
+  };
+  main.appendChild(bell);
   root.appendChild(main);
   if (node._rnWidget?.options) node._rnWidget.options.getMinHeight = () => MIN_PANEL_H;
   if (!node._rnSized) {
@@ -246,6 +346,7 @@ api.addEventListener("progress", (e) => {
 });
 // a run starting: say so, keep the last frame up until a new one arrives
 api.addEventListener("execution_start", () => {
+  queueCheck++;             // a queue-empty check in flight is about an older run now
   for (const n of liveNodes()) {
     const s = state(n);
     s.kind = "wait";
@@ -270,11 +371,32 @@ api.addEventListener("executed", (e) => {
   }
 });
 
+// a prompt that ran to the end; errors and interrupts stay silent
+api.addEventListener("execution_success", (e) => runFinished(e?.detail?.prompt_id));
+
 app.registerExtension({
   name: "RedNode.LivePreview",
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData?.name !== NODE_NAME) return;
     injectStyle();
+    // right-click the node: the finish sound's three choices, and a way to hear it
+    const onMenu = nodeType.prototype.getExtraMenuOptions;
+    nodeType.prototype.getExtraMenuOptions = function (canvas, options) {
+      onMenu?.apply(this, arguments);
+      const node = this;
+      const now = soundMode(node);
+      options.push(
+        { content: "Finish sound",
+          has_submenu: true,
+          submenu: {
+            options: SOUND_MODES.map((m) => ({
+              content: (m === now ? "● " : "○ ") + SOUND_WORDS[m],
+              callback: () => { setSoundMode(node, m); if (m !== "off") chime(); },
+            })),
+          } },
+        { content: "Play the finish sound", callback: () => chime() },
+        null);
+    };
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       onCreated?.apply(this, arguments);
