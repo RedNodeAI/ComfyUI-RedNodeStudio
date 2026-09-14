@@ -240,7 +240,8 @@ lighting sliders work the same way off the exposure and colour dials. Every slot
 pick a file, and the node is happy with none of them.
 
 Three of the sliders are mine, trained for Krea 2, and they are attached to the
-[v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0):
+[v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0) and listed
+[on Civitai](https://civitai.com/models/2937168) with example strips:
 `camera_height_krea2_rednode`, `camera_orbit_krea2_rednode` and `camera_back_krea2_rednode`. Free to
 use and share, just not to sell. The zoom slider and the colour temperature slider are Loraholic's,
 on Civitai: [zoom](https://civitai.com/models/2717832) and
@@ -466,9 +467,9 @@ goes. ComfyUI Manager installs the packs; the files are yours to fetch.
 
 | File | Goes in | Where from |
 |---|---|---|
-| `camera_height_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_height_krea2_rednode.safetensors) |
-| `camera_orbit_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_orbit_krea2_rednode.safetensors) |
-| `camera_back_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_back_krea2_rednode.safetensors) |
+| `camera_height_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_height_krea2_rednode.safetensors) or [Civitai](https://civitai.com/models/2937168) |
+| `camera_orbit_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_orbit_krea2_rednode.safetensors) or [Civitai](https://civitai.com/models/2937168) |
+| `camera_back_krea2_rednode.safetensors` | `models/loras` | [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_back_krea2_rednode.safetensors) or [Civitai](https://civitai.com/models/2937168) |
 | Zoom slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2717832) |
 | Colour temperature slider, Loraholic's | `models/loras` | [Civitai](https://civitai.com/models/2760910) |
 

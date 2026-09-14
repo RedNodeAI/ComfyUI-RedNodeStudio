@@ -256,9 +256,12 @@ const CAM_LORA_HINT = {
   zoom: "Push in / pull out. Auto follows the shot size: close pushes in, wide pulls out."
       + "\nNot ours: \"Zoom Slider - (Krea2 + ZIT)\" by Loraholic, "
       + "https://civitai.com/models/2717832 - download it there, the pack only drives it.",
-  height: "Camera height. Auto follows the tilt: below eye level pulls minus, above pushes plus.",
-  orbit: "Camera swung round the subject. Auto follows where the camera sits against the way they face.",
-  back: "Seen from behind. Auto rises once the camera passes their shoulder line; 0 in front.",
+  height: "Camera height. Auto follows the tilt: below eye level pulls minus, above pushes plus."
+        + " Mine, free: https://civitai.com/models/2937168 (also on the GitHub v1.2.0 release).",
+  orbit: "Camera swung round the subject. Auto follows where the camera sits against the way they face."
+        + " Mine, free: https://civitai.com/models/2937168 (also on the GitHub v1.2.0 release).",
+  back: "Seen from behind. Auto rises once the camera passes their shoulder line; 0 in front."
+        + " Mine, free: https://civitai.com/models/2937168 (also on the GitHub v1.2.0 release).",
 };
 // which files count as the default pick for each key (RedNode's own sliders,
 // then the community zoom): first match wins, you can pick any file
