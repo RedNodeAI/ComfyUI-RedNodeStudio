@@ -1318,6 +1318,10 @@ class RedNodePostProcess:
         cfg, ws_raw = (got if got else (None, {}))
         if not cfg or not any(cfg[n].get("on") for n in ORDER):
             return (image,)
+        if isinstance(ws_raw, dict) and ws_raw.get("draft"):
+            print("[RedNode Post] the Workspace's Draft switch is on; the chain is skipped "
+                  "and the picture passes through", flush=True)
+            return (image,)
         # depth of field and haze need a depth map; make one rather than asking the
         # user to build a second branch of the graph for it
         depth = None

@@ -1195,6 +1195,10 @@ def parse_config(config_json):
             "use_dials": bool(data.get("use_dials", True)),
             "studio_preset": studio_preset, "auto": auto, "latent": latent_cfg,
             "vram_tier": tier, "paint": paint_cfg,
+            # DRAFT: the Detailer and Post nodes pass the picture through while this
+            # is on, so a seed iterates on the base render alone; one flip renders
+            # the keeper in full. Off by default.
+            "draft": bool(data.get("draft")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
             "camera": camera_cfg,

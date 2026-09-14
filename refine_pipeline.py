@@ -554,6 +554,14 @@ class RedNodeStudioDetailer:
             ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
         except Exception:
             ws_cfg = _ws.parse_config("{}")
+        if ws_cfg.get("draft"):
+            # the Workspace's Draft switch: every pass skipped, the frame through,
+            # so a seed can be judged on the base render before it costs anything
+            line = ("draft: the Workspace's Draft switch is on, every pass skipped and "
+                    "the frame passed through")
+            print("[RedNode Detailer] " + line, flush=True)
+            self._notify(unique_id, -1, len(cfg["stages"]), "end")
+            return (image, line)
         import random as _random
         seed = (_random.getrandbits(48) if cfg["seed_random"] else cfg["seed"])
         # THE TAPS: with the toggle on, the strip gets the input as it arrived,

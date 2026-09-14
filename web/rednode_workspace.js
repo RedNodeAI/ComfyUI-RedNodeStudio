@@ -220,6 +220,7 @@ css.textContent = `
 .rn-ws-fshost{flex:1;min-height:0;display:flex;flex-direction:column;
   background:#16181c;border:1px solid #2f333a;border-radius:8px;padding:10px;
   overflow:auto}
+.rn-ws-draft.on{background:#3a2a10;border-color:#e0a84a;color:#ffd27a;font-weight:700}
 .rn-ws-topbar{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;flex:none;
   margin:2px 0;background:#16181c;border:1px solid #2f333a;border-radius:6px;
   padding:8px 10px;width:100%;box-sizing:border-box}
@@ -1177,6 +1178,7 @@ export function readCfg(node) {
   if (!["off", "scrub", "rewrite"].includes(d.auto.style_lock)) d.auto.style_lock = "off";
   if (d.auto.joy_mode_prompts === undefined) d.auto.joy_mode_prompts = true;
   if (d.use_dials === undefined) d.use_dials = true;
+  d.draft = !!d.draft;                               // the footer's Draft switch
   // PER GALLERY, not one number for all of them. One shared size meant the slider on
   // Img2Img resized the moodboard, and only three of the six galleries had a slider at
   // all, so the other three could only be changed from a tab they had nothing to do
@@ -12581,12 +12583,28 @@ export function render(node) {
     render(node);
   };
 
+  // DRAFT: iterate on the base render alone. The Detailer and Post nodes read this
+  // off the queued workspace and pass the picture through while it is on, so a seed
+  // costs one sampler run to judge and one flip renders the keeper in full.
+  const draftBtn = document.createElement("button");
+  draftBtn.className = "rn-ws-btn rn-ws-draft" + (cfg.draft ? " on" : "");
+  draftBtn.style.width = "auto";
+  draftBtn.style.padding = "0 10px";
+  draftBtn.textContent = cfg.draft ? "DRAFT" : "Draft";
+  draftBtn.title = cfg.draft
+    ? "Draft is ON: the Detailer and the Post chain pass the picture through, so a "
+      + "queue is the base render alone. Click to render the keeper in full."
+    : "Draft: skip the Detailer passes and the Post chain for fast rerolls on the "
+      + "base render. Nothing on those nodes changes; they pass the picture through "
+      + "until this is off again.";
+  draftBtn.onclick = () => { cfg.draft = !cfg.draft; writeCfg(node); render(node); };
+
   const cog = document.createElement("button");
   cog.className = "rn-ws-cog";
   cog.textContent = "⚙";
   cog.title = "Save or delete workspace presets.";
   cog.onclick = () => openCog(node, cog);
-  foot.append(resLab, res, presetLab, psel, tierBtn, cog);
+  foot.append(resLab, res, presetLab, psel, draftBtn, tierBtn, cog);
   // INSIDE the host, not on the wrap. The host carries the UI zoom, and a sibling
   // placed after a zoomed flex item is laid out against the UNZOOMED height, so at any
   // scale above 1 the foot rendered part-way up the panel, floating over the effect
