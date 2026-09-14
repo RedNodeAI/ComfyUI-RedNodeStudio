@@ -22,16 +22,27 @@ import time
 import torch
 
 MAX_STAGES = 24
-THUMB_PX = 320
+THUMB_PX = 320                     # the strip's thumbnail, always
+# The size the view gets. The Stage Tap offers these on the node and the Detailer's
+# taps carry one in their config; 0 keeps the frame as it is. The thumbnail in the
+# strip stays small whatever is chosen, so the list stays light.
+TAP_SIZES = {"320 px": 320, "512 px": 512, "768 px": 768, "1024 px": 1024,
+             "1536 px": 1536, "full size": 0}
+TAP_DEFAULT = "768 px"
+MAX_BYTES = 400 * 1024 * 1024      # of view-size pictures held in memory, whole run
 
 # The last run's taps, in the order they executed. A tap notices a new run by the
-# identity of the PROMPT dict every node in one execution shares.
+# identity of the PROMPT dict every node in one execution shares. The view-size
+# PNG of each stage lives beside the list, keyed by step, and is served by URL:
+# a 1536 px PNG in the JSON list would make every refresh of the strip a
+# multi-megabyte read.
 STAGES = []
+_PNG = {}
 _RUN = {"key": None, "n": 0}
 
 
-def _thumb(image, px=THUMB_PX):
-    """A PNG data URI of an IMAGE tensor's first frame, long edge at most px.
+def _frame(image):
+    """The first frame of an IMAGE tensor as a PIL image.
 
     Not every decoder hands back a tidy [B, H, W, 3]. Video VAEs (WanVAE, which is
     what Krea2 decodes with) return [B, T, H, W, C], and a decode can carry an
@@ -49,14 +60,25 @@ def _thumb(image, px=THUMB_PX):
     elif t.shape[-1] > 3:
         t = t[..., :3]                               # drop alpha and anything after
     arr = (t.detach().cpu().float().clamp(0, 1).numpy() * 255).astype("uint8")
-    img = Image.fromarray(arr, mode="RGB")
-    if max(img.width, img.height) > px:
+    return Image.fromarray(arr, mode="RGB")
+
+
+def _png_bytes(img, px):
+    """PNG bytes of a PIL image, long edge at most px; px 0 leaves it as it is."""
+    from PIL import Image
+    if px and max(img.width, img.height) > px:
         scale = px / max(img.width, img.height)
         img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))),
                          Image.LANCZOS)
     buf = _io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    return buf.getvalue()
+
+
+def _thumb(image, px=THUMB_PX):
+    """A PNG data URI of an IMAGE tensor's first frame, long edge at most px."""
+    return "data:image/png;base64," + base64.b64encode(
+        _png_bytes(_frame(image), px)).decode("ascii")
 
 
 def _run_key(prompt):
@@ -84,28 +106,51 @@ def _new_run_if_needed(prompt):
         _RUN["key"] = key
         _RUN["n"] = 0
         STAGES.clear()
+        _PNG.clear()
 
 
-def record(image, label="", prompt=None, source="image"):
-    """Add one stage to the run. Failing to make a thumbnail is never fatal."""
+def _drop_oldest():
+    old = STAGES.pop(0)
+    _PNG.pop(old["step"], None)
+
+
+def record(image, label="", prompt=None, source="image", px=None):
+    """Add one stage to the run. Failing to make a thumbnail is never fatal.
+
+    px is the long edge the view's picture is kept at (0 = as it is); the strip's
+    thumbnail is always THUMB_PX. None means the default tap size.
+    """
     _new_run_if_needed(prompt)
     _RUN["n"] += 1
     step = _RUN["n"]
+    if px is None:
+        px = TAP_SIZES[TAP_DEFAULT]
     try:
-        uri = _thumb(image)
+        frame = _frame(image)
+        full = _png_bytes(frame, px)
+        uri = "data:image/png;base64," + base64.b64encode(
+            _png_bytes(frame, THUMB_PX)).decode("ascii")
     except Exception as e:
         print(f"[RedNode Stages] step {step} could not be previewed ({e})", flush=True)
         return step
+    ts = time.time()
+    _PNG[step] = full
     STAGES.append({
         "step": step,
         "label": str(label or "").strip() or f"Step {step}",
         "thumb": uri,
+        # the view-size picture, by URL; the stamp stops a browser showing last
+        # run's step 3 for this run's step 3
+        "full": "/rednode/stages/%d.png?t=%d" % (step, int(ts * 1000)),
+        "px": int(px),
         "source": source,
         "w": int(image.shape[-2]), "h": int(image.shape[-3]),
-        "ts": time.time(),
+        "ts": ts,
     })
     while len(STAGES) > MAX_STAGES:
-        STAGES.pop(0)
+        _drop_oldest()
+    while len(STAGES) > 1 and sum(len(v) for v in _PNG.values()) > MAX_BYTES:
+        _drop_oldest()                               # full-size taps of a 4K chain
     return step
 
 
@@ -119,6 +164,12 @@ class RedNodeStageTap:
                 "label": ("STRING", {"default": "", "tooltip": "what this point in the "
                                      "workflow is, e.g. 'after upscale'. Empty just "
                                      "numbers the step"}),
+                "size": (list(TAP_SIZES), {"default": TAP_DEFAULT,
+                                           "tooltip": "how big the Stage View keeps "
+                                           "this frame. Bigger is sharper on the node "
+                                           "and in its full screen; full size is the "
+                                           "frame as it is. The strip's thumbnail "
+                                           "stays small either way"}),
             },
             "optional": {
                 "image": ("IMAGE", {"tooltip": "wire the image through this node; it comes "
@@ -165,7 +216,8 @@ class RedNodeStageTap:
         # a tap must run every queue or the strip would show a stale workflow
         return float("nan")
 
-    def tap(self, label="", image=None, latent=None, vae=None, prompt=None):
+    def tap(self, label="", size=TAP_DEFAULT, image=None, latent=None, vae=None,
+            prompt=None):
         shot = image
         source = "image"
         # the wired VAE IS the object the workflow decodes with, so previewing a
@@ -178,7 +230,8 @@ class RedNodeStageTap:
                 print(f"[RedNode Stages] could not decode the latent for a preview ({e})",
                       flush=True)
         if shot is not None:
-            step = record(shot, label, prompt, source)
+            step = record(shot, label, prompt, source,
+                          px=TAP_SIZES.get(size, TAP_SIZES[TAP_DEFAULT]))
             print(f"[RedNode Stages] step {step}: "
                   f"{str(label).strip() or 'unnamed'} ({source})", flush=True)
         elif latent is not None:
@@ -222,6 +275,17 @@ try:
     @PromptServer.instance.routes.get("/rednode/stages")
     async def _rednode_stages(request):
         return web.json_response({"stages": STAGES})
+
+    @PromptServer.instance.routes.get("/rednode/stages/{step}.png")
+    async def _rednode_stage_png(request):
+        try:
+            data = _PNG.get(int(request.match_info["step"]))
+        except (TypeError, ValueError):
+            data = None
+        if data is None:
+            return web.Response(status=404, text="no such stage in this run")
+        return web.Response(body=data, content_type="image/png",
+                            headers={"Cache-Control": "no-store"})
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)
     print(f"[RedNode Krea2] stage HTTP route not registered: {e}", flush=True)

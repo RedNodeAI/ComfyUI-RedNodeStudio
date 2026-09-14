@@ -176,6 +176,11 @@ def parse_pipeline(config_json):
             # Stage View strip, so a chain can be read step by step without
             # wiring taps. Off by default, per the house rule.
             "taps": bool(data.get("taps")),
+            # the long edge the strip keeps each frame at; 0 is the frame as it is
+            "tap_px": (int(data["tap_px"])
+                       if isinstance(data.get("tap_px"), (int, float))
+                       and not isinstance(data.get("tap_px"), bool)
+                       and int(data["tap_px"]) >= 0 else 768),
             # the node's own SAM: the checkpoint every detailer pass segments
             # with unless it names its own, and the precision it loads at. ""
             # is the loader's first file and the loader's own precision.
@@ -559,7 +564,7 @@ class RedNodeStudioDetailer:
             try:
                 from . import stages as _stages
                 tap = lambda img, label: _stages.record(
-                    img, label, prompt=prompt, source="detailer")
+                    img, label, prompt=prompt, source="detailer", px=cfg["tap_px"])
             except Exception as exc:
                 print("[RedNode Detailer] taps unavailable: %s" % exc, flush=True)
         if tap:

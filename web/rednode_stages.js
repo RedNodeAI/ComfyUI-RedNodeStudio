@@ -43,7 +43,10 @@ css.textContent = `
 .rn-sg-view{position:relative;flex:1;min-height:160px;background:#111316;border-radius:6px;
   border:1px solid #2a2e35;overflow:hidden;display:flex;align-items:center;
   justify-content:center}
-.rn-sg-view img{max-width:100%;max-height:100%;display:block}
+/* The picture FILLS the box, scaling up as well as down: the taps are kept at a
+   chosen size and the node and the room are whatever size they are. */
+.rn-sg-view > img{flex:1;min-width:0;min-height:0;width:100%;height:100%;
+  object-fit:contain;display:block}
 .rn-sg-cmp{position:relative;width:100%;height:100%;overflow:hidden;cursor:ew-resize}
 .rn-sg-cmp .base,.rn-sg-cmp .top{position:absolute;inset:0;display:flex;align-items:center;
   justify-content:center}
@@ -51,8 +54,7 @@ css.textContent = `
    narrowed. Narrowing it re-centres the image inside the smaller box, so instead of
    one picture revealing another you get two half-size pictures side by side. */
 .rn-sg-cmp .top{overflow:hidden;clip-path:inset(0 50% 0 0)}
-.rn-sg-cmp img{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  max-width:100%;max-height:100%}
+.rn-sg-cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .rn-sg-cmp .handle{position:absolute;top:0;bottom:0;width:2px;background:#fff;
   box-shadow:0 0 6px #000a;pointer-events:none}
 .rn-sg-cmp .handle::after{content:"";position:absolute;top:50%;left:50%;width:22px;
@@ -270,13 +272,13 @@ function render(node) {
     base.className = "base";
     const bimg = document.createElement("img");
     bimg.draggable = false;
-    bimg.src = stages[b].thumb;
+    bimg.src = stages[b].full || stages[b].thumb;
     base.appendChild(bimg);
     const top = document.createElement("div");
     top.className = "top";
     const aimg = document.createElement("img");
     aimg.draggable = false;
-    aimg.src = stages[a].thumb;
+    aimg.src = stages[a].full || stages[a].thumb;
     top.appendChild(aimg);
     const handle = document.createElement("div");
     handle.className = "handle";
@@ -306,19 +308,28 @@ function render(node) {
         setWipe(((ev.clientX - r.left) / Math.max(1, r.width)) * 100);
       };
       move(e);
+      // ON THE BOX, not the window. The panel stops every pointer event from
+      // bubbling past itself (so the canvas never sees them), which meant a window
+      // listener only heard moves made OUTSIDE the node: the line jumped once on
+      // the press and then stuck. With the pointer captured above, the box hears
+      // the whole drag wherever the pointer goes.
       const up = () => {
-        window.removeEventListener("pointermove", move);
+        box.removeEventListener("pointermove", move);
+        box.removeEventListener("pointerup", up);
+        box.removeEventListener("pointercancel", up);
         window.removeEventListener("pointerup", up);
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
+      box.addEventListener("pointermove", move);
+      box.addEventListener("pointerup", up);
+      box.addEventListener("pointercancel", up);
+      window.addEventListener("pointerup", up);         // a release with no capture
     });
     view.appendChild(box);
     setWipe(node._rnWipe ?? 50);
   } else {
     const img = document.createElement("img");
     img.draggable = false;
-    img.src = stages[a].thumb;
+    img.src = stages[a].full || stages[a].thumb;
     img.title = `${stages[a].label} (${stages[a].w} x ${stages[a].h}, from the `
               + `${stages[a].source})`;
     view.appendChild(img);

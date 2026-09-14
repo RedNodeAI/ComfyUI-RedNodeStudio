@@ -412,6 +412,7 @@ function readCfg(node) {
   if (typeof d.seed !== "number") d.seed = 0;
   if (typeof d.seed_random !== "boolean") d.seed_random = true;
   if (typeof d.taps !== "boolean") d.taps = false;
+  if (![320, 512, 768, 1024, 1536, 0].includes(d.tap_px)) d.tap_px = 768;
   if (typeof d.sam_model !== "string") d.sam_model = "";
   if (typeof d.sam_precision !== "string") d.sam_precision = "";
   return d;
@@ -585,6 +586,23 @@ function buildPanel(node) {
                  + "the strip; nothing to wire.";
       tapB.onclick = () => { d.taps = !d.taps; writeCfg(node, d); render(); };
       srow.append(tapB);
+      if (d.taps) {
+        // the size the strip keeps each frame at, the Stage Tap's own choice
+        const tapSz = document.createElement("select");
+        tapSz.className = "rn-adv-tappx";
+        for (const [v, l] of [[320, "320 px"], [512, "512 px"], [768, "768 px"],
+                              [1024, "1024 px"], [1536, "1536 px"], [0, "full size"]]) {
+          const o = document.createElement("option");
+          o.value = String(v);
+          o.textContent = l;
+          o.selected = (d.tap_px ?? 768) === v;
+          tapSz.appendChild(o);
+        }
+        tapSz.title = "How big the Stage View keeps each frame. Bigger is sharper on "
+                    + "the node and in its full screen; full size is the frame as it is.";
+        tapSz.onchange = () => { d.tap_px = parseInt(tapSz.value, 10); writeCfg(node, d); };
+        srow.append(tapSz);
+      }
       wrap.appendChild(srow);
     }
     cap("START · the workspace's image arrives");
