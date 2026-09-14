@@ -233,11 +233,18 @@ lamp in a prompt and you get a lamp in the picture, so the wording stays on what
 to the scene. Exposure runs in stops either side of a centred zero, darker one way and brighter the
 other, and colour runs in mireds either side of neutral daylight, warm one way and cool the other.
 
-RedNode Camera LoRAs turns that same geometry into slider strengths. Four camera sliders, zoom,
-height, orbit and back, each one off, auto or manual. On auto the slider follows the stage, so
-pushing the camera in moves zoom with it and there is no second number to keep in sync. The two
-lighting sliders work the same way off the exposure and colour dials. Every slot is empty until you
-pick a file, and the node is happy with none of them.
+The stage turns that same geometry into slider strengths. Four camera sliders, zoom, height, orbit
+and back, each one off, auto or manual. On auto the slider follows the stage, so pushing the camera
+in moves zoom with it and there is no second number to keep in sync. The two lighting sliders work
+the same way off the exposure and colour dials. Every slot is empty until you pick a file, and the
+stage is happy with none of them.
+
+In a plain graph, without the Workspace, wire a model and clip into RedNode Camera Studio and take
+them out again: they come out with the sliders applied at the strengths the panel shows, and the
+prompt output leads your text. That is the whole classic setup: the Studio, a text encode and a
+sampler. On a camera path the model comes out once per shot, each at that shot's strengths. RedNode
+Camera LoRAs does the same job as a separate node for graphs that want the slider files and modes
+chosen there, or that get their camera_json from elsewhere.
 
 Three of the sliders are mine, trained for Krea 2, and they are attached to the
 [v1.2.0 release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/tag/v1.2.0) and listed
@@ -351,7 +358,7 @@ what they did. Treat them as legacy.
 
 | Node | What it does |
 |---|---|
-| RedNode Camera Studio | A top-view stage: place the subjects, the walls and the lights, move the camera, and the geometry is written as the physical-camera language Krea 2 obeys. Camera paths render one image per shot. |
+| RedNode Camera Studio | A top-view stage: place the subjects, the walls and the lights, move the camera, and the geometry is written as the physical-camera language Krea 2 obeys. Wire a model and clip through it and they come out with the slider LoRAs applied. Camera paths render one image per shot. |
 | RedNode Camera LoRAs | Applies the camera slider LoRAs (zoom, height, orbit, back) from the studio's own geometry, off / auto / manual per slider. |
 | RedNode Camera Multi-Angle | Turns the studio's camera into a Qwen-Image-Edit Multiple-Angles prompt, for re-shooting an existing photo from another viewpoint. |
 

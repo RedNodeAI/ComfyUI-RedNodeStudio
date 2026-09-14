@@ -289,15 +289,20 @@ class RedNodeCameraStudio:
                    "on a top-view stage, set the lens, and the node writes the "
                    "physical-camera paragraph Krea 2 obeys - where the camera is, "
                    "its tilt, what it sees, the lens - plus scene blocking for "
-                   "several subjects. Wire prompt_in to lead your prompt with it.")
-    RETURN_TYPES = ("STRING", "STRING", "IMAGE", "LATENT", "INT", "INT")
-    RETURN_NAMES = ("prompt", "camera_json", "image", "latent", "width", "height")
+                   "several subjects. Wire prompt_in to lead your prompt with it. "
+                   "Wire a model (and clip) in and they come out with the camera "
+                   "and light slider LoRAs applied at the stage's strengths, so a "
+                   "plain graph needs only this node, a text encode and a sampler.")
+    RETURN_TYPES = ("STRING", "STRING", "IMAGE", "LATENT", "INT", "INT", "MODEL", "CLIP")
+    RETURN_NAMES = ("prompt", "camera_json", "image", "latent", "width", "height", "model", "clip")
     # BATCH ANGLES: with a camera path set, every output is a LIST of N shots
-    # (prompt, camera_json, latent, width, height per shot; the image is
-    # passed through once). ComfyUI runs the downstream nodes once per item,
-    # so one Queue renders the whole path. With the path off the lists have
-    # one entry and the graph behaves as before.
-    OUTPUT_IS_LIST = (True, True, False, True, True, True)
+    # (prompt, camera_json, latent, width, height, model and clip per shot; the
+    # image is passed through once). ComfyUI runs the downstream nodes once per
+    # item, so one Queue renders the whole path. With the path off the lists
+    # have one entry and the graph behaves as before. The model is per shot on
+    # purpose: an orbit path changes the orbit slider's auto strength shot by
+    # shot, and a clone with patches is cheap.
+    OUTPUT_IS_LIST = (True, True, False, True, True, True, True, True)
     FUNCTION = "run"
 
     @classmethod
@@ -313,21 +318,48 @@ class RedNodeCameraStudio:
                               "unless the panel says otherwise)."}),
                 "image": ("IMAGE", {"tooltip": "Passed through untouched, so the node "
                                     "can sit in a review chain."}),
+                "model": ("MODEL", {"tooltip": "Optional. Comes out of the model output with "
+                                    "the stage's camera and light slider LoRAs applied at "
+                                    "the strengths the panel shows (off, auto or manual per "
+                                    "slider). Nothing on: passes through untouched."}),
+                "clip": ("CLIP", {"tooltip": "Optional, with the model: the same LoRAs land "
+                                  "on the clip too, as a LoRA loader would."}),
             },
         }
 
-    def run(self, config="{}", prompt_in=None, image=None):
+    def run(self, config="{}", prompt_in=None, image=None, model=None, clip=None):
         st = parse_state(config)
         cams = _ct.camera_path(st["camera"], st["subjects"], st["path"])
-        prompts, jsons, latents, ws, hs = [], [], [], [], []
+        prompts, jsons, latents, ws, hs, models, clips = [], [], [], [], [], [], []
         for i, cam in enumerate(cams):
             shot = self._shot(st, cam, prompt_in, i, len(cams))
             prompts.append(shot[0]); jsons.append(shot[1]); latents.append(shot[2])
             ws.append(shot[3]); hs.append(shot[4])
+            m, c = self._sliders(st, cam, model, clip)
+            models.append(m); clips.append(c)
         if len(cams) > 1:
             print("[RedNode Camera Studio] camera path %s: %d shots" % (st["path"]["mode"], len(cams)),
                   flush=True)
-        return (prompts, jsons, image, latents, ws, hs)
+        return (prompts, jsons, image, latents, ws, hs, models, clips)
+
+    @staticmethod
+    def _sliders(st, cam, model, clip):
+        """The wired model and clip with this shot's slider LoRAs on them.
+
+        The same resolver the Workspace's Camera tab uses, on the state with
+        this shot's camera swapped in, so a path's orbit shot gets that shot's
+        orbit strength. No model wired, or no slider on: the inputs come back
+        as they are (None when nothing is wired).
+        """
+        if model is None:
+            return None, clip
+        st_i = dict(st, camera=cam)
+        wanted = [(e["key"], e["name"], e["strength"])
+                  for e in resolve_camera_loras(st_i) + resolve_light_loras(st_i)]
+        if not wanted:
+            return model, clip
+        m, c, _applied = _apply_loras(model, clip, wanted)
+        return m, c
 
     def _shot(self, st, cam, prompt_in, index, count):
         """One shot's outputs for one camera state."""
@@ -530,9 +562,10 @@ def _guess_lora(key, names):
 class RedNodeCameraLoRAs:
     """The studio's camera LoRAs as a standalone node: model (+clip) in, the
     four slider LoRAs applied at strengths that follow the camera_json from
-    the Camera Studio, model (+clip) out. Completes the standalone chain
-    (Studio.prompt -> your text encode, Studio.camera_json -> here -> sampler)
-    so the studio drives any Krea 2 graph without the workspace."""
+    the Camera Studio, model (+clip) out. The Studio's own model and clip
+    sockets do the same in one node; this one is for a graph that wants the
+    slider files and modes chosen here rather than on the stage, or that gets
+    its camera_json from somewhere else."""
     CATEGORY = "RedNode/Prompt"
     DESCRIPTION = ("Applies the camera slider LoRAs (zoom / height / orbit / back) "
                    "at strengths set from the Camera Studio's camera_json - Auto "
