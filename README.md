@@ -476,6 +476,11 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
   Krea2-BBOX-Prompter. Manager installs packs but not models, so the upscaler's two files are
   yours to fetch: `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and
   `ema_vae_fp16.safetensors`.
+- `RedNode_Studio_Pro_Grade.json` is the V1.3 graph with the settings of a heavy Krea 2 grading
+  flow set on the pack's own controls: 10 steps on the beta57 schedule with Detail Daemon and a
+  densified tail, i2i at 0.97, a face and eyes detailer group, a tiled pass at 0.25 with Tone lock,
+  then SeedVR2 to 2K with the VRAM freed first. Pick a 1x skin model on the tiled card when you
+  have one; it ships resize-only.
 - `RedNode_MultiAngle.json` re-shoots an existing photo from another viewpoint:
   the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
   Krea 2 finishes the frame.
