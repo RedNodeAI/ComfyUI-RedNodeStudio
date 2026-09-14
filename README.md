@@ -166,8 +166,9 @@ Three kinds of pass:
 - **Sampler**: the whole frame refined at a denoise, an image to image over what arrived. Its
   scale sticks, so 0.5 then 2.0 across two passes is the shrink-and-regrow chain.
 - **Detailer**: SAM3 segments a target, face, hair, hands, eyes, clothes or background, the crop
-  renders at a working resolution, and goes back under a feathered mask. The SAM file and its
-  precision are picked once on the node.
+  renders at a working resolution, and goes back under a feathered mask at a blend, so a stronger
+  denoise can be softened at the paste instead of at the sampler. The SAM file and its precision
+  are picked once on the node.
 - **Upscale**: SeedVR2 at a size, 720p, 1080p, 2K, 1440p or 4K as a pixel budget, with the short
   edge worked out from the frame's own aspect. The loader dials sit on the card.
 

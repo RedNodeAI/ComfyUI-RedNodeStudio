@@ -119,6 +119,11 @@ def parse_pipeline(config_json):
             "lora_strength": _num("lora_strength", 0.0, 2.0, 1.0),
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
             "feather": _num("feather", 0, 64, 8, int),
+            # BLEND: how much of the rendered crop goes back. 1 is the render
+            # under the mask as before; 0.5 halves it against the crop as it
+            # was, the dial tuned against denoise (0.3 to 0.5 with blend under
+            # 1 keeps a face's own skin under a stronger repaint).
+            "blend": _num("blend", 0.0, 1.0, 1.0),
             "padding": _num("padding", 0.0, 2.0, 0.35),
             # the crop's working resolution: its long edge is resized to this
             # before rendering, then the result goes back at the crop's own
@@ -889,14 +894,16 @@ class RedNodeStudioDetailer:
         return mask, box, None
 
     @staticmethod
-    def _paste(image, crop, rendered, mask, box, feather):
-        """The rendered crop back into the frame under the feathered mask."""
+    def _paste(image, crop, rendered, mask, box, feather, blend=1.0):
+        """The rendered crop back into the frame under the feathered mask, at
+        a blend: the matte scaled, so 0.5 leaves half the crop as it was."""
         y0, y1, x0, x1 = box
         m = mask[:, y0:y1, x0:x1].unsqueeze(-1).clamp(0, 1)
         if feather > 0:
             k = int(feather) * 2 + 1
             m = F.avg_pool2d(m.permute(0, 3, 1, 2), k, stride=1,
                              padding=k // 2).permute(0, 2, 3, 1).clamp(0, 1)
+        m = m * max(0.0, min(1.0, float(blend)))
         merged = image.clone()
         merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
         return merged
@@ -937,7 +944,7 @@ class RedNodeStudioDetailer:
                                      size=crop.shape[1:3], mode="bilinear",
                                      align_corners=False).permute(0, 2, 3, 1)
         return self._paste(image, crop, rendered, mask, box,
-                           s["feather"]), None
+                           s["feather"], s["blend"]), None
 
     def _handler_pass(self, image, rigd, s, ws_cfg, seed, tag, tap=None):
         """A pass on an engine rig (a RIG_KIND_HANDLERS kind, the personal
@@ -998,7 +1005,7 @@ class RedNodeStudioDetailer:
                                     size=crop.shape[1:3], mode="bilinear",
                                     align_corners=False).permute(0, 2, 3, 1)
                             out = self._paste(out, crop, img, mask, box,
-                                              s["feather"])
+                                              s["feather"], s["blend"])
             except Exception as exc:
                 why = "the engine failed: %s" % exc
             line = "%s: %s rig %r, %s" % (

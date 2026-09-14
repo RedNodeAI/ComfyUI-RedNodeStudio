@@ -1077,6 +1077,26 @@ function buildPanel(node) {
           lab("Denoise"),
           bar(dv, 0, 1, 0.01, fmt2, "Denoise for this pass.", "#b8283c",
               (v) => { s.denoise = v; writeCfg(node, d); }));
+        if (isDet) {
+          // BLEND against denoise: how much of the rendered crop goes back.
+          // 1 is the render under the mask; lower keeps some of the crop as
+          // it was, so a stronger denoise can be softened at the paste rather
+          // than at the sampler. Feather beside it, the mask's edge in pixels.
+          str.line.append(
+            lab("Blend"),
+            bar(s.blend ?? 1.0, 0, 1, 0.05, fmt2,
+                "How much of the rendered crop goes back into the frame. 1.00 is "
+                + "the render under the mask; 0.50 keeps half of the crop as it "
+                + "was. Tune it against Denoise: 0.3 to 0.5 denoise with a blend "
+                + "under 1 repaints harder and still keeps the face's own skin.",
+                "#c9a24a", (v) => { s.blend = v; writeCfg(node, d); }),
+            lab("Feather"),
+            num(s.feather ?? 8, 1,
+                "The mask's soft edge in pixels, 0 to 64. 8 to 12 hides the seam "
+                + "on a face; more for hair against a busy background.",
+                (v) => { s.feather = Math.max(0, Math.min(64, Math.round(v)));
+                         writeCfg(node, d); }, "46px"));
+        }
         const rrow = document.createElement("div");
         rrow.className = "line";
         // iteration on one pass, the Paint tab's Passes: N rounds over its own
