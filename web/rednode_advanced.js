@@ -862,6 +862,7 @@ function buildPanel(node) {
         sum.style.fontSize = "12px";
         sum.textContent = s.type === "upscale"
           ? "SeedVR2 \u00b7 " + (s.size || "1080p")
+            + (s.region ? " \u00b7 " + s.region : "")
             + (s.dit_model ? " \u00b7 " + s.dit_model.replace(/\.safetensors$/i, "") : "")
           : (s.rig || "(active rig)")
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
@@ -873,6 +874,8 @@ function buildPanel(node) {
           + ((s.repeat || 1) > 1 ? " \u00b7 \u00d7" + s.repeat
              + ((s.pass_custom || s.scale_custom) ? " per round" : "") : "")
           + (s.crop_res ? " \u00b7 " + s.crop_res + "px" : "");
+        sum.textContent += (s.free_vram ? " \u00b7 free VRAM" : "")
+                         + (s.tone_lock ? " \u00b7 tone lock" : "");
         top.appendChild(sum);
       } else if (s.type === "upscale") {
         // no rig: the SeedVR2 loaders do the loading. The size is the whole
@@ -886,6 +889,16 @@ function buildPanel(node) {
                        + "3840x2160. A frame already past the size is brought DOWN "
                        + "to it, the same as the workflow.",
                        (v) => { s.size = v; writeCfg(node, d); }));
+        // a REGION: SAM3's target, the crop through the upscaler and back at
+        // its own size, so the face gains the detail and the frame keeps its size
+        top.append(lab("Region"),
+                   sel(TARGETS, s.region || "",
+                       "Upscale only this target: SAM3 finds it, the crop goes "
+                       + "through SeedVR2 at the size and comes back at its own "
+                       + "size under a feathered matte. The frame keeps its size; "
+                       + "the region gains the detail. (whole frame) upscales "
+                       + "everything and grows the frame.",
+                       (v) => { s.region = v; writeCfg(node, d); }, "(whole frame)"));
       } else {
         top.append(lab("Rig"),
                    sel(rigs, s.rig, "Which Models-tab rig runs this pass.",
@@ -956,7 +969,13 @@ function buildPanel(node) {
         shiftFolds(node, i, -1);
         writeAndRender();
       };
-      top.append(spacer, dup, del);
+      // FREE VRAM before this pass: the models ComfyUI holds are unloaded
+      // while nothing is mid-allocation, so a 7B upscaler never overlaps the rig
+      const freeT = tog("Free VRAM", "free_vram", false,
+        "Unload every model ComfyUI is holding before this pass runs, so its "
+        + "model never overlaps the one before it. They reload on demand: the "
+        + "cost is one load, not the run. Runs on every queue.");
+      top.append(spacer, freeT, dup, del);
       card.appendChild(top);
 
       if (!isFolded && s.type === "upscale") {
@@ -1116,6 +1135,27 @@ function buildPanel(node) {
         };
         rep.addEventListener("wheel", () => rep.blur(), { passive: true });
         rrow.append(lab("Repeat"), rep);
+        // TONE LOCK: the result keeps its detail and takes this pass's input
+        // tone, so colour and exposure stop wandering down a long chain
+        rrow.append(tog("Tone lock", "tone_lock", false,
+          "Keep this pass's new detail but take the tone, colour and exposure at "
+          + "a radius, from the picture as it arrived, skin hue held. Off, the "
+          + "pass keeps whatever tone the model gave it. The drift fix for a long "
+          + "chain of passes."));
+        if (s.tone_lock) {
+          rrow.append(
+            lab("Radius"),
+            num(s.tone_radius ?? 32, 4,
+                "How coarse the tone is, in pixels. 32 locks exposure and colour "
+                + "casts and leaves everything finer to the pass; smaller pulls "
+                + "more of the input back.",
+                (v) => { s.tone_radius = Math.max(4, Math.min(256, Math.round(v)));
+                         writeCfg(node, d); }, "46px"),
+            lab("Strength"),
+            bar(s.tone_strength ?? 1, 0, 1, 0.05, fmt2,
+                "How far the tone is pulled back to the input's. 1.00 is all the way.",
+                "#3fa7a0", (v) => { s.tone_strength = v; writeCfg(node, d); }));
+        }
         const reps = Math.max(1, Math.round(Number(s.repeat) || 1));
         const extra = [];
         if (reps > 1) {

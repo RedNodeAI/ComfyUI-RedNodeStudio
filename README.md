@@ -170,7 +170,11 @@ Three kinds of pass:
   denoise can be softened at the paste instead of at the sampler. The SAM file and its precision
   are picked once on the node.
 - **Upscale**: SeedVR2 at a size, 720p, 1080p, 2K, 1440p or 4K as a pixel budget, with the short
-  edge worked out from the frame's own aspect. The loader dials sit on the card.
+  edge worked out from the frame's own aspect. The loader dials sit on the card. A region, face
+  or hair, upscales that crop only and the frame keeps its size; an out-of-memory halves the
+  tile and tries again.
+- **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
+  but takes the tone from the picture as it arrived, the drift fix for a long chain.
 
 Duplicate a pass with the button beside its delete and nudge one number, which is how a chain
 gets built. Group titles fold and switch a set of passes at once. Premade layouts ship, the face

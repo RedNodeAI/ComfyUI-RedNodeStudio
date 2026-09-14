@@ -125,6 +125,19 @@ def parse_pipeline(config_json):
             # 1 keeps a face's own skin under a stronger repaint).
             "blend": _num("blend", 0.0, 1.0, 1.0),
             "padding": _num("padding", 0.0, 2.0, 0.35),
+            # FREE VRAM before this pass: every model ComfyUI holds unloaded at
+            # the moment nothing is mid-allocation, so a big rig or the SeedVR2
+            # loaders never overlap the pass before. Runs every queue.
+            "free_vram": bool(s.get("free_vram")),
+            # TONE LOCK: the result keeps its own detail and takes the pass
+            # input's tone (its low frequencies at a radius) by strength, skin
+            # hue held. The drift fix for a long chain. Off by default.
+            "tone_lock": bool(s.get("tone_lock")),
+            "tone_radius": _num("tone_radius", 4, 256, 32, int),
+            "tone_strength": _num("tone_strength", 0.0, 1.0, 1.0),
+            # an upscale pass on a region only: SAM3's target, the crop through
+            # the upscaler and back under the feathered matte. "" is the frame.
+            "region": str(s.get("region") or "")[:48],
             # the crop's working resolution: its long edge is resized to this
             # before rendering, then the result goes back at the crop's own
             # size. 0 keeps the old behaviour, the crop as it comes (x Scale).
@@ -237,6 +250,53 @@ def upscale_short_edge(w, h, target_px):
     return max(16, int(round(f * min(int(w), int(h)) / 2.0)) * 2)
 
 
+def _box_blur(t, radius):
+    """A separable box blur run twice on [B,H,W,C]: a cheap near-gaussian,
+    edges weighted by what is there rather than by padding."""
+    k = int(radius) * 2 + 1
+    x = t.permute(0, 3, 1, 2)
+    for _ in range(2):
+        x = F.avg_pool2d(x, (k, 1), stride=1, padding=(k // 2, 0),
+                         count_include_pad=False)
+        x = F.avg_pool2d(x, (1, k), stride=1, padding=(0, k // 2),
+                         count_include_pad=False)
+    return x.permute(0, 2, 3, 1)
+
+
+def tone_lock(before, after, radius=32, strength=1.0, skin=0.5):
+    """The pass result with the pass input's tone. The result keeps its high
+    frequencies (the detail the pass made); the input's low frequencies at the
+    radius replace its own, by strength; skin hue is held to the input's. Colour
+    and exposure stop wandering pass to pass down a long chain."""
+    strength = max(0.0, min(1.0, float(strength)))
+    if strength <= 0:
+        return after
+    a = after[:, :, :, :3]
+    b = before[:, :, :, :3].to(a.device, a.dtype)
+    if b.shape[1:3] != a.shape[1:3]:
+        b = F.interpolate(b.permute(0, 3, 1, 2), size=a.shape[1:3], mode="bilinear",
+                          align_corners=False).permute(0, 2, 3, 1)
+    if b.shape[0] != a.shape[0]:
+        b = b[:1].expand(a.shape[0], -1, -1, -1)
+    r = max(1, min(int(radius), min(a.shape[1], a.shape[2]) // 2))
+    locked = (a - _box_blur(a, r) + _box_blur(b, r)).clamp(0, 1)
+    if skin > 0:
+        try:
+            from . import postprocess as _pp     # its helpers are NCHW
+            locked = _pp._skin_hold(b.permute(0, 3, 1, 2), locked.permute(0, 3, 1, 2),
+                                    skin).permute(0, 2, 3, 1)
+        except Exception:
+            pass
+    return (a + (locked - a) * strength).clamp(0, 1)
+
+
+def _is_oom(exc):
+    oom = getattr(torch.cuda, "OutOfMemoryError", None)
+    if oom is not None and isinstance(exc, oom):
+        return True
+    return "out of memory" in str(exc).lower()
+
+
 def _call_node(cls, kw):
     """A node called the way the graph calls it, its outputs as a list. A V3
     node (comfy_api io.ComfyNode) hands back a NodeOutput with the values in
@@ -282,24 +342,43 @@ def _seedvr2(image, s, seed):
             "model": s["dit_model"], "blocks_to_swap": s["blocks_to_swap"],
             "swap_io_components": False, "offload_device": s["offload"],
             "cache_model": s["cache_model"], "attention_mode": s["attention"]}))[0]
-        vae = _call_node(vae_cls, fill(vae_cls, {
-            "model": s["vae_model"], "encode_tiled": s["tiled"],
-            "encode_tile_size": s["tile"], "encode_tile_overlap": s["tile_overlap"],
-            "decode_tiled": s["tiled"], "decode_tile_size": s["tile"],
-            "decode_tile_overlap": s["tile_overlap"],
-            "offload_device": s["offload"], "cache_model": s["cache_model"]}))[0]
         h, w = int(image.shape[1]), int(image.shape[2])
         res = upscale_short_edge(
             w, h, UPSCALE_SIZES.get(s["size"], UPSCALE_SIZES["1080p"]))
-        outs = _call_node(up_cls, fill(up_cls, {
-            "image": image, "dit": dit, "vae": vae,
-            "seed": int(seed) & 0xffffffff, "resolution": res,
-            "max_resolution": s["max_edge"], "batch_size": 1,
-            "uniform_batch_size": False, "temporal_overlap": 0,
-            "prepend_frames": 0, "color_correction": s["color_fix"],
-            "input_noise_scale": s["input_noise"],
-            "latent_noise_scale": s["latent_noise"],
-            "offload_device": s["offload"], "enable_debug": False}))
+        # THE TILE LADDER: an out-of-memory with the tiled VAE on halves the
+        # tile (overlap kept to a quarter of it) down to 64 before giving up,
+        # so a card that cannot fit 1024 still finishes at 512 or 256
+        tile = int(s["tile"])
+        while True:
+            overlap = min(int(s["tile_overlap"]), tile // 4)
+            vae = _call_node(vae_cls, fill(vae_cls, {
+                "model": s["vae_model"], "encode_tiled": s["tiled"],
+                "encode_tile_size": tile, "encode_tile_overlap": overlap,
+                "decode_tiled": s["tiled"], "decode_tile_size": tile,
+                "decode_tile_overlap": overlap,
+                "offload_device": s["offload"], "cache_model": s["cache_model"]}))[0]
+            try:
+                outs = _call_node(up_cls, fill(up_cls, {
+                    "image": image, "dit": dit, "vae": vae,
+                    "seed": int(seed) & 0xffffffff, "resolution": res,
+                    "max_resolution": s["max_edge"], "batch_size": 1,
+                    "uniform_batch_size": False, "temporal_overlap": 0,
+                    "prepend_frames": 0, "color_correction": s["color_fix"],
+                    "input_noise_scale": s["input_noise"],
+                    "latent_noise_scale": s["latent_noise"],
+                    "offload_device": s["offload"], "enable_debug": False}))
+                break
+            except Exception as exc:
+                if not (s["tiled"] and tile > 64 and _is_oom(exc)):
+                    raise
+                tile = max(64, tile // 2)
+                print("[RedNode Detailer] SeedVR2 ran out of memory; the tile is "
+                      "halved to %d and the pass tried again" % tile, flush=True)
+                try:
+                    import comfy.model_management as _mm
+                    _mm.soft_empty_cache()
+                except Exception:
+                    pass
         for v in outs:
             if torch.is_tensor(v) and v.ndim == 4:
                 return v, None
@@ -590,15 +669,42 @@ class RedNodeStudioDetailer:
             tag = "%d/%d %s" % (i, len(stages), s["type"])
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
                      sam_precision=cfg["sam_precision"])
+            pass_in = out
+            if s["free_vram"]:
+                # every model ComfyUI holds unloaded before this pass, while
+                # nothing is mid-allocation; the next sampler pays one load
+                try:
+                    from . import vram as _vram
+                    count, freed = _vram.free_models()
+                    line = "%s: freed %d model(s), about %d MB, before the pass" % (
+                        tag, count, freed // (1024 * 1024))
+                except Exception as exc:
+                    line = "%s: free VRAM failed: %s" % (tag, exc)
+                print("[RedNode Detailer] " + line, flush=True)
+                report.append(line)
             # A SEEDVR2 UPSCALE loads no rig: the pack's own loaders do the
-            # loading, and a pass that could not run passes the picture on
+            # loading, and a pass that could not run passes the picture on.
+            # With a region it works the target's crop only, and the frame
+            # keeps its size: the region gains the detail, the way a detailer's
+            # scale spends pixels on a face.
             if s["type"] == "upscale":
-                up, why = _seedvr2(out, s, seed + i)
+                if s["region"]:
+                    self._rn_live_label = "upscale %d of %d" % (i, len(stages))
+                    up, why = self._each_frame(
+                        out, lambda frame, _s=s, _seed=seed + i:
+                        self._upscale_region(frame, _s, _seed))
+                    if why is not None:
+                        up = None
+                else:
+                    up, why = _seedvr2(out, s, seed + i)
                 if up is not None:
-                    line = "%s: SeedVR2 %s, %d x %d -> %d x %d" % (
-                        tag, s["size"], out.shape[2], out.shape[1],
-                        up.shape[2], up.shape[1])
-                    out = up
+                    line = ("%s: SeedVR2 %s on %s, %d x %d kept" % (
+                                tag, s["size"], s["region"], out.shape[2], out.shape[1])
+                            if s["region"] else
+                            "%s: SeedVR2 %s, %d x %d -> %d x %d" % (
+                                tag, s["size"], out.shape[2], out.shape[1],
+                                up.shape[2], up.shape[1]))
+                    out = self._tone(up, pass_in, s, tag, report)
                 else:
                     line = "%s: %s; passed through" % (tag, why)
                 print("[RedNode Detailer] " + line, flush=True)
@@ -615,6 +721,7 @@ class RedNodeStudioDetailer:
                 for line in lines:
                     print("[RedNode Detailer] " + line, flush=True)
                     report.append(line)
+                out = self._tone(out, pass_in, s, tag, report)
                 continue
             rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"])
             if model is None or clip is None or vae is None:
@@ -786,10 +893,49 @@ class RedNodeStudioDetailer:
                                           " x%d" % (r + 1) if reps > 1 else ""))
                 if why:
                     break
+            if not why:
+                out = self._tone(out, pass_in, s, tag, report)
         if tap:
             tap(out, "Detailer out")
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
+
+    def _tone(self, img, src, s, tag, report):
+        """Tone lock on a pass that asked for it: the result's detail, the
+        pass input's tone. A failure is a line, never a dead queue."""
+        if not s.get("tone_lock") or img is src or img is None:
+            return img
+        try:
+            res = tone_lock(src, img, s["tone_radius"], s["tone_strength"])
+            line = "%s: tone lock, radius %d, strength %.2f" % (
+                tag, s["tone_radius"], s["tone_strength"])
+        except Exception as exc:
+            res = img
+            line = "%s: tone lock failed: %s" % (tag, exc)
+        print("[RedNode Detailer] " + line, flush=True)
+        report.append(line)
+        return res
+
+    def _upscale_region(self, frame, s, seed):
+        """SeedVR2 on the region only: the target's box padded 16 and rounded
+        to 8, the crop through the upscaler at the pass's size, back at the
+        crop's own size under the feathered matte at the blend."""
+        mask, box, why = self._locate(frame, dict(s, target=s["region"]))
+        if why is not None:
+            return frame, why
+        H, W = frame.shape[1], frame.shape[2]
+        y0, y1, x0, x1 = box
+        y0, x0 = max(0, (y0 - 16) // 8 * 8), max(0, (x0 - 16) // 8 * 8)
+        y1, x1 = min(H, -(-(y1 + 16) // 8) * 8), min(W, -(-(x1 + 16) // 8) * 8)
+        crop = frame[:, y0:y1, x0:x1, :3]
+        up, why = _seedvr2(crop, s, seed)
+        if up is None:
+            return frame, why
+        if up.shape[1:3] != crop.shape[1:3]:
+            up = F.interpolate(up.permute(0, 3, 1, 2), size=crop.shape[1:3],
+                               mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
+        return self._paste(frame, crop, up.to(crop.dtype), mask, (y0, y1, x0, x1),
+                           s["feather"], s["blend"]), None
 
     def _each_frame(self, image, fn):
         """A batch goes through a pass one frame at a time.
