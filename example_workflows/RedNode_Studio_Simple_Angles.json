@@ -1,0 +1,1630 @@
+{
+  "id": "b87812e0-4272-45c8-91ae-a11ecf03948f",
+  "revision": 0,
+  "last_node_id": 8833,
+  "last_link_id": 74996,
+  "nodes": [
+    {
+      "id": 8823,
+      "type": "e2814e53-2e9b-47e1-9fcf-2b2183de2df7",
+      "pos": [
+        -11755.373179359507,
+        -194.29688329647408
+      ],
+      "size": [
+        353.9322270947796,
+        234.4443558487519
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "unet_name",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        },
+        {
+          "label": "clip_name",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          },
+          "link": null
+        },
+        {
+          "label": "vae_name",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            74976
+          ]
+        },
+        {
+          "label": "CLIP",
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            74977
+          ]
+        },
+        {
+          "label": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            74984,
+            74993
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.27.0",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        },
+        "previewExposures": []
+      },
+      "widgets_values": [
+        "krea2TurboOfficialComfy_krea2TurboFp8.safetensors",
+        "qwen3VLInstruct4bHeretic_v10.safetensors",
+        "wan_2.1_vae_fp32.safetensors"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 8828,
+      "type": "RedNodePromptBox",
+      "pos": [
+        -9043.215902591455,
+        -151.58088562090407
+      ],
+      "size": [
+        471.9593050074254,
+        949.6861556320446
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "text",
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        },
+        {
+          "label": "seed",
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "label": "resolve_wildcards",
+          "localized_name": "resolve_wildcards",
+          "name": "resolve_wildcards",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "resolve_wildcards"
+          },
+          "link": null
+        },
+        {
+          "label": "font_size",
+          "localized_name": "font_size",
+          "name": "font_size",
+          "type": "INT",
+          "widget": {
+            "name": "font_size"
+          },
+          "link": null
+        },
+        {
+          "label": "text_color",
+          "localized_name": "text_color",
+          "name": "text_color",
+          "type": "COMBO",
+          "widget": {
+            "name": "text_color"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "prompt",
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            74986
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodePromptBox",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        },
+        "rn_tools_hidden": true
+      },
+      "widgets_values": [
+        "Beautiful female fantasy adventurer standing in an ancient ruined temple, long silver-black hair, intricate dark blue and black travelling outfit combining fitted leather, layered fabric, belts, small pouches and decorative metal clasps, long cape attached at the shoulders, ornate sword sheathed across her back. Elegant feminine design rather than heavy armor, realistic face and skin, moss-covered stone ruins, broken columns, plants and shafts of sunlight surrounding her, atmospheric depth, extremely detailed fantasy realism, cinematic game promotional artwork, full body.",
+        122927785852163,
+        "randomize",
+        true,
+        16,
+        "default"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 8824,
+      "type": "KSampler",
+      "pos": [
+        -7470.588124497655,
+        -90.52670173911538
+      ],
+      "size": [
+        490.25640532706757,
+        704.7448055807376
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 74989
+        },
+        {
+          "label": "positive",
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 74982
+        },
+        {
+          "label": "negative",
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 74983
+        },
+        {
+          "label": "latent_image",
+          "localized_name": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 74978
+        },
+        {
+          "label": "seed",
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "label": "steps",
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "label": "cfg",
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "label": "sampler_name",
+          "localized_name": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          },
+          "link": null
+        },
+        {
+          "label": "scheduler",
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "label": "denoise",
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "widget": {
+            "name": "denoise"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            74992
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.27.0",
+        "Node name for S&R": "KSampler",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        738818512106939,
+        "randomize",
+        8,
+        1,
+        "euler",
+        "normal",
+        1
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 8830,
+      "type": "VAEDecode",
+      "pos": [
+        -6937.184417926059,
+        -53.23348824378179
+      ],
+      "size": [
+        140,
+        46
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "samples",
+          "localized_name": "samples",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 74992
+        },
+        {
+          "label": "vae",
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 74993
+        }
+      ],
+      "outputs": [
+        {
+          "label": "IMAGE",
+          "localized_name": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            74995,
+            74996
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.2",
+        "Node name for S&R": "VAEDecode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 2,
+      "type": "RedNodeCameraStudio",
+      "pos": [
+        -11359.608976293246,
+        -249.92742457937595
+      ],
+      "size": [
+        1577.6110714655397,
+        1268.8513363904967
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "prompt_in",
+          "localized_name": "prompt_in",
+          "name": "prompt_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "label": "image",
+          "localized_name": "image",
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "label": "model",
+          "localized_name": "model",
+          "name": "model",
+          "shape": 7,
+          "type": "MODEL",
+          "link": 74976
+        },
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 74977
+        },
+        {
+          "label": "config",
+          "localized_name": "config",
+          "name": "config",
+          "type": "STRING",
+          "widget": {
+            "name": "config"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "prompt",
+          "localized_name": "prompt",
+          "name": "prompt",
+          "shape": 6,
+          "type": "STRING",
+          "links": [
+            74985
+          ]
+        },
+        {
+          "label": "camera_json",
+          "localized_name": "camera_json",
+          "name": "camera_json",
+          "shape": 6,
+          "type": "STRING",
+          "links": []
+        },
+        {
+          "label": "image",
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "label": "latent",
+          "localized_name": "latent",
+          "name": "latent",
+          "shape": 6,
+          "type": "LATENT",
+          "links": [
+            74978
+          ]
+        },
+        {
+          "label": "width",
+          "localized_name": "width",
+          "name": "width",
+          "shape": 6,
+          "type": "INT",
+          "links": null
+        },
+        {
+          "label": "height",
+          "localized_name": "height",
+          "name": "height",
+          "shape": 6,
+          "type": "INT",
+          "links": null
+        },
+        {
+          "label": "model",
+          "localized_name": "model",
+          "name": "model",
+          "shape": 6,
+          "type": "MODEL",
+          "links": [
+            74988
+          ]
+        },
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 6,
+          "type": "CLIP",
+          "links": [
+            74990
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeCameraStudio",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "{\"camera\":{\"pos\":[0.019490111485593153,0.9,1.1499165776499962],\"target\":0,\"target_height\":null,\"focal_mm\":35,\"roll_deg\":0,\"aperture\":0,\"lock\":true,\"aim\":[0,0,0]},\"subjects\":[{\"name\":\"the subject\",\"pos\":[0,0,0],\"height\":1.7,\"facing_deg\":0,\"kind\":\"person\",\"size\":[0.6,0.6],\"locked\":false,\"rel\":null}],\"output\":\"krea2\",\"join\":\"lead\",\"auto_latent\":true,\"latent_mp\":1.05,\"latent_batch\":1,\"zoom_lora\":\"\",\"zoom_mode\":\"off\",\"zoom_strength\":0,\"cam_loras\":{\"zoom\":{\"name\":\"zoom_krea2_loraholic.safetensors\",\"mode\":\"auto\",\"strength\":0},\"height\":{\"name\":\"camera_height_krea2_rednode.safetensors\",\"mode\":\"auto\",\"strength\":0},\"orbit\":{\"name\":\"camera_orbit_krea2_rednode.safetensors\",\"mode\":\"auto\",\"strength\":0},\"back\":{\"name\":\"camera_back_krea2_rednode.safetensors\",\"mode\":\"auto\",\"strength\":0}},\"light_loras\":{\"brightness\":{\"name\":\"PornMaster_Krea2_Light_Slider_V1.safetensors\",\"mode\":\"off\",\"strength\":0},\"colour\":{\"name\":\"color_temp_krea2_loraholic.safetensors\",\"mode\":\"off\",\"strength\":0}},\"path\":{\"mode\":\"off\",\"shots\":10,\"b\":null,\"orbit_from\":0,\"orbit_to\":180},\"stage_zoom\":\"normal\",\"lights\":[]}"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 8832,
+      "type": "RedNodeImageReview",
+      "pos": [
+        -8554.929145766242,
+        -125.69518027295118
+      ],
+      "size": [
+        675.3524325709277,
+        820.1501397081965
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 74995
+        }
+      ],
+      "outputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeImageReview",
+        "rn_review": [],
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        ""
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 8826,
+      "type": "Krea2RedNode",
+      "pos": [
+        -7782.366437342009,
+        -62.2225255109639
+      ],
+      "size": [
+        278.31478117454935,
+        523.3196382858594
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 74991
+        },
+        {
+          "label": "vae",
+          "localized_name": "vae",
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": 74984
+        },
+        {
+          "label": "subject_image",
+          "localized_name": "subject_image",
+          "name": "subject_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "label": "scene_image",
+          "localized_name": "scene_image",
+          "name": "scene_image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "label": "moodboard_style",
+          "localized_name": "moodboard_style",
+          "name": "moodboard_style",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "label": "extra_subjects",
+          "localized_name": "extra_subjects",
+          "name": "extra_subjects",
+          "shape": 7,
+          "type": "KREA2_SOURCES",
+          "link": null
+        },
+        {
+          "label": "output_latent",
+          "localized_name": "output_latent",
+          "name": "output_latent",
+          "shape": 7,
+          "type": "LATENT",
+          "link": null
+        },
+        {
+          "label": "subject_boost_mask",
+          "localized_name": "subject_boost_mask",
+          "name": "subject_boost_mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "label": "edit_mask",
+          "localized_name": "edit_mask",
+          "name": "edit_mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "label": "settings",
+          "localized_name": "settings",
+          "name": "settings",
+          "shape": 7,
+          "type": "KREA2_SETTINGS",
+          "link": null
+        },
+        {
+          "label": "workspace",
+          "localized_name": "workspace",
+          "name": "workspace",
+          "shape": 7,
+          "type": "KREA2_WORKSPACE",
+          "link": null
+        },
+        {
+          "label": "style_strength",
+          "localized_name": "style_strength",
+          "name": "style_strength",
+          "type": "FLOAT",
+          "widget": {
+            "name": "style_strength"
+          },
+          "link": null
+        },
+        {
+          "label": "instruction",
+          "localized_name": "instruction",
+          "name": "instruction",
+          "type": "STRING",
+          "widget": {
+            "name": "instruction"
+          },
+          "link": 74987
+        },
+        {
+          "label": "preset",
+          "localized_name": "preset",
+          "name": "preset",
+          "type": "COMBO",
+          "widget": {
+            "name": "preset"
+          },
+          "link": null
+        },
+        {
+          "label": "negative_prompt",
+          "localized_name": "negative_prompt",
+          "name": "negative_prompt",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "negative_prompt"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "positive",
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            74982
+          ]
+        },
+        {
+          "label": "negative",
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "slot_index": 1,
+          "links": [
+            74983
+          ]
+        }
+      ],
+      "title": "Krea 2 RedNode",
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "Krea2RedNode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.8",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        1,
+        "",
+        "Balanced",
+        ""
+      ],
+      "color": "#233",
+      "bgcolor": "#355"
+    },
+    {
+      "id": 8829,
+      "type": "RedNodeLoraStack",
+      "pos": [
+        -9716.59918378202,
+        -123.31908921047321
+      ],
+      "size": [
+        655.5700203833312,
+        827.6967644010367
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 74988
+        },
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 74990
+        },
+        {
+          "label": "preset",
+          "localized_name": "preset",
+          "name": "preset",
+          "type": "COMBO",
+          "widget": {
+            "name": "preset"
+          },
+          "link": null
+        },
+        {
+          "label": "seed",
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "model",
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            74989
+          ]
+        },
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "links": [
+            74991
+          ]
+        },
+        {
+          "label": "keywords",
+          "localized_name": "keywords",
+          "name": "keywords",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "label": "applied_loras",
+          "localized_name": "applied_loras",
+          "name": "applied_loras",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeLoraStack",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "custom (use stack)",
+        "{\"ui\": {\"loaded_from\": \"Default_RedNode\", \"filter\": \"Krea 2\"}, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}]}",
+        473911826915638,
+        "randomize",
+        "{\"ui\": {\"loaded_from\": \"Default_RedNode\", \"filter\": \"Krea 2\"}, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}]}"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 8833,
+      "type": "RedNodeSave",
+      "pos": [
+        -6719.660651648405,
+        -232.66539895167847
+      ],
+      "size": [
+        668.8890380859375,
+        1060.2221923828124
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "localized_name": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 74996
+        },
+        {
+          "label": "seed",
+          "localized_name": "seed",
+          "name": "seed",
+          "shape": 7,
+          "type": "INT",
+          "link": null
+        },
+        {
+          "label": "config",
+          "localized_name": "config",
+          "name": "config",
+          "type": "STRING",
+          "widget": {
+            "name": "config"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "image",
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {}
+        },
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodeSave"
+      },
+      "widgets_values": [
+        "{\"root\":\"\",\"subfolder\":\"%date%/\",\"name\":\"%date%_%time%\",\"numbering\":\"counter\",\"pad\":4,\"split_drafts\":false,\"keep\":false,\"write_text\":false,\"write_json\":false,\"embed_png\":true,\"prompts_folder\":\"\",\"format\":\"png\",\"quality\":90,\"compress\":7}",
+        ""
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 8827,
+      "type": "RedNodePromptCombine",
+      "pos": [
+        -7748.276383690749,
+        542.6977226796247
+      ],
+      "size": [
+        570.085033506577,
+        529.410954799795
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "text_1",
+          "localized_name": "text_1",
+          "name": "text_1",
+          "type": "STRING",
+          "widget": {
+            "name": "text_1"
+          },
+          "link": null
+        },
+        {
+          "label": "text_2",
+          "localized_name": "text_2",
+          "name": "text_2",
+          "type": "STRING",
+          "widget": {
+            "name": "text_2"
+          },
+          "link": null
+        },
+        {
+          "label": "separator",
+          "localized_name": "separator",
+          "name": "separator",
+          "type": "STRING",
+          "widget": {
+            "name": "separator"
+          },
+          "link": null
+        },
+        {
+          "label": "order",
+          "localized_name": "order",
+          "name": "order",
+          "type": "STRING",
+          "widget": {
+            "name": "order"
+          },
+          "link": null
+        },
+        {
+          "label": "is_final_prompt",
+          "localized_name": "is_final_prompt",
+          "name": "is_final_prompt",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "is_final_prompt"
+          },
+          "link": null
+        },
+        {
+          "label": "channel",
+          "localized_name": "channel",
+          "name": "channel",
+          "type": "STRING",
+          "widget": {
+            "name": "channel"
+          },
+          "link": null
+        },
+        {
+          "label": "channel_out",
+          "localized_name": "channel_out",
+          "name": "channel_out",
+          "type": "STRING",
+          "widget": {
+            "name": "channel_out"
+          },
+          "link": null
+        },
+        {
+          "label": "RedNode Camera Studio prompt",
+          "name": "part_1",
+          "type": "STRING",
+          "link": 74985
+        },
+        {
+          "label": "RedNode Prompt Box",
+          "name": "part_2",
+          "type": "STRING",
+          "link": 74986
+        }
+      ],
+      "outputs": [
+        {
+          "label": "prompt",
+          "localized_name": "prompt",
+          "name": "prompt",
+          "type": "STRING",
+          "links": [
+            74987
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0",
+        "Node name for S&R": "RedNodePromptCombine",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.8"
+        }
+      },
+      "widgets_values": [
+        "",
+        "",
+        ", ",
+        "",
+        false,
+        "",
+        "{\"channel\":\"\",\"channel_out\":\"\",\"parts\":[{\"kind\":\"slot\",\"name\":\"RedNode Camera Studio prompt\",\"on\":true,\"auto\":\"RedNode Camera Studio prompt\"},{\"kind\":\"slot\",\"name\":\"RedNode Prompt Box\",\"on\":true,\"auto\":\"RedNode Prompt Box\"}]}",
+        "",
+        ""
+      ]
+    }
+  ],
+  "links": [
+    [
+      74976,
+      8823,
+      0,
+      2,
+      2,
+      "MODEL"
+    ],
+    [
+      74977,
+      8823,
+      1,
+      2,
+      3,
+      "CLIP"
+    ],
+    [
+      74978,
+      2,
+      3,
+      8824,
+      3,
+      "LATENT"
+    ],
+    [
+      74982,
+      8826,
+      0,
+      8824,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      74983,
+      8826,
+      1,
+      8824,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      74984,
+      8823,
+      2,
+      8826,
+      1,
+      "VAE"
+    ],
+    [
+      74985,
+      2,
+      0,
+      8827,
+      8,
+      "STRING"
+    ],
+    [
+      74986,
+      8828,
+      0,
+      8827,
+      9,
+      "STRING"
+    ],
+    [
+      74987,
+      8827,
+      0,
+      8826,
+      12,
+      "STRING"
+    ],
+    [
+      74988,
+      2,
+      6,
+      8829,
+      0,
+      "MODEL"
+    ],
+    [
+      74989,
+      8829,
+      0,
+      8824,
+      0,
+      "MODEL"
+    ],
+    [
+      74990,
+      2,
+      7,
+      8829,
+      1,
+      "CLIP"
+    ],
+    [
+      74991,
+      8829,
+      1,
+      8826,
+      0,
+      "CLIP"
+    ],
+    [
+      74992,
+      8824,
+      0,
+      8830,
+      0,
+      "LATENT"
+    ],
+    [
+      74993,
+      8823,
+      2,
+      8830,
+      1,
+      "VAE"
+    ],
+    [
+      74995,
+      8830,
+      0,
+      8832,
+      0,
+      "IMAGE"
+    ],
+    [
+      74996,
+      8830,
+      0,
+      8833,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 317,
+      "title": "Samplers",
+      "bounding": [
+        -7804.063438806853,
+        -171.48030492990918,
+        1030.1890208807936,
+        789.7828757820296
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 318,
+      "title": "Prompting + Lora",
+      "bounding": [
+        -9726.967115056435,
+        -228.81236838527792,
+        1875.136960210726,
+        1035.4387449943188
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 319,
+      "title": "Workspace",
+      "bounding": [
+        -11765.373179359507,
+        -319.92742457937595,
+        1990.0420225786766,
+        1348.8513363904967
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "e2814e53-2e9b-47e1-9fcf-2b2183de2df7",
+        "version": 1,
+        "state": {
+          "lastGroupId": 319,
+          "lastNodeId": 8833,
+          "lastLinkId": 74996,
+          "lastRerouteId": 60
+        },
+        "revision": 0,
+        "config": {},
+        "name": "Model Here",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            -1574.331207553243,
+            153.9133031534747,
+            128,
+            108
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            -807.4493764272725,
+            122.268012716628,
+            128,
+            108
+          ]
+        },
+        "inputs": [
+          {
+            "id": "363d12e2-7b8d-4fa0-8f13-9bba1d3d50f2",
+            "name": "unet_name",
+            "type": "COMBO",
+            "linkIds": [
+              73270
+            ],
+            "pos": [
+              -1470.331207553243,
+              177.9133031534747
+            ]
+          },
+          {
+            "id": "c0890d19-b2bf-49ba-bc24-ae56442b33f8",
+            "name": "clip_name",
+            "type": "COMBO",
+            "linkIds": [
+              73271
+            ],
+            "pos": [
+              -1470.331207553243,
+              197.9133031534747
+            ]
+          },
+          {
+            "id": "89b86d5f-59d0-4160-9384-e630ddac3985",
+            "name": "vae_name",
+            "type": "COMBO",
+            "linkIds": [
+              73273
+            ],
+            "pos": [
+              -1470.331207553243,
+              217.9133031534747
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "eeb1ecd7-0cbe-4ad0-9835-f4814195db29",
+            "name": "MODEL",
+            "type": "MODEL",
+            "linkIds": [
+              74071
+            ],
+            "localized_name": "MODEL",
+            "pos": [
+              -783.4493764272725,
+              146.268012716628
+            ]
+          },
+          {
+            "id": "7022846b-73d5-4a01-b092-4714adda4934",
+            "name": "CLIP",
+            "type": "CLIP",
+            "linkIds": [
+              4,
+              4
+            ],
+            "localized_name": "CLIP",
+            "pos": [
+              -783.4493764272725,
+              166.268012716628
+            ]
+          },
+          {
+            "id": "8fb24f8a-324c-4dea-87f6-831d10dacfc6",
+            "name": "VAE",
+            "type": "VAE",
+            "linkIds": [
+              72436
+            ],
+            "pos": [
+              -783.4493764272725,
+              186.268012716628
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 3,
+            "type": "CLIPLoader",
+            "pos": [
+              -1287.9550054781794,
+              195.2186097526603
+            ],
+            "size": [
+              420,
+              106
+            ],
+            "flags": {
+              "pinned": true
+            },
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "label": "clip_name",
+                "localized_name": "clip_name",
+                "name": "clip_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "clip_name"
+                },
+                "link": 73271
+              },
+              {
+                "label": "type",
+                "localized_name": "type",
+                "name": "type",
+                "type": "COMBO",
+                "widget": {
+                  "name": "type"
+                },
+                "link": null
+              },
+              {
+                "label": "device",
+                "localized_name": "device",
+                "name": "device",
+                "shape": 7,
+                "type": "COMBO",
+                "widget": {
+                  "name": "device"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "CLIP",
+                "localized_name": "CLIP",
+                "name": "CLIP",
+                "type": "CLIP",
+                "links": [
+                  4
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.27.0",
+              "Node name for S&R": "CLIPLoader",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "qwen3VLInstruct4bHeretic_v10.safetensors",
+              "krea2",
+              "default"
+            ]
+          },
+          {
+            "id": 7170,
+            "type": "VAELoader",
+            "pos": [
+              -1242.811797782283,
+              355.039554433016
+            ],
+            "size": [
+              270,
+              58
+            ],
+            "flags": {
+              "pinned": true
+            },
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+              {
+                "label": "vae_name",
+                "localized_name": "vae_name",
+                "name": "vae_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "vae_name"
+                },
+                "link": 73273
+              }
+            ],
+            "outputs": [
+              {
+                "label": "VAE",
+                "localized_name": "VAE",
+                "name": "VAE",
+                "type": "VAE",
+                "links": [
+                  72436
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.27.0",
+              "Node name for S&R": "VAELoader",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "input_ue_unconnectable": {},
+                "version": "7.8"
+              }
+            },
+            "widgets_values": [
+              "qwen_image_vae.safetensors"
+            ]
+          },
+          {
+            "id": 1,
+            "type": "UNETLoader",
+            "pos": [
+              -1287.9930751077331,
+              60.306138290270255
+            ],
+            "size": [
+              420,
+              82
+            ],
+            "flags": {
+              "pinned": true
+            },
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+              {
+                "label": "unet_name",
+                "localized_name": "unet_name",
+                "name": "unet_name",
+                "type": "COMBO",
+                "widget": {
+                  "name": "unet_name"
+                },
+                "link": 73270
+              },
+              {
+                "label": "weight_dtype",
+                "localized_name": "weight_dtype",
+                "name": "weight_dtype",
+                "type": "COMBO",
+                "widget": {
+                  "name": "weight_dtype"
+                },
+                "link": null
+              }
+            ],
+            "outputs": [
+              {
+                "label": "MODEL",
+                "localized_name": "MODEL",
+                "name": "MODEL",
+                "type": "MODEL",
+                "links": [
+                  74071
+                ]
+              }
+            ],
+            "properties": {
+              "cnr_id": "comfy-core",
+              "ver": "0.27.0",
+              "Node name for S&R": "UNETLoader",
+              "ue_properties": {
+                "widget_ue_connectable": {},
+                "version": "7.8",
+                "input_ue_unconnectable": {}
+              }
+            },
+            "widgets_values": [
+              "krea2TurboOfficialComfy_krea2TurboFp8.safetensors",
+              "default"
+            ]
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 4,
+            "origin_id": 3,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 1,
+            "type": "CLIP"
+          },
+          {
+            "id": 72436,
+            "origin_id": 7170,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 2,
+            "type": "VAE"
+          },
+          {
+            "id": 73270,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 1,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 73271,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 3,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 73273,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 7170,
+            "target_slot": 0,
+            "type": "COMBO"
+          },
+          {
+            "id": 74071,
+            "origin_id": 1,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "MODEL"
+          }
+        ],
+        "extra": {
+          "ue_links": [],
+          "links_added_by_ue": []
+        }
+      }
+    ]
+  },
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8264462809917358,
+      "offset": [
+        10765.908097805413,
+        860.6699428514088
+      ]
+    }
+  },
+  "version": 0.4
+}

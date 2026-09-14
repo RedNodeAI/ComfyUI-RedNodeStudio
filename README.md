@@ -447,6 +447,11 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
 - `RedNode_MultiAngle.json` re-shoots an existing photo from another viewpoint:
   the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
   Krea 2 finishes the frame.
+- `RedNode_Studio_Simple_Angles.json` is the camera stage in a plain graph, no Workspace:
+  Camera Studio with the loaders wired through it, a Prompt Box and Prompt Combine for the
+  words, a stock KSampler, Save and Review. The stage sets the camera slider strengths by
+  itself, and a camera path renders one image per shot. The three RedNode sliders it names
+  are the free Civitai files above.
 
 Two optional packs matter to the STUDIO itself rather than to a workflow. **ComfyUI-Easy-Sam3**
 gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in `models/sam3`). Without
