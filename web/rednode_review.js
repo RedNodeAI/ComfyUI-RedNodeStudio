@@ -508,6 +508,20 @@ function openMenu(node, entry, index, ev, slot = 0) {
 // the corner tags, the right-click menu and the recovery path in the big room with
 // no second implementation, and closing points it home and renders once. The node's
 // own element keeps its size and nothing on the canvas moves.
+// Up and down walk a batch's frames, the column down the left; left and right
+// walk the history. A single picture ignores up and down.
+function stepSlot(node, dir) {
+  const h = hist(node);
+  if (!h.length) return;
+  const view = node._rnView || 0;
+  const n = (h[view].files || []).length;
+  if (n <= 1) return;
+  const at = node._rnSlotFor === view ? (node._rnSlot || 0) : 0;
+  node._rnSlot = Math.max(0, Math.min(n - 1, at + dir));
+  node._rnSlotFor = view;
+  render(node);
+}
+
 function openFullscreen(node) {
   if (node._rnFsPrev) return;                       // already open
   const ov = document.createElement("div");
@@ -525,7 +539,8 @@ function openFullscreen(node) {
   const hint = document.createElement("span");
   hint.className = "hint";
   hint.textContent = "Esc closes. Wheel over the picture zooms, drag moves it; wheel over "
-                   + "the strip scrolls it. Arrows walk the history. Right-click for the menu.";
+                   + "the strip scrolls it. Left and right walk the history, up and down the "
+                   + "frames of a batch. Right-click for the menu.";
   const x = document.createElement("button");
   x.className = "rn-rv-fsx";
   x.textContent = "Close  (Esc)";
@@ -556,7 +571,7 @@ function openFullscreen(node) {
     const over = e.target === strip || e.target?.closest?.(".rn-rv-strip") === strip;
     if (strip && over) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
   }, { passive: false });
-  arrowKeys(fshost, step);
+  arrowKeys(fshost, step, (d) => stepSlot(node, d));
 
   node._rnFsPrev = node._rnRootEl;
   node._rnRootEl = fshost;
@@ -584,12 +599,13 @@ function openFullscreen(node) {
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const dir = { ArrowLeft: -1, ArrowUp: -1, PageUp: -1, ArrowRight: 1, ArrowDown: 1,
-                  PageDown: 1, Home: "first", End: "last" }[e.key];
-    if (dir === undefined) return;
+    const vert = { ArrowUp: -1, PageUp: -1, ArrowDown: 1, PageDown: 1 }[e.key];
+    const dir = { ArrowLeft: -1, ArrowRight: 1, Home: "first", End: "last" }[e.key];
+    if (vert === undefined && dir === undefined) return;
     e.preventDefault();
     e.stopPropagation();
-    step(dir);
+    if (vert !== undefined) stepSlot(node, vert);
+    else step(dir);
   };
   x.onclick = close;
   document.addEventListener("keydown", onKey, true);
@@ -897,7 +913,8 @@ function build(node) {
   node._rnWidget = w;
 
   // arrows walk the history while the pointer is over the panel, the way any photo
-  // viewer behaves. 0 is the newest, so right goes back in time.
+  // viewer behaves. 0 is the newest, so right goes back in time. Up and down walk
+  // the frames of a batch instead.
   arrowKeys(wrap, (dir) => {
     const h = hist(node);
     if (!h.length) return;
@@ -906,7 +923,7 @@ function build(node) {
                  : dir === "last" ? h.length - 1
                  : Math.max(0, Math.min(h.length - 1, at + dir));
     render(node);
-  });
+  }, (dir) => stepSlot(node, dir));
 
   // The frontend assigns node.imgs from every executed event and draws them under the
   // widgets. That is the stock PreviewImage picture, which would show every image twice.

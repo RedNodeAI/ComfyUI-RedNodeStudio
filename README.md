@@ -173,7 +173,8 @@ whatever ComfyUI's own preview setting is. For Krea 2 the sharp version needs
 **RedNode Image Review** is a preview that remembers: the newest picture on top and the runs before
 it in a strip, right-click for Copy, Keep, Name and Rerun with the same seed or fresh ones. Double
 click the picture for a full screen room where the wheel zooms and a drag pans. A run that made
-several pictures, a camera path or a batch, shows them in a column beside the big one.
+several pictures, a camera path or a batch, shows them in a column beside the big one. Left and
+right arrows walk the history, up and down walk the frames of that column.
 
 ![The Image Review's full screen room, the history strip along the bottom](images/review.webp)
 
@@ -186,7 +187,8 @@ run's id, so keeping the picture you are looking at needs no wire.
 ![Comparing two stages of a run with a wipe](images/stage-wipe.webp)
 
 **RedNode Stage Tap and Stage View** photograph any point in the graph and compare two of them with
-a wipe. The Detailer's Taps feed the same strip.
+a wipe. The Detailer's Taps feed the same strip. A Full screen button, or a double-click on the
+picture, puts the strip and the wipe over the whole window.
 
 ## Keeping the canvas small
 
@@ -363,7 +365,7 @@ what they did. Treat them as legacy.
 | RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view where the wheel zooms and a drag pans. A run that made several pictures shows them in a column beside the big one; click to view any of them. |
 | RedNode Live Preview | Shows the picture forming step by step while the node wired into it renders, then the finished frame. The workspace and the Detailer decode every step with the small VAE (lighttaew2_1 in models/vae_approx for Krea 2) and stream it here, whatever ComfyUI's own preview setting is. |
 | RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
-| RedNode Stage Tap / Stage View | Photograph any point in the graph, then compare stages with a wipe. |
+| RedNode Stage Tap / Stage View | Photograph any point in the graph, then compare stages with a wipe, on the node or full screen. |
 
 ### LoRAs and sampling
 

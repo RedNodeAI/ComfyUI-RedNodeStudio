@@ -1,7 +1,7 @@
 import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
-import { arrowKeys } from "./rednode_keys.js";
+import { arrowKeys, forgetArrowKeys } from "./rednode_keys.js";
 import { findNodes } from "./rednode_graph.js";
 
 // RedNode Stage View — the strip of everything the workflow did last run.
@@ -61,6 +61,23 @@ css.textContent = `
 .rn-sg-tag{position:absolute;top:6px;background:#000b;color:#fff;font-size:10px;
   padding:2px 6px;border-radius:4px;pointer-events:none}
 .rn-sg-empty{font-size:12px;opacity:.45;text-align:center;padding:0 16px;line-height:1.5}
+/* No picture in this panel is a drag source. The browser's image drag used to start
+   on the first pointer movement over the compare box, which cancelled the pointer
+   events the wipe handle lives on: the line jumped once and stuck. */
+.rn-sg-wrap img{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
+/* The room: the panel over the whole window, the Image Review's way. */
+.rn-sg-fsov{position:fixed;inset:0;z-index:9990;background:#0c0d10ee;display:flex;
+  flex-direction:column;padding:14px}
+.rn-sg-fsbar{display:flex;align-items:center;gap:10px;flex:none;padding:0 2px 10px}
+.rn-sg-fsbar .ttl{font:600 14px system-ui,sans-serif;color:#e8ecf1;letter-spacing:.02em}
+.rn-sg-fsbar .hint{font-size:11.5px;opacity:.5;color:#ddd}
+.rn-sg-fsx{margin-left:auto;background:#15171b;border:1px solid #33373d;
+  border-radius:5px;color:#ddd;cursor:pointer;font-size:13px;padding:7px 14px}
+.rn-sg-fsx:hover{border-color:#b8283c;color:#fff}
+.rn-sg-fshost{flex:1;min-height:0;height:auto;border:1px solid #2f333a;border-radius:8px;
+  padding:10px}
+.rn-sg-fshost .rn-sg-th{width:110px;height:110px}
+.rn-sg-fshost .rn-sg-tag{font-size:13px}
 `;
 let styled = false;
 const injectStyle = () => {
@@ -99,6 +116,96 @@ function emptyReason() {
        + "Queue a run and each one appears here in order.";
 }
 
+// The arrows step through the stages. With compare on, the shift key moves the
+// second one, so the same keys drive both sides of the wipe.
+function stepStage(node, dir, second) {
+  const n = stages.length;
+  if (!n) return;
+  const key = node._rnCmp && second ? "_rnB" : "_rnA";
+  const at = node[key] ?? 0;
+  node[key] = dir === "first" ? 0
+            : dir === "last" ? n - 1
+            : Math.max(0, Math.min(n - 1, at + dir));
+  render(node);
+}
+
+const roomToggle = (node) => {
+  if (node._rnFsPrev) node._rnFsClose?.();
+  else openFullscreen(node);
+};
+
+// ---- full screen -------------------------------------------------------------
+// render() draws into node._rnRootEl, so pointing that at an overlay host puts the
+// strip, the picture and the compare wipe in the big room with no second
+// implementation; closing points it home and renders once.
+function openFullscreen(node) {
+  if (node._rnFsPrev) return;                       // already open
+  const ov = document.createElement("div");
+  ov.className = "rn-sg-fsov";
+  for (const t of ["pointerdown", "pointermove", "pointerup", "click", "dblclick", "keydown",
+                   "contextmenu"]) {
+    ov.addEventListener(t, (e) => e.stopPropagation());
+  }
+  ov.addEventListener("dragstart", (e) => e.preventDefault());
+  ov.addEventListener("wheel", (e) => { e.stopPropagation(); }, { passive: true });
+  const bar = document.createElement("div");
+  bar.className = "rn-sg-fsbar";
+  const ttl = document.createElement("span");
+  ttl.className = "ttl";
+  ttl.textContent = "RedNode Stage View";
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = "Esc closes. Arrows step through the stages; with Compare on, shift and "
+                   + "an arrow move the right side. Drag across the picture to wipe.";
+  const x = document.createElement("button");
+  x.className = "rn-sg-fsx";
+  x.textContent = "Close  (Esc)";
+  bar.append(ttl, hint, x);
+  const fshost = document.createElement("div");
+  fshost.className = "rn-sg-wrap rn-sg-fshost";
+  ov.append(bar, fshost);
+  document.body.appendChild(ov);
+
+  arrowKeys(fshost, (dir) => stepStage(node, dir, node._rnShift));
+  fshost.addEventListener("pointermove", (e) => { node._rnShift = e.shiftKey; });
+
+  node._rnFsPrev = node._rnRootEl;
+  node._rnRootEl = fshost;
+  const close = () => {
+    if (!node._rnFsPrev) return;
+    node._rnRootEl = node._rnFsPrev;
+    node._rnFsPrev = null;
+    node._rnFsClose = null;
+    forgetArrowKeys(fshost);
+    ov.remove();
+    document.removeEventListener("keydown", onKey, true);
+    render(node);
+  };
+  // Esc always closes; the arrows are handled here too, because the room opens under
+  // a pointer that has not moved yet and the hover rule only takes hold once it does
+  const onKey = (e) => {
+    const tag = (document.activeElement?.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const dir = { ArrowLeft: -1, ArrowUp: -1, PageUp: -1, ArrowRight: 1, ArrowDown: 1,
+                  PageDown: 1, Home: "first", End: "last" }[e.key];
+    if (dir === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    stepStage(node, dir, e.shiftKey);
+  };
+  x.onclick = close;
+  document.addEventListener("keydown", onKey, true);
+  node._rnFsClose = close;
+  render(node);
+}
+
 function render(node) {
   const root = node._rnRootEl;
   if (!root) return;
@@ -130,7 +237,14 @@ function render(node) {
     }
     render(node);
   };
-  bar.append(count, refresh, cmp);
+  const fs = document.createElement("button");
+  fs.className = "rn-sg-btn rn-sg-fs";
+  fs.textContent = node._rnFsPrev ? "Close full screen" : "Full screen";
+  fs.title = node._rnFsPrev ? "Back to the node. Esc does the same."
+                            : "The strip and the picture over the whole window. Double-click "
+                              + "the picture does the same; Esc closes.";
+  fs.onclick = () => roomToggle(node);
+  bar.append(count, refresh, cmp, fs);
   root.appendChild(bar);
 
   if (!stages.length) {
@@ -155,11 +269,13 @@ function render(node) {
     const base = document.createElement("div");
     base.className = "base";
     const bimg = document.createElement("img");
+    bimg.draggable = false;
     bimg.src = stages[b].thumb;
     base.appendChild(bimg);
     const top = document.createElement("div");
     top.className = "top";
     const aimg = document.createElement("img");
+    aimg.draggable = false;
     aimg.src = stages[a].thumb;
     top.appendChild(aimg);
     const handle = document.createElement("div");
@@ -183,6 +299,8 @@ function render(node) {
     box.append(base, top, handle, tagA, tagB);
     box.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
+      e.preventDefault();                          // no text or image drag begins
+      try { box.setPointerCapture?.(e.pointerId); } catch (err) { /* not a pointer */ }
       const move = (ev) => {
         const r = box.getBoundingClientRect();
         setWipe(((ev.clientX - r.left) / Math.max(1, r.width)) * 100);
@@ -199,6 +317,7 @@ function render(node) {
     setWipe(node._rnWipe ?? 50);
   } else {
     const img = document.createElement("img");
+    img.draggable = false;
     img.src = stages[a].thumb;
     img.title = `${stages[a].label} (${stages[a].w} x ${stages[a].h}, from the `
               + `${stages[a].source})`;
@@ -209,6 +328,7 @@ function render(node) {
     tag.textContent = stages[a].label;
     view.appendChild(tag);
   }
+  view.addEventListener("dblclick", (e) => { e.stopPropagation(); roomToggle(node); });
   root.appendChild(view);
 
   const strip = document.createElement("div");
@@ -217,6 +337,7 @@ function render(node) {
     const th = document.createElement("div");
     th.className = "rn-sg-th" + (i === a ? " a" : "") + (node._rnCmp && i === b ? " b" : "");
     const img = document.createElement("img");
+    img.draggable = false;
     img.src = st.thumb;
     th.appendChild(img);
     const n = document.createElement("span");
@@ -257,6 +378,7 @@ function build(node) {
                    "keydown", "contextmenu"]) {
     wrap.addEventListener(t, (e) => e.stopPropagation());
   }
+  wrap.addEventListener("dragstart", (e) => e.preventDefault());
   wrap.addEventListener("wheel", (e) => {
     if (!e.shiftKey) return;                         // plain wheel scrolls the panel
     e.preventDefault();
@@ -274,18 +396,7 @@ function build(node) {
   w.element = wrap;
   w.options.getMinHeight = () => MIN_PANEL_H;
 
-  // arrows step through the stages. With compare on, holding shift moves the second
-  // one, so the same keys drive both sides of the wipe.
-  arrowKeys(wrap, (dir) => {
-    const n = stages.length;
-    if (!n) return;
-    const key = node._rnCmp && node._rnShift ? "_rnB" : "_rnA";
-    const at = node[key] ?? 0;
-    node[key] = dir === "first" ? 0
-              : dir === "last" ? n - 1
-              : Math.max(0, Math.min(n - 1, at + dir));
-    render(node);
-  });
+  arrowKeys(wrap, (dir) => stepStage(node, dir, node._rnShift));
   wrap.addEventListener("pointermove", (e) => { node._rnShift = e.shiftKey; });
   w.options.minNodeSize = [NODE_MIN_W, MIN_PANEL_H + 60];
   node._rnWidget = w;
@@ -353,6 +464,7 @@ app.registerExtension({
     const onRemoved = nodeType.prototype.onRemoved;
     nodeType.prototype.onRemoved = function () {
       onRemoved?.apply(this, arguments);
+      this._rnFsClose?.();                          // a removed node takes its room down
       viewers.delete(this);
     };
   },

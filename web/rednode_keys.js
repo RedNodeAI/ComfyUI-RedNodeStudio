@@ -8,7 +8,7 @@
 // Nothing is captured unless a handler is actually registered for the panel under the
 // pointer, and never while a text field has focus.
 
-const panels = new Map();          // element -> handler(direction)
+const panels = new Map();          // element -> { h: handler(direction), v: vertical or null }
 let hovered = null;
 
 function typing() {
@@ -24,6 +24,7 @@ const KEYS = {
   ArrowLeft: -1, ArrowUp: -1, PageUp: -1,
   ArrowRight: 1, ArrowDown: 1, PageDown: 1,
 };
+const VERTICAL = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown"]);
 
 // ---------------------------------------------------------------- panel hotkeys
 // The same idea as the arrows, for combinations that OVERRIDE something ComfyUI already
@@ -111,12 +112,15 @@ function wire() {
     if (!hovered || typing()) return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const step = KEYS[e.key];
-    const handler = panels.get(hovered);
-    if (!handler) return;
+    const entry = panels.get(hovered);
+    if (!entry) return;
     if (step === undefined && e.key !== "Home" && e.key !== "End") return;
     e.preventDefault();
     e.stopPropagation();
-    handler(e.key === "Home" ? "first" : e.key === "End" ? "last" : step);
+    // a panel with two axes sends up and down to its second handler: the Review's
+    // batch column, where left and right still walk the history
+    if (entry.v && VERTICAL.has(e.key)) { entry.v(step); return; }
+    entry.h(e.key === "Home" ? "first" : e.key === "End" ? "last" : step);
   }, true);
 
   // Window capture for the same reason the keydown uses it: whoever else is listening,
@@ -174,11 +178,13 @@ export function forgetPaste(el) {
   pastes.delete(el);
 }
 
-/** Drive `el`'s panel with the arrow keys while the pointer is over it. */
-export function arrowKeys(el, handler) {
+/** Drive `el`'s panel with the arrow keys while the pointer is over it. With a
+ * `vertical` handler, up and down go to it instead and left and right stay on
+ * `handler`; without one every arrow drives `handler`, as before. */
+export function arrowKeys(el, handler, vertical) {
   if (!el || typeof handler !== "function") return;
   wire();
-  panels.set(el, handler);
+  panels.set(el, { h: handler, v: typeof vertical === "function" ? vertical : null });
   el.addEventListener("pointerenter", () => { hovered = el; });
   el.addEventListener("pointerleave", () => { if (hovered === el) hovered = null; });
 }
