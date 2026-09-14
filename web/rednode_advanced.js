@@ -89,6 +89,7 @@ css.textContent = `
 .rn-adv .chip.sampler{background:#233a5c;color:#9cc4ff}
 .rn-adv .chip.detailer{background:#4a2d57;color:#e2b0ff}
 .rn-adv .chip.upscale{background:#1f4d3a;color:#9be7c0}
+.rn-adv .chip.usdu{background:#4d3a1f;color:#f0c98a}
 .rn-adv select,.rn-adv input{background:#15171b;border:1px solid #33373d;
   border-radius:4px;color:#e8ecf1;font-size:12px;padding:3px 6px}
 .rn-adv input[type=number]{width:58px}
@@ -204,7 +205,13 @@ async function fetchLists() {
   const dit = await inputs("SeedVR2LoadDiTModel");
   const svae = await inputs("SeedVR2LoadVAEModel");
   const up = await inputs("SeedVR2VideoUpscaler");
+  // Ultimate SD Upscale for the tiled pass, and core's upscale model list
+  const usdu = await inputs("UltimateSDUpscale");
   LISTS = {
+    usdu: !!Object.keys(usdu).length,
+    usduModes: optionsOf(usdu.mode_type),
+    seamModes: optionsOf(usdu.seam_fix_mode),
+    upscaleModels: await pull("UpscaleModelLoader", "model_name"),
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
     loras: await pull("LoraLoaderModelOnly", "lora_name"),
@@ -476,7 +483,8 @@ function buildPanel(node) {
     const d = readCfg(node);
     const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [],
                          samPrecisions: [], ditModels: [], vaeModels: [],
-                         attention: [], offloads: [], colorFixes: [] };
+                         attention: [], offloads: [], colorFixes: [],
+                         usdu: false, usduModes: [], seamModes: [], upscaleModels: [] };
     wrap.replaceChildren();
     const cap = (t) => {
       const c = document.createElement("div");
@@ -853,7 +861,8 @@ function buildPanel(node) {
       const chip = document.createElement("span");
       chip.className = "chip " + s.type;
       chip.textContent = s.type === "sampler" ? "SAMPLER"
-                       : s.type === "upscale" ? "UPSCALE" : "DETAILER";
+                       : s.type === "upscale" ? "UPSCALE"
+                       : s.type === "usdu" ? "USDU" : "DETAILER";
       top.append(caret, grip, eye, chip);
       if (isFolded) {
         // folded, the header still says what would run
@@ -866,6 +875,8 @@ function buildPanel(node) {
             + (s.dit_model ? " \u00b7 " + s.dit_model.replace(/\.safetensors$/i, "") : "")
           : (s.rig || "(active rig)")
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
+          + (s.type === "usdu" ? " \u00b7 x" + (s.upscale_by ?? 2) + " \u00b7 "
+             + (s.usdu_model ? s.usdu_model.replace(/\.(safetensors|pth)$/i, "") : "resize") : "")
           + " \u00b7 denoise " + (s.denoise ?? (s.type === "detailer" ? 0.15 : 0.3))
           + ((s.scale ?? 1) !== 1 ? " \u00b7 scale " + s.scale : "")
           + (s.loras === false ? " \u00b7 raw" : (s.lora_set ? " \u00b7 " + s.lora_set : ""))
@@ -932,7 +943,7 @@ function buildPanel(node) {
                            s.crop_res = v ? parseInt(v, 10) : 0;
                            writeCfg(node, d);
                          }, "(crop)"));
-        } else {
+        } else if (s.type === "sampler") {
           top.append(lab("Res"),
                      sel(["768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",
@@ -1081,20 +1092,36 @@ function buildPanel(node) {
         // STRENGTH: the two dials ridden while tuning, both bars so the card
         // reads at a glance, then the repeat and what each round of it does.
         const str = group("Strength");
-        const dv = s.denoise ?? (isDet ? 0.15 : 0.3);
+        const isUsdu = s.type === "usdu";
+        const dv = s.denoise ?? (isDet ? 0.15 : isUsdu ? 0.25 : 0.3);
         const sv = s.scale ?? 1.0;
         const scaleMin = isDet ? 1 : 0.25;
+        if (isUsdu) {
+          // a tiled pass grows the frame by a factor and its denoise is the
+          // whole game: above 0.4 the tiles start inventing subjects
+          str.line.append(
+            lab("Upscale by"),
+            bar(s.upscale_by ?? 2, 0.25, 4, 0.05, fmtX,
+                "How much bigger the frame comes out. The upscale model (or a plain "
+                + "resize) grows it first, then every tile is redrawn at the denoise.",
+                "#4a8fe0", (v) => { s.upscale_by = v; writeCfg(node, d); }));
+        } else {
+          str.line.append(
+            lab("Scale"),
+            bar(sv, scaleMin, 4, 0.05, fmtX,
+                isDet ? "Render the crop this much bigger, then put it back at its own "
+                        + "size: more pixels spent on the face, no change to the frame."
+                      : "Resize ratio for this pass. 1 is the picture as it arrives. The "
+                        + "new size STICKS, so 0.5 then 2.0 across two passes is the "
+                        + "shrink-and-regrow chain that invents detail.",
+                "#4a8fe0", (v) => { s.scale = v; writeCfg(node, d); }));
+        }
         str.line.append(
-          lab("Scale"),
-          bar(sv, scaleMin, 4, 0.05, fmtX,
-              isDet ? "Render the crop this much bigger, then put it back at its own "
-                      + "size: more pixels spent on the face, no change to the frame."
-                    : "Resize ratio for this pass. 1 is the picture as it arrives. The "
-                      + "new size STICKS, so 0.5 then 2.0 across two passes is the "
-                      + "shrink-and-regrow chain that invents detail.",
-              "#4a8fe0", (v) => { s.scale = v; writeCfg(node, d); }),
           lab("Denoise"),
-          bar(dv, 0, 1, 0.01, fmt2, "Denoise for this pass.", "#b8283c",
+          bar(dv, 0, 1, 0.01, fmt2,
+              isUsdu ? "Denoise per tile. 0.20 to 0.35 sharpens and keeps the picture; "
+                       + "above 0.40 tiles start inventing their own subjects."
+                     : "Denoise for this pass.", "#b8283c",
               (v) => { s.denoise = v; writeCfg(node, d); }));
         if (isDet) {
           // BLEND against denoise: how much of the rendered crop goes back.
@@ -1198,6 +1225,61 @@ function buildPanel(node) {
         }
         str.box.append(rrow, ...extra);
         card.appendChild(str.box);
+
+        if (isUsdu) {
+          // TILES: what Ultimate SD Upscale is handed. The defaults are the Pro
+          // Grade notes: padding 128 up, seam fix None or Band Pass, a 1x skin
+          // model as the upscaler when there is one.
+          const tl = group("Tiles");
+          tl.line.append(
+            lab("Upscale model"),
+            sel(L.upscaleModels, s.usdu_model || "",
+                "The upscale model that grows the frame before the tiles are redrawn: "
+                + "a 4x ESRGAN file, or a 1x skin model at Upscale by 1.00 for a skin "
+                + "pass. (resize only) grows it by plain resampling.",
+                (v) => { s.usdu_model = v; writeCfg(node, d); }, "(resize only)"),
+            lab("Tile"),
+            num(s.usdu_tile ?? 1024, 64, "Tile size in pixels, both axes. 1024 is a "
+                + "Krea 2 sized tile; smaller fits a small card and costs more tiles.",
+                (v) => { s.usdu_tile = Math.max(256, Math.min(2048, Math.round(v))); writeCfg(node, d); }, "56px"),
+            lab("Padding"),
+            num(s.usdu_padding ?? 128, 32, "Pixels of context around each tile. 128 to "
+                + "512; more hides seams and costs time.",
+                (v) => { s.usdu_padding = Math.max(0, Math.min(512, Math.round(v))); writeCfg(node, d); }, "50px"),
+            lab("Blur"),
+            num(s.usdu_blur ?? 8, 1, "Mask blur at the tile edges, in pixels.",
+                (v) => { s.usdu_blur = Math.max(0, Math.min(64, Math.round(v))); writeCfg(node, d); }, "40px"),
+            lab("Order"),
+            sel(L.usduModes.length ? L.usduModes : ["Linear", "Chess", "None"],
+                s.usdu_mode || "Linear",
+                "The tiling order. Linear row by row; Chess alternates so neighbours "
+                + "are never redrawn together; None skips the redraw and only seam fixes.",
+                (v) => { s.usdu_mode = v; writeCfg(node, d); }),
+            lab("Seam fix"),
+            sel(L.seamModes.length ? L.seamModes
+                                   : ["None", "Band Pass", "Half Tile", "Half Tile + Intersections"],
+                s.seam_mode || "None",
+                "A second pass over the seams. None or Band Pass; Half Tile and the "
+                + "intersections double the chance of a tile inventing something.",
+                (v) => { s.seam_mode = v; writeAndRender(); }));
+          if ((s.seam_mode || "None") !== "None") {
+            tl.line.append(
+              lab("Seam denoise"),
+              num(s.seam_denoise ?? 0.35, 0.05, "Denoise for the seam pass.",
+                  (v) => { s.seam_denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }, "46px"));
+          }
+          tl.line.append(tog("Tiled decode", "tiled_decode", false,
+            "Decode each tile through the VAE in tiles too, for a small card. Off is "
+            + "faster when memory allows."));
+          card.appendChild(tl.box);
+          if (LISTS && !L.usdu) {
+            const warn = document.createElement("div");
+            warn.className = "hint";
+            warn.textContent = "ComfyUI_UltimateSDUpscale is not installed, so this pass "
+                             + "will say so and pass the picture through.";
+            card.appendChild(warn);
+          }
+        }
 
         // PROMPT: what the pass is told. The stack and its set, the Krea 2
         // references, a LoRA of its own, and the words.
@@ -1317,6 +1399,14 @@ function buildPanel(node) {
                                      cache_model: false, tiled: true, tile: 1024,
                                      tile_overlap: 128, color_fix: "lab", max_edge: 0,
                                      input_noise: 0, latent_noise: 0 }));
+    // Ultimate SD Upscale as a pass, opened on the Pro Grade notes: 6 steps of
+    // deis/simple at 0.25, x2, 1024 tiles padded 128, no seam fix
+    mk("＋ Tiled upscale", () => ({ on: true, type: "usdu", rig: "", steps: 6,
+                                   sampler: "deis", scheduler: "simple", denoise: 0.25,
+                                   upscale_by: 2, usdu_model: "", usdu_tile: 1024,
+                                   usdu_padding: 128, usdu_blur: 8, usdu_mode: "Linear",
+                                   seam_mode: "None", seam_denoise: 0.35,
+                                   tiled_decode: false, prompt: "" }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");

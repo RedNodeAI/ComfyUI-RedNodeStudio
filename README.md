@@ -173,6 +173,9 @@ Three kinds of pass:
   edge worked out from the frame's own aspect. The loader dials sit on the card. A region, face
   or hair, upscales that crop only and the frame keeps its size; an out-of-memory halves the
   tile and tries again.
+- **Tiled upscale**: Ultimate SD Upscale as a pass, the rig's model and the pass's prompt over
+  tiles, an upscale model first or a plain resize, opened on 6 steps of deis at 0.25 denoise,
+  1024 tiles padded 128 and no seam fix. Needs ComfyUI_UltimateSDUpscale.
 - **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
   but takes the tone from the picture as it arrived, the drift fix for a long chain.
 

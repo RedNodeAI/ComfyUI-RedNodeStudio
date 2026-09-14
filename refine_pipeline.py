@@ -66,7 +66,7 @@ def parse_pipeline(config_json):
                            "name": str(s.get("name") or ""),
                            "color": str(s.get("color") or "")})
             continue
-        if s.get("type") not in ("sampler", "detailer", "upscale"):
+        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -82,7 +82,8 @@ def parse_pipeline(config_json):
             "prompt": str(s.get("prompt") or ""),
             "negative": str(s.get("negative") or ""),
             "denoise": _num("denoise", 0.0, 1.0,
-                            0.15 if s["type"] == "detailer" else 0.3),
+                            0.15 if s["type"] == "detailer" else
+                            0.25 if s["type"] == "usdu" else 0.3),
             "steps": _num("steps", 0, 200, 0, int),          # 0 = the rig's
             "cfg": _num("cfg", 0.0, 30.0, 0.0),              # 0 = the rig's
             "sampler": str(s.get("sampler") or ""),          # "" = the rig's
@@ -138,6 +139,21 @@ def parse_pipeline(config_json):
             # an upscale pass on a region only: SAM3's target, the crop through
             # the upscaler and back under the feathered matte. "" is the frame.
             "region": str(s.get("region") or "")[:48],
+            # A TILED UPSCALE (Ultimate SD Upscale): the rig's model and prompt
+            # over tiles, an upscale model first ("" is a plain resize), the
+            # tile, its padding and mask blur, the seam fix. Denoise above 0.4
+            # invents subjects in tiles, so the defaults sit at 0.25.
+            "usdu_model": str(s.get("usdu_model") or ""),
+            "upscale_by": _num("upscale_by", 0.25, 4.0, 2.0),
+            "usdu_tile": _num("usdu_tile", 256, 2048, 1024, int),
+            "usdu_padding": _num("usdu_padding", 0, 512, 128, int),
+            "usdu_blur": _num("usdu_blur", 0, 64, 8, int),
+            "usdu_mode": str(s.get("usdu_mode") or "Linear"),
+            "seam_mode": str(s.get("seam_mode") or "None"),
+            "seam_denoise": _num("seam_denoise", 0.0, 1.0, 0.35),
+            "seam_width": _num("seam_width", 0, 512, 64, int),
+            "seam_padding": _num("seam_padding", 0, 512, 16, int),
+            "tiled_decode": bool(s.get("tiled_decode")),
             # the crop's working resolution: its long edge is resized to this
             # before rendering, then the result goes back at the crop's own
             # size. 0 keeps the old behaviour, the crop as it comes (x Scale).
@@ -450,6 +466,18 @@ def resolve_sampling(stage, rig):
     return int(steps), float(cfg), sampler, scheduler, int(start), end
 
 
+def _fill(cls, values):
+    """The node's own defaults, then these choices over them: "" on a combo
+    keeps the default, and a dial the node lacks is dropped, so a version that
+    grew or lost a widget still calls."""
+    kw = _defaults_for(cls)
+    have = _all_inputs(cls)
+    for k, v in values.items():
+        if k in have and v is not None and v != "":
+            kw[k] = v
+    return kw
+
+
 def _all_inputs(cls):
     it = cls.INPUT_TYPES()
     merged = {}
@@ -716,6 +744,12 @@ class RedNodeStudioDetailer:
             # its own road: the handler renders, nothing loads
             rigd = _rig_settings(ws_cfg, s["rig"])
             if rigd.get("kind") in _ws.RIG_KIND_HANDLERS:
+                if s["type"] == "usdu":
+                    line = ("%s: a tiled upscale needs a model rig and %r is an "
+                            "engine rig; passed through" % (tag, rigd.get("name") or s["rig"]))
+                    print("[RedNode Detailer] " + line, flush=True)
+                    report.append(line)
+                    continue
                 out, lines = self._handler_pass(out, rigd, s, ws_cfg,
                                                 seed + i, tag, tap)
                 for line in lines:
@@ -871,6 +905,20 @@ class RedNodeStudioDetailer:
                     if abs(sr["scale"] - 1.0) >= 1e-3:
                         line += ", scale %.2f -> %d x %d" % (
                             sr["scale"], out.shape[2], out.shape[1])
+                elif s["type"] == "usdu":
+                    before = (out.shape[2], out.shape[1])
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        return self._usdu(frame, model, pos, neg, vae, _sr, _seed,
+                                          steps, cfg_v, sampler, scheduler)
+                    out, why = self._each_frame(out, _one)
+                    line = "%s: tiled upscale on rig %r, %s" % (
+                        tag, rig_name,
+                        why or ("x%.2f %s, %d steps, %s/%s, denoise %.2f, tile %d, "
+                                "%d x %d -> %d x %d"
+                                % (sr["upscale_by"], sr["usdu_model"] or "resize",
+                                   steps, sampler, scheduler, sr["denoise"],
+                                   sr["usdu_tile"], before[0], before[1],
+                                   out.shape[2], out.shape[1])))
                 else:
                     def _one(frame, _sr=sr, _seed=rseed):
                         return self._detail(frame, model, pos, neg, vae, _sr, _seed,
@@ -889,6 +937,7 @@ class RedNodeStudioDetailer:
                 report.append(line)
                 if tap and not why:
                     tap(out, "%d %s%s" % (i, s["target"] if s["type"] == "detailer"
+                                          else "usdu" if s["type"] == "usdu"
                                           else "sampler",
                                           " x%d" % (r + 1) if reps > 1 else ""))
                 if why:
@@ -899,6 +948,56 @@ class RedNodeStudioDetailer:
             tap(out, "Detailer out")
         self._notify(unique_id, -1, len(cfg["stages"]), "end")
         return (out, "\n".join(report))
+
+    def _usdu(self, frame, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
+              scheduler):
+        """Ultimate SD Upscale as a pass: the rig's model and this pass's prompt
+        over tiles, through the pack's own node out of NODE_CLASS_MAPPINGS. An
+        upscale model runs first; "" is a plain resize by the factor and the
+        NoUpscale node. Returns (image, None) or (frame, why)."""
+        maps = _core.NODE_CLASS_MAPPINGS
+        cls, cls_no = maps.get("UltimateSDUpscale"), maps.get("UltimateSDUpscaleNoUpscale")
+        if cls is None or cls_no is None:
+            return frame, ("ComfyUI_UltimateSDUpscale is not installed, and it is what "
+                           "tiles. Install it in Manager; passed through")
+        if scheduler not in comfy.samplers.KSampler.SCHEDULERS:
+            # the pack's own schedules are built for the built-in sampler; the
+            # tiler takes core's names only
+            print("[RedNode Detailer] scheduler %r is the pack's own; the tiled "
+                  "upscale runs simple" % scheduler, flush=True)
+            scheduler = "simple"
+        img = frame[:, :, :, :3]
+        kw = {"model": model, "positive": pos, "negative": neg, "vae": vae,
+              "seed": int(seed) & 0xffffffffffffffff, "steps": int(steps),
+              "cfg": float(cfg_v), "sampler_name": sampler, "scheduler": scheduler,
+              "denoise": float(s["denoise"]), "mode_type": s["usdu_mode"],
+              "tile_width": int(s["usdu_tile"]), "tile_height": int(s["usdu_tile"]),
+              "mask_blur": int(s["usdu_blur"]), "tile_padding": int(s["usdu_padding"]),
+              "seam_fix_mode": s["seam_mode"], "seam_fix_denoise": float(s["seam_denoise"]),
+              "seam_fix_width": int(s["seam_width"]), "seam_fix_mask_blur": int(s["usdu_blur"]),
+              "seam_fix_padding": int(s["seam_padding"]), "force_uniform_tiles": True,
+              "tiled_decode": bool(s["tiled_decode"]), "batch_size": 1}
+        try:
+            if s["usdu_model"]:
+                loader = maps.get("UpscaleModelLoader")
+                if loader is None:
+                    return frame, "core's UpscaleModelLoader is missing; passed through"
+                um = _call_node(loader, _fill(loader, {"model_name": s["usdu_model"]}))[0]
+                fn = lambda: _call_node(cls, _fill(cls, dict(
+                    kw, image=img, upscale_by=float(s["upscale_by"]), upscale_model=um)))
+            else:
+                big = self._resize(img, float(s["upscale_by"]))
+                fn = lambda: _call_node(cls_no, _fill(cls_no, dict(kw, upscaled_image=big)))
+            # the tiler samples through core's common_ksampler, so every tile's
+            # steps stream to the Live Preview like any pass
+            outs = _live.sampled(self._rn_uid, fn,
+                                 label=getattr(self, "_rn_live_label", ""))()
+        except Exception as exc:
+            return frame, "the tiled upscale failed: %s; passed through" % exc
+        for v in outs:
+            if torch.is_tensor(v) and v.ndim == 4:
+                return v, None
+        return frame, "the tiled upscale returned no image; passed through"
 
     def _tone(self, img, src, s, tag, report):
         """Tone lock on a pass that asked for it: the result's detail, the
