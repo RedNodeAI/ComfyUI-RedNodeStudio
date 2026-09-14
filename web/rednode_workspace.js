@@ -806,6 +806,7 @@ function normaliseAutoUi(value, defaultMode) {
   a.joy = !!a.joy;
   a.qwen = !!a.qwen;
   a.clipgen = !!a.clipgen;
+  a.florence = !!a.florence;
   return a;
 }
 function normSel(name, sel, imagesLen) {
@@ -1175,6 +1176,8 @@ export function readCfg(node) {
     if (typeof d.auto[k] !== "string") d.auto[k] = "";
   }
   if (typeof d.auto.joy_memory !== "string") d.auto.joy_memory = "auto";
+  if (typeof d.auto.florence_model !== "string") d.auto.florence_model = "";
+  if (typeof d.auto.florence_task !== "string") d.auto.florence_task = "more_detailed_caption";
   if (!["off", "scrub", "rewrite"].includes(d.auto.style_lock)) d.auto.style_lock = "off";
   if (d.auto.joy_mode_prompts === undefined) d.auto.joy_mode_prompts = true;
   if (d.use_dials === undefined) d.use_dials = true;
@@ -3706,6 +3709,8 @@ function autoSection(node, body, tabName) {
           "ComfyUI-JoyCaption is not installed."),
       eng("qwen", "QwenVL", autoStatus.qwen,
           "ComfyUI-QwenVL is not installed."),
+      eng("florence", "Florence", autoStatus.florence,
+          "comfyui-florence2 is not installed."),
       eng("clipgen", "CLIP gen", true, ""),
       fixedBtn, adv,
     );
@@ -3892,6 +3897,45 @@ function autoSection(node, body, tabName) {
                   "On: this panel's per-tab prompts steer JoyCaption (scene stays "
                   + "anonymous, style stays subject-free). Off: the pack's own prompt "
                   + "style above takes over."),
+        );
+      }
+
+      if (autoStatus.florence) {
+        // FLORENCE-2: one model folder and one task, shared by every tab that
+        // switches the engine on; the list is what the pack's loader lists
+        const hf = document.createElement("div");
+        hf.className = "advh";
+        hf.textContent = "Florence-2";
+        advBox.appendChild(hf);
+        const fsel = (label, key, options, hint) => {
+          const w = document.createElement("label");
+          w.className = "cellc";
+          const t = document.createElement("span");
+          t.textContent = label;
+          t.title = hint;
+          const sel = document.createElement("select");
+          sel.className = "rn-ws-res";
+          for (const [v, lab2] of options) {
+            const o = document.createElement("option");
+            o.value = v;
+            o.textContent = lab2;
+            o.selected = cfg.auto[key] === v;
+            sel.appendChild(o);
+          }
+          sel.title = hint;
+          sel.onchange = () => { cfg.auto[key] = sel.value; writeCfg(node); };
+          w.append(t, sel);
+          return w;
+        };
+        advBox.append(
+          fsel("Model", "florence_model",
+               [["", "First folder found"], ...(autoStatus.florence_models || []).map((x) => [x, x])],
+               "Which Florence-2 folder in models/LLM captions. The PromptGen builds "
+               + "write prompt-shaped captions; base and large write plain descriptions."),
+          fsel("Task", "florence_task",
+               (autoStatus.florence_tasks || ["more_detailed_caption"]).map((x) => [x, x]),
+               "The pack's caption task. more_detailed_caption for a paragraph; the "
+               + "prompt_gen tasks want a PromptGen model."),
         );
       }
 

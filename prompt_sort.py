@@ -43,6 +43,69 @@ Rules:
 5. Answer with ONLY a JSON object with keys: subject, surroundings, style_extra, light_and_colour, placement, style, lighting. Strings only. No commentary, no markdown fences."""
 
 
+# REWRITE: the same boxes, the same model, a writer this time. Every fact stays;
+# the wording gets concrete, and a style tag says what kind of picture it is for.
+REWRITE_STYLES = ("keep", "photoreal", "cinematic", "illustration")
+
+_STYLE_NOTES = {
+    "keep": "Keep the medium and style exactly as written.",
+    "photoreal": "Write it as a photograph: name the camera feel, lens, film or sensor "
+                 "look and the light where they fit, in plain photographic terms.",
+    "cinematic": "Write it as a film still: framing, lens, colour grade and the light, "
+                 "in the terms a cinematographer uses.",
+    "illustration": "Write it as an illustration: the medium, line, brush and palette, "
+                    "in the terms an illustrator uses.",
+}
+
+REWRITE_SYSTEM = """You rewrite an image prompt so it reads well for a text to image model, box by box. You are a writer, not an inventor.
+
+Boxes: subject, surroundings, style_extra, light_and_colour, placement (the same boxes in, the same boxes out).
+
+Rules:
+1. Every fact in the input stays: who, what, where, what they wear, the light, the colours. Add nothing that changes the picture.
+2. Improve the wording: concrete nouns, specific materials and light, one clear sentence or two per box, no filler, no lists of adjectives, no words like "stunning" or "masterpiece".
+3. %s
+4. An empty box stays empty unless the style note above asks for style words in style_extra.
+5. Answer with ONLY a JSON object with keys: subject, surroundings, style_extra, light_and_colour, placement. Strings only. No commentary, no markdown fences."""
+
+
+def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=None,
+                   generate=None):
+    """fields: the frame's text boxes -> the same boxes rewritten, or None.
+
+    `generate` may be injected (tests); it takes (model, system, prompt) and
+    returns the reply text. Returns None on any failure, having printed why."""
+    style = style if style in REWRITE_STYLES else "keep"
+    lump = "\n".join("%s: %s" % (k, str(fields.get(k) or "").strip())
+                     for k in FIELDS if str(fields.get(k) or "").strip())
+    if not lump.strip():
+        print("[RedNode Prompt Rewrite] nothing to rewrite", flush=True)
+        return None
+    gen = generate or (lambda m, s, p: _ap.ollama_generate(
+        m, s, p, url=url, options={"temperature": 0.4, "num_predict": 700},
+        keep_alive=0, **({"transport": transport} if transport else {})))
+    reply = gen(model, REWRITE_SYSTEM % _STYLE_NOTES[style],
+                "Input boxes:\n\n" + lump + "\n\nReturn the JSON.")
+    if not reply:
+        print("[RedNode Prompt Rewrite] the model returned nothing", flush=True)
+        return None
+    try:
+        data = _extract_json(reply)
+    except Exception as exc:
+        print("[RedNode Prompt Rewrite] could not read the reply (%s): %r"
+              % (exc, str(reply)[:200]), flush=True)
+        return None
+    out = {}
+    for k in FIELDS:
+        v = data.get(k, "")
+        out[k] = str(v).strip() if isinstance(v, (str, int, float)) else ""
+    if not any(out[k] for k in FIELDS):
+        print("[RedNode Prompt Rewrite] the reply had no text in any box; keeping "
+              "the frame as it was", flush=True)
+        return None
+    return out
+
+
 def _system():
     styles = ", ".join(str(s) for s in STYLE_CHOICES if str(s).lower() != "none")
     lights = ", ".join(str(l) for l in LIGHTING_CHOICES if str(l).lower() != "none")
@@ -129,6 +192,29 @@ try:
         if result is None:
             return web.json_response(
                 {"error": "the sorter could not produce a result; the console "
+                          "says why"}, status=502)
+        return web.json_response({"fields": result})
+
+    @PromptServer.instance.routes.post("/rednode/prompt_rewrite")
+    async def _rn_prompt_rewrite(request):
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request"}, status=400)
+        model = str(body.get("model") or "").strip()
+        url = str(body.get("url") or _ap.OLLAMA_URL)
+        if not model:
+            return web.json_response(
+                {"error": "no Ollama model chosen: pick one on the Auto Prompt "
+                          "section (any tab) first"}, status=400)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: rewrite_fields(body.get("fields") or {}, model,
+                                         str(body.get("style") or "keep"), url=url))
+        if result is None:
+            return web.json_response(
+                {"error": "the rewrite could not produce a result; the console "
                           "says why"}, status=502)
         return web.json_response({"fields": result})
 except Exception as _e:

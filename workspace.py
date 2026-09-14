@@ -527,6 +527,7 @@ def _normalise_auto(auto_in, default_mode):
         "joy": bool(auto_in.get("joy")),
         "qwen": bool(auto_in.get("qwen")),
         "clipgen": bool(auto_in.get("clipgen")),
+        "florence": bool(auto_in.get("florence")),
         "length": max(0, min(300, int(auto_in.get("length", 0))))
                   if isinstance(auto_in.get("length"), (int, float)) else 0,
         # fixed (default): the same image reuses the cached prompt. Unfixed
@@ -1176,6 +1177,12 @@ def parse_config(config_json):
         "joy_length": str(auto_in.get("joy_length") or ""),
         "joy_memory": str(auto_in.get("joy_memory") or "auto"),
         "joy_mode_prompts": bool(auto_in.get("joy_mode_prompts", True)),
+        # Florence-2, one choice shared by every tab: which models/LLM folder and
+        # which of the pack's caption tasks
+        "florence_model": str(auto_in.get("florence_model") or ""),
+        "florence_task": (str(auto_in.get("florence_task"))
+                          if auto_in.get("florence_task") in autoprompt.FLORENCE_TASKS
+                          else "more_detailed_caption"),
         "style_lock": auto_in.get("style_lock")
                       if auto_in.get("style_lock") in ("off", "scrub", "rewrite") else "off",
     }
@@ -2383,7 +2390,8 @@ class RedNodeStudioWorkspace:
             # every tensor engine needs the image, not just WD14 — gating on WD14 alone
             # silently starved CLIP gen, JoyCaption and QwenVL of their input. And the
             # moodboard tensor is a BATCH: caption its first ref (the resolved entry).
-            need_tensor = a["wd14"] or a["joy"] or a["qwen"] or a["clipgen"]
+            need_tensor = (a["wd14"] or a["joy"] or a["qwen"] or a["clipgen"]
+                           or a["florence"])
             t_img = tensor_map[tab_name] if need_tensor else None
             if t_img is not None and t_img.shape[0] > 1:
                 t_img = t_img[:1]
@@ -2396,6 +2404,8 @@ class RedNodeStudioWorkspace:
                     wired=wired, use_ollama=a["ollama"], use_wd14=a["wd14"],
                     use_joy=a["joy"], use_qwen=a["qwen"],
                     use_clip=a["clipgen"], clip=clip,
+                    use_florence=a["florence"],
+                    florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
                     unload_heavy=ga["wd14_unload"],
                     combine=a["combine"], max_words=a["length"],
                     model=ga["model"], url=ga["url"],
@@ -2441,7 +2451,8 @@ class RedNodeStudioWorkspace:
 
         any_engines = any(
             tabs[n]["auto"]["on"] and (tabs[n]["auto"]["wd14"] or tabs[n]["auto"]["ollama"]
-                                       or tabs[n]["auto"]["joy"] or tabs[n]["auto"]["qwen"])
+                                       or tabs[n]["auto"]["joy"] or tabs[n]["auto"]["qwen"]
+                                       or tabs[n]["auto"]["florence"])
             for n in ("subject", "scene", "moodboard", "i2i"))
         # STYLE LOCK: the moodboard's prompt is the style authority. Style vocabulary in
         # the subject and scene prompts that the mood prompt does not itself use is
@@ -3309,7 +3320,7 @@ def standalone_autoprompt(config_json, tab_name, entry):
     ga = cfg["auto"]
     skipped = (["CLIP gen (needs the workflow's CLIP; it runs on the next queue)"]
                if a["clipgen"] else [])
-    if not (a["ollama"] or a["wd14"] or a["joy"] or a["qwen"]):
+    if not (a["ollama"] or a["wd14"] or a["joy"] or a["qwen"] or a["florence"]):
         raise ValueError("no engines that can run standalone are on for this tab"
                          + (" (CLIP gen only runs with the queue)"
                             if a["clipgen"] else ""))
@@ -3324,12 +3335,14 @@ def standalone_autoprompt(config_json, tab_name, entry):
     except OSError:
         mtime = None
     t_img = (load_image(entry, cfg["resize"])
-             if (a["wd14"] or a["joy"] or a["qwen"]) else None)
+             if (a["wd14"] or a["joy"] or a["qwen"] or a["florence"]) else None)
     prompt = autoprompt.build_prompt(
         a["mode"], image_bytes=img_bytes, image_tensor=t_img,
         wired=(), use_ollama=a["ollama"], use_wd14=a["wd14"],
         use_joy=a["joy"], use_qwen=a["qwen"],
         use_clip=False, clip=None,
+        use_florence=a["florence"],
+        florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
         unload_heavy=ga["wd14_unload"],
         combine=a["combine"], max_words=a["length"],
         model=ga["model"], url=ga["url"],
@@ -3368,6 +3381,9 @@ try:
             "joy": autoprompt.joycaption_available(),
             "qwen": autoprompt.qwenvl_available(),
             "joy_options": autoprompt.joycaption_options(),
+            "florence": autoprompt.florence_available(),
+            "florence_models": autoprompt.florence_models(),
+            "florence_tasks": list(autoprompt.FLORENCE_TASKS),
             "converter": {"gender": SWAP_MODES, "style": STYLE_MODES, "act": ACT_MODES},
         })
 

@@ -78,7 +78,8 @@ tier, which clamps the expensive dials for a smaller card.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
-box for any other model. The auto prompt captions the references through a local vision model,
+box for any other model. The auto prompt captions the references through a local vision model
+(Ollama, WD14, JoyCaption, QwenVL or Florence-2, one Florence model and task shared by every tab),
 with a length budget, a converter for gender and style swaps, and a saved prompts button.
 Wildcards and `@keyword` macros resolve on the run's seed.
 
@@ -317,8 +318,11 @@ The same editor is what a Krea 2 prompt row on the Workspace's Prompts tab is.
 RedNode Describe To Boxes fills those boxes from a picture. It sends the image to a local Ollama
 vision model, asks for five labelled sections, and hands back Subject, Surroundings and Light and
 colour on separate outputs, with the raw reply on a fourth in case the split came back malformed.
-Ollama is the only engine verified so far. The vision model is released from VRAM as soon as the
-reply lands, so it does not sit on top of your checkpoint for the rest of the queue.
+Its engine choice adds Florence + Ollama: Florence-2 writes the caption and Ollama, text only, sorts
+it into the sections. The vision model is released from VRAM as soon as the reply lands, so it does
+not sit on top of your checkpoint for the rest of the queue. Beside the Frame's Auto sort button a
+Rewrite button sends the boxes through the same Ollama model as a writer, with a style tag
+(keep, photoreal, cinematic, illustration), and puts the result back in the boxes for editing.
 
 ## The Krea 2 system
 
@@ -421,7 +425,7 @@ what they did. Treat them as legacy.
 |---|---|
 | RedNode Prompt Box | Prompt editor with highlighting, @keyword macros and a seeded wildcard engine. |
 | RedNode Prompt Frame | Subject and Surroundings in their own boxes, emitted in the order that sets the framing. Five steps from Portrait to Roomscale, plus placement, style, lighting and a warnings output. |
-| RedNode Describe To Boxes | Reads a picture into Subject, Surroundings and Light and colour, ready to wire into the Frame. Runs on a local Ollama vision model. |
+| RedNode Describe To Boxes | Reads a picture into Subject, Surroundings and Light and colour, ready to wire into the Frame. Runs on a local Ollama vision model, or Florence-2 with Ollama sorting its caption. |
 | RedNode Prompt Combine | Prompt pieces joined in the order you drag them, typed, wired, or pulled wholesale from a channel. |
 | RedNode Text Combine | The plain string joiner: same rows, no prompt flag. |
 | RedNode Prompt Converter | Word-boundary gender and style swaps for captions. |

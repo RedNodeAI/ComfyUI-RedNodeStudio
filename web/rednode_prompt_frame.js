@@ -317,6 +317,60 @@ export function buildFrameEditor(wrap, F) {
     }
   });
   head.appendChild(sortBtn);
+  // REWRITE: the same model as a writer. Every fact stays, the wording gets
+  // concrete, and the style tag beside it says what kind of picture it is for.
+  // The result lands back in the boxes for editing, never straight to the queue.
+  const rwStyle = document.createElement("select");
+  rwStyle.style.maxWidth = "120px";
+  fillSelect(rwStyle, ["keep", "photoreal", "cinematic", "illustration"], "keep");
+  rwStyle.title = "What the rewrite writes for: keep the style as written, or a "
+                + "photograph, a film still, an illustration.";
+  const rwBtn = el("button", "rn-pf-btn", "✍ Rewrite");
+  rwBtn.title = "Rewrite what is in the boxes so it reads well for the model: every "
+              + "fact kept, the wording made concrete, in the style picked beside "
+              + "it. Uses the Ollama model chosen on the Auto Prompt section. The "
+              + "result comes back into the boxes for you to edit.";
+  rwBtn.addEventListener("click", async () => {
+    const model = F.sortModel?.() || "";
+    if (!model) {
+      rwBtn.textContent = "pick an Auto Prompt model first";
+      setTimeout(() => { rwBtn.textContent = "✍ Rewrite"; }, 2200);
+      return;
+    }
+    rwBtn.disabled = true;
+    rwBtn.textContent = "rewriting…";
+    try {
+      const fields = {
+        subject: subject.value, surroundings: surroundings.value,
+        style_extra: styleExtra.value, light_and_colour: lac.value,
+        placement: placement.value,
+      };
+      const r = await fetch("/rednode/prompt_rewrite", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, url: F.sortUrl?.() || "", fields,
+                               style: rwStyle.value }),
+      });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      const f = j.fields || {};
+      subject.value = f.subject ?? subject.value;
+      surroundings.value = f.surroundings ?? surroundings.value;
+      styleExtra.value = f.style_extra ?? styleExtra.value;
+      lac.value = f.light_and_colour ?? lac.value;
+      placement.value = f.placement ?? placement.value;
+      changed();
+      pullFromWidgets();
+      rwBtn.textContent = "rewritten";
+    } catch (e) {
+      rwBtn.textContent = "rewrite failed";
+      console.warn("[RedNode Prompt Frame] rewrite:", e);
+    } finally {
+      rwBtn.disabled = false;
+      setTimeout(() => { rwBtn.textContent = "✍ Rewrite"; }, 1800);
+    }
+  });
+  head.appendChild(rwStyle);
+  head.appendChild(rwBtn);
   wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------

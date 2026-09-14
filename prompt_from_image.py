@@ -35,7 +35,33 @@ SPLIT_INSTRUCTION = (
     "Write nothing before SUBJECT and nothing after the MOOD line. No bullets, no "
     "markdown, no preamble.")
 
-ENGINES = ["Ollama"]
+# Ollama looks at the picture itself. Florence + Ollama has Florence-2 (kijai's
+# pack) write the caption and Ollama, text only, sort it into the sections: the
+# eyes and the words split the way Lonecat's flow splits them.
+ENGINES = ["Ollama", "Florence + Ollama"]
+
+TEXT_SPLIT_INSTRUCTION = SPLIT_INSTRUCTION.replace(
+    "what you see in this image", "this description of an image")
+
+
+def florence_then_sort(image_tensor, model, instruction, max_tokens, seed):
+    """Florence-2 captions the picture; Ollama sorts the caption. Returns
+    (raw_reply, notice) with the caption itself when nothing can sort it."""
+    try:
+        from .autoprompt import florence_caption, ollama_generate
+    except ImportError:
+        from autoprompt import florence_caption, ollama_generate
+    caption = florence_caption(image_tensor, "more_detailed_caption", "", True)
+    if not caption.strip():
+        return "", "Florence-2 returned nothing (is comfyui-florence2 installed?)."
+    if not model or model.startswith("("):
+        return "SUBJECT: " + caption, "Florence-2 captioned; no Ollama to sort it, so the caption is in subject."
+    text_instruction = (TEXT_SPLIT_INSTRUCTION if instruction == SPLIT_INSTRUCTION
+                        else instruction)
+    raw = ollama_generate(model, "", text_instruction + "\n\nDescription: " + caption,
+                          options={"seed": seed, "num_predict": max_tokens,
+                                   "temperature": 0.2}) or ""
+    return raw, ""
 
 
 def parse_sections(text):
@@ -151,6 +177,17 @@ class RedNodeDescribeToBoxes:
                    "matching inputs on RedNode Prompt Frame.")
 
     def run(self, image, engine, model, instruction, max_tokens, seed):
+        if engine == "Florence + Ollama":
+            raw, notice = florence_then_sort(image, model, instruction, max_tokens, seed)
+            if not raw.strip():
+                return ("", "", "", "", notice or "The captioner returned nothing.")
+            sections, problems = parse_sections(raw)
+            boxes = to_boxes(sections)
+            if not notice:
+                notice = ("; ".join(problems) if problems
+                          else "Described into %d words." % len(raw.split()))
+            return (boxes["subject"], boxes["surroundings"], boxes["light_and_colour"],
+                    raw, notice)
         if model.startswith("("):
             return ("", "", "", "", "No vision model available. Is Ollama running?")
         try:
@@ -207,12 +244,15 @@ try:
             img = load_image(entry, 1024)
             models = _ollama_models()
             model = str(data.get("model") or models[0])
+            engine = str(data.get("engine") or ENGINES[0])
+            if engine not in ENGINES:
+                engine = ENGINES[0]
             try:
                 seed = int(data.get("seed", 0))
             except (TypeError, ValueError):
                 seed = 0
             subject, surroundings, lac, _raw, notice = RedNodeDescribeToBoxes().run(
-                img, ENGINES[0], model, SPLIT_INSTRUCTION, 400, max(0, seed))
+                img, engine, model, SPLIT_INSTRUCTION, 400, max(0, seed))
             return {"subject": subject, "surroundings": surroundings,
                     "light_and_colour": lac, "notice": notice}
         try:

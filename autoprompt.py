@@ -544,6 +544,79 @@ def qwenvl_caption(image_tensor, mode_prompt, unload=True):
         return ""
 
 
+# ---------------------------------------------------------------------------
+# Florence-2, through kijai's comfyui-florence2 pack: the loader's model list is
+# models/LLM, the run node hands back (image, mask, caption, data). The loaded
+# model is held between calls on purpose and dropped when unload says so.
+# ---------------------------------------------------------------------------
+_fl_model = {"key": None, "obj": None}
+
+FLORENCE_TASKS = ("more_detailed_caption", "detailed_caption", "caption",
+                  "prompt_gen_mixed_caption", "prompt_gen_mixed_caption_plus",
+                  "prompt_gen_tags", "prompt_gen_analyze")
+
+
+def florence_available():
+    return _node_cls("Florence2Run") is not None and _node_cls("Florence2ModelLoader") is not None
+
+
+def florence_models():
+    """The Florence-2 folders in models/LLM, as the pack's loader lists them."""
+    cls = _node_cls("Florence2ModelLoader")
+    try:
+        return [str(x) for x in cls.INPUT_TYPES()["required"]["model"][0]]
+    except Exception:
+        return []
+
+
+def florence_release():
+    """Drop the held Florence-2 model."""
+    _fl_model["key"], _fl_model["obj"] = None, None
+
+
+def florence_caption(image_tensor, task="more_detailed_caption", model="", unload=True,
+                     precision="fp16"):
+    """One caption from the installed Florence-2 pack; "" and one line on failure.
+    "" for the model picks the first folder the loader lists."""
+    loader, run = _node_cls("Florence2ModelLoader"), _node_cls("Florence2Run")
+    if loader is None or run is None:
+        print("[RedNode AutoPrompt] comfyui-florence2 is not installed; skipping Florence",
+              flush=True)
+        return ""
+    try:
+        name = model or _widget_default(loader, "model")
+        if not name:
+            print("[RedNode AutoPrompt] no Florence-2 folder in models/LLM; skipping it",
+                  flush=True)
+            return ""
+        key = (name, precision)
+        if _fl_model["obj"] is None or _fl_model["key"] != key:
+            got = _call_filtered(getattr(loader(), loader.FUNCTION), model=name,
+                                 precision=precision)
+            vals = getattr(got, "args", None)
+            if vals is None:
+                vals = got if isinstance(got, (list, tuple)) else [got]
+            _fl_model["obj"], _fl_model["key"] = vals[0], key
+        out = _call_filtered(
+            getattr(run(), run.FUNCTION), image=image_tensor, text_input="",
+            florence2_model=_fl_model["obj"],
+            task=task if task in FLORENCE_TASKS else "more_detailed_caption",
+            fill_mask=False, keep_model_loaded=not unload, max_new_tokens=512,
+            num_beams=3, do_sample=True, seed=1)
+        vals = getattr(out, "args", None)
+        if vals is None:
+            vals = out.get("result", ()) if isinstance(out, dict) else out
+        text = _first_string(vals[2]) if isinstance(vals, (list, tuple)) and len(vals) > 2 else ""
+        if unload:
+            florence_release()
+            free_vram()                      # hand the space back before the next engine loads
+        return text
+    except Exception as e:
+        print(f"[RedNode AutoPrompt] Florence-2 failed ({e}); continuing without it",
+              flush=True)
+        return ""
+
+
 def wd14_available():
     return _wd14_node() is not None
 
@@ -647,6 +720,7 @@ def build_prompt(mode, *, image_bytes=None, image_tensor=None, wired=(),
                  use_clip=False, clip=None, clip_fn=None,
                  frank=False, joy_opts=None, cache_base=None, use_cache=True, sidecar=None,
                  unload_heavy=True, joy_fn=None, qwen_fn=None, combine="append",
+                 use_florence=False, florence_fn=None, florence_opts=None,
                  max_words=0, instruction="", question="",
                  model="", url=OLLAMA_URL, wd14_model="", threshold=0.35,
                  character_threshold=0.85, replace_underscore=False, exclude_tags="",
@@ -721,6 +795,14 @@ def build_prompt(mode, *, image_bytes=None, image_tensor=None, wired=(),
     if use_qwen and image_tensor is not None:
         text = part("qwen", [],
                     lambda: (qwen_fn or qwenvl_caption)(image_tensor, prompt_text, unload_heavy))
+        if text:
+            paragraphs.append(text)
+    if use_florence and image_tensor is not None:
+        fo = dict(florence_opts or {})
+        text = part("florence", [fo.get("model", ""), fo.get("task", "")],
+                    lambda: (florence_fn or florence_caption)(
+                        image_tensor, fo.get("task") or "more_detailed_caption",
+                        fo.get("model", ""), unload_heavy))
         if text:
             paragraphs.append(text)
     if use_clip and image_tensor is not None:
@@ -834,6 +916,7 @@ def release_engines(model="", url=OLLAMA_URL):
         done.append(f"Ollama: released {model}")
     wd14_release()
     done.append("WD14: sessions dropped")
+    florence_release()
     freed = caption_model_release()
     done.append(f"vision models: {len(freed)} cached object(s) dropped"
                 if freed else "vision models: nothing cached")
