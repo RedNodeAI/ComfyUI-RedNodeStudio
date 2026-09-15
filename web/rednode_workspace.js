@@ -564,14 +564,14 @@ css.textContent = `
 .rn-ws-sect > .head .ttl{font-size:11.5px;font-weight:700;letter-spacing:.4px;opacity:.7;flex:1}
 .rn-ws-sect .rn-ws-dial{margin-left:12px}
 /* The Post tab: the chain list beside one editor. */
-.rn-ws-fxsplit{display:flex;gap:18px;align-items:stretch;min-height:220px}
-.rn-ws-fxlist{flex:none;width:190px;display:flex;flex-direction:column;border:1px solid #2a2e35;
+.rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px}
+.rn-ws-fxlist{flex:none;width:250px;display:flex;flex-direction:column;border:1px solid #2a2e35;
   border-radius:6px;background:#16181c;padding:0 0 6px;max-height:760px;overflow-y:auto}
-.rn-ws-fxband{font-size:10.5px;letter-spacing:.12em;font-weight:700;color:#e0e4ea;
-  background:#252a32;border-left:2px solid #b8283c;padding:6px 10px;margin:6px 0 2px}
+.rn-ws-fxband{font-size:11.5px;letter-spacing:.12em;font-weight:700;color:#e0e4ea;
+  background:#252a32;border-left:2px solid #b8283c;padding:7px 10px;margin:6px 0 2px}
 .rn-ws-fxband:first-child{margin-top:0}
-.rn-ws-fxrow{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 8px;cursor:pointer;
-  border-left:2px solid transparent;font-size:12px;color:#8d939b;white-space:nowrap}
+.rn-ws-fxrow{display:flex;align-items:center;gap:9px;padding:6px 10px 6px 8px;cursor:pointer;
+  border-left:2px solid transparent;font-size:13.5px;color:#8d939b;white-space:nowrap}
 .rn-ws-fxrow.on{color:#e0e4ea}
 .rn-ws-fxrow:hover{background:#1b1f25}
 .rn-ws-fxrow.sel{background:#20242b;border-left-color:#b8283c;color:#fff}
