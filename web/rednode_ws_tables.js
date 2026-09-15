@@ -316,12 +316,20 @@ export const POST_FX = [
     ] },
   { id: "sharpen", label: "Sharpen",
     blurb: "True sharpening. Lucy deconvolution reverses a Gaussian blur instead of "
-         + "just boosting edge contrast, so one or two passes beat a heavy unsharp.",
+         + "just boosting edge contrast, so one or two passes beat a heavy unsharp. "
+         + "Detail band is the guarded option for an AI frame: it lifts the detail "
+         + "layer only, soft-clips it so halos cannot grow, and holds back on noise, "
+         + "shadows, highlights, hair edges and skin.",
     controls: [
-      { key: "mode", label: "Mode", def: "lucy", choice: ["lucy", "unsharp"],
+      { key: "mode", label: "Mode", def: "lucy", choice: ["lucy", "unsharp", "band"],
+        labels: { lucy: "Lucy deconvolution", unsharp: "Unsharp mask",
+                  band: "Detail band (guarded)" },
         hint: "Lucy is Richardson-Lucy deconvolution: it estimates what the image "
             + "looked like before it was blurred. Unsharp is the classic halo-prone "
-            + "edge boost, cheaper and blunter." },
+            + "edge boost, cheaper and blunter. Detail band splits the picture into a "
+            + "soft base and a detail layer and lifts only the detail, with guards for "
+            + "halos, noise, shadows, highlights, hair edges and skin: the one to reach "
+            + "for on an AI frame." },
       { key: "iterations", label: "Iterations", min: 1, max: 20, step: 1, def: 1,
         hint: "Lucy only. Each pass sharpens further and amplifies noise further. "
             + "1 to 3 is the useful range." },
@@ -329,9 +337,35 @@ export const POST_FX = [
         hint: "Lucy only. How wide the blur it assumes was. Match it to the softness "
             + "you are fighting." },
       { key: "amount", label: "Amount", min: 0, max: 3, step: 0.01, def: 0.5,
-        hint: "Unsharp only. How much edge contrast to add." },
+        hint: "Unsharp and detail band. How hard the detail is pushed back in. On the "
+            + "detail band the ceiling tightens as this rises, so a big number bites "
+            + "without haloing." },
       { key: "radius", label: "Radius", min: 0.1, max: 10, step: 0.1, def: 1.0,
-        hint: "Unsharp only. How far from an edge the halo reaches." },
+        hint: "Unsharp and detail band. How far from an edge the effect reaches: on "
+            + "unsharp that is the halo's width, on the detail band how coarse the "
+            + "detail layer is. 1 to 3 pixels is the useful range." },
+      { key: "edge_preserve", label: "Edge preserve", min: 0.001, max: 0.2, step: 0.001,
+        def: 0.02,
+        hint: "Detail band only. How closely the soft base follows edges before the "
+            + "detail is taken off it. Low follows them hard, which keeps halos off hair "
+            + "and lashes; high behaves more like a plain blur and bites harder." },
+      { key: "noise_gate", label: "Noise gate", min: 0, max: 0.5, step: 0.005, def: 0.055,
+        hint: "Detail band only. Detail finer than this is left alone, so the grain an AI "
+            + "paints onto skin is not turned into black speckles." },
+      { key: "shadow_protect", label: "Shadow protect", min: 0, max: 1, step: 0.01, def: 0.35,
+        hint: "Detail band only. How much sharpening is held back in the darkest tones, "
+            + "where noise lives and detail does not." },
+      { key: "highlight_protect", label: "Highlight protect", min: 0, max: 1, step: 0.01,
+        def: 0.5,
+        hint: "Detail band only. How much is held back near white, so skin speculars and "
+            + "skies do not gain a hard rim." },
+      { key: "fringe_hold", label: "Fringe hold", min: 0, max: 1, step: 0.01, def: 0.5,
+        hint: "Detail band only. Where brightness already jumps a long way, hair against "
+            + "a bright background for instance, the sharpening eases off so the edge "
+            + "does not gain a white outline." },
+      { key: "skin_protect", label: "Skin protect", min: 0, max: 1, step: 0.01, def: 0,
+        hint: "Detail band only. Holds sharpening back on skin-coloured areas so pores do "
+            + "not turn gritty. 0.5 to 0.7 is a portrait setting." },
     ] },
   // NOT an effect: the settings for the depth map the two depth effects share.
   // Drawn as a card so it lives beside them, with no switch of its own.

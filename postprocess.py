@@ -96,8 +96,13 @@ DEFAULTS = {
     "clarity": {"on": False, "radius": 3, "offset": 2.0, "strength": 0.4,
                 "blend_mode": "soft light", "blend_if_dark": 50, "blend_if_light": 205,
                 "dark_intensity": 0.4, "light_intensity": 0.0},
+    # SHARPEN: three modes. lucy and unsharp use the four dials above; the detail
+    # band uses amount and radius plus the guards below, which is what stops a hard
+    # setting from haloing, speckling or crunching an AI frame.
     "sharpen": {"on": False, "mode": "lucy", "iterations": 1, "kernel_size": 3,
-                "amount": 0.5, "radius": 1.0},
+                "amount": 0.5, "radius": 1.0,
+                "edge_preserve": 0.02, "noise_gate": 0.055, "shadow_protect": 0.35,
+                "highlight_protect": 0.5, "fringe_hold": 0.5, "skin_protect": 0.0},
     # THE DEPTH CARD: not an effect, the settings for the depth map the two depth
     # effects share. Which estimator, which Depth Anything V2 checkpoint, and the
     # working resolution. "auto" is whichever is installed, and its own default file.
@@ -158,7 +163,7 @@ DEPTH_ESTIMATORS = {
 }
 DEPTH_MODELS = {"vitg": "depth_anything_v2_vitg.pth", "vitl": "depth_anything_v2_vitl.pth",
                 "vitb": "depth_anything_v2_vitb.pth", "vits": "depth_anything_v2_vits.pth"}
-SHARPEN_MODES = ("lucy", "unsharp")
+SHARPEN_MODES = ("lucy", "unsharp", "band")
 VIGNETTE_LAWS = ("smooth", "cos4")
 SKIN_SUBJECT = ("off", "auto", "always")
 SKIN_SHOWS = ("off", "mask", "over")
@@ -764,15 +769,43 @@ def clarity(img, radius=3, offset=2.0, strength=0.4, blend_mode="soft light",
     return _clamp01(_nhwc(t + (mixed - t) * weight))
 
 
-def sharpen(img, mode="lucy", iterations=1, kernel_size=3, amount=0.5, radius=1.0):
-    """Richardson-Lucy deconvolution, or a plain unsharp mask.
+def sharpen(img, mode="lucy", iterations=1, kernel_size=3, amount=0.5, radius=1.0,
+            edge_preserve=0.02, noise_gate=0.055, shadow_protect=0.35,
+            highlight_protect=0.5, fringe_hold=0.5, skin_protect=0.0):
+    """Richardson-Lucy deconvolution, a plain unsharp mask, or a guarded detail band.
 
     Lucy assumes the image was blurred by a Gaussian point spread function and
     walks an estimate back towards the sharp original, one multiplicative step
     per iteration. It recovers real detail rather than just raising edge
     contrast, which is why one or two iterations beat a heavy unsharp pass.
+
+    The detail band splits the picture into a soft base (0.45 guided filter on
+    luma plus 0.55 box blur) and the detail above it, soft-clips the detail with a
+    tanh whose ceiling rises slower than its gain, so a strong setting stops
+    growing halos, gates out the finest noise, and holds back in the shadows, the
+    highlights, where luma already jumps a long way (hair edges) and on skin.
     """
     t = _nchw(img)
+    if mode == "band":
+        amt = max(0.0, min(3.0, float(amount)))
+        if amt <= 0:
+            return img
+        r = max(1, int(round(float(radius))))
+        y = _luma(t)
+        eps = max(1e-6, float(edge_preserve) ** 2)
+        low = 0.45 * _guided(y.expand_as(t), t, r, eps) + 0.55 * _box(t, r)
+        d = t - low
+        cap = 0.035 + 0.045 * amt
+        band = cap * torch.tanh(amt * d / cap)
+        ng = max(0.0, float(noise_gate))
+        if ng > 0:
+            band = band * _smoothstep(d.abs(), 0.3 * ng, ng)
+        w = (1.0 - float(shadow_protect) * (1.0 - _smoothstep(y, 0.06, 0.28)))
+        w = w * (1.0 - float(highlight_protect) * _smoothstep(y, 0.72, 0.95))
+        w = w * (1.0 - float(fringe_hold) * _smoothstep((y - _luma(low)).abs(), 0.10, 0.30))
+        if float(skin_protect) > 0:
+            w = w * (1.0 - float(skin_protect) * _skin_weight(t.clamp(0, 1)))
+        return _clamp01(_nhwc(t + band * w))
     if mode == "unsharp":
         blurred = gaussian_blur(t, max(0.1, float(radius)))
         return _clamp01(_nhwc(t + (t - blurred) * float(amount)))
@@ -1169,6 +1202,10 @@ def _guard(name, cur):
         cur["mode"] = cur["mode"] if cur["mode"] in SHARPEN_MODES else "lucy"
         cur["iterations"] = max(1, min(20, cur["iterations"]))
         cur["kernel_size"] = max(1, min(31, cur["kernel_size"]))
+        cur["noise_gate"] = max(0.0, min(0.5, cur["noise_gate"]))
+        cur["edge_preserve"] = max(0.001, min(0.2, cur["edge_preserve"]))
+        for _k in ("shadow_protect", "highlight_protect", "fringe_hold", "skin_protect"):
+            cur[_k] = max(0.0, min(1.0, cur[_k]))
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")

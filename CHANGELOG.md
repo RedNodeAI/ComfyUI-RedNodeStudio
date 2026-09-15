@@ -98,6 +98,10 @@ cheap to judge.
   puts it on screen. De-yellow, rosy, skin saturation, brightness with a
   highlight guard, shadow lift, evenness, and smoothing with a texture dial,
   all starting at 0
+- A Detail band mode on Sharpen: a guided-filter base, the detail layer
+  soft-clipped so halos stop growing as the amount rises, a noise gate so AI
+  skin grain does not become speckles, and shadow, highlight, hair edge and
+  skin protection
 - Vignette gains a falloff law (the smooth band, or the natural cosine to the
   fourth that real glass follows), a roundness dial from the frame's oval to a
   true circle, and a ring colour that lands in the falloff only and tints
