@@ -98,6 +98,12 @@ DEFAULTS = {
     # its edge is, in pixels.
     "mask": {"on": False, "source": "auto", "feather": 12},
     "dof": {"on": False, "focus": 0.35, "range": 0.15, "blur": 6.0, "flip_depth": False},
+    # RELIGHT: a new key light over the depth map's relief. Azimuth is where it
+    # comes from (0 right, 90 top, 180 left, 270 below), elevation how high it
+    # sits (0 grazing, 90 straight on). Ambient is what the unlit side keeps.
+    "relight": {"on": False, "azimuth": 45.0, "elevation": 35.0, "intensity": 0.6,
+                "warmth": 0.0, "ambient": 0.6, "softness": 0.5, "shadow": 0.4,
+                "relief": 1.0, "flip_depth": False},
     "haze": {"on": False, "strength": 0.35, "start": 0.45, "lift": 0.12,
              "flip_depth": False},
     "light_wrap": {"on": False, "strength": 0.4, "radius": 2.5, "threshold": 0.7},
@@ -140,13 +146,14 @@ CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 
 # the chain order: repair, tone, detail, light, lens
 ORDER = ("denoise", "color", "match", "lut", "clarity", "sharpen",   # repair and grade
+         "relight",                                                  # light
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
          "light_wrap", "diffusion", "vignette",              # ...and its glare
          "halation", "rolloff", "grain")                     # the film
 
 # effects that cannot run without a depth map wired into the node
-DEPTH_EFFECTS = ("dof", "haze")
+DEPTH_EFFECTS = ("dof", "haze", "relight")
 
 
 # ---------------------------------------------------------------------------
@@ -657,6 +664,83 @@ def dof(img, depth=None, focus=0.35, range=0.15, blur=6.0, flip_depth=False):  #
     return _clamp01(_nhwc(t * (1 - coc) + soft * coc))
 
 
+def _height_field(depth, like, flip, mask=None, softness=0.5):
+    """[B,1,H,W] height, 1 near and 0 far, smoothed by softness; the subject mask
+    adds a dome so a person reads as rounded rather than as a flat cut-out."""
+    h = 1.0 - _depth_map(depth, like, flip)
+    if mask is not None:
+        m = mask if mask.ndim == 4 else mask.unsqueeze(1)
+        m = m[:, :1].to(h.device, h.dtype)
+        if m.shape[0] != h.shape[0]:
+            m = m[:1].expand(h.shape[0], -1, -1, -1)
+        if m.shape[2:] != h.shape[2:]:
+            m = F.interpolate(m, size=h.shape[2:], mode="bilinear", align_corners=False)
+        dome = gaussian_blur(m.clamp(0, 1), max(1.0, min(h.shape[2:]) * 0.04))
+        h = h + dome * 0.35
+    return gaussian_blur(h, 0.5 + float(softness) * 6.0)
+
+
+def relight(img, depth=None, mask=None, azimuth=45.0, elevation=35.0, intensity=0.6,
+            warmth=0.0, ambient=0.6, softness=0.5, shadow=0.4, relief=1.0,
+            flip_depth=False):
+    """A new key light over the picture's relief.
+
+    The depth map becomes a height field, its gradient becomes normals, and a
+    directional light shades them: the side facing the light keeps its
+    brightness (a little more, so the picture does not simply darken), the side
+    facing away falls to ambient. Contact shadows come from a short march up
+    the height field towards the light: a pixel with higher ground between it
+    and the light sits in shadow. Warmth tints the light itself. The subject
+    mask, when the chain has one, rounds the subject off so faces light like
+    faces and not like cardboard.
+    """
+    if depth is None:
+        print("[RedNode Post] relight needs a depth map on the node's depth input; "
+              "skipping it", flush=True)
+        return img
+    strength = max(0.0, min(1.0, float(intensity)))
+    if strength <= 0:
+        return img
+    t = _nchw(img)
+    B, _C, H, W = t.shape
+    h = _height_field(depth, t, flip_depth, mask, softness)
+    # normals from the gradient; relief scales how much the terrain leans
+    k = 24.0 * max(0.0, float(relief))
+    dx = (torch.roll(h, -1, 3) - torch.roll(h, 1, 3)) * 0.5 * k
+    dy = (torch.roll(h, -1, 2) - torch.roll(h, 1, 2)) * 0.5 * k
+    nx, ny, nz = -dx, dy, torch.ones_like(h)          # image y runs down; normal y up
+    norm = (nx * nx + ny * ny + nz * nz).sqrt()
+    nx, ny, nz = nx / norm, ny / norm, nz / norm
+    az = math.radians(float(azimuth))
+    el = math.radians(max(1.0, min(89.0, float(elevation))))
+    lx, ly, lz = math.cos(az) * math.cos(el), math.sin(az) * math.cos(el), math.sin(el)
+    diffuse = (nx * lx + ny * ly + nz * lz).clamp(0.0, 1.0)
+    # contact shadows: march towards the light; ground higher than the line of
+    # sight to the light puts this pixel in shadow
+    sh = float(shadow)
+    occl = torch.zeros_like(h)
+    if sh > 0:
+        steps, px = 10, max(1.0, min(H, W) / 96.0)
+        rise = math.tan(el) * (k / 24.0) * 0.012
+        ys = torch.linspace(-1, 1, H, device=t.device, dtype=t.dtype).view(1, H, 1)
+        xs = torch.linspace(-1, 1, W, device=t.device, dtype=t.dtype).view(1, 1, W)
+        for s in range(1, steps + 1):
+            ox = lx * px * s * 2.0 / max(1, W - 1)
+            oy = -ly * px * s * 2.0 / max(1, H - 1)
+            grid = torch.stack([(xs + ox).expand(B, H, W), (ys + oy).expand(B, H, W)], -1)
+            hs = F.grid_sample(h, grid, mode="bilinear", padding_mode="border",
+                               align_corners=True)
+            occl = torch.maximum(occl, ((hs - h) - rise * s).clamp(0.0, 1.0) * 6.0)
+        occl = gaussian_blur(occl.clamp(0.0, 1.0), 1.5) * sh
+    amb = max(0.0, min(1.0, float(ambient)))
+    lit = (amb + (1.0 - amb) * diffuse) * (1.0 - occl * (1.0 - amb))
+    lit = lit * 1.3                                     # the lit side gains, not just the far side losing
+    w = float(warmth) * 0.5
+    tint = torch.tensor([1.0 + w, 1.0, 1.0 - w], device=t.device, dtype=t.dtype).view(1, 3, 1, 1)
+    gain = 1.0 + (lit * tint - 1.0) * strength
+    return _clamp01(_nhwc(t * gain))
+
+
 def haze(img, depth=None, strength=0.35, start=0.45, lift=0.12, flip_depth=False):
     """Aerial perspective: distance washes out towards the atmosphere's colour.
 
@@ -855,7 +939,7 @@ EFFECTS = {
     "sharpen": sharpen, "bloom": bloom, "halation": halation, "light_wrap": light_wrap,
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
-    "match": match, "lut": lut,
+    "match": match, "lut": lut, "relight": relight,
 }
 
 
@@ -995,6 +1079,8 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
             args["depth"] = depth
         if name == "match":
             args["reference"] = reference
+        if name == "relight":
+            args["mask"] = mask
         started = time.time()
         res = EFFECTS[name](out, **args)
         # LIMITED TO THE SUBJECT OR THE BACKGROUND: the card's result only under

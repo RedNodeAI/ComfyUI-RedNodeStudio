@@ -316,6 +316,39 @@ export const POST_FX = [
         hint: "How soft the mask's edge is, in pixels, so a limited card does not "
             + "cut a hard line round the subject." },
     ] },
+  { id: "relight", label: "Relight", depth: true, cost: "depth model",
+    blurb: "A new key light over the picture's relief. The depth map says which way "
+         + "every surface faces, so the side towards the light keeps its brightness "
+         + "and the side away falls to ambient, with contact shadows where higher "
+         + "ground blocks the light. Distances are worked out for you.",
+    controls: [
+      { key: "azimuth", label: "From", min: 0, max: 360, step: 5, def: 45,
+        hint: "Where the light comes from, around the frame: 0 is the right edge, 90 "
+            + "the top, 180 the left, 270 below." },
+      { key: "elevation", label: "Height", min: 5, max: 85, step: 5, def: 35,
+        hint: "How high the light sits. Low is grazing and dramatic, with long "
+            + "shadows; high is flat and even." },
+      { key: "intensity", label: "Strength", min: 0, max: 1, step: 0.01, def: 0.6,
+        hint: "How much of the new light shows. 0 is off; 1 is the full relight." },
+      { key: "ambient", label: "Ambient", min: 0, max: 1, step: 0.01, def: 0.6,
+        hint: "What the side facing away keeps. Low is a hard single light; high "
+            + "is a soft fill." },
+      { key: "warmth", label: "Warmth", min: -1, max: 1, step: 0.05, def: 0,
+        hint: "The light's own colour: positive warm, negative cool. The shadows "
+            + "keep the picture's colour." },
+      { key: "shadow", label: "Contact shadow", min: 0, max: 1, step: 0.01, def: 0.4,
+        hint: "Shadows cast by higher ground onto lower: under a chin, behind a "
+            + "shoulder. 0 turns them off." },
+      { key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, def: 0.5,
+        hint: "Smooths the relief before lighting it. Low picks up pores and "
+            + "noise; high lights only the big shapes." },
+      { key: "relief", label: "Relief", min: 0, max: 3, step: 0.05, def: 1.0,
+        hint: "How steep the terrain reads. Higher makes every surface lean "
+            + "further into or away from the light." },
+      { key: "flip_depth", label: "Flip depth", min: 0, max: 1, step: 1, def: 0,
+        hint: "Depth estimators disagree about which end is near. If the light "
+            + "lands on the wrong side of things, set this to 1." },
+    ] },
   { id: "haze", label: "Atmospheric haze", depth: true, cost: "depth model",
     blurb: "Distance washes out towards the air's own colour and loses contrast. "
          + "This is most of what makes a background read as far away, and it is "

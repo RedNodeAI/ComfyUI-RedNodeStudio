@@ -351,6 +351,7 @@ export function looksSection(node, body) {
 // once was a wall of sliders. The two settings cards sit at the foot of the list.
 const FX_GROUPS = [
   ["GRADE", ["denoise", "color", "match", "lut", "clarity", "sharpen"]],
+  ["LIGHT", ["relight"]],
   ["AIR", ["haze"]],
   ["LENS", ["distortion", "dof", "aberration", "bloom", "light_wrap", "diffusion", "vignette"]],
   ["FILM", ["halation", "rolloff", "grain"]],

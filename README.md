@@ -140,7 +140,8 @@ Subject picture, and the edit mask that confines the pass.
 ![The Post tab: saved looks, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
 
 **Post.** The grading chain, seventeen effects in physical camera order, with looks you can save and
-random ranges on any dial. Depth of field and haze make their own depth map; the Depth card picks
+random ranges on any dial. Depth of field, haze and Relight, a new key light over the picture's
+relief with contact shadows, make their own depth map; the Depth card picks
 the estimator, the checkpoint and the resolution. Match reference moves the frame's colour onto a
 Moodboard, Subject or Scene picture with skin held back, and LUT applies a .cube file from
 models/luts. Every card has a Limit row: whole frame, subject only or background only, through

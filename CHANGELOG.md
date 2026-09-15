@@ -65,6 +65,9 @@ cheap to judge.
 - A Mask card (the auto-mask source and its feather), a Match card (the
   picture's colour moved onto a reference, AdaIN or linear, with a skin
   hold) and a LUT card (.cube files from models/luts)
+- A Relight card: a new key light over the depth map's relief, direction,
+  height, strength, ambient, warmth, contact shadows, and the subject mask
+  rounding the subject off
 
 ### Camera Studio
 
