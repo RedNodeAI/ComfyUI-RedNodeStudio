@@ -655,7 +655,7 @@ css.textContent = `
 .rn-ws-fxcard.dragging{opacity:.5;transform:rotate(-2deg)}
 .rn-ws-eye{width:16px;height:16px;flex:none;border:none;background:none;color:#474b52;
   padding:0;cursor:pointer;font-size:11px;line-height:16px;text-align:center}
-.rn-ws-eye.on{color:#b8283c}
+.rn-ws-eye.on{color:#22c55e;text-shadow:0 0 5px #22c55e88}
 .rn-ws-eye.gear{color:#474b52;font-size:12px;cursor:default}
 .rn-ws-fxlimitpill{margin-left:auto;font-size:9px;border:1px solid #6b5a2a;color:#d4b25f;
   border-radius:8px;padding:0 5px;line-height:14px}
