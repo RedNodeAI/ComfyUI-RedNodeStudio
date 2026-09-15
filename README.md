@@ -140,10 +140,12 @@ Subject picture, and the edit mask that confines the pass.
 ![The Post tab: saved looks, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
 
 **Post.** The grading chain, twenty effects in physical camera order, with saved effects you can keep and
-random ranges on any dial. A folded section below your own saved effects carries a small library
-that ships with the pack: Pro Grade starting points for Krea 2 and Z-Image, and looks for product
-shots, faded prints, instant film and more. Apply one freely; save a copy under your own name to
-change it, since the shipped ones cannot be edited or deleted. Depth of field, haze and Relight, a new key light over the picture's
+random ranges on any dial. Saved effects has two tabs: Mine, for the effects you keep, and Shipped,
+a library of seventeen looks that come with the pack, each with a picture of what it does: Pro
+Grade starting points for Krea 2 and Z-Image, portrait, beauty and product advertising grades,
+food, cinematic and night looks, faded prints, instant film, disposable flash, early digital and
+black and white. Apply one freely; save a copy under your own name to change it, since the
+shipped ones cannot be edited or deleted. Depth of field, haze and Relight, a new key light over the picture's
 relief with contact shadows, make their own depth map; the Depth card picks
 the estimator, the checkpoint and the resolution. Match reference moves the frame's colour onto a
 Moodboard, Subject or Scene picture with skin held back, and LUT applies a .cube file from

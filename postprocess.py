@@ -2036,13 +2036,35 @@ BUILTIN_LOOKS = {
 }
 
 
+LOOKS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "looks")
+_LOOK_THUMBS = {}
+
+
+def look_slug(name):
+    """The file name a shipped look's thumbnail goes by: lower case, words joined by _."""
+    return "".join(c if c.isalnum() else "_" for c in str(name).lower()).strip("_")
+
+
+def shipped_thumb(name):
+    """A shipped look's thumbnail from looks/<slug>.jpg as a data URI, read once; "" when
+    the file is not there, and the panel then paints the swatch instead."""
+    if name not in _LOOK_THUMBS:
+        try:
+            with open(os.path.join(LOOKS_DIR, look_slug(name) + ".jpg"), "rb") as f:
+                _LOOK_THUMBS[name] = ("data:image/jpeg;base64,"
+                                      + base64.b64encode(f.read()).decode("ascii"))
+        except OSError:
+            _LOOK_THUMBS[name] = ""
+    return _LOOK_THUMBS[name]
+
+
 def all_looks():
     """The shipped looks and the user's saved ones, shipped first. Each entry is
     {"config": chain, "thumb": data URI or "", "builtin": bool, "swatch": pair,
     "blurb": str}."""
     out = {}
     for name, entry in BUILTIN_LOOKS.items():
-        out[name] = {"config": entry["config"], "thumb": "", "builtin": True,
+        out[name] = {"config": entry["config"], "thumb": shipped_thumb(name), "builtin": True,
                      "swatch": list(entry.get("swatch") or ()),
                      "blurb": entry.get("blurb", "")}
     for name, entry in sorted(load_presets().items()):

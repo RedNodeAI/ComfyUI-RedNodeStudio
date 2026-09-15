@@ -72,11 +72,15 @@ cheap to judge.
 
 ### Post FX
 
-- A small library of looks ships with the pack: Pro Grade starting points for
-  Krea 2 and Z-Image plus looks for natural photos, product shots, portraits,
-  cinematic grades, faded and instant-film prints and black and white. They
-  sit in their own folded section under your own saved effects, can be
-  applied and copied but never renamed, overwritten or deleted
+- Seventeen looks ship with the pack, each with a picture of what it does:
+  Pro Grade starting points for Krea 2 and Z-Image, natural photo, soft and
+  Portra portraits, beauty editorial, clean and dark luxury product grades,
+  warm food, teal and orange, Cinestill night, low key, faded 70s print, 90s
+  Polaroid, disposable flash, early digital compact and black and white.
+  Saved effects has Mine and Shipped tabs; a shipped look can be applied and
+  copied but never renamed, overwritten or deleted
+- Highlights on the Colour card leave pure white and mid grey where they
+  are, so recovering the bright end never greys a white background
 - The Post tab is a chain list beside one editor: the list says what is on
   and in what order, the editor shows the picked card's dials
 - A Limit on every card: subject, background or a mask, with a feather

@@ -555,12 +555,18 @@ function lookCell(node, cfg, preset) {
       + "copy of your own to change it."
     : `Apply the "${preset.name}" look. Right-click for rename, overwrite and delete.`;
   if (preset.builtin) {
-    const sw = document.createElement("span");
-    sw.className = "sw";
-    const [c1, c2] = preset.swatch && preset.swatch.length === 2
-      ? preset.swatch : ["#2a2e35", "#4a5058"];
-    sw.style.background = `linear-gradient(135deg, ${c1} 55%, ${c2} 100%)`;
-    cell.appendChild(sw);
+    if (preset.thumb) {
+      const im = document.createElement("img");
+      im.src = preset.thumb;
+      cell.appendChild(im);
+    } else {
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      const [c1, c2] = preset.swatch && preset.swatch.length === 2
+        ? preset.swatch : ["#2a2e35", "#4a5058"];
+      sw.style.background = `linear-gradient(135deg, ${c1} 55%, ${c2} 100%)`;
+      cell.appendChild(sw);
+    }
     const tag = document.createElement("span");
     tag.className = "tag";
     tag.textContent = "SHIPPED";
@@ -614,9 +620,11 @@ export function looksSection(node, body) {
   arr.className = "arr";
   arr.textContent = folded ? "▸" : "▾";
   const savedOnly = postPresets.filter((p) => !p.builtin);
+  const shipped = postPresets.filter((p) => p.builtin);
+  const tab = node.properties?.rn_saved_fx_tab === "shipped" ? "shipped" : "mine";
   const ttl = document.createElement("span");
   ttl.className = "ttl rn-ws-savedttl";
-  ttl.textContent = "Saved effects" + (savedOnly.length ? ` (${savedOnly.length})` : "");
+  ttl.textContent = "Saved effects";
   head.append(arr, ttl);
   head.title = folded ? "Show the saved effects." : "Fold the saved effects away.";
   head.onclick = () => {
@@ -629,8 +637,34 @@ export function looksSection(node, body) {
     return;
   }
 
+  // two tabs, so the looks that ship with the pack never bury your own
+  const tabs = document.createElement("div");
+  tabs.className = "rn-ws-row rn-ws-looktabs";
+  const seg = document.createElement("div");
+  seg.className = "rn-ws-seg";
+  for (const [v, l, tip] of [
+    ["mine", `Mine (${savedOnly.length})`, "The effects you saved, and the last graded frame."],
+    ["shipped", `Shipped (${shipped.length})`,
+     "Looks that ship with the pack. Apply one, or right-click to save a copy you can change."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (tab === v ? " on" : "");
+    b.textContent = l;
+    b.title = tip;
+    b.onclick = () => { (node.properties ||= {}).rn_saved_fx_tab = v; postRender(node); };
+    seg.appendChild(b);
+  }
+  tabs.appendChild(seg);
+  sect.appendChild(tabs);
+
   const grid = document.createElement("div");
   grid.className = "rn-ws-lookgrid";
+  if (tab === "shipped") {
+    for (const preset of shipped) grid.appendChild(lookCell(node, cfg, preset));
+    sect.appendChild(grid);
+    body.appendChild(sect);
+    return;
+  }
 
   // the last graded frame, so you can see what the dials are actually doing
   const live = document.createElement("div");
@@ -708,41 +742,6 @@ export function looksSection(node, body) {
   };
   row.append(tl, tr, save);
   sect.appendChild(row);
-  body.appendChild(sect);
-
-  shippedSection(node, body);
-}
-
-// what ships with the pack: folded by default, a swatch instead of a photo, and no
-// way to rename, overwrite or delete it from here (openLookMenu enforces that too)
-function shippedSection(node, body) {
-  const cfg = node._rnCfg;
-  const shipped = postPresets.filter((p) => p.builtin);
-  const sect = document.createElement("div");
-  sect.className = "rn-ws-sect rn-ws-looks rn-ws-shiplooks";
-  const head = document.createElement("div");
-  head.className = "head";
-  const folded = node.properties?.rn_shipped_fx_folded !== false;   // folded by default
-  const arr = document.createElement("span");
-  arr.className = "arr";
-  arr.textContent = folded ? "▸" : "▾";
-  const ttl = document.createElement("span");
-  ttl.className = "ttl rn-ws-savedttl";
-  ttl.textContent = `Shipped with the pack (${shipped.length})`;
-  head.append(arr, ttl);
-  head.title = folded ? "Show the effects that ship with the pack."
-                       : "Fold the shipped effects away.";
-  head.onclick = () => {
-    (node.properties ||= {}).rn_shipped_fx_folded = !folded;
-    postRender(node);
-  };
-  sect.appendChild(head);
-  if (!folded) {
-    const grid = document.createElement("div");
-    grid.className = "rn-ws-lookgrid";
-    for (const preset of shipped) grid.appendChild(lookCell(node, cfg, preset));
-    sect.appendChild(grid);
-  }
   body.appendChild(sect);
 }
 
