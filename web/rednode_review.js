@@ -23,12 +23,7 @@ const THUMB_H = 64;
 const css = document.createElement("style");
 css.textContent = `
 .rn-rv-wrap{display:flex;flex-direction:column;gap:6px;padding:8px;box-sizing:border-box;
-  font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden;
-  contain:layout paint style;will-change:transform}
-/* A layer of its own, layout and paint contained: ComfyUI moves every DOM widget
-   by its position on each frame of a pan, and without this the browser repainted the
-   panel and re-scaled its picture every frame, which read as the whole canvas lagging.
-   With it the drawn panel is shifted as it is. */
+  font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden}
 .rn-rv-main{flex:1;min-height:100px;display:flex;align-items:center;justify-content:center;
   background:#111316;border-radius:6px;overflow:hidden;position:relative;cursor:context-menu}
 .rn-rv-main img{max-width:100%;max-height:100%;object-fit:contain}
