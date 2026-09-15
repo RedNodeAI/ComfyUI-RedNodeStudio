@@ -309,6 +309,7 @@ css.textContent = `
   overflow:hidden;text-overflow:ellipsis}
 .rn-ws-segb:hover{color:#fff}
 .rn-ws-segb.on{background:#b8283c;color:#fff;font-weight:600}
+.rn-ws-switch .rn-ws-segb{padding:4px 10px;font-size:12px}
 .rn-ws-gen{flex:1 1 auto;min-width:120px;min-height:38px;padding:0 18px;border-radius:6px;
   border:1px solid #2f7a4d;background:#1f9d55;color:#fff;font-weight:700;
   font-size:14.5px;cursor:pointer;letter-spacing:.01em}
@@ -3674,17 +3675,12 @@ function autoSection(node, body, tabName) {
       b.onclick = () => { a[key] = !a[key]; writeCfg(node); render(node); };
       return b;
     };
-    const fixedBtn = document.createElement("button");
-    fixedBtn.className = "rn-ws-on" + (a.fixed ? " on" : "");
-    fixedBtn.textContent = a.fixed ? "REUSE" : "FRESH";
-    fixedBtn.style.width = "auto";
-    fixedBtn.style.padding = "0 9px";
-    fixedBtn.title = a.fixed
-      ? "Reuse: the same image keeps its prompt; the LLM does not re-run. Click for "
-        + "fresh wording every queue."
-      : "Fresh: the LLM re-runs on EVERY queue and the whole graph downstream "
-        + "recomputes. Click to reuse the prompt per image instead.";
-    fixedBtn.onclick = () => { a.fixed = !a.fixed; writeCfg(node); render(node); };
+    const fixedBtn = segSwitch([
+      ["reuse", "REUSE", "The same image keeps its prompt; the LLM does not re-run."],
+      ["fresh", "FRESH", "The LLM re-runs on EVERY queue for fresh wording, and the whole "
+                         + "graph downstream recomputes."],
+    ], a.fixed ? "reuse" : "fresh",
+    (v) => { a.fixed = v === "reuse"; writeCfg(node); render(node); });
 
     const adv = document.createElement("button");
     adv.className = "rn-ws-cog" + (node._rnAutoAdv ? " on" : "");
@@ -5887,6 +5883,15 @@ export function rollSeed() {
 }
 
 async function paintGenerate(node) {
+  if (!node._rnCfg?.paint?.on) {
+    // a blank white result with no word of why is the worst answer a button
+    // can give; say what is off and where the switch is
+    alert("Paint is switched off on this tab, so Generate would render a blank "
+        + "canvas. Switch Paint on with the switch at the top of the Paint tab, "
+        + "then press Generate. The main Queue button renders the workspace as "
+        + "usual.");
+    return;
+  }
   const picked = chosenTarget(node._rnCfg);
   if (!picked) {
     alert("Nothing to paint with. Either add a RedNode Paint Render node and wire "
@@ -7838,18 +7843,12 @@ function paintBody(node, body) {
     // The word, not just an icon: a lone dice that highlights when active reads as
     // "press me to randomise" as easily as "random is on", and the wrong reading
     // cost a session of confusion once already.
-    const dice = document.createElement("button");
-    dice.className = "rn-ws-btn" + (P.seed_random !== false ? " on" : "");
-    dice.textContent = P.seed_random !== false ? "\uD83C\uDFB2 random" : "\uD83D\uDCCC fixed";
-    dice.title = P.seed_random !== false
-      ? "A new seed is rolled before each Generate. Click to keep the current one, "
-        + "which repeats the same picture until something else changes."
-      : "This exact seed runs every Generate, so an unchanged setup is served from "
-        + "cache and nothing re-renders. Click to roll a new seed each press.";
-    dice.onclick = () => {
-      P.seed_random = P.seed_random === false;
-      writeCfg(node); render(node);
-    };
+    const dice = segSwitch([
+      ["random", "\uD83C\uDFB2 Random", "A new seed is rolled before each Generate."],
+      ["fixed", "\uD83D\uDCCC Fixed", "This exact seed runs every Generate, so an unchanged "
+                                    + "setup is served from cache and nothing re-renders."],
+    ], P.seed_random !== false ? "random" : "fixed",
+    (v) => { P.seed_random = v === "random"; writeCfg(node); render(node); });
     wrap.append(lab, inp, dice);
 
     // Painted only: Whole frame has no crop to shape, so showing this there would
@@ -7888,26 +7887,20 @@ function paintBody(node, body) {
       // native resolution it is the difference between a pass that works and one
       // that duplicates limbs or takes the machine down. This restores the old
       // refusal for work where every pixel of an already-large region matters.
-      const floorB = document.createElement("button");
-      floorB.className = "rn-ws-btn rn-ws-compact" + (P.region_floor ? " on" : "");
-      floorB.dataset.regionFloor = "1";
-      floorB.style.width = "auto";
-      floorB.style.padding = "0 8px";
-      floorB.textContent = P.region_floor ? "Never shrink" : "Size is a target";
-      floorB.title = P.region_floor
-        ? "On: a region already bigger than the mask size renders at its own size "
-          + "instead of coming down to it. Keeps every pixel of a large region, at "
-          + "that region's cost. The VRAM tier ceiling still applies."
-        : "Off: the mask size is a target in BOTH directions, so a big region is "
-          + "brought down to it. Click to keep large regions at their own size "
-          + "instead, which preserves detail but can push a model past the "
-          + "resolution it was trained on.";
-      floorB.onclick = () => {
+      const floorB = segSwitch([
+        ["target", "Size is a target", "The mask size is a target in BOTH directions, so a "
+                                       + "big region is brought down to it."],
+        ["floor", "Never shrink", "A region already bigger than the mask size renders at "
+                                  + "its own size. Keeps every pixel of a large region, at "
+                                  + "that region's cost; the VRAM tier ceiling still applies."],
+      ], P.region_floor ? "floor" : "target",
+      (v) => {
         const live = node._rnCfg?.paint || P;
-        live.region_floor = !live.region_floor;
+        live.region_floor = v === "floor";
         writeCfg(node);
         render(node);
-      };
+      });
+      floorB.dataset.regionFloor = "1";
 
       // What Automatic actually picked, filled by the pane, which owns the mask
       // pixels. Blank whenever the answer does not apply, never stale.
@@ -9441,26 +9434,19 @@ function modelsBody(node, page) {
     const krow = document.createElement("div");
     krow.className = "rn-ws-row";
     const kb = document.createElement("button");
-    kb.className = "rn-ws-on" + (rig.kind ? " on" : "");
-    kb.style.width = "auto";
-    kb.style.padding = "0 10px";
     // personal-only kinds (window.rnRigKinds, from a gitignored local
-    // web file) join the cycle when present; public installs never see them
-    const kinds = ["", "external", ...(window.rnRigKinds || [])];
-    kb.textContent = rig.kind === "external" ? "External renderer"
-                   : rig.kind ? (window.rnLocalRigLabel?.(rig.kind) || rig.kind)
-                   : "Local files";
-    kb.title = "Local files loads a checkpoint or diffusion model here, as "
-             + "always. External renderer loads NOTHING: this rig carries the "
-             + "numbers and prompt for an engine outside the workspace; use "
-             + "RedNode Rig Out and Rig In to bridge it. Click to cycle the "
-             + "kinds.";
-    kb.onclick = () => {
-      const at = Math.max(0, kinds.indexOf(rig.kind || ""));
-      rig.kind = kinds[(at + 1) % kinds.length] || "";
-      writeCfg(node); render(node);
-    };
-    krow.appendChild(kb);
+    // web file) join the segment when present; public installs never see them
+    const kindOpts = [
+      ["", "Local files", "Loads a checkpoint or diffusion model here, as always."],
+      ["external", "External renderer", "Loads NOTHING: this rig carries the numbers and "
+                                        + "prompt for an engine outside the workspace; use "
+                                        + "RedNode Rig Out and Rig In to bridge it."],
+      ...(window.rnRigKinds || []).map((k) => [k, window.rnLocalRigLabel?.(k) || k, ""]),
+    ];
+    const kbSeg = segSwitch(kindOpts,
+      kindOpts.some((o) => o[0] === (rig.kind || "")) ? (rig.kind || "") : "",
+      (v) => { rig.kind = v || ""; writeCfg(node); render(node); });
+    krow.appendChild(kbSeg);
     body.appendChild(krow);
   }
   if (rig.kind === "external") {
@@ -9999,6 +9985,26 @@ async function fetchFrameDef() {
   return FRAME_DEF;
 }
 
+// A SWITCH SHOWS BOTH WORDS. One button whose label changes with its state
+// reads as "press me to do this" as easily as "this is on", and it cost more
+// than one session of confusion. Every two-way (or three-way) choice on the
+// panel is a segment: every option visible, the live one filled, like the
+// Canvas row and the Camera tab's Prompt / Image to image pair.
+function segSwitch(options, current, onPick, title) {
+  const seg = document.createElement("div");
+  seg.className = "rn-ws-seg rn-ws-switch";
+  if (title) seg.title = title;
+  for (const [value, label, tip] of options) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (current === value ? " on" : "");
+    b.textContent = label;
+    if (tip) b.title = tip;
+    b.onclick = () => { if (current !== value) onPick(value); };
+    seg.appendChild(b);
+  }
+  return seg;
+}
+
 function promptsBody(node, body) {
   const cfg = node._rnCfg;
   const R = cfg.prompts.rows;
@@ -10122,15 +10128,13 @@ function promptsBody(node, body) {
       const e = document.createElement("span"); e.className = "rn-ws-note"; e.textContent = "No rigs yet (Models tab)";
       rigPick.appendChild(e);
     }
-    const kind = document.createElement("button");
-    kind.className = "rn-ws-segb" + (row.kind === "krea2" ? " on" : "");
-    kind.textContent = row.kind === "krea2" ? "Krea 2 box" : "Plain box";
-    kind.title = "Krea 2 prompts use the RedNode Prompt Box conventions (wildcards, "
-               + "@keywords). Every other model gets the plain box.";
-    kind.onclick = () => {
-      row.kind = row.kind === "krea2" ? "plain" : "krea2";
-      writeCfg(node); render(node);
-    };
+    const kind = segSwitch([
+      ["krea2", "Krea 2 box", "The frame editor: Style, Subject, Surroundings, Light and "
+                              + "colour and the camera, with wildcards and @keywords."],
+      ["plain", "Plain box", "One plain text box, for any other model or for a prompt "
+                             + "you want typed as is."],
+    ], row.kind === "krea2" ? "krea2" : "plain",
+    (v) => { row.kind = v; writeCfg(node); render(node); });
     const del = document.createElement("button");
     del.className = "rn-ws-btn";
     del.style.width = "auto";
@@ -10395,21 +10399,12 @@ function latentBody(node, body) {
   on.title = L.on ? "The empty latent goes out on output_latent."
                   : "Off: output_latent stays empty unless the edit mask provides one.";
   on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
-  const srcBtn = document.createElement("button");
-  srcBtn.className = "rn-ws-on" + (L.source === "input" ? " on" : "");
-  srcBtn.style.width = "auto";
-  srcBtn.style.padding = "0 10px";
-  srcBtn.textContent = L.source === "input" ? "Wired input" : "This tab";
-  srcBtn.title = L.source === "input"
-    ? "output_latent is whatever you wired into the node's latent socket. The size "
-      + "controls below are ignored. Click to build the canvas here instead."
-    : "The canvas is built here, from the size below. Click to use a latent wired "
-      + "into the node's latent socket instead.";
-  srcBtn.onclick = () => {
-    L.source = L.source === "input" ? "tab" : "input";
-    writeCfg(node);
-    render(node);
-  };
+  const srcBtn = segSwitch([
+    ["tab", "This tab", "The canvas is built here, from the size below."],
+    ["input", "Wired input", "output_latent is whatever you wired into the node's latent "
+                             + "socket. The size controls below are ignored."],
+  ], L.source === "input" ? "input" : "tab",
+  (v) => { L.source = v; writeCfg(node); render(node); });
   const hint = document.createElement("span");
   hint.className = "hint";
   hint.textContent = L.source === "input"
@@ -11342,20 +11337,15 @@ function i2iPassRow(node, body, tabName) {
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   lab.textContent = "Pass";
-  const b = document.createElement("button");
-  b.className = "rn-ws-on" + (t.prompt_only ? "" : " on");
-  b.style.width = "auto";
-  b.style.padding = "0 10px";
-  b.textContent = t.prompt_only ? "Prompt only (Latent tab canvas)" : "Image to image";
-  b.title = t.prompt_only
-    ? "The source only donates its prompt, and the canvas comes from the Latent "
-      + "tab. Click for a real image to image pass, which paints onto the source "
-      + "itself and takes over output_latent."
-    : "output_latent is the source image ENCODED (wire the vae input), and the denoise "
-      + "socket carries the strength below. This BEATS the Latent tab: an image to "
-      + "image pass paints onto your picture, not a blank canvas. Click for prompt "
-      + "only instead.";
-  b.onclick = () => { t.prompt_only = !t.prompt_only; writeCfg(node); render(node); };
+  const b = segSwitch([
+    ["i2i", "Image to image", "output_latent is the source image ENCODED (wire the vae "
+                              + "input), and the denoise socket carries the strength below. "
+                              + "This BEATS the Latent tab: an image to image pass paints onto "
+                              + "your picture, not a blank canvas."],
+    ["prompt", "Prompt only", "The source only donates its prompt, and the canvas comes "
+                              + "from the Latent tab."],
+  ], t.prompt_only ? "prompt" : "i2i",
+  (v) => { t.prompt_only = v === "prompt"; writeCfg(node); render(node); });
   row.append(lab, b);
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const dSteps = passValueList(t, "pass_denoise", "denoise", 0, 1);

@@ -46,6 +46,12 @@ cheap to judge.
 - The frame's head line is two groups, Saved prompts (load and save the
   whole frame) and Tools (Auto sort, and Rewrite with a readable style
   choice); the placement box is a counted box like the others
+- Switches show both words: the Latent tab's source, the rig kind on the
+  Models tab, a prompt row's box kind, the auto prompt's Reuse / Fresh, the
+  Img2Img pass kind, the Paint seed and region floor are all segments with
+  the live word filled, like the Canvas row
+- Generate on the Paint tab with Paint switched off says so instead of
+  rendering a blank canvas
 
 ### Studio Detailer
 
