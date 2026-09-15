@@ -92,6 +92,12 @@ cheap to judge.
   clicked; right-click a card or a square to type the place it should take.
   Saved orders keep the run order alone, apart from looks: applying one
   moves the effects it names and skips the rest.
+- A Skin card: retouching that only lands on skin. The mask is built in Lab
+  from colour, minus eyes, teeth, lips and fine detail, minus printed
+  pattern, and cut to the subject mask when the chain has one; Show the mask
+  puts it on screen. De-yellow, rosy, skin saturation, brightness with a
+  highlight guard, shadow lift, evenness, and smoothing with a texture dial,
+  all starting at 0
 - Vignette gains a falloff law (the smooth band, or the natural cosine to the
   fourth that real glass follows), a roundness dial from the frame's oval to a
   true circle, and a ring colour that lands in the falloff only and tints

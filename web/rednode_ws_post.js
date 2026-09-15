@@ -680,7 +680,7 @@ export function looksSection(node, body) {
 // read. One effect open at a time is the point: the old grid of every card at
 // once was a wall of sliders. The two settings cards sit at the foot of the list.
 const FX_GROUPS = [
-  ["GRADE", ["denoise", "color", "match", "lut", "clarity", "sharpen"]],
+  ["GRADE", ["denoise", "color", "match", "lut", "skin", "clarity", "sharpen"]],
   ["LIGHT", ["relight"]],
   ["AIR", ["haze"]],
   ["LENS", ["distortion", "dof", "aberration", "bloom", "light_wrap", "diffusion", "vignette"]],
@@ -1418,7 +1418,7 @@ export function postBody(node, body) {
     const cost = document.createElement("span");
     cost.className = "rn-ws-cost";
     cost.textContent = fx.cost;
-    cost.title = fx.cost === "depth model"
+    cost.title = fx.costHint ? fx.costHint : fx.cost === "depth model"
       ? "This one needs a depth map, so switching it on loads a depth model. That "
       + "is seconds, not milliseconds, and it is usually the reason a grade feels "
       + "slow. The Depth card picks the estimator and its resolution; wire a depth "

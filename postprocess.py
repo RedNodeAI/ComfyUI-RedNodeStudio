@@ -83,6 +83,16 @@ DEFAULTS = {
               "skin_protect": 0.5, "ref_file": ""},
     # A LUT: a .cube file from models/luts, trilinear, strength past 1 overdrives
     "lut": {"on": False, "file": "", "strength": 1.0, "log": False},
+    # THE SKIN CARD: grading that lands on skin and nowhere else. The mask is built
+    # in Lab from colour rules crossed with RGB rules, minus a protect term for eyes,
+    # teeth, lips and fine detail, minus busy pattern (printed cloth, knitwear, hair)
+    # by local variance, and ANDed with the subject mask when the chain has one.
+    # Every EDIT dial ships at 0, so the card on and untouched is a passthrough.
+    "skin": {"on": False, "subject": "auto", "show": "off", "protect": 1.0,
+             "pattern_reject": 0.6, "mask_soften": 3.0,
+             "de_yellow": 0.0, "rosy": 0.0, "brighten": 0.0, "shadow_lift": 0.0,
+             "evenness": 0.0, "smooth": 0.0, "texture_preserve": 0.55,
+             "saturation": 0.0},
     "clarity": {"on": False, "radius": 3, "offset": 2.0, "strength": 0.4,
                 "blend_mode": "soft light", "blend_if_dark": 50, "blend_if_light": 205,
                 "dark_intensity": 0.4, "light_intensity": 0.0},
@@ -150,6 +160,10 @@ DEPTH_MODELS = {"vitg": "depth_anything_v2_vitg.pth", "vitl": "depth_anything_v2
                 "vitb": "depth_anything_v2_vitb.pth", "vits": "depth_anything_v2_vits.pth"}
 SHARPEN_MODES = ("lucy", "unsharp")
 VIGNETTE_LAWS = ("smooth", "cos4")
+SKIN_SUBJECT = ("off", "auto", "always")
+SKIN_SHOWS = ("off", "mask", "over")
+# cards that want the subject mask for their own working, not only for a Limit
+MASK_EFFECTS = ("relight", "skin")
 # keys a chain instance carries for the panel's sake that are NOT arguments to the
 # effect function: the switch, the random ranges, the Limit row, the instance's
 # identity, the Match card's dropped picture, the lens picker's memory and the
@@ -158,7 +172,7 @@ NON_ARG_KEYS = ("on", "rand", "limit", "fx", "id", "ref_file", "lens", "awb")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 
 # the chain order: repair, tone, detail, light, lens
-ORDER = ("denoise", "color", "match", "lut", "clarity", "sharpen",   # repair and grade
+ORDER = ("denoise", "color", "match", "lut", "skin", "clarity", "sharpen",   # repair and grade
          "relight",                                                  # light
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
@@ -207,6 +221,46 @@ def gaussian_blur(t, sigma):
     t = F.conv2d(t, kx, groups=c)
     t = F.pad(t, (0, 0, r, r), mode=mode)
     return F.conv2d(t, ky, groups=c)
+
+
+def _box(t, r):
+    """Mean of an NCHW tensor over a (2r+1) square window, replicate padded.
+
+    Cumulative sums, so the cost does not grow with the radius: local statistics
+    over 4 percent of the short edge are 80 px across at 4K, far too wide for a
+    convolution. The global mean comes out before the sums and goes back after,
+    which keeps float32 accurate along a long row.
+    """
+    r = int(r)
+    if r < 1:
+        return t
+    k = 2 * r + 1
+    mu = t.mean()
+    x = F.pad(t - mu, (r, r, r, r), mode="replicate")
+    cs = F.pad(x.cumsum(-1), (1, 0, 0, 0))
+    x = cs[..., k:] - cs[..., :-k]
+    cs = F.pad(x.cumsum(-2), (0, 0, 1, 0))
+    x = cs[..., k:, :] - cs[..., :-k, :]
+    return x / float(k * k) + mu
+
+
+def _guided(guide, src, r, eps):
+    """Guided filter (He, Sun and Tang, 2010): a low pass that follows the guide's
+    edges. Where the guide is flat the output is the local mean; across an edge
+    much stronger than eps (in the guide's units squared) the edge passes through."""
+    mean_g = _box(guide, r)
+    mean_s = _box(src, r)
+    var_g = (_box(guide * guide, r) - mean_g * mean_g).clamp_min(0.0)
+    cov = _box(guide * src, r) - mean_g * mean_s
+    a = cov / (var_g + float(eps))
+    b = mean_s - a * mean_g
+    return _box(a, r) * guide + _box(b, r)
+
+
+def _smoothstep(x, lo=0.0, hi=1.0):
+    """0 below lo, 1 above hi, the smooth Hermite ramp between."""
+    t = ((x - lo) / max(1e-6, float(hi) - float(lo))).clamp(0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
 
 
 def _clamp01(t):
@@ -307,6 +361,37 @@ def _srgb_to_linear(t):
 
 def _linear_to_srgb(t):
     return torch.where(t <= 0.0031308, t * 12.92, 1.055 * t.clamp(min=0) ** (1 / 2.4) - 0.055)
+
+
+_LAB_D = 6.0 / 29.0
+
+
+def _rgb_to_lab(t):
+    """NCHW sRGB 0..1 to CIE Lab (D65), as three N1HW planes."""
+    lin = _srgb_to_linear(t.clamp(0, 1))
+    r, g, b = lin[:, 0:1], lin[:, 1:2], lin[:, 2:3]
+    x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047
+    y = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+    z = (0.0193339 * r + 0.1191920 * g + 0.9503041 * b) / 1.08883
+    d, d3 = _LAB_D, _LAB_D ** 3
+    f = lambda u: torch.where(u > d3, u.clamp_min(0) ** (1.0 / 3.0),      # noqa: E731
+                              u / (3 * d * d) + 4.0 / 29.0)
+    fx, fy, fz = f(x.clamp_min(0)), f(y.clamp_min(0)), f(z.clamp_min(0))
+    return 116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)
+
+
+def _lab_to_rgb(L, a, b):
+    """CIE Lab (D65) planes back to NCHW sRGB 0..1."""
+    fy = (L + 16.0) / 116.0
+    fx = fy + a / 500.0
+    fz = fy - b / 200.0
+    d = _LAB_D
+    g = lambda u: torch.where(u > d, u ** 3, 3 * d * d * (u - 4.0 / 29.0))   # noqa: E731
+    x, y, z = 0.95047 * g(fx), g(fy), 1.08883 * g(fz)
+    r = 3.2404542 * x - 1.5371385 * y - 0.4985314 * z
+    gg = -0.9692660 * x + 1.8760108 * y + 0.0415560 * z
+    bb = 0.0556434 * x - 0.2040259 * y + 1.0572252 * z
+    return _clamp01(_linear_to_srgb(torch.cat([r, gg, bb], 1)))
 
 
 def _rgb_to_hsv(t):
@@ -506,6 +591,96 @@ def lut(img, file="", strength=1.0, log=False):
         out = out.clamp(0, 1) ** 2.2
     res = x + (out - x) * float(strength)
     return _nhwc(_clamp01(res)).to(img.dtype)
+
+
+# ---------------------------------------------------------------- the skin card
+def _ramp(v, lo, hi, klo, khi):
+    """1 inside [lo, hi], falling to 0 over klo below and khi above."""
+    return (((v - lo + klo) / klo).clamp(0, 1) * ((hi + khi - v) / khi).clamp(0, 1))
+
+
+def _skin_mask(t, L, a, b, protect=1.0, pattern_reject=0.6, soften=3.0, subject=None):
+    """N1HW in 0..1: how much each pixel reads as bare skin."""
+    H, W = t.shape[2], t.shape[3]
+    short = min(H, W)
+    C = torch.sqrt(a * a + b * b)
+    w_lab = (_ramp(L, 32, 92, 8, 6) * _ramp(a, 3, 38, 3, 6) * _ramp(b, 2, 40, 4, 6)
+             * _ramp(C, 6, 50, 4, 8))
+    R_, G_, B_ = t[:, 0:1], t[:, 1:2], t[:, 2:3]
+    mx = t.max(1, keepdim=True)[0]
+    mn = t.min(1, keepdim=True)[0]
+    w_rgb = (((R_ - 0.12) / 0.10).clamp(0, 1) * ((R_ - G_ - 0.02) / 0.06).clamp(0, 1)
+             * ((R_ - B_ - 0.04) / 0.08).clamp(0, 1) * ((mx - mn - 0.04) / 0.06).clamp(0, 1))
+    w0 = 0.65 * w_lab + 0.35 * w_rgb
+    r_hf = max(1, int(round(0.004 * short)))
+    p_eye = ((34 - L) / 8).clamp(0, 1) * ((16 - C) / 8).clamp(0, 1)
+    p_teeth = ((L - 78) / 10).clamp(0, 1) * ((14 - C) / 8).clamp(0, 1)
+    p_lips = (((a - 22) / 8).clamp(0, 1) * ((C - 28) / 10).clamp(0, 1)
+              * ((L - 25) / 10).clamp(0, 1) * ((72 - L) / 12).clamp(0, 1))
+    p_micro = (((L - _box(L, r_hf)).abs() - 4) / 6).clamp(0, 1)
+    p = float(protect) * (1 - (1 - p_eye) * (1 - p_teeth) * (1 - p_lips) * (1 - p_micro))
+    w1 = w0 * (1 - p)
+    r_var = max(2, int(round(0.02 * short)))
+    sd_L = (_box(L * L, r_var) - _box(L, r_var) ** 2).clamp_min(0).sqrt()
+    sd_C = (_box(C * C, r_var) - _box(C, r_var) ** 2).clamp_min(0).sqrt()
+    pat = 0.5 * _smoothstep(sd_L, 6, 13) + 0.5 * _smoothstep(sd_C, 5, 11)
+    w2 = w1 * (1 - float(pattern_reject) * pat)
+    if subject is not None:
+        m = subject if subject.ndim == 4 else subject.unsqueeze(1)
+        m = m[:, :1].to(t.device, t.dtype)
+        if m.shape[0] != t.shape[0]:
+            m = m[:1].expand(t.shape[0], -1, -1, -1)
+        if m.shape[2:] != t.shape[2:]:
+            m = F.interpolate(m, size=t.shape[2:], mode="bilinear", align_corners=False)
+        w2 = w2 * gaussian_blur(m.clamp(0, 1), 2.0)
+    return gaussian_blur(w2, max(0.0, float(soften)) / 2.0).clamp(0, 1)
+
+
+def skin(img, mask=None, subject="auto", show="off", protect=1.0, pattern_reject=0.6,
+         mask_soften=3.0, de_yellow=0.0, rosy=0.0, brighten=0.0, shadow_lift=0.0,
+         evenness=0.0, smooth=0.0, texture_preserve=0.55, saturation=0.0):
+    """Retouching under a skin mask, every edit in Lab.
+
+    de_yellow and rosy trim the two colour axes, evenness pulls them toward a local
+    average so blotches even out, saturation scales skin's chroma, smoothing softens
+    lightness while texture_preserve puts the fine detail back, the brightness lift
+    fades out near white, and the shadow lift is weighted to the dark side of the
+    face. Nothing outside the mask is touched.
+    """
+    if show == "off" and not any(float(v) for v in (de_yellow, rosy, brighten, shadow_lift,
+                                                   evenness, smooth, saturation)):
+        return img
+    t = _nchw(img)[:, :3].float()
+    L, a, b = _rgb_to_lab(t)
+    w = _skin_mask(t, L, a, b, protect, pattern_reject, mask_soften,
+                   mask if subject != "off" else None)
+    if show == "mask":
+        return _nhwc(w.expand(-1, 3, -1, -1)).to(img.dtype)
+    if show == "over":
+        tint = torch.tensor([0.10, 0.95, 0.35], device=t.device, dtype=t.dtype).view(1, 3, 1, 1)
+        return _nhwc(_clamp01(t * (1 - 0.5 * w) + tint * 0.5 * w)).to(img.dtype)
+    short = min(t.shape[2], t.shape[3])
+    r_even = max(1, int(round(0.04 * short)))
+    ev = float(evenness)
+    a1 = a + ev * (_box(a, r_even) - a) if ev else a
+    b1 = b + ev * (_box(b, r_even) - b) if ev else b
+    a2 = a1 + float(rosy)
+    b2 = b1 - float(de_yellow)
+    sat = float(saturation)
+    if sat:
+        a2 = a2 * (1.0 + sat)
+        b2 = b2 * (1.0 + sat)
+    L1 = L
+    if float(smooth):
+        r_sm = max(1, int(round(0.012 * short)))
+        low = 100.0 * _guided(L / 100.0, L / 100.0, r_sm, 4e-4)
+        L1 = low + (L - low) * (1.0 - float(smooth) * (1.0 - float(texture_preserve)))
+    L2 = L1 + float(shadow_lift) * (1.0 - L / 100.0) ** 2
+    L3 = L2 + float(brighten) * ((92.0 - L) / 12.0).clamp(0, 1)
+    Lo = (L + w * (L3 - L)).clamp(0, 100)
+    ao = (a + w * (a2 - a)).clamp(-128, 127)
+    bo = (b + w * (b2 - b)).clamp(-128, 127)
+    return _nhwc(_lab_to_rgb(Lo, ao, bo)).to(img.dtype)
 
 
 # ---------------------------------------------------------------- the limit
@@ -980,7 +1155,7 @@ EFFECTS = {
     "sharpen": sharpen, "bloom": bloom, "halation": halation, "light_wrap": light_wrap,
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
-    "match": match, "lut": lut, "relight": relight,
+    "match": match, "lut": lut, "relight": relight, "skin": skin,
 }
 
 
@@ -997,6 +1172,16 @@ def _guard(name, cur):
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")
+    elif name == "skin":
+        cur["subject"] = cur["subject"] if cur["subject"] in SKIN_SUBJECT else "auto"
+        cur["show"] = cur["show"] if cur["show"] in SKIN_SHOWS else "off"
+        for _k, _lo, _hi in (("protect", 0.0, 1.0), ("pattern_reject", 0.0, 1.0),
+                             ("mask_soften", 0.0, 12.0), ("de_yellow", 0.0, 15.0),
+                             ("rosy", 0.0, 12.0), ("brighten", 0.0, 15.0),
+                             ("shadow_lift", 0.0, 25.0), ("evenness", 0.0, 1.0),
+                             ("smooth", 0.0, 1.0), ("texture_preserve", 0.0, 1.0),
+                             ("saturation", -1.0, 1.0)):
+            cur[_k] = max(_lo, min(_hi, float(cur[_k])))
     elif name == "vignette":
         cur["law"] = cur["law"] if cur["law"] in VIGNETTE_LAWS else "smooth"
         cur["roundness"] = max(0.0, min(1.0, cur["roundness"]))
@@ -1162,8 +1347,10 @@ SLOW_CHAIN_SECONDS = 2.0
 
 
 def needs_mask(cfg):
-    """True when any instance that is on is limited to the subject or the background."""
-    return any(c.get("on") and c.get("limit") in ("subject", "background")
+    """True when any instance that is on is limited to the subject or the background,
+    or is a Skin card set to always make a subject mask."""
+    return any(c.get("on") and (c.get("limit") in ("subject", "background")
+                                or (c.get("fx") == "skin" and c.get("subject") == "always"))
                for c in (cfg.get("chain") or []))
 
 
@@ -1208,15 +1395,18 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
             if ref is None and item.get("source") == "file":
                 ref = file_reference(item.get("ref_file", ""))
             args["reference"] = ref
-        if name == "relight":
+        if name in MASK_EFFECTS:
             args["mask"] = mask
         started = time.time()
         res = EFFECTS[name](out, **args)
         # LIMITED TO THE SUBJECT OR THE BACKGROUND: this instance's result only
         # under the mask, softened by the Mask card's feather; the rest of the
         # frame as it was before it
-        res = limit_to(out, res, mask, item.get("limit", "off"),
-                       cfg["mask"]["feather"], item["id"])
+        # a card showing its own mask is being LOOKED at: the Limit row would only
+        # composite the preview back into the picture, so it is shown whole
+        if str(item.get("show", "off")) == "off":
+            res = limit_to(out, res, mask, item.get("limit", "off"),
+                           cfg["mask"]["feather"], item["id"])
         out = res
         timings.append((item["id"], time.time() - started))
         if on_effect:

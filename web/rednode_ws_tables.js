@@ -226,6 +226,67 @@ export const POST_FX = [
         hint: "For LUTs cut for log footage: a 2.2 gamma in and out around the "
             + "lookup. Off for LUTs made for normal pictures, which is most of them." },
     ] },
+  { id: "skin", label: "Skin", cost: "scales with the frame",
+    costHint: "The mask is built in Lab and measured over wide windows, so this card "
+            + "costs about a fifth of a second on a 1 MP frame and around a second at "
+            + "4K. Setting the subject mask to Always adds the auto-mask on top.",
+    blurb: "Retouching that lands on skin and nowhere else. The card finds skin by "
+         + "colour, keeps eyes, teeth, lips and fine detail out of it, drops busy "
+         + "pattern like printed cloth, and cuts to the subject mask as well when the "
+         + "chain has one. Every edit dial starts at 0, so switching the card on changes "
+         + "nothing until you move one.",
+    controls: [
+      { key: "subject", label: "Subject mask", def: "auto", step: 1,
+        choice: ["off", "auto", "always"],
+        labels: { off: "Skin colour only", auto: "Use one if the chain has one",
+                  always: "Always make one" },
+        hint: "Whether the skin mask is also cut to the subject. Auto uses the mask the "
+            + "chain already made for another card, so it costs nothing on its own. "
+            + "Always runs the auto-mask for this card, which takes a second or two. "
+            + "Skin colour only can catch a wooden floor or a tan wall." },
+      { key: "show", label: "Show the mask", def: "off", step: 1,
+        choice: ["off", "mask", "over"],
+        labels: { off: "No, grade the picture", mask: "The mask in black and white",
+                  over: "The mask painted over the picture" },
+        hint: "Puts the mask on screen instead of the grade, so you can see what the card "
+            + "has selected before you move a dial. Set it back to the first choice before "
+            + "the final render. A card showing its mask ignores its own Limit row." },
+      { key: "protect", label: "Protect", min: 0, max: 1, step: 0.01, def: 1.0,
+        hint: "Holds eyes, teeth, lips and fine detail like lashes and nostrils out of the "
+            + "mask. 1 is the full hold." },
+      { key: "pattern_reject", label: "Pattern reject", min: 0, max: 1, step: 0.01, def: 0.6,
+        hint: "Drops busy areas out of the mask by how much brightness and colour jump "
+            + "about locally, so pores stay in and printed fabric, knitwear and hair are "
+            + "cut. Raise it if a patterned shirt is being smoothed." },
+      { key: "mask_soften", label: "Mask softness", min: 0, max: 12, step: 0.5, def: 3,
+        hint: "Blurs the mask by this many pixels so its edge does not speckle." },
+      { key: "de_yellow", label: "De-yellow", min: 0, max: 15, step: 0.1, def: 0,
+        hint: "Takes yellow out of skin. 2 to 5 is a normal correction for tungsten light "
+            + "or a yellow wall bouncing back. Nothing else in the frame moves." },
+      { key: "rosy", label: "Rosy", min: 0, max: 12, step: 0.1, def: 0,
+        hint: "Puts red back. Use it after de-yellow when skin has gone flat or grey. 1 to "
+            + "3 is plenty." },
+      { key: "saturation", label: "Skin saturation", min: -1, max: 1, step: 0.01, def: 0,
+        hint: "Scales how colourful skin is and nothing else. Negative calms a flushed or "
+            + "over-orange render; a small positive brings life back to pale skin." },
+      { key: "brighten", label: "Brightness", min: 0, max: 15, step: 0.1, def: 0,
+        hint: "Lifts skin. The lift fades out near white, so a forehead or cheekbone "
+            + "already close to blown does not clip." },
+      { key: "shadow_lift", label: "Shadow lift", min: 0, max: 25, step: 0.1, def: 0,
+        hint: "Opens the shaded side of a face without touching the lit side: the lift is "
+            + "weighted by how dark the skin already is, squared." },
+      { key: "evenness", label: "Evenness", min: 0, max: 1, step: 0.01, def: 0,
+        hint: "Pulls skin colour toward its own local average, so blotches, red patches and "
+            + "a shadowed jaw even out while brightness and texture stay. 0.3 to 0.6 is "
+            + "natural; 1 flattens the colour completely." },
+      { key: "smooth", label: "Smoothing", min: 0, max: 1, step: 0.01, def: 0,
+        hint: "Softens the brightness of skin. Work with Texture below: smoothing at 1 with "
+            + "texture at 0 is the plastic look nobody wants." },
+      { key: "texture_preserve", label: "Texture", min: 0, max: 1, step: 0.01, def: 0.55,
+        hint: "How much of the fine detail smoothing puts back. 1 keeps every pore, so "
+            + "smoothing does nothing; 0 keeps none. Around 0.5 takes out blotches and "
+            + "leaves skin reading as skin." },
+    ] },
   { id: "clarity", label: "Clarity",
     blurb: "Local contrast: it thickens midtone detail without touching overall "
          + "brightness. This is the punch, not the sharpness.",
