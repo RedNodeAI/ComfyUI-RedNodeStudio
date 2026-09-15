@@ -341,14 +341,14 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
     schedule: core's common_ksampler, exactly as before. Otherwise the rig's schedule
     is built the way core builds it, densified if asked, the model clone gets the
     wrapper, and the run goes through ksample."""
-    # A RIG WITH ITS OWN SAMPLER CHAIN (custom_sampler.py): while a caller has named one,
-    # the chain samples instead, with this call's model, prompts, latent and numbers
-    from . import custom_sampler as _custom
-    _chain = _custom.active()
-    if _chain:
-        return _custom.run_chain(_chain, model, seed, steps, cfg, sampler, scheduler,
-                                 positive, negative, latent, denoise=denoise,
-                                 start_step=start_step, last_step=last_step, sigmas=sigmas)
+    # A RIG MADE OF YOUR OWN NODES (custom_rig.py, rig_chain.py): while a caller samples on
+    # one, its own sampler runs instead, with this call's model, prompts, latent and numbers
+    from . import rig_chain as _rigc
+    _rig = _rigc.active()
+    if _rig:
+        return _rigc.run_rig(_rig, model, seed, steps, cfg, sampler, scheduler,
+                             positive, negative, latent, denoise=denoise,
+                             start_step=start_step, last_step=last_step, sigmas=sigmas)
     dials = dials or {}
     if sigmas is None and not any_on(dials) and scheduler not in EXTRA_SCHEDULERS:
         # only the keywords that differ from core's defaults travel, so a caller

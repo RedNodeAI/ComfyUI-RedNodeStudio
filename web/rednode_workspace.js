@@ -16,7 +16,7 @@ import { TAB_ORDER, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
-import { customRigNodes, CUSTOM_RIG } from "./rednode_custom_rig.js";
+import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
 import { buildLoraPanel, render as loraRender, writeSlots as loraWrite,
@@ -1123,8 +1123,7 @@ export function readCfg(node) {
     if (typeof r.i2i_sampler !== "string") r.i2i_sampler = "";
     if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
     if (r.kind !== "external" && r.kind !== "node") r.kind = "";
-    if (typeof r.node !== "string") r.node = "";          // a "node" rig's Custom Rig name
-    if (typeof r.custom_sampler !== "string") r.custom_sampler = "";   // a Sampler End's name
+    if (typeof r.node !== "string") r.node = "";          // a "node" rig's rig-node name
     if (typeof r.denoise !== "number") r.denoise = 1.0;
     // the LoRAs-tab SET this rig renders with; "" = Main
     if (typeof r.lora_set !== "string") r.lora_set = "";
@@ -1331,16 +1330,10 @@ export function setupProblems(node, cfg) {
     if (!wired("model")) out.push("There is no rig. Press New Rig and choose its model, CLIP and VAE.");
     return out;
   }
-  if (rig.custom_sampler && !allNodes().some((n) => n?.type === "RedNodeSamplerEnd"
-      && !(n.mode === 2 || n.mode === 4)
-      && (String((n.widgets || []).find((w) => w?.name === "name")?.value ?? "").trim()
-          || "My sampler") === rig.custom_sampler)) {
-    out.push(`No RedNode Sampler End named "${rig.custom_sampler}" is on the canvas.`);
-  }
   if (rig.kind === "node") {
     const want = rig.node || rig.name;
     if (!customRigNodes().some((c) => c.name === want)) {
-      out.push(`No RedNode Custom Rig node named "${want}" is on the canvas.`);
+      out.push(`No RedNode Rig Model for the rig "${want}" is on the canvas.`);
     }
   } else if (rig.kind) {
     return out;                                // an engine rig loads nothing on purpose
@@ -9630,9 +9623,11 @@ function modelsBody(node, page) {
     // web file) join the segment when present; public installs never see them
     const kindOpts = [
       ["", "Local files", "Loads a checkpoint or diffusion model here, as always."],
-      ["node", "Custom node", "Takes its model, CLIP and VAE, or a finished render, from a "
-                             + "RedNode Custom Rig node on the canvas: your own loaders, "
-                             + "patches or sampler chain. Nothing is wired to the Workspace."],
+      ["node", "Your own nodes", "Your own workflow is the rig: your loaders into RedNode Rig "
+                                 + "Model, your own sampler fed by RedNode Rig Inputs, its "
+                                 + "result into RedNode Rig Result. The Workspace applies its "
+                                 + "LoRAs, prompts, cameras and references and calls your "
+                                 + "sampler every time it samples. Nothing is wired."],
       ["external", "External renderer", "Loads NOTHING: this rig carries the numbers and "
                                         + "prompt for an engine outside the workspace; use "
                                         + "RedNode Rig Out and Rig In to bridge it."],
@@ -9645,7 +9640,8 @@ function modelsBody(node, page) {
     body.appendChild(krow);
   }
   if (rig.kind === "node") {
-    // WHICH CUSTOM RIG NODE: picked from the canvas by name, with a button that adds one
+    // WHICH RIG NODES: the rig name on your Rig Model, Rig Inputs and Rig Result, with a
+    // button that drops all three
     const found = customRigNodes();
     const want = rig.node || rig.name;
     const sel = document.createElement("select");
@@ -9659,37 +9655,56 @@ function modelsBody(node, page) {
       o.selected = nm === want;
       sel.appendChild(o);
     }
-    sel.title = "The RedNode Custom Rig node this rig takes its model, CLIP and VAE from, by "
-              + "that node's name.";
+    sel.title = "The rig name on your RedNode Rig Model, Rig Inputs and Rig Result nodes.";
     sel.onchange = () => { rig.node = sel.value === rig.name ? "" : sel.value; writeCfg(node); render(node); };
-    pill(body, "Custom Rig node", sel, sel.title);
+    pill(body, "Rig nodes", sel, sel.title);
+    // the model family decides the encode: Krea 2 gets the identity system, so the
+    // Subject, People and Scene references and the masks reach your sampler's prompts
+    const fam = document.createElement("select");
+    fam.className = "rn-ws-select";
+    for (const [v, t] of [["krea2", "Krea 2 (references and masks)"], ["", "Other model"]]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      o.selected = (rig.clip_type === "krea2" ? "krea2" : "") === v;
+      fam.appendChild(o);
+    }
+    fam.title = "Which way the Workspace encodes this rig's prompts with your CLIP. Krea 2 "
+              + "uses the Studio's identity system, so the Subject, People and Scene tabs and "
+              + "the masks are in the positive your sampler gets. Other is a plain text encode.";
+    fam.onchange = () => { rig.clip_type = fam.value; writeCfg(node); render(node); };
+    pill(body, "Model family", fam, fam.title);
     const addB = document.createElement("button");
     addB.className = "rn-ws-btn";
     addB.style.cssText = "width:auto;padding:0 12px";
-    addB.textContent = "Add a Custom Rig node";
-    addB.title = "Puts a RedNode Custom Rig node beside this Workspace, named for this rig. "
-               + "Wire your loaders or your sampler chain into it; nothing connects to the "
-               + "Workspace.";
+    addB.textContent = "Add the rig nodes";
+    addB.title = "Puts RedNode Rig Model, Rig Inputs and Rig Result beside this Workspace, "
+               + "named for this rig. Put your loaders before Rig Model and your sampler "
+               + "between Rig Inputs and Rig Result; nothing connects to the Workspace.";
     addB.onclick = () => {
       const LG = globalThis.LiteGraph;
-      const made = LG?.createNode?.(CUSTOM_RIG);
-      if (!made) return;
-      made.pos = [(node.pos?.[0] || 0) - 360, (node.pos?.[1] || 0) + 40 + found.length * 40];
-      (node.graph || app.graph)?.add?.(made);
-      const w = (made.widgets || []).find((x) => x?.name === "name");
-      if (w) { w.value = want; w.callback?.(want); }
-      made.title = `Custom Rig: ${want}`;
+      const x0 = (node.pos?.[0] || 0) - 420;
+      const y0 = (node.pos?.[1] || 0) + 40;
+      RIG_NODES.forEach((type, k) => {
+        const made = LG?.createNode?.(type);
+        if (!made) return;
+        made.pos = [x0, y0 + k * 180];
+        (node.graph || app.graph)?.add?.(made);
+        const w = (made.widgets || []).find((x) => x?.name === "rig");
+        if (w) { w.value = want; w.callback?.(want); }
+      });
       app.graph?.setDirtyCanvas?.(true, true);
       render(node);
     };
     const en = document.createElement("div");
     en.className = "rn-ws-note";
     en.textContent = found.some((c) => c.name === want)
-      ? "Found on the canvas. When you queue, it runs only if this rig is in use: the "
-        + "active rig, a pass rig, the paint rig or a Detailer pass. No wire is needed. "
-        + "With a latent or an image wired into it, that is the render and the sampler "
-        + "below sits out."
-      : `No Custom Rig node named "${want}" yet. Add one, or rename yours to match.`;
+      ? "Found on the canvas. Your loaders go into Rig Model, which hands your sampler the "
+        + "model and clip with this Workspace's LoRAs on them. Rig Inputs hands it the "
+        + "prompts, latent, seed and the numbers below; your result goes into Rig Result. "
+        + "The Workspace calls it for the render, every pass, the Paint tab and every "
+        + "Detailer pass on this rig. No wires to the Workspace."
+      : `No rig nodes for "${want}" yet. Add them, or set your nodes' rig name to match.`;
     const brow = document.createElement("div");
     brow.className = "rn-ws-row";
     brow.append(addB);
@@ -9966,31 +9981,6 @@ function modelsBody(node, page) {
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
-  if (rig.kind !== "external") {
-    // YOUR OWN SAMPLER: a chain between RedNode Sampler Start and Sampler End, by name
-    const chains = [...new Set(allNodes().filter((n) => n?.type === "RedNodeSamplerEnd"
-      && !(n.mode === 2 || n.mode === 4)).map((n) => String((n.widgets || [])
-      .find((w) => w?.name === "name")?.value ?? "").trim() || "My sampler"))];
-    const sel = document.createElement("select");
-    sel.className = "rn-ws-select";
-    const cur = rig.custom_sampler || "";
-    const opts = [["", "Built-in"], ...chains.map((c) => [c, c])];
-    if (cur && !chains.includes(cur)) opts.push([cur, cur + "  (not on the canvas)"]);
-    for (const [v, t] of opts) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = t;
-      o.selected = v === cur;
-      sel.appendChild(o);
-    }
-    const hint = "Built-in samples with the numbers here. A named chain samples through your "
-               + "own nodes between RedNode Sampler Start and Sampler End instead, for every "
-               + "render, pass and Detailer pass on this rig; it takes the numbers here from "
-               + "Sampler Start. Nothing is wired.";
-    sel.title = hint;
-    sel.onchange = () => { rig.custom_sampler = sel.value; writeCfg(node); render(node); };
-    pill(body, "Sampler chain", sel, hint);
-  }
   if (rig.kind && rig.kind !== "node") {
     // an external engine names its own samplers, so these are free text notes
     // riding the sockets, not comfy's lists

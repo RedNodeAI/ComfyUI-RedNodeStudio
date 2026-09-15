@@ -1,17 +1,19 @@
 import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 
-// RedNode Custom Rig, the page half: the links that make it run.
+// Your own nodes as a Workspace rig, the page half: the links that make Rig Model run.
 //
-// ComfyUI runs a node only when a link in the queued prompt asks for it. A Custom Rig
-// has no wire to the Workspace or the Detailer, so on the way to the queue this adds,
-// into the prompt only, one link from each Custom Rig a consumer USES this run to that
+// ComfyUI runs a node only when a link in the queued prompt asks for it. A Rig Model has
+// no wire to the Workspace or the Detailer, so on the way to the queue this adds, into
+// the prompt only, one link from each Rig Model a consumer USES this run to that
 // consumer, on an input named rn_rig_<id> that the consumer does not declare. ComfyUI
 // orders by it and does not validate it, and the consumer ignores the value (the rig is
-// read by name from what the node published). Nothing touches the canvas or the saved
-// workflow, and a Custom Rig no rig in use names is never linked, so it never runs.
+// read by name from what the node published). Rig Inputs, your sampler and Rig Result are
+// run by the pack itself per sampling call (rig_chain.py). Nothing touches the canvas or
+// the saved workflow, and a Rig Model no rig in use names is never linked.
 
-export const CUSTOM_RIG = "RedNodeCustomRig";
+export const CUSTOM_RIG = "RedNodeRigModel";
+export const RIG_NODES = ["RedNodeRigModel", "RedNodeRigInputs", "RedNodeRigResult"];
 const WORKSPACE = "RedNodeStudioWorkspace";
 const DETAILERS = new Set(["RedNodeStudioDetailer", "RedNodeStudioAdvanced"]);
 
@@ -24,15 +26,15 @@ const rigNameOf = (r, i) => String(r?.name || "").trim() || `Rig ${i + 1}`;
 /** Add the queue-time links to a prompt (mutated). Returns how many were added. */
 export function linkCustomRigs(output) {
   if (!output || typeof output !== "object") return 0;
-  const byName = {};                                   // Custom Rig node name -> ids
+  const byName = {};                                   // Rig Model's rig name -> ids
   for (const [id, n] of Object.entries(output)) {
     if (n?.class_type !== CUSTOM_RIG) continue;
-    const nm = String(n.inputs?.name ?? "").trim() || "Custom rig";
+    const nm = String(n.inputs?.rig ?? "").trim() || "My rig";
     (byName[nm] ||= []).push(id);
   }
   if (!Object.keys(byName).length) return 0;
 
-  // every Workspace's rig list: rig name -> the Custom Rig node it takes
+  // every Workspace's rig list: rig name -> the rig name its nodes carry
   const nodeFor = {};
   const workspaces = [];
   for (const [id, n] of Object.entries(output)) {
@@ -49,7 +51,7 @@ export function linkCustomRigs(output) {
   }
   if (!Object.keys(nodeFor).length) return 0;
 
-  // does `from` depend on `to` through the prompt's links? A Custom Rig fed by its own
+  // does `from` depend on `to` through the prompt's links? A Rig Model fed by its own
   // consumer (the Workspace's positive into a sampler into the rig) would become a loop
   // with the added link, and ComfyUI refuses the whole queue for a loop
   const dependsOn = (from, to) => {
@@ -75,8 +77,8 @@ export function linkCustomRigs(output) {
       const inputs = (output[consumerId].inputs ||= {});
       if (inputs[key]) continue;
       if (dependsOn(rid, consumerId)) {
-        console.warn(`[RedNode Custom Rig] "${target}" is fed by the node that would use it, so `
-          + "linking it would make a loop. It is left out of this queue.");
+        console.warn(`[RedNode Rig] the Rig Model for "${target}" is fed by the node that would `
+          + "use it, so linking it would make a loop. It is left out of this queue.");
         continue;
       }
       inputs[key] = [rid, 0];
@@ -103,7 +105,7 @@ export function linkCustomRigs(output) {
   return added;
 }
 
-/** The Custom Rig nodes on the canvas, subgraphs included: [{node, name}]. */
+/** The Rig Model nodes on the canvas, subgraphs included: [{node, name}]. */
 export function customRigNodes(root = app.graph) {
   const out = [];
   const seen = new Set();
@@ -112,8 +114,8 @@ export function customRigNodes(root = app.graph) {
     seen.add(graph);
     for (const n of (graph._nodes || graph.nodes || [])) {
       if (n?.type === CUSTOM_RIG && !(n.mode === 2 || n.mode === 4)) {
-        const w = (n.widgets || []).find((x) => x?.name === "name");
-        out.push({ node: n, name: String(w?.value ?? "").trim() || "Custom rig" });
+        const w = (n.widgets || []).find((x) => x?.name === "rig");
+        out.push({ node: n, name: String(w?.value ?? "").trim() || "My rig" });
       }
       if (n?.subgraph) walk(n.subgraph);
     }
@@ -123,7 +125,7 @@ export function customRigNodes(root = app.graph) {
 }
 
 app.registerExtension({
-  name: "RedNode.CustomRig",
+  name: "RedNode.RigNodes",
   async setup() {
     const orig = app.graphToPrompt;
     if (typeof orig !== "function") return;
@@ -131,25 +133,27 @@ app.registerExtension({
       const res = await orig.apply(this, args);
       try {
         const n = linkCustomRigs(res?.output);
-        if (n) console.log(`[RedNode Custom Rig] linked ${n} Custom Rig input(s) into this queue`);
+        if (n) console.log(`[RedNode Rig] linked ${n} Rig Model input(s) into this queue`);
       } catch (e) {
-        console.warn("[RedNode Custom Rig] could not link the Custom Rigs into the queue:", e);
+        console.warn("[RedNode Rig] could not link the Rig Model nodes into the queue:", e);
       }
       return res;
     };
   },
   async beforeRegisterNodeDef(nodeType, nodeData) {
-    if (nodeData?.name !== CUSTOM_RIG) return;
-    // the title follows the name, so a canvas with several reads at a glance
+    if (!RIG_NODES.includes(nodeData?.name)) return;
+    const label = { RedNodeRigModel: "Rig Model", RedNodeRigInputs: "Rig Inputs",
+                    RedNodeRigResult: "Rig Result" }[nodeData.name];
+    // the title follows the rig name, so a canvas with several rigs reads at a glance
     const titled = (node) => {
-      const w = (node.widgets || []).find((x) => x?.name === "name");
-      const nm = String(w?.value ?? "").trim() || "Custom rig";
-      node.title = `Custom Rig: ${nm}`;
+      const w = (node.widgets || []).find((x) => x?.name === "rig");
+      const nm = String(w?.value ?? "").trim() || "My rig";
+      node.title = `${label}: ${nm}`;
     };
     const onCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       onCreated?.apply(this, arguments);
-      const w = (this.widgets || []).find((x) => x?.name === "name");
+      const w = (this.widgets || []).find((x) => x?.name === "rig");
       if (w) {
         const cb = w.callback;
         w.callback = (...a) => { const r = cb?.apply(w, a); titled(this); this.setDirtyCanvas?.(true, true); return r; };

@@ -44,7 +44,7 @@ from . import sampler_dials as _dials
 from .prompt_tools import SWAP_MODES, STYLE_MODES, ACT_MODES, convert_text
 
 WORKSPACE_TYPE = "KREA2_WORKSPACE"
-RIG_TYPE = "RN_RIG"                 # a RedNode Custom Rig's record (custom_rig.py)
+RIG_TYPE = "RN_RIG"                 # a RedNode Rig Model's record (custom_rig.py)
 CUSTOM_SENTINEL = "custom (live)"
 
 # the Latent tab's preset canvas sizes; the JS list mirrors this order
@@ -897,8 +897,8 @@ def parse_config(config_json):
             "kind": (str(r.get("kind"))
                      if r.get("kind") in ("external", "node")
                      or r.get("kind") in RIG_KIND_HANDLERS else "files"),
-            # a "node" rig: which RedNode Custom Rig node it takes, by that node's name
-            # ("" means a node named like the rig itself)
+            # a "node" rig (your own nodes): the rig name on its Rig Model, Rig Inputs and
+            # Rig Result nodes ("" means the same name as the rig itself)
             "node": str(r.get("node") or "")[:64],
             "denoise": _num("denoise", 0.0, 1.0, 1.0, float),
             # a handled kind (the personal NovelAI rig) carries its own extra
@@ -920,8 +920,6 @@ def parse_config(config_json):
             # SAMPLER DIALS, per rig, all off by default: AuraFlow shift, Detail
             # Daemon, Seed Variance, densify the tail (sampler_dials.py)
             "dials": _dials.parse_dials(r),
-            # a RedNode Sampler End's name: this rig samples through that chain
-            "custom_sampler": str(r.get("custom_sampler") or "")[:64],
         })
     try:
         active = int(min_.get("active", 0))
@@ -1251,43 +1249,41 @@ RIG_KIND_HANDLERS = {}
 # why the active rig last failed to load ("" when it loaded, or nothing was asked)
 RIG_LOAD_ERROR = {"text": ""}
 
-# RedNode Custom Rig nodes that ran, by name: {"name", "model", "clip", "vae", "latent",
-# "image", "node"}. The node writes here when the queued prompt links it in; the rig
-# loaders read here. Last writer wins on a name clash, and says so.
+# RedNode Rig Model nodes that ran, by rig name: {"name", "model", "clip", "vae", "node"}.
+# The node writes here when the queued prompt links it in; the rig loaders read here.
+# Last writer wins on a name clash, and says so.
 _NODE_RIGS = {}
 
 
-def register_node_rig(name, model=None, clip=None, vae=None, latent=None, image=None,
-                      node_id=None):
-    nm = str(name or "").strip() or "Custom rig"
-    rec = {"name": nm, "model": model, "clip": clip, "vae": vae, "latent": latent,
-           "image": image, "node": str(node_id or "")}
+def register_node_rig(name, model=None, clip=None, vae=None, node_id=None):
+    nm = str(name or "").strip() or "My rig"
+    rec = {"name": nm, "model": model, "clip": clip, "vae": vae, "node": str(node_id or "")}
     old = _NODE_RIGS.get(nm)
     if old and old["node"] and rec["node"] and old["node"] != rec["node"]:
-        print("[RedNode Custom Rig] two Custom Rig nodes are named %r; the one that ran "
-              "last is used" % nm, flush=True)
+        print("[RedNode Rig] two Rig Model nodes name the rig %r; the one that ran last "
+              "is used" % nm, flush=True)
     _NODE_RIGS[nm] = rec
-    have = [k for k in ("model", "clip", "vae", "latent", "image") if rec[k] is not None]
-    print("[RedNode Custom Rig] %r ready: %s" % (nm, ", ".join(have) or "nothing wired in"),
+    have = [k for k in ("model", "clip", "vae") if rec[k] is not None]
+    print("[RedNode Rig] %r ready: %s" % (nm, ", ".join(have) or "nothing wired in"),
           flush=True)
     return rec
 
 
 def custom_rig_names(prompt):
-    """The names of the Custom Rig nodes in this queued prompt; None when there is no
+    """The rig names on the Rig Model nodes in this queued prompt; None when there is no
     prompt to read, which callers take as "do not filter"."""
     if not isinstance(prompt, dict):
         return None
     out = set()
     for n in prompt.values():
-        if isinstance(n, dict) and n.get("class_type") == "RedNodeCustomRig":
-            v = (n.get("inputs") or {}).get("name")
-            out.add((v.strip() if isinstance(v, str) else "") or "Custom rig")
+        if isinstance(n, dict) and n.get("class_type") == "RedNodeRigModel":
+            v = (n.get("inputs") or {}).get("rig")
+            out.add((v.strip() if isinstance(v, str) else "") or "My rig")
     return out
 
 
 def node_rig(name, prompt=None):
-    """A Custom Rig's record by name, or None. With the prompt, only a node that is in
+    """A Rig Model's record by rig name, or None. With the prompt, only a node that is in
     this queue counts, so a node deleted since an earlier run is not used."""
     nm = str(name or "").strip()
     names = custom_rig_names(prompt)
@@ -1383,8 +1379,10 @@ def nothing_rendered(cfg, rig_name, model, clip, enc_err=None, samp_err=None,
                        "loads one." % (who[0].upper() + who[1:]))
     if model is None:
         if RIG_LOAD_ERROR["text"]:
-            return head + ("%s could not load: %s. Check the files chosen on the Models tab."
-                           % (who[0].upper() + who[1:], RIG_LOAD_ERROR["text"]))
+            return head + ("%s could not load: %s.%s"
+                           % (who[0].upper() + who[1:], RIG_LOAD_ERROR["text"],
+                              "" if (rig or {}).get("kind") == "node"
+                              else " Check the files chosen on the Models tab."))
         return head + ("%s has no diffusion model or checkpoint chosen, and no model is wired "
                        "in. Choose one on the Models tab." % (who[0].upper() + who[1:]))
     if clip is None:
@@ -1485,14 +1483,14 @@ def load_active_rig(cfg, name="", prompt=None):
         rec = node_rig(target, prompt)
         if rec is None:
             RIG_LOAD_ERROR["text"] = (
-                "the RedNode Custom Rig node %r did not run this queue. Check a Custom Rig "
-                "node with that name is on the canvas and not bypassed, and queue from the "
-                "ComfyUI page, which links it in" % target)
+                "the RedNode Rig Model node for the rig %r did not run this queue. Check a Rig "
+                "Model node with that rig name is on the canvas and not bypassed, and queue "
+                "from the ComfyUI page, which links it in" % target)
             print("[RedNode Workspace] rig %r: %s" % (rig["name"], RIG_LOAD_ERROR["text"]),
                   flush=True)
             return rig["name"], None, None, None
         RIG_LOAD_ERROR["text"] = ""
-        print("[RedNode Workspace] rig %r is the Custom Rig node %r: nothing loaded here"
+        print("[RedNode Workspace] rig %r takes its model from your own nodes (Rig Model %r)"
               % (rig["name"], target), flush=True)
         return rig["name"], rec["model"], rec["clip"], rec["vae"]
     if rig.get("kind") == "external" or rig.get("kind") in RIG_KIND_HANDLERS:
@@ -2041,7 +2039,7 @@ class RedNodeStudioWorkspace:
                model=None, latent=None, style_in=None, subject_in=None,
                surroundings_in=None, light_and_colour_in=None, image_in=None,
               **_custom_rigs):
-        # _custom_rigs: the links the page adds at queue time from RedNode Custom Rig
+        # _custom_rigs: the links the page adds at queue time from RedNode Rig Model
         # nodes (rn_rig_<id>). They only order the run; the records are read by name.
         latent_in = latent
         cfg = parse_config(config)
@@ -3112,28 +3110,6 @@ class RedNodeStudioWorkspace:
                 _hh = min(x.shape[1] for x in _h_imgs)
                 _hw = min(x.shape[2] for x in _h_imgs)
                 rig_image = torch.cat([x[:, :_hh, :_hw, :] for x in _h_imgs], dim=0)
-        # A CUSTOM RIG CARRYING ITS OWN RENDER: the user's sampler chain made the picture
-        # (or the latent), so it is the image output and the built-in sampler stands down
-        _rig_now = (cfg["models"]["rigs"][cfg["models"]["active"]]
-                    if cfg["models"]["rigs"] else {})
-        if (_mode == "internal" and not _prt and not _stage_only and rig_image is None
-                and _rig_now.get("kind") == "node"):
-            _rec = node_rig(_rig_now.get("node") or _rig_now.get("name"), prompt)
-            if _rec is not None and _rec.get("image") is not None:
-                rig_image = _rec["image"]
-                print("[RedNode Workspace] rig %r: the Custom Rig's picture is the render"
-                      % _rig_now.get("name"), flush=True)
-            elif _rec is not None and _rec.get("latent") is not None:
-                _dv = vae if vae is not None else _rec.get("vae")
-                result_latent_out = _rec["latent"]
-                if _dv is not None:
-                    rig_image = _dv.decode(_rec["latent"]["samples"])
-                    while rig_image.ndim > 4:
-                        rig_image = rig_image[0]
-                    print("[RedNode Workspace] rig %r: the Custom Rig's latent, decoded, "
-                          "is the render" % _rig_now.get("name"), flush=True)
-                else:
-                    _no_vae = True
         if (_mode == "internal" and not _prt and not _stage_only and rig_image is None
                 and positive is not None and model is not None):
             try:
@@ -3162,10 +3138,12 @@ class RedNodeStudioWorkspace:
                     _lc = cfg["latent"]
                     _lat = {"samples": torch.zeros(
                         [_lc["batch"], 16, _lc["h"] // 8, _lc["w"] // 8])}
-                _chain0 = _ar.get("custom_sampler") or ""
+                from . import rig_chain as _rigc
+                _chain0 = _rigc.rig_for(_ar)
                 print("[RedNode Workspace] %s: seed %d, %d steps, "
                       "cfg %.1f, %s/%s, denoise %.2f" % (
-                          ("sampler chain %r" % _chain0) if _chain0 else "built-in sampler",
+                          ("your own nodes for the rig %r" % _chain0) if _chain0
+                          else "built-in sampler",
                           _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
                           _dn), flush=True)
                 # PASSES, the Paint tab's iteration on the i2i chain: each pass
@@ -3353,11 +3331,13 @@ class RedNodeStudioWorkspace:
                             ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
                             _rig_p,
                         ] if x)
-                        from . import custom_sampler as _custom
+                        from . import rig_chain as _rigc
                         _rig_rec = (next((r for r in cfg["models"]["rigs"]
                                           if r.get("name") == _rig_p), None)
                                     if _rig_p else _ar) or {}
-                        with _custom.using(_rig_rec.get("custom_sampler") or "", prompt):
+                        with _rigc.using(_rigc.rig_for(_rig_rec), prompt,
+                                         clip=lora_clip if lora_clip is not None else clip,
+                                         vae=_v):
                             _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
                                 _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
                                 _sched_p, _pos_i, negative, _out,

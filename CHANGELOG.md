@@ -28,23 +28,24 @@ cheap to judge.
 
 ### Rigs
 
-- Your own sampler chain for any rig: build it between RedNode Sampler Start,
-  which hands out the model, positive, negative, latent, seed, steps, CFG,
-  sampler, scheduler, denoise, step window and VAE, and RedNode Sampler End,
-  which takes the finished latent under a name. A rig's Sampler chain choice
-  on the Models tab names it, and the main render, every Latent and Img2Img
-  pass, the paint pass and every Detailer pass on that rig sample through it,
-  each with its own values. No wires; the pack runs the chain's nodes itself
-  through ComfyUI's own node calls, and nodes that do not depend on Sampler
-  Start run once per queue. A KSampler chain renders pixel for pixel what the
-  built-in sampler does. The Tiled upscale pass keeps its own sampler
-- A RedNode Custom Rig node: your own model, CLIP and VAE from any loaders, or a
-  finished latent or picture from your own sampler chain, as a named rig. A
-  Models tab rig of kind Custom node takes it, and the built-in sampler, every
-  Detailer pass and the paint rig use it like any other rig. Put as many on the
-  canvas as you like. Nothing is wired to the Workspace or the Detailer: when
-  you queue, the page links in only the Custom Rigs a rig in use names, so an
-  unused one never runs and never loads its models
+- A rig made of your own nodes, three nodes that share the rig's name.
+  RedNode Rig Model takes your loaders and hands back the model, CLIP and VAE
+  with the Workspace's LoRAs and camera LoRAs for that rig applied. RedNode Rig
+  Inputs hands your sampler the positive, negative, latent, seed, steps, CFG,
+  sampler, scheduler, denoise, start step and end step, with the cameras and,
+  on a Krea 2 rig, the Subject, People and Scene references. RedNode Rig Result
+  takes the finished latent or picture
+- On the Models tab a rig of kind Your own nodes names those nodes, and has no
+  built-in sampler settings of its own. The main render, every Latent and
+  Img2Img pass, the paint pass and every Detailer pass on that rig sample
+  through your nodes, each with its own values, and the result carries on to
+  the Detailer, Post FX and Save. A KSampler between them renders pixel for
+  pixel what the built-in sampler does. The Tiled upscale pass keeps its own
+  sampler
+- No wires to the Workspace or the Detailer, and as many rigs as you like: when
+  you queue, the page links in only the Rig Model nodes a rig in use names, so
+  an unused rig never runs and never loads its models. An Add the rig nodes
+  button puts all three on the canvas with the rig's name
 
 ### Workspace
 

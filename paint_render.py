@@ -250,12 +250,13 @@ def _fit_region(t_nhwc, budget_side, cap=0, floor=False):
 
 
 def _paint_chain(prompt):
-    """The active rig's own sampler chain name, "" for the built-in sampler."""
+    """The active rig's name when it is your own nodes, "" for the built-in sampler."""
     try:
         from .workspace import parse_config as _pcfg
+        from . import rig_chain as _rigc
         cfg = _pcfg(json.dumps(_workspace_cfg(prompt)))
         rigs = cfg["models"]["rigs"]
-        return (rigs[cfg["models"]["active"]].get("custom_sampler") or "") if rigs else ""
+        return _rigc.rig_for(rigs[cfg["models"]["active"]]) if rigs else ""
     except Exception:
         return ""
 
@@ -762,8 +763,8 @@ class RedNodePaintRender:
             # on the built-in paint door) and the run (live_preview.py)
             # through the sampler dials' entry: with nothing on it is core's
             # common_ksampler; an extra scheduler name on the rig builds its schedule
-            from . import custom_sampler as _custom
-            with _custom.using(_paint_chain(prompt), prompt):
+            from . import rig_chain as _rigc
+            with _rigc.using(_paint_chain(prompt), prompt, clip=clip, vae=vae):
                 out = _live.sampled(unique_id, _dials.sample_with_dials,
                                     label=("pass %d of %d" % (i + 1, passes))
                                           if passes > 1 else "",

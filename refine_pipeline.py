@@ -649,7 +649,7 @@ class RedNodeStudioDetailer:
             pass
 
     def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
-        # _custom_rigs: queue-time links from RedNode Custom Rig nodes; order only
+        # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
         self._rn_prompt = prompt              # a rig's own sampler chain reads it
         # A paint-door run or an external-sampler workspace hands over no image
         # at all; pass the nothing along like Review and Save do, don't crash
@@ -761,6 +761,7 @@ class RedNodeStudioDetailer:
                 continue
             rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"],
                                                              prompt=prompt)
+            self._rn_clip, self._rn_vae = clip, vae
             if model is None or clip is None or vae is None:
                 line = "%s: rig %r is missing a %s, pass skipped" % (
                     tag, s["rig"] or rig_name or "(active)",
@@ -774,7 +775,8 @@ class RedNodeStudioDetailer:
             # the rig's sampler dials ride every pass on it: its shift on the model
             # now, Detail Daemon, Seed Variance and densify at the sampler call
             self._rn_dials = rig.get("dials") or {}
-            self._rn_chain = rig.get("custom_sampler") or ""
+            from . import rig_chain as _rigc
+            self._rn_chain = _rigc.rig_for(rig)
             if self._rn_dials.get("shift"):
                 model = _dials.apply_shift(model, self._rn_dials["shift"])
             # THE STACK, unless this pass says raw: the main LoRAs tab applied to
@@ -1078,8 +1080,9 @@ class RedNodeStudioDetailer:
 
     def _ksample(self, model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
                  denoise, start, end):
-        from . import custom_sampler as _custom
-        with _custom.using(getattr(self, "_rn_chain", ""), getattr(self, "_rn_prompt", None)):
+        from . import rig_chain as _rigc
+        with _rigc.using(getattr(self, "_rn_chain", ""), getattr(self, "_rn_prompt", None),
+                         clip=getattr(self, "_rn_clip", None), vae=getattr(self, "_rn_vae", None)):
             return _dials.sample_with_dials(
                 model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
                 denoise=max(0.01, denoise), dials=getattr(self, "_rn_dials", None),
