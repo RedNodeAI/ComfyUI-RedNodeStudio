@@ -46,6 +46,13 @@ cheap to judge.
   you queue, the page links in only the Rig Model nodes a rig in use names, so
   an unused rig never runs and never loads its models. An Add the rig nodes
   button puts all three on the canvas with the rig's name
+- A rig per pass can be another model family: Z-Image drafting and Krea 2
+  finishing, or the other way round, straight from the Latent or Img2Img tab.
+  A pass on a rig with another text encoder encodes the prompts again with
+  it (Krea 2 style on a Krea 2 rig, a plain encode otherwise), and a pass on
+  a rig with another VAE decodes the latent with the last rig's VAE and
+  encodes it with its own. The picture is decoded with the last pass's VAE.
+  Rigs that share the same files still hand the latent straight over
 
 ### Workspace
 

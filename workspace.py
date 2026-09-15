@@ -1321,6 +1321,22 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
     return None
 
 
+def rig_text_key(rec, clip, from_rec=True):
+    """What decides a rig's conditioning: two rigs with the same key share it. A files
+    rig is its CLIP file and type; your own nodes, or a wired CLIP, the object itself."""
+    ctype = str((rec or {}).get("clip_type") or "")
+    if not from_rec or (rec or {}).get("kind") == "node":
+        return ("obj", id(clip), ctype)
+    return ("file", str(rec.get("clip") or "ckpt:%s" % (rec.get("checkpoint") or "")), ctype)
+
+
+def rig_vae_key(rec, vae, from_rec=True):
+    """What decides a rig's latent space: two rigs with the same key share latents."""
+    if not from_rec or (rec or {}).get("kind") == "node":
+        return ("obj", id(vae))
+    return ("file", str(rec.get("vae") or "ckpt:%s" % (rec.get("checkpoint") or "")))
+
+
 def blocked(message=None):
     """An ExecutionBlocker: downstream nodes skip instead of crashing.
 
@@ -1948,10 +1964,10 @@ class RedNodeStudioWorkspace:
         return text
 
     @staticmethod
-    def _pass_rig(cfg, name):
-        """Another Models-tab rig for one pass of the built-in sampler: its model
-        with its own LoRA set applied, and its sampler numbers. None when there is
-        nothing to load, so the pass falls back to the run's rig and says so.
+    def _pass_rig(cfg, name, prompt=None):
+        """Another Models-tab rig for one pass of the built-in sampler: its model and
+        CLIP with its own LoRA set applied, its VAE, and its sampler numbers. None when
+        there is nothing to load, so the pass falls back to the run's rig and says so.
 
         The camera LoRAs are not re-applied on it: they are tuned for the run's
         model, and a relay's second rig is the same family anyway. The rig cache
@@ -1962,7 +1978,8 @@ class RedNodeStudioWorkspace:
             print("[RedNode Workspace] no rig named %r for this pass; the run's rig "
                   "carries on" % name, flush=True)
             return None
-        _nm, model, _clip, _vae = load_active_rig(cfg, name)
+        _nm, model, clip, vae = load_active_rig(cfg, name, prompt=prompt)
+        ekey, vkey = rig_text_key(rec, clip), rig_vae_key(rec, vae)
         if model is None:
             print("[RedNode Workspace] pass rig %r has no model to load; the run's "
                   "rig carries on" % name, flush=True)
@@ -1976,9 +1993,10 @@ class RedNodeStudioWorkspace:
         lc = lora_set_cfg(cfg, rec.get("lora_set") or "", "Workspace pass rig")
         if lc.get("on", True) and lc.get("slots"):
             model, _c, _w, _applied = _lora.apply_stack(
-                model, None, _lora.CUSTOM_SENTINEL,
+                model, clip, _lora.CUSTOM_SENTINEL,
                 json.dumps({"ui": lc.get("ui") or {}, "slots": lc["slots"]}),
                 int(lc.get("seed", 0) or 0), None, tag="Workspace pass rig LoRAs")
+            clip = _c if _c is not None else clip
         steps = int(rec.get("steps") or 8)
         try:
             cfg_v = float(rec.get("cfg", 1.0) or 1.0)
@@ -1990,7 +2008,22 @@ class RedNodeStudioWorkspace:
                      else "simple")
         print("[RedNode Workspace] pass rig %r: %d steps, cfg %.1f, %s/%s"
               % (name, steps, cfg_v, sampler, scheduler), flush=True)
-        return model, steps, cfg_v, sampler, scheduler, dials
+        return model, steps, cfg_v, sampler, scheduler, dials, clip, vae, ekey, vkey
+
+    @staticmethod
+    def _pass_encode(cfg, rig_name, rec, clip, vae, text, negative, studio_preset,
+                     style_strength, workspace):
+        """A pass rig's own conditioning, for a rig with another text encoder: the same
+        encode the run uses, by that rig's model family."""
+        if rec.get("clip_type") == "krea2":
+            from .rednode import Krea2RedNode
+            return Krea2RedNode().encode(
+                clip, text, studio_preset or CUSTOM_SENTINEL,
+                style_strength if style_strength is not None else 0.5,
+                negative_prompt=negative, vae=vae, workspace=workspace)
+        import nodes as _core_enc
+        return (_core_enc.CLIPTextEncode().encode(clip, text)[0],
+                _core_enc.CLIPTextEncode().encode(clip, negative)[0])
 
     def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
                     rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
@@ -3191,8 +3224,16 @@ class RedNodeStudioWorkspace:
                     print("[RedNode Workspace] camera path: %d shots, one render each"
                           % len(_shot_states), flush=True)
                 _shot_images, _last_out = [], None
+                # A PASS RIG OF ANOTHER FAMILY: what the run encoded with and decodes
+                # with, so a pass on a rig with another text encoder encodes the
+                # prompts again and a pass with another VAE gets the latent moved
+                _run_ekey = rig_text_key(_ar, clip, clip is rig_clip)
+                _run_vkey = rig_vae_key(_ar, _v, _v is rig_vae)
+                _prow_run = prompt_row_for(cfg["models"], cfg["prompts"])
+                _penc = {}
                 for _si in _shot_list:
                     _pos_i, _model_i = positive, model
+                    _lat_vae, _lat_vkey = _v, _run_vkey
                     if _si is not None:
                         try:
                             _pos_i, _model_i = self._shot_setup(
@@ -3299,15 +3340,55 @@ class RedNodeStudioWorkspace:
                         _model_p, _steps_p, _cfg_p = _model_i, rig_steps, rig_cfg
                         _sampler_p, _sched_p, _rig_p = rig_sampler, rig_scheduler, ""
                         _dials_p = _ar.get("dials") or {}
+                        _pos_p, _neg_p = _pos_i, negative
+                        _clip_p = lora_clip if lora_clip is not None else clip
+                        _vae_p, _vkey_p = _v, _run_vkey
                         if _pass_cfg and _pass_cfg.get("rig_custom"):
                             _rl = _pass_cfg.get("pass_rig") or []
                             _rig_p = str(_rl[min(_p, len(_rl) - 1)] if _rl else "")
                         if _rig_p and _rig_p != str(_ar.get("name") or ""):
-                            _got = self._pass_rig(cfg, _rig_p)
+                            _got = self._pass_rig(cfg, _rig_p, prompt)
                             if _got is None:
                                 _rig_p = ""
                             else:
-                                _model_p, _steps_p, _cfg_p, _sampler_p, _sched_p, _dials_p = _got
+                                (_model_p, _steps_p, _cfg_p, _sampler_p, _sched_p, _dials_p,
+                                 _gclip, _gvae, _gekey, _gvkey) = _got
+                                _prec = next((r for r in cfg["models"]["rigs"]
+                                              if r.get("name") == _rig_p), {})
+                                if _gclip is not None:
+                                    _clip_p = _gclip
+                                if (_gclip is not None
+                                        and _gekey != _run_ekey):
+                                    _ck = (_rig_p, _si)
+                                    if _ck not in _penc:
+                                        _row_p = prompt_row_for(cfg["models"], cfg["prompts"],
+                                                                _rig_p)
+                                        if _row_p is None or _row_p is _prow_run:
+                                            _row_p = _prow or {}
+                                        _txt_p = (self._shot_text(_shot_states[_si],
+                                                                  _cam_state_row, run_seed)
+                                                  if _si is not None else _row_p.get("text", ""))
+                                        try:
+                                            _penc[_ck] = self._pass_encode(
+                                                cfg, _rig_p, _prec, _gclip,
+                                                _gvae if _gvae is not None else _v,
+                                                _txt_p, str(_row_p.get("negative") or ""),
+                                                studio_preset, style_strength, workspace)
+                                        except Exception as _pe:
+                                            raise RuntimeError(
+                                                "pass %d on the rig %r could not encode the "
+                                                "prompt with that rig's own text encoder: %s"
+                                                % (_p + 1, _rig_p, _pe)) from _pe
+                                        print("[RedNode Workspace] %s pass %d: the rig %r has "
+                                              "another text encoder, so the prompts are "
+                                              "encoded again with it (%s)"
+                                              % (_pass_what, _p + 1, _rig_p,
+                                                 "Krea 2" if _prec.get("clip_type") == "krea2"
+                                                 else "plain text encode"), flush=True)
+                                    _pos_p, _neg_p = _penc[_ck]
+                                if (_gvae is not None
+                                        and _gvkey != _run_vkey):
+                                    _vae_p, _vkey_p = _gvae, _gvkey
                         else:
                             _rig_p = ""
                         if _pass_cfg and _pass_cfg.get("steps_custom"):
@@ -3331,20 +3412,54 @@ class RedNodeStudioWorkspace:
                             ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
                             _rig_p,
                         ] if x)
+                        _moved = False
+                        if (_vkey_p != _lat_vkey and _out is not None
+                                and _vae_p is not None):
+                            _sm0 = _out["samples"]
+                            if not bool(torch.count_nonzero(_sm0)):
+                                # an empty canvas has no picture to carry over; the
+                                # sampler sizes its channels for the model
+                                pass
+                            elif _lat_vae is None:
+                                raise RuntimeError(
+                                    "pass %d on the rig %r needs the latent moved to that "
+                                    "rig's VAE, and there is no VAE to decode it with first"
+                                    % (_p + 1, _rig_p or rig_name))
+                            else:
+                                _pix = _lat_vae.decode(_sm0)
+                                while _pix.ndim > 4:
+                                    _pix = _pix[0]
+                                _mv = {k_: v_ for k_, v_ in _out.items() if k_ != "noise_mask"}
+                                _mv["samples"] = _vae_p.encode(_pix[:, :, :, :3])
+                                _out = _mv
+                                _moved = True
+                                print("[RedNode Workspace] %s pass %d: the rig %r has "
+                                      "another VAE, so the latent is decoded and encoded "
+                                      "again with it" % (_pass_what, _p + 1, _rig_p),
+                                      flush=True)
+                            _lat_vae, _lat_vkey = _vae_p, _vkey_p
+                        _cont = _segs is not None and not _moved
+                        if _segs is not None and _moved:
+                            print("[RedNode Workspace] %s pass %d adds fresh noise: a latent "
+                                  "moved to another VAE cannot continue the last pass's "
+                                  "noise" % (_pass_what, _p + 1), flush=True)
                         from . import rig_chain as _rigc
                         _rig_rec = (next((r for r in cfg["models"]["rigs"]
                                           if r.get("name") == _rig_p), None)
                                     if _rig_p else _ar) or {}
                         with _rigc.using(_rigc.rig_for(_rig_rec), prompt,
-                                         clip=lora_clip if lora_clip is not None else clip,
-                                         vae=_v):
+                                         clip=_clip_p, vae=_vae_p):
                             _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
                                 _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
-                                _sched_p, _pos_i, negative, _out,
+                                _sched_p, _pos_p, _neg_p, _out,
                                 denoise=_dnp, dials=_dials_p,
-                                sigmas=(_segs[_p] if _segs is not None else None),
-                                disable_noise=bool(_segs is not None and _p > 0))
+                                sigmas=(_segs[_p] if _cont else None),
+                                disable_noise=bool(_cont and _p > 0))
                     _last_out = _out
+                    # the last pass's VAE decodes: after a pass on another family the
+                    # latent is in that rig's space
+                    _v_run = _v
+                    _v = _lat_vae if _lat_vae is not None else _v
                     if _v is not None:
                         # the same courtesy the encode gets: past roughly 2
                         # megapixels a whole decode is a VRAM spike that reads as
@@ -3369,8 +3484,9 @@ class RedNodeStudioWorkspace:
                         while _img.ndim > 4:
                             _img = _img[0]
                         _shot_images.append(_img)
+                    _v = _v_run
                 result_latent_out = _last_out
-                if _v is None:
+                if _v is None and not _shot_images:
                     _no_vae = True
                     print("[RedNode Workspace] built-in sampler rendered, but no "
                           "VAE is wired or named on the rig, so there is no image "
