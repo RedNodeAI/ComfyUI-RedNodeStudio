@@ -16,6 +16,7 @@ import { TAB_ORDER, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
+import { customRigNodes, CUSTOM_RIG } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
 import { buildLoraPanel, render as loraRender, writeSlots as loraWrite,
@@ -1121,7 +1122,8 @@ export function readCfg(node) {
     // the i2i pair: "" means the pair above, which is every rig saved before it
     if (typeof r.i2i_sampler !== "string") r.i2i_sampler = "";
     if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
-    if (r.kind !== "external") r.kind = "";
+    if (r.kind !== "external" && r.kind !== "node") r.kind = "";
+    if (typeof r.node !== "string") r.node = "";          // a "node" rig's Custom Rig name
     if (typeof r.denoise !== "number") r.denoise = 1.0;
     // the LoRAs-tab SET this rig renders with; "" = Main
     if (typeof r.lora_set !== "string") r.lora_set = "";
@@ -1328,15 +1330,24 @@ export function setupProblems(node, cfg) {
     if (!wired("model")) out.push("There is no rig. Press New Rig and choose its model, CLIP and VAE.");
     return out;
   }
-  if (rig.kind) return out;                    // an engine rig loads nothing on purpose
-  const ckpt = !!rig.checkpoint;
-  if (!ckpt && !rig.unet && !wired("model")) out.push("No diffusion model or checkpoint chosen.");
-  if (!ckpt && !rig.clip && !wired("clip")) out.push("No text encoder (CLIP) chosen.");
-  if (rig.clip && !rig.clip_type) {
-    out.push("The CLIP type is empty, so it loads as Stable Diffusion. Set it to match the "
-           + "model, krea2 for Krea 2.");
+  if (rig.kind === "node") {
+    const want = rig.node || rig.name;
+    if (!customRigNodes().some((c) => c.name === want)) {
+      out.push(`No RedNode Custom Rig node named "${want}" is on the canvas.`);
+    }
+  } else if (rig.kind) {
+    return out;                                // an engine rig loads nothing on purpose
   }
-  if (!ckpt && !rig.vae && !wired("vae")) out.push("No VAE chosen, so the picture cannot be decoded.");
+  const ckpt = !!rig.checkpoint;
+  if (!rig.kind) {
+    if (!ckpt && !rig.unet && !wired("model")) out.push("No diffusion model or checkpoint chosen.");
+    if (!ckpt && !rig.clip && !wired("clip")) out.push("No text encoder (CLIP) chosen.");
+    if (rig.clip && !rig.clip_type) {
+      out.push("The CLIP type is empty, so it loads as Stable Diffusion. Set it to match the "
+             + "model, krea2 for Krea 2.");
+    }
+    if (!ckpt && !rig.vae && !wired("vae")) out.push("No VAE chosen, so the picture cannot be decoded.");
+  }
   const rows = cfg.prompts?.rows || [];
   const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
   const hasText = (row) => String(row.text || "").trim();
@@ -9612,6 +9623,9 @@ function modelsBody(node, page) {
     // web file) join the segment when present; public installs never see them
     const kindOpts = [
       ["", "Local files", "Loads a checkpoint or diffusion model here, as always."],
+      ["node", "Custom node", "Takes its model, CLIP and VAE, or a finished render, from a "
+                             + "RedNode Custom Rig node on the canvas: your own loaders, "
+                             + "patches or sampler chain. Nothing is wired to the Workspace."],
       ["external", "External renderer", "Loads NOTHING: this rig carries the numbers and "
                                         + "prompt for an engine outside the workspace; use "
                                         + "RedNode Rig Out and Rig In to bridge it."],
@@ -9623,7 +9637,57 @@ function modelsBody(node, page) {
     krow.appendChild(kbSeg);
     body.appendChild(krow);
   }
-  if (rig.kind === "external") {
+  if (rig.kind === "node") {
+    // WHICH CUSTOM RIG NODE: picked from the canvas by name, with a button that adds one
+    const found = customRigNodes();
+    const want = rig.node || rig.name;
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-select";
+    const names = [...new Set(found.map((c) => c.name))];
+    if (!names.includes(want)) names.unshift(want);
+    for (const nm of names) {
+      const o = document.createElement("option");
+      o.value = nm;
+      o.textContent = nm + (found.some((c) => c.name === nm) ? "" : "  (not on the canvas)");
+      o.selected = nm === want;
+      sel.appendChild(o);
+    }
+    sel.title = "The RedNode Custom Rig node this rig takes its model, CLIP and VAE from, by "
+              + "that node's name.";
+    sel.onchange = () => { rig.node = sel.value === rig.name ? "" : sel.value; writeCfg(node); render(node); };
+    pill(body, "Custom Rig node", sel, sel.title);
+    const addB = document.createElement("button");
+    addB.className = "rn-ws-btn";
+    addB.style.cssText = "width:auto;padding:0 12px";
+    addB.textContent = "Add a Custom Rig node";
+    addB.title = "Puts a RedNode Custom Rig node beside this Workspace, named for this rig. "
+               + "Wire your loaders or your sampler chain into it; nothing connects to the "
+               + "Workspace.";
+    addB.onclick = () => {
+      const LG = globalThis.LiteGraph;
+      const made = LG?.createNode?.(CUSTOM_RIG);
+      if (!made) return;
+      made.pos = [(node.pos?.[0] || 0) - 360, (node.pos?.[1] || 0) + 40 + found.length * 40];
+      (node.graph || app.graph)?.add?.(made);
+      const w = (made.widgets || []).find((x) => x?.name === "name");
+      if (w) { w.value = want; w.callback?.(want); }
+      made.title = `Custom Rig: ${want}`;
+      app.graph?.setDirtyCanvas?.(true, true);
+      render(node);
+    };
+    const en = document.createElement("div");
+    en.className = "rn-ws-note";
+    en.textContent = found.some((c) => c.name === want)
+      ? "Found on the canvas. When you queue, it runs only if this rig is in use: the "
+        + "active rig, a pass rig, the paint rig or a Detailer pass. No wire is needed. "
+        + "With a latent or an image wired into it, that is the render and the sampler "
+        + "below sits out."
+      : `No Custom Rig node named "${want}" yet. Add one, or rename yours to match.`;
+    const brow = document.createElement("div");
+    brow.className = "rn-ws-row";
+    brow.append(addB);
+    body.append(brow, en);
+  } else if (rig.kind === "external") {
     const en = document.createElement("div");
     en.className = "rn-ws-note";
     en.textContent = "No files load for this rig. Set its numbers in the "
@@ -9895,7 +9959,7 @@ function modelsBody(node, page) {
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
-  if (rig.kind) {
+  if (rig.kind && rig.kind !== "node") {
     // an external engine names its own samplers, so these are free text notes
     // riding the sockets, not comfy's lists
     const txtRow = (label, key, hint) => {

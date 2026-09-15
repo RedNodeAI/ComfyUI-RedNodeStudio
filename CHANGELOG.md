@@ -26,6 +26,16 @@ cheap to judge.
   then saves the whole frame), Show the full-size picture on the node on Image
   Review
 
+### Rigs
+
+- A RedNode Custom Rig node: your own model, CLIP and VAE from any loaders, or a
+  finished latent or picture from your own sampler chain, as a named rig. A
+  Models tab rig of kind Custom node takes it, and the built-in sampler, every
+  Detailer pass and the paint rig use it like any other rig. Put as many on the
+  canvas as you like. Nothing is wired to the Workspace or the Detailer: when
+  you queue, the page links in only the Custom Rigs a rig in use names, so an
+  unused one never runs and never loads its models
+
 ### Workspace
 
 - A new Workspace starts ready to render: the built-in sampler, and the latent

@@ -646,6 +646,7 @@ from .live_preview import RedNodeLivePreview  # noqa: E402
 from .sampler_config import RedNodeSamplerConfig  # noqa: E402
 from .postprocess import RedNodePostProcess, RedNodePostFX  # noqa: E402
 from .stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
+from .custom_rig import RedNodeCustomRig  # noqa: E402
 from .paint_render import RedNodePaintRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
@@ -712,6 +713,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeStageTap": RedNodeStageTap,
     "RedNodeStageView": RedNodeStageView,
     "RedNodePaintRender": RedNodePaintRender,
+    "RedNodeCustomRig": RedNodeCustomRig,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePromptCombine": "RedNode Prompt Combine",
@@ -768,6 +770,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeChannelConvert": "RedNode Channel Convert",
     "RedNodeStageTap": "RedNode Stage Tap",
     "RedNodeStageView": "RedNode Stage View",
+    "RedNodeCustomRig": "RedNode Custom Rig",
     "RedNodePaintRender": "RedNode Paint Render",
 }
 

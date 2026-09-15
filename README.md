@@ -434,6 +434,7 @@ what they did. Treat them as legacy.
 | RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view where the wheel zooms and a drag pans. A run that made several pictures shows them in a column beside the big one; click to view any of them. |
 | RedNode Live Preview | Shows the picture forming step by step while the node wired into it renders, then the finished frame. The workspace and the Detailer decode every step with the small VAE (lighttaew2_1 in models/vae_approx for Krea 2) and stream it here, whatever ComfyUI's own preview setting is. |
 | RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
+| RedNode Custom Rig | Your own model stack or sampler chain as a named rig. Wire in any loaders, patches, a finished latent or a picture, pick its name on the Models tab as a Custom node rig, and the Workspace and every Detailer pass use it. Nothing is wired to them: it runs only when a rig in use names it. |
 | RedNode Stage Tap / Stage View | Photograph any point in the graph at a chosen size, then compare stages with a wipe, on the node or full screen. |
 
 ### LoRAs and sampling

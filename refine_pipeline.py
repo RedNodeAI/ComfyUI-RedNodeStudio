@@ -648,7 +648,8 @@ class RedNodeStudioDetailer:
         except Exception:
             pass
 
-    def run(self, image, config="{}", prompt=None, unique_id=None):
+    def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
+        # _custom_rigs: queue-time links from RedNode Custom Rig nodes; order only
         # A paint-door run or an external-sampler workspace hands over no image
         # at all; pass the nothing along like Review and Save do, don't crash
         if image is None:
@@ -757,7 +758,8 @@ class RedNodeStudioDetailer:
                     report.append(line)
                 out = self._tone(out, pass_in, s, tag, report)
                 continue
-            rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"])
+            rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"],
+                                                             prompt=prompt)
             if model is None or clip is None or vae is None:
                 line = "%s: rig %r is missing a %s, pass skipped" % (
                     tag, s["rig"] or rig_name or "(active)",
