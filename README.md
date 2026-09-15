@@ -78,7 +78,9 @@ tier, which clamps the expensive dials for a smaller card.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
-box for any other model. The auto prompt captions the references through a local vision model
+box for any other model. A frame row's Camera words switch stops every camera sentence it writes,
+the height stop and the studio's paragraph alike, and the Camera tab's switch strips the studio's
+paragraph from the queued prompt as well as the LoRAs and the path. The auto prompt captions the references through a local vision model
 (Ollama, WD14, JoyCaption, QwenVL or Florence-2, one Florence model and task shared by every tab),
 with a length budget, a converter for gender and style swaps, and a saved prompts button.
 Wildcards and `@keyword` macros resolve on the run's seed.

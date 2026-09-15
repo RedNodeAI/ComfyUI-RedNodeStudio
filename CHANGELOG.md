@@ -36,6 +36,9 @@ cheap to judge.
   Prompt's Ollama model as a writer and come back for editing
 - Save writes Civitai metadata with AutoV2 hashes, and plays a finish sound
   when asked
+- A Camera words switch on every frame row: off, the row writes no camera
+  sentence at all. The Camera tab's switch now strips the studio's paragraph
+  from the queued prompt too, not only the LoRAs and the path
 
 ### Studio Detailer
 

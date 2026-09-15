@@ -1788,10 +1788,13 @@ class RedNodeStudioWorkspace:
     def _shot_text(shot_state, row, run_seed):
         """The row's prompt re-assembled with one shot's camera: the Frame run
         again with that camera, so the paragraph describes where THIS shot
-        stands. A plain row has no frame to re-run and keeps its words."""
-        cam_json = json.dumps(shot_state)
+        stands. A plain row has no frame to re-run and keeps its words. No
+        state (the Camera tab off) re-runs it with no camera; a row whose
+        Camera words switch is off writes no camera words at all."""
         text = row.get("text", "")
         fr = row.get("frame") or {}
+        words_off = bool(fr.get("camera_off"))
+        cam_json = json.dumps(shot_state) if shot_state and not words_off else ""
         if row.get("kind") == "krea2" and fr:
             from .prompt_frame import RedNodePromptFrame
             text, _n = RedNodePromptFrame().run(
@@ -1807,7 +1810,8 @@ class RedNodeStudioWorkspace:
                 style=str(fr.get("style") or "None"),
                 style_extra=str(fr.get("style_extra") or ""),
                 framing_push=str(fr.get("framing_push") or "Off"),
-                camera_height=str(fr.get("camera_height") or "Eye level"),
+                camera_height=("Eye level" if words_off
+                               else str(fr.get("camera_height") or "Eye level")),
                 camera=cam_json,
                 seed=run_seed)
         return text
@@ -2546,8 +2550,10 @@ class RedNodeStudioWorkspace:
                         # simple height stop. Missing here meant the studio's
                         # paragraph vanished from the QUEUED prompt whenever the
                         # auto prompt re-assembled the frame
-                        camera_height=str(_fr.get("camera_height") or "Eye level"),
-                        camera=(str(_fr.get("camera") or "") if camera_on(cfg) else ""),
+                        camera_height=("Eye level" if _fr.get("camera_off")
+                                       else str(_fr.get("camera_height") or "Eye level")),
+                        camera=(str(_fr.get("camera") or "")
+                                if camera_on(cfg) and not _fr.get("camera_off") else ""),
                         style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),
@@ -2611,10 +2617,14 @@ class RedNodeStudioWorkspace:
         try:
             _zrow = prompt_row_for(cfg["models"], cfg["prompts"])
             _zfr = (_zrow or {}).get("frame") or {}
-            _zcam = _zfr.get("camera") if camera_on(cfg) else None
+            _zcam = (_zfr.get("camera")
+                     if camera_on(cfg) and not _zfr.get("camera_off") else None)
             if _zfr.get("camera") and not camera_on(cfg):
                 print("[RedNode Workspace] the Camera tab is off: no camera "
                       "paragraph, no camera LoRAs, no path", flush=True)
+            elif _zfr.get("camera") and _zfr.get("camera_off"):
+                print("[RedNode Workspace] the row's Camera words are off: no "
+                      "camera paragraph, no camera LoRAs, no path", flush=True)
             if isinstance(_zcam, str) and _zcam.strip():
                 from .camera_studio import parse_state as _cs_parse, \
                     resolve_camera_loras as _cs_loras, \
@@ -2835,6 +2845,15 @@ class RedNodeStudioWorkspace:
         # row for the active rig, typed text first as always.
         positive = negative = rig_image = result_latent_out = None
         _prow = prompt_row_for(cfg["models"], cfg["prompts"])
+        # THE CAMERA WORDS OFF, by the tab's switch or the row's: the panel bakes
+        # the studio paragraph and the height stop into the row's text as it
+        # previews, so the switch has to strip them here as well as skip the
+        # LoRAs and the path. The frame runs again with no camera.
+        _pfr = (_prow or {}).get("frame") or {}
+        if (_prow and _prow.get("kind") == "krea2" and _pfr
+                and (_pfr.get("camera_off")
+                     or (_pfr.get("camera") and not camera_on(cfg)))):
+            _prow = dict(_prow, text=self._shot_text(None, _prow, run_seed))
         _mode = cfg["models"]["sampler_mode"]
         # THE MODEL DECIDES THE ENCODE, the same rule the reference toggles follow:
         # a krea2 CLIP type gets the Studio identity system, refs and all; any other

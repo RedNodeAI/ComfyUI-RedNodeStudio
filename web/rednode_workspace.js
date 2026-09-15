@@ -10139,7 +10139,32 @@ function promptsBody(node, body) {
       node._rnPromptSel = Math.max(0, Math.min(node._rnPromptSel, R.length - 1));
       writeCfg(node); render(node);
     };
-    head.append(name, rigPick, kind, del);
+    if (row.kind !== "plain") {
+      // CAMERA WORDS: one switch that stops every camera sentence this row
+      // writes, the height stop and the studio's paragraph alike, without
+      // touching the Camera tab or the row's studio camera. Off, the row reads
+      // as if the camera were at eye level and the studio never opened.
+      row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
+      const camT = document.createElement("button");
+      camT.className = "rn-ws-on" + (row.frame.camera_off ? "" : " on");
+      camT.textContent = "Camera words";
+      camT.style.width = "auto";
+      camT.style.padding = "0 9px";
+      camT.title = row.frame.camera_off
+        ? "Off: this row writes no camera sentence, neither the Camera height stop "
+          + "nor the Camera Studio's paragraph, and a studio camera on the row runs "
+          + "no LoRAs or path. Click to let the camera speak again."
+        : "On: the row's Camera height stop and, when the Camera tab is on, the "
+          + "studio's paragraph lead the prompt. Click to write no camera words at "
+          + "all for this row.";
+      camT.onclick = () => {
+        row.frame.camera_off = !row.frame.camera_off;
+        writeCfg(node); render(node);
+      };
+      head.append(name, rigPick, kind, camT, del);
+    } else {
+      head.append(name, rigPick, kind, del);
+    }
     box.appendChild(head);
 
     if (folded()) { body.appendChild(box); return; }
@@ -10160,9 +10185,17 @@ function promptsBody(node, body) {
         const host = document.createElement("div");
         const typedOf = (n) => (row.frame[n] !== undefined ? row.frame[n]
                                                            : FRAME_DEF.defaults[n]);
+        const camOff = () => !!row.frame.camera_off;
+        const tabOff = () => !!(cfg.camera && cfg.camera.on === false);
         const F = {
           opts: FRAME_DEF.opts,
           get: typedOf,
+          // the preview writes row.text, which is what the queue encodes, so it
+          // assembles with the camera the run will actually have: none when the
+          // Camera tab or the row's Camera words switch is off
+          getPreview: (n) => (n === "camera" ? ((camOff() || tabOff()) ? "" : typedOf(n))
+                              : n === "camera_height" ? (camOff() ? "Eye level" : typedOf(n))
+                              : typedOf(n)),
           resolveWildcards: false,   // the queue rolls them with the run seed
           set: (n, v) => { row.frame[n] = v; },
           folds: {
