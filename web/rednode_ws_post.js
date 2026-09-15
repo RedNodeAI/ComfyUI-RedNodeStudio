@@ -279,6 +279,21 @@ function openLookMenu(node, preset, applyLook, ev) {
   };
   const sep = document.createElement("div");
   sep.className = "sep";
+  if (preset.builtin) {
+    // shipped with the pack: apply it, or keep an editable copy under your own name
+    m.append(
+      note,
+      mk("Apply these effects", () => applyLook()),
+      mk("Save a copy…", async () => {
+        const name = prompt("Name your copy", `${preset.name} copy`);
+        if (!name) return;
+        const cfg = (await (await api.fetchApi(
+          `/rednode/post_presets?name=${encodeURIComponent(preset.name)}`)).json()).config;
+        await postPresetAction(node, { action: "save", name, config: cfg });
+      }),
+    );
+    document.body.appendChild(m);
+  } else {
   m.append(
     note,
     mk("Apply these effects", () => applyLook()),
@@ -301,6 +316,7 @@ function openLookMenu(node, preset, applyLook, ev) {
       postPresetAction(node, { action: "delete", name: preset.name })),
   );
   document.body.appendChild(m);
+  }
   const mw = 230, mh = m.getBoundingClientRect().height || 180;
   m.style.left = Math.max(6, Math.min(ev.clientX || 0,
     (window.innerWidth || 1920) - mw - 6)) + "px";
@@ -527,6 +543,64 @@ export function openPostCog(node, anchor) {
   setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
 }
 
+// one applyable cell: a saved look shows its own thumbnail, a shipped one a
+// two-colour swatch and a SHIPPED tag; both apply on click, right-click opens
+// the menu appropriate to that kind (see openLookMenu)
+function lookCell(node, cfg, preset) {
+  const cell = document.createElement("div");
+  cell.className = "rn-ws-look" + (preset.builtin ? " shipped" : "");
+  cell.style.width = cell.style.height = cfg.look_thumb + "px";
+  cell.title = preset.builtin
+    ? `${preset.name}. ${preset.blurb || ""} Ships with the pack: apply it, or save a `
+      + "copy of your own to change it."
+    : `Apply the "${preset.name}" look. Right-click for rename, overwrite and delete.`;
+  if (preset.builtin) {
+    const sw = document.createElement("span");
+    sw.className = "sw";
+    const [c1, c2] = preset.swatch && preset.swatch.length === 2
+      ? preset.swatch : ["#2a2e35", "#4a5058"];
+    sw.style.background = `linear-gradient(135deg, ${c1} 55%, ${c2} 100%)`;
+    cell.appendChild(sw);
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = "SHIPPED";
+    cell.appendChild(tag);
+  } else if (preset.thumb) {
+    const im = document.createElement("img");
+    im.src = preset.thumb;
+    cell.appendChild(im);
+  } else {
+    const ph = document.createElement("span");
+    ph.className = "ph";
+    ph.textContent = "No shot";
+    cell.appendChild(ph);
+  }
+  const nm = document.createElement("span");
+  nm.className = "cap";
+  nm.textContent = preset.name;
+  cell.appendChild(nm);
+  const applyLook = async () => {
+    const res = await api.fetchApi(
+      `/rednode/post_presets?name=${encodeURIComponent(preset.name)}`);
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    cfg.post = d.config || {};
+    postWrite(node);
+    node._rnCfg = readCfg(node);                    // re-normalise the applied look
+    postRender(node);
+  };
+  cell.onclick = () => applyLook().catch((e) => {
+    console.error("[RedNode Workspace] could not apply the look:", e);
+    alert(`Could not apply that look: ${e.message}`);
+  });
+  cell.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openLookMenu(node, preset, applyLook, e);
+  });
+  return cell;
+}
+
 export function looksSection(node, body) {
   const cfg = node._rnCfg;
   const sect = document.createElement("div");
@@ -539,9 +613,10 @@ export function looksSection(node, body) {
   const arr = document.createElement("span");
   arr.className = "arr";
   arr.textContent = folded ? "▸" : "▾";
+  const savedOnly = postPresets.filter((p) => !p.builtin);
   const ttl = document.createElement("span");
   ttl.className = "ttl rn-ws-savedttl";
-  ttl.textContent = "Saved effects" + (postPresets.length ? ` (${postPresets.length})` : "");
+  ttl.textContent = "Saved effects" + (savedOnly.length ? ` (${savedOnly.length})` : "");
   head.append(arr, ttl);
   head.title = folded ? "Show the saved effects." : "Fold the saved effects away.";
   head.onclick = () => {
@@ -582,46 +657,8 @@ export function looksSection(node, body) {
   live.appendChild(cap);
   grid.appendChild(live);
 
-  for (const preset of postPresets) {
-    const cell = document.createElement("div");
-    cell.className = "rn-ws-look";
-    cell.style.width = cell.style.height = cfg.look_thumb + "px";
-    cell.title = `Apply the "${preset.name}" look. Right-click for rename, `
-               + "overwrite and delete.";
-    if (preset.thumb) {
-      const im = document.createElement("img");
-      im.src = preset.thumb;
-      cell.appendChild(im);
-    } else {
-      const ph = document.createElement("span");
-      ph.className = "ph";
-      ph.textContent = "No shot";
-      cell.appendChild(ph);
-    }
-    const nm = document.createElement("span");
-    nm.className = "cap";
-    nm.textContent = preset.name;
-    cell.appendChild(nm);
-    const applyLook = async () => {
-      const res = await api.fetchApi(
-        `/rednode/post_presets?name=${encodeURIComponent(preset.name)}`);
-      const d = await res.json();
-      if (d.error) throw new Error(d.error);
-      cfg.post = d.config || {};
-      postWrite(node);
-      node._rnCfg = readCfg(node);                  // re-normalise the applied look
-      postRender(node);
-    };
-    cell.onclick = () => applyLook().catch((e) => {
-      console.error("[RedNode Workspace] could not apply the look:", e);
-      alert(`Could not apply that look: ${e.message}`);
-    });
-    cell.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openLookMenu(node, preset, applyLook, e);
-    });
-    grid.appendChild(cell);
+  for (const preset of savedOnly) {
+    grid.appendChild(lookCell(node, cfg, preset));
   }
   sect.appendChild(grid);
 
@@ -671,6 +708,41 @@ export function looksSection(node, body) {
   };
   row.append(tl, tr, save);
   sect.appendChild(row);
+  body.appendChild(sect);
+
+  shippedSection(node, body);
+}
+
+// what ships with the pack: folded by default, a swatch instead of a photo, and no
+// way to rename, overwrite or delete it from here (openLookMenu enforces that too)
+function shippedSection(node, body) {
+  const cfg = node._rnCfg;
+  const shipped = postPresets.filter((p) => p.builtin);
+  const sect = document.createElement("div");
+  sect.className = "rn-ws-sect rn-ws-looks rn-ws-shiplooks";
+  const head = document.createElement("div");
+  head.className = "head";
+  const folded = node.properties?.rn_shipped_fx_folded !== false;   // folded by default
+  const arr = document.createElement("span");
+  arr.className = "arr";
+  arr.textContent = folded ? "▸" : "▾";
+  const ttl = document.createElement("span");
+  ttl.className = "ttl rn-ws-savedttl";
+  ttl.textContent = `Shipped with the pack (${shipped.length})`;
+  head.append(arr, ttl);
+  head.title = folded ? "Show the effects that ship with the pack."
+                       : "Fold the shipped effects away.";
+  head.onclick = () => {
+    (node.properties ||= {}).rn_shipped_fx_folded = !folded;
+    postRender(node);
+  };
+  sect.appendChild(head);
+  if (!folded) {
+    const grid = document.createElement("div");
+    grid.className = "rn-ws-lookgrid";
+    for (const preset of shipped) grid.appendChild(lookCell(node, cfg, preset));
+    sect.appendChild(grid);
+  }
   body.appendChild(sect);
 }
 

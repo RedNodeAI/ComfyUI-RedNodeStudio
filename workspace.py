@@ -3492,16 +3492,19 @@ try:
 
     @PromptServer.instance.routes.get("/rednode/post_presets")
     async def _rednode_post_presets(request):
-        presets = postprocess.load_presets()
         name = request.query.get("name")
         if name:
-            entry = presets.get(name)
+            builtin = postprocess.BUILTIN_LOOKS.get(name)
+            if builtin:
+                return web.json_response({"name": name,
+                                          "config": postprocess.parse_post(builtin["config"])})
+            entry = postprocess.load_presets().get(name)
             if not entry:
                 return web.json_response({"error": f"no preset named {name!r}"}, status=404)
             return web.json_response({"name": name, "config": entry["config"],
                                       "thumb": entry["thumb"]})
         return web.json_response({
-            "presets": [{"name": n, "thumb": e["thumb"]} for n, e in sorted(presets.items())],
+            "presets": postprocess.looks_list(),
             "last_thumb": postprocess.LAST_THUMB["uri"],
             "last_rolls": postprocess.LAST_ROLLS,
         })
@@ -3524,9 +3527,8 @@ try:
                 return web.json_response({"error": "unknown action"}, status=400)
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
-        presets = postprocess.load_presets()
         return web.json_response({
-            "presets": [{"name": n, "thumb": e["thumb"]} for n, e in sorted(presets.items())],
+            "presets": postprocess.looks_list(),
             "last_thumb": postprocess.LAST_THUMB["uri"],
         })
 

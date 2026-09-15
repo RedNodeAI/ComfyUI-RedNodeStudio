@@ -770,6 +770,11 @@ css.textContent = `
 .rn-ws-look .cap{position:absolute;left:0;right:0;bottom:0;background:#000c;color:#e8ecf1;
   font-size:9px;padding:2px 3px;text-align:center;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
+.rn-ws-look.shipped{border-color:#2c4a48}
+.rn-ws-look .sw{position:absolute;inset:0}
+.rn-ws-look .tag{position:absolute;left:3px;top:3px;font-size:8px;font-weight:700;
+  letter-spacing:.06em;background:#22a39fcc;color:#06211f;border-radius:3px;
+  padding:0 3px;line-height:12px}
 .rn-ws-menu{position:fixed;z-index:10003;min-width:210px;background:#1b1e23;border:1px solid #3a3d44;
   border-radius:7px;box-shadow:0 8px 24px #000a;padding:4px;display:flex;flex-direction:column}
 .rn-ws-menu button{background:none;border:0;color:#ddd;border-radius:5px;padding:7px 9px;cursor:pointer;

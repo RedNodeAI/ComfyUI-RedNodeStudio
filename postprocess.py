@@ -1767,6 +1767,8 @@ def save_preset(name, config, thumb=""):
         raise ValueError("a preset needs a name")
     if not isinstance(config, dict):
         raise ValueError("a preset needs a config")
+    if name in BUILTIN_LOOKS:
+        raise ValueError(f"{name!r} ships with the pack and cannot be overwritten")
     presets = load_presets()
     keep = presets.get(name, {}).get("thumb", "")
     presets[name] = {"config": parse_post(config),
@@ -1776,10 +1778,206 @@ def save_preset(name, config, thumb=""):
 
 
 def delete_preset(name):
+    name = str(name or "")
+    if name in BUILTIN_LOOKS:
+        raise ValueError(f"{name!r} ships with the pack and cannot be deleted")
     presets = load_presets()
-    presets.pop(str(name or ""), None)
+    presets.pop(name, None)
     _write_presets(presets)
     return presets
+
+
+# ---------------------------------------------------------------------------
+# LOOKS THAT SHIP WITH THE PACK. A saved look is a whole chain plus a picture of
+# what it did; these have no picture, because they are code rather than a run, so
+# each one carries two swatch colours the picker paints instead. Every config is a
+# PARTIAL chain: parse_post fills in whatever is not named, so a look only says
+# what it changes. They cannot be renamed, overwritten or deleted, and a saved
+# look may not take one of these names (guarded in save_preset and delete_preset).
+# The recipes below are a first pass, tuned by eye against sandbox renders before
+# they ship in a release; see SHIPPED_LOOKS_NEXT.md in the hub.
+BUILTIN_LOOKS = {
+    "Pro Grade Krea 2": {
+        "swatch": ("#3a2f28", "#e8cdb0"),
+        "blurb": "A clean, camera-ready grade: gentle noise cleanup, a light skin pass "
+                "and a cool, restrained colour trim.",
+        "config": {
+            "denoise": {"on": True, "sigma": 1.0, "threshold": 0.05,
+                       "radius_multiplier": 1.0, "strength": 0.75},
+            "skin": {"on": True, "subject": "auto", "de_yellow": 2.5, "rosy": 1.0,
+                    "brighten": 1.5, "shadow_lift": 2.0, "evenness": 0.13,
+                    "smooth": 0.04, "texture_preserve": 0.88, "saturation": -0.06},
+            "clarity": {"on": True, "strength": 0.3},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.3, "skin_protect": 0.6},
+            "color": {"on": True, "temperature": -0.06, "highlights": -0.1,
+                     "split_shadow": -0.1},
+        },
+    },
+    "Pro Grade Z-Image": {
+        "swatch": ("#2c342f", "#d8dfc8"),
+        "blurb": "The same clean base at half the skin strength, with a light film grain "
+                "and a softer highlight roll-off.",
+        "config": {
+            "denoise": {"on": True, "sigma": 1.0, "threshold": 0.05,
+                       "radius_multiplier": 1.0, "strength": 0.75},
+            "skin": {"on": True, "subject": "auto", "de_yellow": 1.2, "rosy": 0.5,
+                    "brighten": 0.7, "shadow_lift": 1.0, "evenness": 0.06,
+                    "smooth": 0.02, "texture_preserve": 0.92},
+            "clarity": {"on": True, "strength": 0.17},
+            "color": {"on": True, "highlights": -0.25},
+            "grain": {"on": True, "power": 0.04, "scale": 1.2, "saturation": 0.0,
+                     "softness": 0.8},
+            "rolloff": {"on": True, "knee": 0.8, "strength": 0.4},
+        },
+    },
+    "Natural Photo": {
+        "swatch": ("#2f3630", "#e6e0cf"),
+        "blurb": "Opens shadows and holds highlights the way a phone's HDR does, then a "
+                "restrained sharpen and a hint of grain to stop it reading as flat CGI.",
+        "config": {
+            "denoise": {"on": True, "sigma": 0.8, "threshold": 0.05, "strength": 0.5},
+            "color": {"on": True, "local_hdr": 0.15, "shadows": 0.1, "highlights": -0.15,
+                     "vibrance": 0.1},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.5, "skin_protect": 0.6},
+            "grain": {"on": True, "power": 0.025, "scale": 1.2, "saturation": 0.0,
+                     "softness": 0.6},
+            "vignette": {"on": True, "amount": 0.06, "law": "cos4"},
+        },
+    },
+    "Soft Portrait": {
+        "swatch": ("#3c2e2a", "#f0dcc8"),
+        "blurb": "A warm, forgiving skin pass with a soft diffusion veil and a gentle "
+                "highlight roll-off: the flattering, unfussy portrait look.",
+        "config": {
+            "skin": {"on": True, "de_yellow": 2.0, "rosy": 1.5, "evenness": 0.2,
+                    "smooth": 0.1, "texture_preserve": 0.85},
+            "color": {"on": True, "highlights": -0.2, "split_highlight": 0.15,
+                     "split_shadow": -0.08},
+            "diffusion": {"on": True, "strength": 0.12, "radius": 5.0, "black_lift": 0.01},
+            "rolloff": {"on": True, "knee": 0.75, "strength": 0.5},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.4, "skin_protect": 0.7},
+        },
+    },
+    "Product Clean": {
+        "swatch": ("#1c2024", "#f4f4f0"),
+        "blurb": "Crisp edges, a little extra punch and clean highlights: the e-commerce "
+                "and catalogue look.",
+        "config": {
+            "denoise": {"on": True, "sigma": 0.6, "threshold": 0.04, "strength": 0.6},
+            "color": {"on": True, "contrast": 1.08, "highlights": -0.2, "shadows": 0.1,
+                     "vibrance": 0.2, "local_hdr": 0.2},
+            "clarity": {"on": True, "strength": 0.35},
+            "sharpen": {"on": True, "mode": "band", "amount": 1.0, "radius": 1.0,
+                       "noise_gate": 0.04, "highlight_protect": 0.3},
+            "rolloff": {"on": True, "knee": 0.85, "strength": 0.4},
+        },
+    },
+    "Cinematic Teal and Orange": {
+        "swatch": ("#1e3234", "#c98a52"),
+        "blurb": "Cool shadows against warm skin, a restrained contrast lift and a hint "
+                "of halation: the classic cinema pairing, kept subtle.",
+        "config": {
+            "color": {"on": True, "split_shadow": -0.35, "split_highlight": 0.25,
+                     "contrast": 1.05, "black_point": -0.02, "saturation": 0.95},
+            "halation": {"on": True, "strength": 0.15},
+            "diffusion": {"on": True, "strength": 0.08},
+            "grain": {"on": True, "power": 0.03, "saturation": 0.0},
+            "vignette": {"on": True, "amount": 0.12},
+        },
+    },
+    "Cinestill Night": {
+        "swatch": ("#241820", "#e04838"),
+        "blurb": "Tungsten-balanced night colour with the red halation the stock is known "
+                "for around bright points of light.",
+        "config": {
+            "film": {"on": True, "stock": "cinestill800t", "strength": 0.8},
+            "halation": {"on": True, "strength": 0.6, "threshold": 0.7, "warmth": 0.9},
+            "bloom": {"on": True, "intensity": 0.5, "threshold": 0.75},
+            "grain": {"on": True, "power": 0.05, "scale": 1.4, "saturation": 0.2,
+                     "softness": 0.5},
+        },
+    },
+    "Faded 70s Print": {
+        "swatch": ("#6b4a3a", "#d9a86c"),
+        "blurb": "The chemistry a colour print loses first: cyan fades, the blacks lift "
+                "into a warm haze, and the grain grows and softens.",
+        "config": {
+            "color": {"on": True, "black_point": -0.08, "contrast": 0.9,
+                     "temperature": 0.15, "tint": -0.12, "saturation": 0.75,
+                     "split_highlight": 0.2},
+            "film": {"on": True, "stock": "gold200", "strength": 0.8, "fade": 0.6},
+            "grain": {"on": True, "power": 0.12, "scale": 1.8, "saturation": 0.3,
+                     "softness": 0.5},
+            "vignette": {"on": True, "amount": 0.2, "feather": 0.7},
+            "diffusion": {"on": True, "strength": 0.1},
+            "distortion": {"on": True, "amount": 0.02, "edge_softness": 0.35,
+                          "lens": "vintage_55", "scale_by_size": True},
+        },
+    },
+    "90s Polaroid": {
+        "swatch": ("#405048", "#f0e8d8"),
+        "blurb": "Low-contrast instant-film colour with a creamy highlight, a green cast "
+                "in the shade and a heavy soft-edged vignette.",
+        "config": {
+            "film": {"on": True, "stock": "instant600", "strength": 0.9},
+            "color": {"on": True, "black_point": -0.05, "highlights": -0.15,
+                     "saturation": 0.9, "split_shadow": -0.15, "split_highlight": 0.2},
+            "vignette": {"on": True, "amount": 0.22, "feather": 0.6},
+            "grain": {"on": True, "power": 0.05, "softness": 0.8},
+            "diffusion": {"on": True, "strength": 0.1},
+            "distortion": {"on": True, "edge_softness": 0.25},
+        },
+    },
+    "Disposable Flash": {
+        "swatch": ("#231f1a", "#ffe9b8"),
+        "blurb": "A hot direct flash with heavy corner falloff and a punchy consumer "
+                "colour stock: the one-hour photo lab look.",
+        "config": {
+            "color": {"on": True, "exposure": 0.1, "contrast": 1.15, "highlights": 0.1,
+                     "saturation": 1.15},
+            "film": {"on": True, "stock": "gold200", "strength": 0.7},
+            "vignette": {"on": True, "amount": 0.3, "law": "cos4"},
+            "grain": {"on": True, "power": 0.09, "scale": 1.6, "saturation": 0.35},
+            "aberration": {"on": True, "amount": 0.6},
+            "distortion": {"on": True, "edge_softness": 0.3},
+        },
+    },
+    "Black and White Classic": {
+        "swatch": ("#1a1a1a", "#d8d8d8"),
+        "blurb": "Contrasty black and white through a yellow filter: the darkroom "
+                "standard, clouds separated from sky.",
+        "config": {
+            "film": {"on": True, "stock": "trix400", "wratten": "yellow8"},
+            "color": {"on": True, "contrast": 1.05},
+            "grain": {"on": True, "power": 0.08, "scale": 1.3, "saturation": 0.0,
+                     "softness": 0.4},
+            "vignette": {"on": True, "amount": 0.1},
+        },
+    },
+}
+
+
+def all_looks():
+    """The shipped looks and the user's saved ones, shipped first. Each entry is
+    {"config": chain, "thumb": data URI or "", "builtin": bool, "swatch": pair,
+    "blurb": str}."""
+    out = {}
+    for name, entry in BUILTIN_LOOKS.items():
+        out[name] = {"config": entry["config"], "thumb": "", "builtin": True,
+                     "swatch": list(entry.get("swatch") or ()),
+                     "blurb": entry.get("blurb", "")}
+    for name, entry in sorted(load_presets().items()):
+        if name in BUILTIN_LOOKS:
+            continue                      # a shipped name always wins
+        out[name] = {"config": entry["config"], "thumb": entry["thumb"],
+                     "builtin": False, "swatch": [], "blurb": ""}
+    return out
+
+
+def looks_list():
+    """What the picker needs: no configs, so the poll stays small."""
+    return [{"name": n, "thumb": e["thumb"], "builtin": e["builtin"],
+             "swatch": e["swatch"], "blurb": e["blurb"]} for n, e in all_looks().items()]
 
 
 # ---------------------------------------------------------------------------
