@@ -98,6 +98,7 @@ cheap to judge.
   puts it on screen. De-yellow, rosy, skin saturation, brightness with a
   highlight guard, shadow lift, evenness, and smoothing with a texture dial,
   all starting at 0
+- Denoise gains a strength dial and Grain a softness dial
 - A Film stock card between Halation and Highlight roll-off: twelve stock
   looks (colour negative, slide, tungsten cinema, instant and three black and
   white) as a characteristic curve with base fog and shadow and highlight

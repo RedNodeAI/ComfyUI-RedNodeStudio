@@ -168,6 +168,9 @@ export const POST_FX = [
       { key: "radius_multiplier", label: "Radius multiplier", min: 0.5, max: 3,
         step: 0.001, def: 1.149,
         hint: "Widens the window around sigma. Above about 1.5 it gets slow fast." },
+      { key: "strength", label: "Strength", min: 0, max: 1, step: 0.01, def: 1.0,
+        hint: "How much of the smoothing lands on the picture. 1 is all of it; 0.6 to 0.8 "
+            + "cleans the noise but leaves a little texture, so skin does not go waxy." },
     ] },
   { id: "color", label: "Colour",
     blurb: "The whole tone and colour grade: exposure, the tone curve, lift, gamma and "
@@ -770,6 +773,10 @@ export const POST_FX = [
       { key: "seed", label: "Seed", min: 0, max: 2147483647, step: 1, def: 0,
         hint: "Same seed, same grain. Change it if a pattern lands somewhere "
             + "distracting." },
+      { key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, def: 0.0,
+        hint: "Rounds each grain off so it reads as silver rather than digital speckle. "
+            + "The grain stays as visible; only its edge softens. 0.5 to 0.8 is the "
+            + "scanned film look." },
     ] },
 ];
 

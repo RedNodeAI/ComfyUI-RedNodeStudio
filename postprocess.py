@@ -73,7 +73,8 @@ POST_TYPE = "KREA2_POST"
 # The default for every control is the value the pack ships with, chosen to match
 # a grade the author had already tuned across several packs' nodes.
 DEFAULTS = {
-    "denoise": {"on": False, "sigma": 0.997, "threshold": 0.051, "radius_multiplier": 1.149},
+    "denoise": {"on": False, "sigma": 0.997, "threshold": 0.051, "radius_multiplier": 1.149,
+                "strength": 1.0},
     # THE COLOUR CARD: the tone and colour grade. Every dial after black_point is a
     # no-op at its default, so an old saved chain grades as it did. `awb` is the
     # Measure button's estimator, never an argument.
@@ -147,7 +148,8 @@ DEFAULTS = {
                    "lens": "custom", "scale_by_size": False},
     "aberration": {"on": False, "amount": 0.47, "red_shift": 1.0, "green_shift": -1.0,
                    "blue_shift": -3.0, "direction": "horizontal", "scale_by_size": False},
-    "grain": {"on": False, "power": 0.09, "scale": 1.0, "saturation": 1.0, "seed": 0},
+    "grain": {"on": False, "power": 0.09, "scale": 1.0, "saturation": 1.0, "seed": 0,
+              "softness": 0.0},
     # VIGNETTE: two falloff laws. "smooth" is the shipped one, a flat centre and a
     # soft ring near the edge; "cos4" is what real glass does, cosine to the fourth
     # of the field angle, normalised so the corner lands at the same darkness either
@@ -395,14 +397,15 @@ def _denoise_notice(radius, pixels):
           "the radius multiplier if that is not worth it.", flush=True)
 
 
-def denoise(img, sigma=0.997, threshold=0.051, radius_multiplier=1.149):
+def denoise(img, sigma=0.997, threshold=0.051, radius_multiplier=1.149, strength=1.0):
     """Bilateral filter: average neighbours that are both CLOSE and SIMILAR.
 
     sigma sets how far the averaging reaches, threshold how different a pixel may
     be before it stops contributing (so edges survive), and radius_multiplier
     trades speed for reach by widening the window around that sigma.
     """
-    if sigma <= 0 or threshold <= 0:
+    k = max(0.0, min(1.0, float(strength)))
+    if sigma <= 0 or threshold <= 0 or k <= 0:
         return img
     t = _nchw(img)
     radius = max(1, int(round(sigma * radius_multiplier * 2)))
@@ -425,7 +428,10 @@ def denoise(img, sigma=0.997, threshold=0.051, radius_multiplier=1.149):
             wr = torch.exp(-((gshift - guide) ** 2) / two_tt) * spatial
             acc += shifted * wr
             wsum += wr
-    return _nhwc(acc / wsum.clamp_min(1e-6))
+    out = acc / wsum.clamp_min(1e-6)
+    if k < 1.0:
+        out = t + (out - t) * k                # strength: how much of the smoothing lands
+    return _nhwc(out)
 
 
 def color(img, brightness=1.0, contrast=1.0, saturation=1.0, temperature=0.0,
@@ -1305,10 +1311,11 @@ def aberration(img, amount=0.47, red_shift=1.0, green_shift=-1.0, blue_shift=-3.
     return _clamp01(_nhwc(torch.cat(planes, dim=1)))
 
 
-def grain(img, power=0.09, scale=1.0, saturation=1.0, seed=0):
+def grain(img, power=0.09, scale=1.0, saturation=1.0, seed=0, softness=0.0):
     """Film grain: noise generated at `scale` then resampled up, so the grain has
     a size instead of being one-pixel static. saturation 0 is mono grain, 1 is
-    fully coloured.
+    fully coloured. softness rounds each grain off with a small blur and puts the
+    spread back, so the grain stays as visible but loses its hard digital edge.
     """
     t = _nchw(img)
     b, c, h, w = t.shape
@@ -1319,6 +1326,11 @@ def grain(img, power=0.09, scale=1.0, saturation=1.0, seed=0):
     noise = torch.randn((b, 3, gh, gw), generator=gen).to(t.device, t.dtype)
     if (gh, gw) != (h, w):
         noise = F.interpolate(noise, size=(h, w), mode="bilinear", align_corners=False)
+    soft = max(0.0, min(1.0, float(softness)))
+    if soft > 0:
+        sd = float(noise.std()) or 1.0
+        noise = gaussian_blur(noise, max(0.3, soft * 1.2 * s))
+        noise = noise * (sd / max(1e-6, float(noise.std())))
     if saturation != 1.0:
         mono = noise.mean(dim=1, keepdim=True)
         noise = mono + (noise - mono) * float(saturation)
