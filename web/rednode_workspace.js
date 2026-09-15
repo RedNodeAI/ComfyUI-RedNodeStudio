@@ -100,7 +100,12 @@ export function applyScale(host, raw) {
 const css = document.createElement("style");
 css.textContent = `
 .rn-ws-wrap{display:flex;flex-direction:column;padding:9px;box-sizing:border-box;
-  font:14px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden}
+  font:14px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden;
+  contain:layout paint style;will-change:transform}
+/* A layer of its own, layout and paint contained: ComfyUI moves the panel by its position
+   on every frame of a pan, and the browser repainted all of it each time. With this the
+   drawn panel is shifted as it is. Every fixed menu and overlay attaches to the page body,
+   so none of them is trapped inside the panel by it. */
 /* THE SELECT BOX SCALES. THE OPEN POPUP DOES NOT. Read the whole story before touching
    this, because it has been got wrong in both directions.
 
