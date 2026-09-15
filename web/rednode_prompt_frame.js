@@ -44,10 +44,12 @@ const FIELDS = [
 
 const STYLE = `
 .rn-pf .rn-pf-off{opacity:.35;pointer-events:none}
-.rn-pf .rn-pf-headgrp{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 6px;
+.rn-pf .rn-pf-headgrp{display:flex;align-items:center;gap:8px;padding:6px 12px;
   border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:rgba(0,0,0,0.18)}
+.rn-pf .rn-pf-headgrp .rn-pf-btn{white-space:nowrap;padding:6px 10px}
+.rn-pf .rn-pf-headgrp select{min-width:150px}
 .rn-pf .rn-pf-headcap{font-size:10px;letter-spacing:.06em;text-transform:uppercase;
-  color:#8a919b;margin-right:2px}
+  color:#8a919b;margin-right:2px;white-space:nowrap}
 .rn-pf .rn-pf-snip{display:flex;align-items:center;gap:6px;margin-top:4px}
 .rn-pf .rn-pf-snip select{flex:1;min-width:0}
 .rn-pf .rn-pf-snip .rn-pf-btn{flex:none}

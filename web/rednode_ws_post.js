@@ -606,6 +606,91 @@ function renderControl(node, cfg, fx, b, c) {
   return cell;
 }
 
+// THE ORDER VIEW: the chain as tiles, top to bottom in run order, each with
+// its number, its band, its state and its Limit. Drag a tile onto another to
+// put it there. The two small buttons double the effect in place or take it
+// out; Camera order puts everything back in the shipped order.
+const BAND_COLOUR = { GRADE: "#b8283c", LIGHT: "#e0a84a", AIR: "#6fb1c9", LENS: "#4a8fe0",
+                      FILM: "#9b6bd6", MORE: "#888" };
+
+function orderBody(node, body, cfg, chain, byId, labels, ops) {
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-row";
+  const note = document.createElement("span");
+  note.className = "rn-ws-note";
+  note.textContent = "Top to bottom is the order the chain runs. Drag a tile onto another "
+                   + "to move it there.";
+  const reset = document.createElement("button");
+  reset.className = "rn-ws-btn";
+  reset.style.cssText = "width:auto;padding:0 12px";
+  reset.textContent = "Camera order";
+  reset.title = "Put every effect back in the order light meets a camera: repair, grade, "
+              + "light, air, lens, film. Doubled effects stay; only the order moves.";
+  reset.onclick = () => { cameraOrder(cfg); postWrite(node); postRender(node); };
+  bar.append(note, reset);
+  body.appendChild(bar);
+  const flow = document.createElement("div");
+  flow.className = "rn-ws-fxflow";
+  chain.forEach((b, i) => {
+    const fx = byId[b.fx];
+    const band = chainBand(b.fx);
+    const tile = document.createElement("div");
+    tile.className = "rn-ws-fxtile" + (b.on ? "" : " off");
+    const colour = BAND_COLOUR[band] || "#888";
+    tile.style.borderLeftColor = colour;
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(i + 1);
+    n.style.borderColor = colour;
+    const mid = document.createElement("div");
+    mid.style.cssText = "display:flex;flex-direction:column;gap:2px;min-width:0";
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = labels[b.id];
+    const bd = document.createElement("span");
+    bd.className = "band";
+    bd.textContent = band + (b.limit && b.limit !== "off" ? " · " + b.limit + " only" : "");
+    bd.style.color = colour;
+    mid.append(nm, bd);
+    const st = document.createElement("span");
+    st.className = "st" + (b.on ? " on" : "");
+    st.title = b.on ? "On." : "Off. Switch it on in the Effects view.";
+    const acts = document.createElement("span");
+    acts.className = "acts";
+    const dup = document.createElement("button");
+    dup.textContent = "⧉";
+    dup.title = "Another " + fx.label + " right after this one, with the same dials: one "
+              + "can work the subject and the next the whole frame.";
+    dup.onclick = (e) => {
+      e.stopPropagation();
+      const nb = newChainItem(cfg, fx.id, b);
+      if (!nb) return;
+      chain.splice(i + 1, 0, nb);
+      node._rnFxSel = nb.id;
+      postWrite(node);
+      postRender(node);
+    };
+    const rm = document.createElement("button");
+    rm.textContent = "✕";
+    rm.title = "Take this " + fx.label + " out of the chain. The Additional row on the "
+             + "Effects view puts an effect back.";
+    rm.onclick = (e) => {
+      e.stopPropagation();
+      chain.splice(i, 1);
+      if (node._rnFxSel === b.id) node._rnFxSel = (chain[Math.max(0, i - 1)] || POST_FX[0]).id;
+      postWrite(node);
+      postRender(node);
+    };
+    acts.append(dup, rm);
+    tile.append(n, mid, st, acts);
+    tile.title = fx.blurb;
+    tile.ondblclick = () => { node._rnFxSel = b.id; node._rnPostSub = "effects"; postRender(node); };
+    ops.dragHandlers(tile, b.id);
+    flow.appendChild(tile);
+  });
+  body.appendChild(flow);
+}
+
 export function postBody(node, body) {
   const cfg = node._rnCfg;
   const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
@@ -630,9 +715,11 @@ export function postBody(node, body) {
   const dragHandlers = (el, id) => {
     el.draggable = true;
     el.addEventListener("dragstart", (e) => { dragId = id; e.dataTransfer?.setData?.("text/plain", id); });
-    el.addEventListener("dragover", (e) => { e.preventDefault(); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop"); });
+    el.addEventListener("dragleave", () => { el.classList.remove("drop"); });
     el.addEventListener("drop", (e) => {
       e.preventDefault();
+      el.classList.remove("drop");
       if (!dragId || dragId === id) return;
       const to = chain.findIndex((b) => b.id === id);
       const from = chain.findIndex((b) => b.id === dragId);
@@ -656,47 +743,38 @@ export function postBody(node, body) {
   body.appendChild(bar);
   looksSection(node, body);
 
-  // THE ORDER MAP: the chain as numbered chips, left to right in run order.
-  // Drag a chip onto another to move it there; click one to edit it. The list
-  // below is the same order with the dials; this is the order at a glance.
-  const mapBar = document.createElement("div");
-  mapBar.className = "rn-ws-fxmapbar";
-  const mapLab = document.createElement("span");
-  mapLab.className = "rn-ws-note";
-  mapLab.textContent = "Run order";
-  mapLab.title = "The chain runs left to right. Drag a chip onto another to move it; "
-               + "the arrows on a row do the same one step at a time.";
-  const reset = document.createElement("button");
-  reset.className = "rn-ws-btn";
-  reset.style.cssText = "width:auto;padding:0 10px;font-size:11px";
-  reset.textContent = "Camera order";
-  reset.title = "Put every effect back in the order light meets a camera: repair, "
-              + "grade, light, air, lens, film. Instances stay; only the order moves.";
-  reset.onclick = () => { cameraOrder(cfg); postWrite(node); postRender(node); };
-  mapBar.append(mapLab, reset);
-  body.appendChild(mapBar);
-  const map = document.createElement("div");
-  map.className = "rn-ws-fxmap";
+  // TWO VIEWS on one chain. Effects: the list of what is on, beside one editor,
+  // clean. Order: the same chain as numbered tiles you drag about, where an
+  // effect is doubled or taken out. The list never rearranges itself.
   const countOf = {};
   for (const b of chain) countOf[b.fx] = (countOf[b.fx] || 0) + 1;
   const nthOf = {};
-  const instanceLabel = (b) => {
-    nthOf[b.fx] = (nthOf[b.fx] || 0) + 1;
-    return byId[b.fx].label + (countOf[b.fx] > 1 ? " " + nthOf[b.fx] : "");
-  };
   const labels = {};
-  for (const b of chain) labels[b.id] = instanceLabel(b);
-  chain.forEach((b, i) => {
-    const chip = document.createElement("button");
-    chip.className = "rn-ws-fxchip" + (b.on ? " on" : "") + (node._rnFxSel === b.id ? " sel" : "");
-    chip.textContent = (i + 1) + " " + labels[b.id];
-    chip.title = labels[b.id] + (b.on ? ", on" : ", off") + ". Click to edit; drag onto "
-               + "another chip to move it there.";
-    chip.onclick = () => { node._rnFxSel = b.id; postRender(node); };
-    dragHandlers(chip, b.id);
-    map.appendChild(chip);
-  });
-  body.appendChild(map);
+  for (const b of chain) {
+    nthOf[b.fx] = (nthOf[b.fx] || 0) + 1;
+    labels[b.id] = byId[b.fx].label + (countOf[b.fx] > 1 ? " " + nthOf[b.fx] : "");
+  }
+  const sub = node._rnPostSub === "order" ? "order" : "effects";
+  {
+    const sbar = document.createElement("div");
+    sbar.className = "rn-ws-row";
+    const seg = document.createElement("div");
+    seg.className = "rn-ws-seg";
+    for (const [v, l, tip] of [["effects", "Effects", "Switch effects on, pick one and set its dials."],
+                               ["order", "Order", "The chain as tiles in the order it runs. Drag to rearrange; double or remove an effect."]]) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (sub === v ? " on" : "");
+      b.textContent = l; b.title = tip;
+      b.onclick = () => { node._rnPostSub = v; postRender(node); };
+      seg.appendChild(b);
+    }
+    sbar.appendChild(seg);
+    body.appendChild(sbar);
+  }
+  if (sub === "order") {
+    orderBody(node, body, cfg, chain, byId, labels, { moveItem, dragHandlers });
+    return;
+  }
 
   const split = document.createElement("div");
   split.className = "rn-ws-fxsplit";
@@ -714,10 +792,6 @@ export function postBody(node, body) {
       gear.title = "Settings, not an effect: it never runs on its own.";
       row.appendChild(gear);
     } else {
-      const num = document.createElement("span");
-      num.className = "rn-ws-fxnum";
-      num.textContent = String(i + 1);
-      row.appendChild(num);
       const eye = document.createElement("button");
       eye.className = "rn-ws-eye" + (b.on ? " on" : "");
       eye.textContent = b.on ? "●" : "○";
@@ -742,21 +816,6 @@ export function postBody(node, body) {
       pill.title = "Limited to the " + b.limit + ".";
       row.appendChild(pill);
     }
-    if (!fx.settings) {
-      const mv = document.createElement("span");
-      mv.className = "rn-ws-fxmove";
-      for (const [txt, delta, tip] of [["▲", -1, "Run this one step earlier."],
-                                       ["▼", 1, "Run this one step later."]]) {
-        const mb = document.createElement("button");
-        mb.textContent = txt;
-        mb.title = tip;
-        mb.disabled = (delta < 0 && i === 0) || (delta > 0 && i === chain.length - 1);
-        mb.onclick = (e) => { e.stopPropagation(); moveItem(b.id, i + delta); };
-        mv.appendChild(mb);
-      }
-      row.appendChild(mv);
-      dragHandlers(row, b.id);
-    }
     row.title = fx.blurb;
     row.onclick = () => { node._rnFxSel = b.id; postRender(node); };
     list.appendChild(row);
@@ -773,8 +832,12 @@ export function postBody(node, body) {
     }
     addRow(b, fx, i);
   });
-  // ADD AN EFFECT: any effect, another instance at the end of the chain (the
-  // editor's Another button copies the one on screen right after itself)
+  // ADDITIONAL: any effect, as another instance at the end of the chain. The
+  // Order view is where it is moved, doubled in place or taken out again.
+  const aband = document.createElement("div");
+  aband.className = "rn-ws-fxband";
+  aband.textContent = "ADDITIONAL";
+  list.appendChild(aband);
   const addRowEl = document.createElement("div");
   addRowEl.className = "rn-ws-fxadd";
   const addSel = document.createElement("select");
@@ -792,7 +855,9 @@ export function postBody(node, body) {
   addBtn.className = "rn-ws-btn";
   addBtn.style.cssText = "width:auto;padding:0 10px";
   addBtn.textContent = "＋ Add";
-  addBtn.title = "Add that effect to the end of the chain, switched on.";
+  addBtn.title = "Add that effect to the end of the chain, switched on. An effect can "
+               + "be in the chain more than once, each with its own dials and Limit; "
+               + "the Order view is where it is moved, doubled in place or removed.";
   addBtn.onclick = () => {
     const b = newChainItem(cfg, addSel.value);
     if (!b) return;
@@ -837,41 +902,6 @@ export function postBody(node, body) {
     onB.title = fx.blurb;
     onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
     h.appendChild(onB);
-    // ANOTHER: a second instance of this effect right after this one, with the
-    // same dials, so a sharpen on the subject can be followed by one on the
-    // whole frame. REMOVE takes this instance out of the chain; the add row at
-    // the foot of the list brings an effect back.
-    const dup = document.createElement("button");
-    dup.className = "rn-ws-btn";
-    dup.style.cssText = "width:auto;padding:0 9px;font-size:11px";
-    dup.textContent = "＋ Another";
-    dup.title = "Add another " + fx.label + " right after this one, with the same dials. "
-              + "Each instance has its own switch, dials and Limit, so one can work "
-              + "the subject and the next the whole frame.";
-    dup.onclick = () => {
-      const nb = newChainItem(cfg, fx.id, b);
-      if (!nb) return;
-      const at = chain.findIndex((x) => x.id === b.id);
-      chain.splice(at + 1, 0, nb);
-      node._rnFxSel = nb.id;
-      postWrite(node);
-      postRender(node);
-    };
-    const rm = document.createElement("button");
-    rm.className = "rn-ws-btn";
-    rm.style.cssText = "width:auto;padding:0 9px;font-size:11px";
-    rm.textContent = "✕ Remove";
-    rm.title = "Take this instance out of the chain. The add row at the foot of the "
-             + "list puts an effect back.";
-    rm.onclick = () => {
-      const at = chain.findIndex((x) => x.id === b.id);
-      if (at < 0) return;
-      chain.splice(at, 1);
-      node._rnFxSel = (chain[Math.max(0, at - 1)] || POST_FX.find((x) => x.settings)).id;
-      postWrite(node);
-      postRender(node);
-    };
-    h.append(dup, rm);
   }
   // an effect that costs real time says so here, because this is where somebody
   // asks "why did that take twenty seconds"; the chips sit after the switch

@@ -576,23 +576,28 @@ css.textContent = `
 .rn-ws-fxrow:hover{background:#1b1f25}
 .rn-ws-fxrow.sel{background:#20242b;border-left-color:#b8283c;color:#fff}
 .rn-ws-fxname{overflow:hidden;text-overflow:ellipsis}
-.rn-ws-fxnum{flex:none;width:18px;text-align:right;font-size:10px;color:#6b7480;font-variant-numeric:tabular-nums}
-.rn-ws-fxmove{margin-left:auto;display:flex;gap:2px;flex:none}
-.rn-ws-fxmove button{background:none;border:1px solid transparent;color:#6b7480;font-size:9px;
-  padding:1px 4px;border-radius:3px;cursor:pointer}
-.rn-ws-fxmove button:hover{color:#fff;border-color:#33373d}
-.rn-ws-fxmove button:disabled{opacity:.25;cursor:default}
-.rn-ws-fxrow .rn-ws-fxlimitpill{margin-left:6px}
-.rn-ws-fxadd{display:flex;gap:6px;align-items:center;padding:6px 8px}
+.rn-ws-fxadd{display:flex;gap:6px;align-items:center;padding:6px 8px 10px}
 .rn-ws-fxadd select{flex:1;min-width:0}
-.rn-ws-fxmapbar{display:flex;align-items:center;gap:8px;margin:4px 0 2px}
-.rn-ws-fxmap{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding:6px;
-  background:#101216;border:1px solid #262a30;border-radius:6px}
-.rn-ws-fxchip{background:#1a1d22;border:1px solid #33373d;color:#8a919b;border-radius:14px;
-  font-size:11px;padding:3px 9px;cursor:grab;white-space:nowrap}
-.rn-ws-fxchip.on{color:#e8ecf1;border-color:#4a5058}
-.rn-ws-fxchip.sel{border-color:#b8283c;color:#fff}
-.rn-ws-fxchip:hover{border-color:#b8283c}
+.rn-ws-fxflow{display:flex;flex-direction:column;gap:0;padding:6px 4px 10px;max-width:520px}
+.rn-ws-fxtile{position:relative;display:flex;align-items:center;gap:12px;padding:10px 12px 10px 14px;
+  background:#16181d;border:1px solid #2a2e35;border-left:4px solid var(--band,#555);
+  border-radius:8px;cursor:grab;margin-bottom:10px}
+.rn-ws-fxtile::after{content:"";position:absolute;left:22px;bottom:-11px;width:2px;height:11px;
+  background:#2f343c}
+.rn-ws-fxtile:last-child::after{display:none}
+.rn-ws-fxtile.drop{border-color:#b8283c;box-shadow:0 0 0 1px #b8283c}
+.rn-ws-fxtile .n{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-weight:700;font-size:13px;background:#0f1114;color:#e8ecf1;
+  border:2px solid var(--band,#555);font-variant-numeric:tabular-nums}
+.rn-ws-fxtile .nm{font-size:13px;font-weight:600;color:#e8ecf1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rn-ws-fxtile .band{font-size:9.5px;letter-spacing:.1em;color:var(--band,#888);font-weight:700}
+.rn-ws-fxtile .st{flex:none;width:8px;height:8px;border-radius:50%;background:#3a3f47}
+.rn-ws-fxtile .st.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
+.rn-ws-fxtile.off .nm{color:#8a919b}
+.rn-ws-fxtile .acts{margin-left:auto;display:flex;gap:4px;flex:none}
+.rn-ws-fxtile .acts button{background:none;border:1px solid transparent;color:#8a919b;font-size:12px;
+  padding:2px 6px;border-radius:4px;cursor:pointer}
+.rn-ws-fxtile .acts button:hover{color:#fff;border-color:#33373d}
 .rn-ws-eye{width:16px;height:16px;flex:none;border:none;background:none;color:#474b52;
   padding:0;cursor:pointer;font-size:11px;line-height:16px;text-align:center}
 .rn-ws-eye.on{color:#b8283c}
@@ -10121,7 +10126,9 @@ function promptsBody(node, body) {
     name.type = "text";
     name.value = row.name;
     name.placeholder = "Prompt " + (i + 1);
-    name.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
+    // a set width, so the rig chips and the box kind sit right after the name
+    // instead of at the far end of a box nobody needs that wide
+    name.style.cssText = "flex:0 0 200px;min-width:0;background:#15171b;border:1px solid "
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
     name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
@@ -10801,6 +10808,18 @@ function latentBody(node, body) {
               num("Batch", "batch", 1, 64, 1, ""));
   canvasCard.appendChild(drow);
   cols.appendChild(canvasCard);
+  if (L.source === "input") {
+    // a wired latent IS the canvas: nothing in these two boxes reaches the run,
+    // so they read as switched off and take less room; the refine passes below
+    // still run on the wired latent
+    cols.style.opacity = ".35";
+    cols.style.pointerEvents = "none";
+    cols.style.maxHeight = "150px";
+    cols.style.overflow = "hidden";
+    cols.title = "A wired latent is the canvas, so the size and preview here are not "
+               + "used. Switch the source to This tab to use them. The refine passes "
+               + "below still run on the wired latent.";
+  }
   body.appendChild(cols);
 
   // REFINE PASSES: the Img2Img tab's per-pass denoise and scale, on the tab that has
