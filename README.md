@@ -137,23 +137,37 @@ signal. Right-click a picture for the gallery menu.
 **Masks.** The subject boost mask, which rides into the identity edit and is sized against the
 Subject picture, and the edit mask that confines the pass.
 
-![The Post tab: saved looks, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
+![The Post tab: saved effects, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
 
-**Post.** The grading chain, twenty effects in physical camera order, with saved effects you can keep and
-random ranges on any dial. Saved effects has two tabs: Mine, for the effects you keep, and Shipped,
-a library of seventeen looks that come with the pack, each with a picture of what it does: Pro
-Grade starting points for Krea 2 and Z-Image, portrait, beauty and product advertising grades,
-food, cinematic and night looks, faded prints, instant film, disposable flash, early digital and
-black and white. Apply one freely; save a copy under your own name to change it, since the
-shipped ones cannot be edited or deleted. Depth of field, haze and Relight, a new key light over the picture's
-relief with contact shadows, make their own depth map; the Depth card picks
-the estimator, the checkpoint and the resolution. Match reference moves the frame's colour onto a
-Moodboard, Subject or Scene picture with skin held back, and LUT applies a .cube file from
-models/luts. Every card has a Limit row: whole frame, subject only or background only, through
-the pack's own auto-mask, with the Mask card setting the source and the feather. RedNode Post
-Process finds these settings by itself when it sits at the end of the graph. The tab is a list of
-the chain on the left, an eye per effect to switch it on, and the selected effect's controls on the
-right, one at a time.
+**Post.** The grading chain, twenty effects in physical camera order, with random ranges on any
+dial. The tab is a list of the chain on the left, an eye per effect to switch it on, and the
+selected effect's controls on the right, one at a time; the Order view lays the effects that are on
+out as numbered cards to drag into another order, double or take out. Every card has a Limit row:
+whole frame, subject only or background only, through the pack's own auto-mask, with the Mask card
+setting the source and the feather. RedNode Post Process finds these settings by itself when it
+sits at the end of the graph.
+
+The cards cover the whole grade. Colour is exposure in stops, shadows and highlights that keep
+black black and white white, local HDR, lift, gamma and gain, vibrance that leaves skin alone, and
+split tone, with a Measure button that reads the frame's white balance and writes it into the
+dials. Skin retouches skin and nothing else: a mask built from colour that stays off eyes, lips,
+teeth and busy fabric, then de-yellow, rosy, evenness, and smoothing with a texture dial that keeps
+the pores. Sharpen has a Detail band mode for AI frames that bites without halos, speckled skin or
+white rims on hair. Film stock turns light into density the way twelve stocks do, colour negative,
+slide, tungsten cinema, instant and black and white with its lens filters. Lens distortion carries
+a lens picker, from a 14 mm ultra wide to a 135 mm, phone, vintage and anamorphic glass, that fills
+the distortion and fringing dials at a size that holds at any resolution. Depth of field, haze and
+Relight, a new key light over the picture's relief with contact shadows, make their own depth map;
+the Depth card picks the estimator, the checkpoint and the resolution. Match reference moves the
+frame's colour onto a dropped picture or a Moodboard, Subject, Scene or Img2Img picture with skin
+held back, and LUT applies a .cube file from models/luts.
+
+Saved effects has two tabs. Mine keeps the effects you save, every dial and the order, with a
+picture of what they did. Shipped is a library of seventeen looks that come with the pack, each
+with a picture: Pro Grade starting points for Krea 2 and Z-Image, portrait, beauty and product
+advertising grades, food, cinematic and night looks, a faded 70s print, 90s instant film,
+disposable flash, an early digital compact and black and white. Apply one freely; save a copy under
+your own name to change it, since the shipped ones cannot be edited or deleted.
 
 ![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
 
@@ -604,7 +618,7 @@ runs a different model from the main pass.
 ## Settings and stored data
 
 Global preferences live in ComfyUI's own settings dialog, under **RedNode**: whether
-captions are remembered between runs and how many, whether Looks store a thumbnail, how
+captions are remembered between runs and how many, whether saved effects keep a picture, how
 many runs the Review strip keeps, how many saved images the index remembers, and a button
 to clear the regenerable caches. Anything that belongs to a single workflow, the grading
 chain, the paint strokes, which images are on a tab, stays on its node instead.

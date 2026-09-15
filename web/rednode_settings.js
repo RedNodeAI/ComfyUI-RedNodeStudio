@@ -271,11 +271,12 @@ app.registerExtension({
     },
     {
       id: ID.lookThumbs,
-      name: "Save a thumbnail with each Look",
-      category: ["RedNode", "Post processing", "Look thumbnails"],
-      tooltip: "A grade is a visual thing, so the Looks picker shows the picture rather "
-             + "than the numbers. Those thumbnails are most of the 104 KB that file "
-             + "takes. Turn this off and Looks are saved as settings only.",
+      name: "Save a picture with each saved effect",
+      category: ["RedNode", "Post processing", "Saved effect pictures"],
+      tooltip: "A grade is a visual thing, so Saved effects shows the picture rather "
+             + "than the numbers. Those pictures are most of what the file weighs. Turn "
+             + "this off and your effects are saved as settings only. The looks that ship "
+             + "with the pack keep their own pictures either way.",
       type: "boolean",
       defaultValue: true,
     },
