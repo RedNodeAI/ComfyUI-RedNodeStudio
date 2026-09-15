@@ -726,7 +726,55 @@ function clearLens(cfg, fx, b) {
   if (target && target[c.key] !== undefined && target[c.key] !== c.to) target[c.key] = c.to;
 }
 
+// a button on a card: Measure on the Colour card fetches the white balance of the
+// last source frame and writes it into the dials, which stay the user's
+function actionControl(node, cfg, fx, b, c) {
+  const cell = document.createElement("div");
+  cell.className = "rn-ws-fxc rn-ws-fxact";
+  const lab = document.createElement("span");
+  lab.className = "lab";
+  lab.textContent = c.label;
+  lab.title = c.hint;
+  const line = document.createElement("div");
+  line.className = "line";
+  const btn = document.createElement("button");
+  btn.className = "rn-ws-btn";
+  btn.style.cssText = "width:auto;padding:0 12px";
+  btn.textContent = c.text;
+  btn.title = c.hint;
+  const note = document.createElement("span");
+  note.className = "rn-ws-note";
+  note.textContent = node._rnAwbSaid || "";
+  btn.onclick = async () => {
+    note.textContent = "Measuring...";
+    try {
+      const res = await api.fetchApi(`/rednode/post_awb?method=${encodeURIComponent(b.awb || "shades_of_grey")}`);
+      const got = await res.json();
+      if (got.error) throw new Error(got.error);
+      b.temperature = got.temperature;
+      b.tint = got.tint;
+      b.on = true;
+      node._rnAwbSaid = `Measured temperature ${got.temperature}, tint ${got.tint}.`
+        + (got.clipped ? " The cast was stronger than the dials reach." : "");
+    } catch (e) {
+      node._rnAwbSaid = e.message;
+    }
+    postWrite(node);
+    postRender(node);
+  };
+  line.append(btn, note);
+  cell.append(lab, line);
+  return cell;
+}
+
 function renderControl(node, cfg, fx, b, c) {
+  if (c.head) {
+    const h = document.createElement("div");
+    h.className = "rn-ws-fxhead";
+    h.textContent = c.head;
+    return h;
+  }
+  if (c.button) return actionControl(node, cfg, fx, b, c);
   const cell = document.createElement("div");
   cell.className = "rn-ws-fxc";
   const isRand = !c.choice && Array.isArray(b.rand[c.key]);

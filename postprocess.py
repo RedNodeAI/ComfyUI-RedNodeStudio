@@ -73,8 +73,15 @@ POST_TYPE = "KREA2_POST"
 # a grade the author had already tuned across several packs' nodes.
 DEFAULTS = {
     "denoise": {"on": False, "sigma": 0.997, "threshold": 0.051, "radius_multiplier": 1.149},
+    # THE COLOUR CARD: the tone and colour grade. Every dial after black_point is a
+    # no-op at its default, so an old saved chain grades as it did. `awb` is the
+    # Measure button's estimator, never an argument.
     "color": {"on": False, "brightness": 1.0, "contrast": 1.0, "saturation": 1.0,
-              "temperature": 0.0, "tint": 0.0, "black_point": 0.0},
+              "temperature": 0.0, "tint": 0.0, "black_point": 0.0,
+              "exposure": 0.0, "shadows": 0.0, "highlights": 0.0, "local_hdr": 0.0,
+              "lift": 0.0, "gamma": 1.0, "gain": 1.0, "vibrance": 0.0,
+              "split_shadow": 0.0, "split_highlight": 0.0, "split_balance": 0.0,
+              "awb": "shades_of_grey"},
     # MATCH A REFERENCE: the picture's colour statistics moved onto a reference
     # picture's (per-channel mean and spread), with skin held back so faces keep
     # their hue. source names where the reference comes from: a Workspace tab
@@ -177,6 +184,7 @@ MASK_EFFECTS = ("relight", "skin")
 # identity, the Match card's dropped picture, the lens picker's memory and the
 # colour card's auto white balance estimator
 NON_ARG_KEYS = ("on", "rand", "limit", "fx", "id", "ref_file", "lens", "awb")
+AWB_METHODS = ("grey_world", "white_patch", "shades_of_grey", "grey_edge")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 # the lens picker's names; the values live in web/rednode_ws_tables.js (LENS_PRESETS)
 LENS_NAMES = ("custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
@@ -340,22 +348,68 @@ def denoise(img, sigma=0.997, threshold=0.051, radius_multiplier=1.149):
 
 
 def color(img, brightness=1.0, contrast=1.0, saturation=1.0, temperature=0.0,
-          tint=0.0, black_point=0.0):
-    """Brightness as a gain, contrast pivoting on mid grey, saturation as a lerp,
-    plus a white-balance style temperature/tint trim and a black point lift.
-
-    temperature moves the red and blue channels in opposite directions (warm is
-    more red, less blue), tint does the same for green against magenta, and
-    black_point rescales the range so the darkest tone lands where you ask.
+          tint=0.0, black_point=0.0, exposure=0.0, shadows=0.0, highlights=0.0,
+          local_hdr=0.0, lift=0.0, gamma=1.0, gain=1.0, vibrance=0.0,
+          split_shadow=0.0, split_highlight=0.0, split_balance=0.0):
+    """The tone and colour grade, in this order: exposure in stops (linear light),
+    brightness, contrast on mid grey, white balance with the frame's brightness put
+    back, shadows and highlights (multiplicative, so black stays black), local HDR
+    (the big tonal swing flattened in linear light, fine detail kept), lift / gamma /
+    gain, split tone on a luma-neutral warm-cool axis, vibrance (the least saturated
+    colours first, skin held), saturation, black point. Each step is skipped at its
+    default.
     """
-    t = _nchw(img) * float(brightness)
+    t = _nchw(img)
+    ev = float(exposure)
+    if ev:
+        t = _linear_to_srgb(_srgb_to_linear(_clamp01(t)) * (2.0 ** ev))
+    t = t * float(brightness)
     t = (t - 0.5) * float(contrast) + 0.5
     if temperature or tint:
         warm = float(temperature) * 0.5
         gm = float(tint) * 0.5
-        gain = torch.tensor([1.0 + warm, 1.0 + gm, 1.0 - warm],
-                            device=t.device, dtype=t.dtype).view(1, 3, 1, 1)
-        t = t * gain
+        wb = torch.tensor([1.0 + warm, 1.0 + gm, 1.0 - warm],
+                          device=t.device, dtype=t.dtype).view(1, 3, 1, 1)
+        before = float(_luma(t).mean())
+        t = t * wb
+        after = float(_luma(t).mean())
+        if before > 1e-6 and after > 1e-6:
+            t = t * max(0.25, min(4.0, before / after))
+    sh, hl = float(shadows), float(highlights)
+    if sh or hl:
+        y = _clamp01(_luma(t))
+        if sh:
+            t = t * (1.0 + sh * 0.8 * (1.0 - y) ** 2)
+        if hl:
+            t = t * (1.0 + hl * 0.6 * ((y - 0.5) * 2.0).clamp(0.0, 1.0) ** 2)
+    a = max(0.0, min(1.0, float(local_hdr)))
+    if a:
+        lin = _srgb_to_linear(_clamp01(t))
+        lum = _luma(lin).clamp_min(1e-4)
+        r = max(1, round(0.04 * min(t.shape[2], t.shape[3])))
+        base = _box(_box(lum, r), r).clamp_min(1e-4)
+        g = ((base.mean() / base) ** (a * 0.5)).clamp(0.25, 4.0)
+        t = _linear_to_srgb(_clamp01(lin * g))
+    lf, gm_, gn = float(lift), float(gamma), float(gain)
+    if lf or gm_ != 1.0 or gn != 1.0:
+        x = _clamp01(t)
+        t = (gn * (x + lf * (1.0 - x))).clamp_min(0.0) ** (1.0 / max(0.05, gm_))
+    ss, shi = float(split_shadow), float(split_highlight)
+    if ss or shi:
+        y = _clamp01(_luma(t))
+        pivot = 0.5 + float(split_balance) * 0.3
+        w_hi = _smoothstep(y, pivot - 0.25, pivot + 0.25)
+        w_lo = (1.0 - w_hi) * (y / 0.06).clamp(0.0, 1.0)
+        axis = torch.tensor([0.8596, -0.1404, -1.1404], device=t.device,
+                            dtype=t.dtype).view(1, 3, 1, 1)
+        t = t + axis * 0.12 * (w_lo * ss + w_hi * shi)
+    vib = float(vibrance)
+    if vib:
+        x = _clamp01(t)
+        sat = x.amax(1, keepdim=True) - x.amin(1, keepdim=True)
+        k = vib * (1.0 - sat) ** 2 * (1.0 - 0.6 * _skin_weight(x))
+        lu = _luma(t)
+        t = lu + (t - lu) * (1.0 + k)
     if saturation != 1.0:
         t = _luma(t) + (t - _luma(t)) * float(saturation)
     bp = float(black_point)
@@ -1224,6 +1278,16 @@ def _guard(name, cur):
                             else "horizontal")
     elif name == "distortion":
         cur["lens"] = cur["lens"] if cur["lens"] in LENS_NAMES else "custom"
+    elif name == "color":
+        cur["awb"] = cur["awb"] if cur["awb"] in AWB_METHODS else "shades_of_grey"
+        cur["exposure"] = max(-3.0, min(3.0, cur["exposure"]))
+        cur["local_hdr"] = max(0.0, min(1.0, cur["local_hdr"]))
+        cur["lift"] = max(-0.5, min(0.5, cur["lift"]))
+        cur["gamma"] = max(0.2, min(3.0, cur["gamma"]))
+        cur["gain"] = max(0.0, min(2.0, cur["gain"]))
+        for _k in ("shadows", "highlights", "split_shadow", "split_highlight",
+                   "split_balance", "vibrance"):
+            cur[_k] = max(-1.0, min(1.0, cur[_k]))
     elif name == "skin":
         cur["subject"] = cur["subject"] if cur["subject"] in SKIN_SUBJECT else "auto"
         cur["show"] = cur["show"] if cur["show"] in SKIN_SHOWS else "off"
@@ -1717,6 +1781,67 @@ def delete_order(name):
 # the most recent graded frame, so "save this look" has a picture to save. Held in
 # memory only: it is a preview, not something worth writing to disk every run.
 LAST_THUMB = {"uri": ""}
+# the frame as it ARRIVED at the chain, small, for the Colour card's Measure button;
+# the graded frame would chase its own tail once the card is on
+LAST_SOURCE = {"img": None}
+
+
+def remember_source(image, long_edge=384):
+    try:
+        t = image
+        while t.ndim > 4:
+            t = t[0]
+        if t.ndim == 3:
+            t = t[None]
+        t = t[:1, ..., :3].detach().float()
+        h, w = t.shape[1], t.shape[2]
+        s = min(1.0, float(long_edge) / max(h, w))
+        x = t.permute(0, 3, 1, 2)
+        if s < 1.0:
+            x = F.interpolate(x, size=(max(1, round(h * s)), max(1, round(w * s))), mode="area")
+        LAST_SOURCE["img"] = x.permute(0, 2, 3, 1).clamp(0, 1).cpu()
+    except Exception:
+        LAST_SOURCE["img"] = None
+
+
+def _awb_estimate(x, method):
+    """The illuminant, per channel, of an NCHW frame in linear light."""
+    if method == "white_patch":
+        e = torch.stack([torch.quantile(x[:, c].flatten(), 0.97) for c in range(3)])
+    elif method == "shades_of_grey":
+        e = torch.stack([(x[:, c].clamp_min(0) ** 6).mean() ** (1 / 6) for c in range(3)])
+    elif method == "grey_edge":
+        b = gaussian_blur(x, 1.0)
+        gx = b[..., :, 1:] - b[..., :, :-1]
+        gy = b[..., 1:, :] - b[..., :-1, :]
+        e = torch.stack([((gx[:, c].abs() ** 6).mean() + (gy[:, c].abs() ** 6).mean()) ** (1 / 6)
+                         for c in range(3)])
+    else:
+        e = torch.stack([x[:, c].mean() for c in range(3)])
+    return e.clamp_min(1e-6)
+
+
+def auto_white_balance(image=None, method="shades_of_grey"):
+    """Temperature and tint that neutralise the frame's cast, in the Colour card's
+    own units. Measured on the remembered source frame unless one is given."""
+    img = image if image is not None else LAST_SOURCE["img"]
+    if img is None:
+        raise ValueError("no picture to measure yet. Queue a run with a RedNode Post "
+                         "Process or Post FX node in the graph, then press Measure again")
+    method = method if method in AWB_METHODS else "shades_of_grey"
+    x = _srgb_to_linear(_nchw(img)[:, :3].float().clamp(0, 1))
+    e = _awb_estimate(x, method)
+    g = (e.mean() / e) ** (1 / 2.2)
+    gr, gg, gb = (float(v) for v in g)
+    w = (gr - gb) / (gr + gb)
+    k = (1 + w) / gr
+    m = k * gg - 1
+    temp, tint = 2 * w, 2 * m
+    clipped = abs(temp) > 1 or abs(tint) > 1
+    temp = round(max(-1.0, min(1.0, temp)), 3)
+    tint = round(max(-1.0, min(1.0, tint)), 3)
+    return {"temperature": temp, "tint": tint, "method": method,
+            "gains": [round(gr, 4), round(gg, 4), round(gb, 4)], "clipped": clipped}
 
 # what the random ranges actually drew last run, so the panel can show it back
 LAST_ROLLS = {}
@@ -1948,6 +2073,7 @@ class RedNodePostProcess:
         return json.dumps(cfg, sort_keys=True)
 
     def run(self, image, prompt=None):
+        remember_source(image)
         got = workspaces_from_prompt(prompt)
         cfg, ws_raw = (got if got else (None, {}))
         if not cfg or not any(cfg[n].get("on") for n in ORDER):
@@ -2044,6 +2170,7 @@ class RedNodePostFX:
         return json.dumps(cfg, sort_keys=True)
 
     def run(self, image, config="{}", depth=None, mask=None, reference=None):
+        remember_source(image)
         cfg = parse_post(own_post(config))
         if not any(cfg[n].get("on") for n in ORDER):
             return (image,)

@@ -98,6 +98,14 @@ cheap to judge.
   puts it on screen. De-yellow, rosy, skin saturation, brightness with a
   highlight guard, shadow lift, evenness, and smoothing with a texture dial,
   all starting at 0
+- The Colour card grows into a full grade: exposure in stops, shadows,
+  highlights, local HDR, lift, gamma and gain, vibrance that holds skin, and
+  split tone, in headed groups. Temperature and tint now put the frame's
+  brightness back, so a saved grade with a non-zero temperature reads about
+  3 percent different at mid grey
+- Auto white balance: a Measure button on the Colour card reads the last
+  frame the chain was given with one of four estimators and writes the
+  answer into Temperature and Tint
 - A lens picker on Lens distortion: ten named lenses fill the distortion and
   chromatic aberration dials at once, every dial still editable, and both
   cards can size their pixel amounts against the frame so a lens reads the

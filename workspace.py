@@ -3476,6 +3476,20 @@ try:
             files = []
         return web.json_response({"files": files})
 
+    @PromptServer.instance.routes.get("/rednode/post_awb")
+    async def _rednode_post_awb(request):
+        # the Colour card's Measure button: a route, not a per-run mode, so the grade
+        # stays a pure function of its numbers and the numbers stay the user's
+        method = request.query.get("method") or "shades_of_grey"
+        try:
+            got = postprocess.auto_white_balance(method=method)
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=404)
+        except Exception as exc:
+            print("[RedNode Post] auto white balance failed: %s" % exc, flush=True)
+            return web.json_response({"error": "could not measure that frame"}, status=500)
+        return web.json_response(got)
+
     @PromptServer.instance.routes.get("/rednode/post_presets")
     async def _rednode_post_presets(request):
         presets = postprocess.load_presets()

@@ -680,6 +680,11 @@ css.textContent = `
   border:1px solid #6b5a2a;color:#d4b25f;background:#241f12;white-space:nowrap;flex:none}
 .rn-ws-fxgrid{display:flex;flex-direction:column;gap:6px;margin:5px 0 2px}
 .rn-ws-fxc{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rn-ws-fxhead{font-size:12px;font-weight:700;opacity:.55;margin:8px 0 0;border-top:1px solid #2a2e35;
+  padding-top:7px;grid-column:1/-1}
+.rn-ws-fxgrid > .rn-ws-fxhead:first-child{margin-top:0;border-top:0;padding-top:0}
+.rn-ws-fxact .line{gap:9px;align-items:center}
+.rn-ws-fxact .rn-ws-note{font-size:11px;opacity:.65;white-space:normal}
 .rn-ws-fxc .lab{font-size:11px;font-weight:600;opacity:.8;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .rn-ws-fxc .line{display:flex;align-items:center;gap:6px;min-width:0}

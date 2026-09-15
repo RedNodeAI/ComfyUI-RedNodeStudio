@@ -170,23 +170,85 @@ export const POST_FX = [
         hint: "Widens the window around sigma. Above about 1.5 it gets slow fast." },
     ] },
   { id: "color", label: "Colour",
-    blurb: "Brightness, contrast and saturation. 1.00 on all three is untouched.",
+    blurb: "The whole tone and colour grade: exposure, the tone curve, lift, gamma and "
+         + "gain, white balance with a Measure button, vibrance and split tone. Every "
+         + "dial sits at no change until you move it.",
     controls: [
+      { head: "Tone" },
+      { key: "exposure", label: "Exposure", min: -3, max: 3, step: 0.05, def: 0.0,
+        hint: "In stops, the way a camera counts light: +1 is twice the light, -1 is "
+            + "half. Done in linear light, so it behaves like opening the lens rather "
+            + "than turning up a screen." },
       { key: "brightness", label: "Brightness", min: 0, max: 3, step: 0.01, def: 1.0,
-        hint: "A straight gain on every channel. 1.00 changes nothing." },
+        hint: "A straight gain on every channel. 1.00 changes nothing. Exposure is the "
+            + "truer control." },
       { key: "contrast", label: "Contrast", min: 0, max: 3, step: 0.01, def: 1.0,
         hint: "Pivots around mid grey, so highlights and shadows spread apart while "
             + "the midpoint stays put." },
-      { key: "saturation", label: "Saturation", min: 0, max: 3, step: 0.01, def: 1.0,
-        hint: "0 is black and white, 1 is untouched, above 1 pushes the colour." },
-      { key: "temperature", label: "Temperature", min: -1, max: 1, step: 0.01, def: 0.0,
-        hint: "White balance trim. Positive warms (more red, less blue), negative "
-            + "cools. 0 leaves the balance alone." },
-      { key: "tint", label: "Tint", min: -1, max: 1, step: 0.01, def: 0.0,
-        hint: "The other white balance axis: positive pushes green, negative magenta." },
+      { key: "shadows", label: "Shadows", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "Opens or closes the dark end only, by multiplying, so black stays black "
+            + "instead of turning into grey haze. White is not touched." },
+      { key: "highlights", label: "Highlights", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "Negative pulls a bright sky or a lit cheek back down, positive pushes it "
+            + "up. Nothing below mid grey moves." },
+      { key: "local_hdr", label: "Local HDR", min: 0, max: 1, step: 0.01, def: 0.0,
+        hint: "Flattens the big tonal swing across the frame and leaves the fine detail "
+            + "alone: shadows open, bright windows come back, the way a phone's HDR "
+            + "reads. 0.3 to 0.5 is plenty." },
       { key: "black_point", label: "Black point", min: -0.5, max: 0.5, step: 0.01, def: 0.0,
         hint: "Positive crushes the blacks for contrast. Negative lifts them into the "
             + "faded, milky film look." },
+      { head: "Lift, gamma, gain" },
+      { key: "lift", label: "Lift", min: -0.5, max: 0.5, step: 0.005, def: 0.0,
+        hint: "Raises or lowers the blacks while white stays put, the colourist's "
+            + "shadow wheel. A small positive lift is the soft, printed floor." },
+      { key: "gamma", label: "Gamma", min: 0.2, max: 3, step: 0.01, def: 1.0,
+        hint: "Bends the midtones: above 1 brightens them, below 1 darkens them, black "
+            + "and white stay where they are." },
+      { key: "gain", label: "Gain", min: 0, max: 2, step: 0.01, def: 1.0,
+        hint: "Scales from black up, so white moves most. Just under 1 takes the edge "
+            + "off hot highlights without touching the blacks." },
+      { head: "Colour" },
+      { key: "saturation", label: "Saturation", min: 0, max: 3, step: 0.01, def: 1.0,
+        hint: "0 is black and white, 1 is untouched, above 1 pushes every colour." },
+      { key: "vibrance", label: "Vibrance", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "Saturation for the colours that need it: dull colours move most, strong "
+            + "ones hardly at all, and skin is held back, so faces do not go orange. "
+            + "Negative mutes the same way." },
+      { key: "temperature", label: "Temperature", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "White balance trim. Positive warms (more red, less blue), negative cools. "
+            + "The frame's average brightness is put back afterwards, so this moves "
+            + "colour and never exposure." },
+      { key: "tint", label: "Tint", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "The other white balance axis: positive pushes green, negative magenta. "
+            + "Brightness is held steady here too." },
+      { key: "awb", label: "Auto estimator", def: "shades_of_grey", step: 1,
+        choice: ["shades_of_grey", "grey_world", "white_patch", "grey_edge"],
+        labels: { grey_world: "Grey world (the average is grey)",
+                  white_patch: "White patch (the brightest is white)",
+                  shades_of_grey: "Shades of grey (the safe pick)",
+                  grey_edge: "Grey edge (the edges average grey)" },
+        hint: "How Measure works out the light the picture was made under. Shades of "
+            + "grey is the safe pick. Grey world suits a busy frame, white patch a frame "
+            + "with something truly white in it, grey edge a frame dominated by one "
+            + "colour, a red dress or a green field. Choosing one changes nothing on "
+            + "its own." },
+      { button: "awb", label: "Auto white balance", text: "Measure",
+        hint: "Measures the last picture this chain was given and writes the answer into "
+            + "Temperature and Tint, then switches this card on. The numbers are yours "
+            + "to nudge afterwards. Needs one queued run first, so there is a picture "
+            + "to look at." },
+      { head: "Split tone" },
+      { key: "split_shadow", label: "Shadow tint", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "Colours the dark end without moving its brightness: negative is cool "
+            + "blue, positive warm amber. Cool shadows with warm highlights is the "
+            + "classic cinema pairing. Pure black takes no tint." },
+      { key: "split_highlight", label: "Highlight tint", min: -1, max: 1, step: 0.01, def: 0.0,
+        hint: "The same for the bright end. A little warmth here makes skin and late sun "
+            + "look printed rather than rendered." },
+      { key: "split_balance", label: "Balance", min: -1, max: 1, step: 0.05, def: 0.0,
+        hint: "Where shadow stops and highlight starts. Negative hands more of the frame "
+            + "to the highlight tint, positive more to the shadow tint." },
     ] },
   { id: "match", label: "Match reference",
     blurb: "Moves the frame's colour onto a reference picture's: per channel, the "
