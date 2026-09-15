@@ -1296,6 +1296,87 @@ def delete_preset(name):
 
 
 # ---------------------------------------------------------------------------
+# WHAT IS INSTALLED, for the panel. Depth of field, haze and relight drive a depth
+# estimator from comfyui_controlnet_aux; a card limited to the subject or the
+# background drives a segmenter from comfyui-rmbg. Neither ships with this pack, and a
+# card whose model is missing does nothing but print a console line, which a new user
+# never sees. This says, for the Post tab, which of them are there and where their
+# weights live.
+DEPTH_LABELS = {"depth_anything_v2": "Depth Anything V2", "depth_anything": "Depth Anything",
+                "midas": "MiDaS", "zoe": "Zoe"}
+DEPTH_INSTALL = ("Install comfyui_controlnet_aux from the Manager. Its depth estimators "
+                 "fetch their own weights the first time they run, into that pack's ckpts "
+                 "folder; Depth Anything V2 is the one to pick on the Depth card.")
+
+
+def _weight_files(root, want, depth=4):
+    """File names under root whose name contains `want`, a few levels down."""
+    found = []
+    if not root or not os.path.isdir(root):
+        return found
+    base = root.rstrip(os.sep).count(os.sep)
+    for cur, dirs, files in os.walk(root):
+        if cur.count(os.sep) - base >= depth:
+            dirs[:] = []
+        for f in files:
+            if want in f.lower() and f.lower().endswith((".pth", ".pt", ".safetensors", ".bin")):
+                found.append(f)
+    return sorted(set(found))
+
+
+def model_status():
+    """{"depth": {...}, "mask": {...}}: what the depth cards and the Limit row can
+    drive on this install, with where the weights go and what to install."""
+    try:
+        import nodes
+        maps = getattr(nodes, "NODE_CLASS_MAPPINGS", {}) or {}
+    except Exception:
+        maps = {}
+    estimators = [k for k, name in DEPTH_ESTIMATORS.items() if name in maps]
+    weights, ckpts = [], ""
+    try:
+        import folder_paths
+        for base in folder_paths.get_folder_paths("custom_nodes"):
+            for d in (os.listdir(base) if os.path.isdir(base) else []):
+                if d.lower() == "comfyui_controlnet_aux":
+                    ckpts = os.path.join(base, d, "ckpts")
+                    weights = _weight_files(ckpts, "depth")
+    except Exception:
+        pass
+    try:
+        from . import automask as _am
+        seg_names, seg_hint = _am.SEGMENTERS, _am.INSTALL_HINT
+    except Exception:
+        seg_names = ("RMBG", "BiRefNetRMBG", "BRIA_RMBG")
+        seg_hint = ("comfyui-rmbg brings RMBG-2.0, which is the one to have for this.")
+    segmenters = [n for n in seg_names if n in maps]
+    seg_models, rmbg_dir = [], ""
+    try:
+        import folder_paths
+        roots = (folder_paths.get_folder_paths("rmbg") if "rmbg" in folder_paths.folder_names_and_paths
+                 else [os.path.join(folder_paths.models_dir, "RMBG")])
+        for root in roots:
+            if os.path.isdir(root):
+                rmbg_dir = rmbg_dir or root
+                seg_models += sorted(e for e in os.listdir(root) if not e.startswith("."))
+    except Exception:
+        pass
+    return {
+        "depth": {"ready": bool(estimators), "estimators": estimators,
+                  "labels": {k: DEPTH_LABELS.get(k, k) for k in estimators},
+                  "weights": weights, "pack": "comfyui_controlnet_aux",
+                  "where": ckpts or "comfyui_controlnet_aux/ckpts, once the pack is installed",
+                  "install": DEPTH_INSTALL},
+        "mask": {"ready": bool(segmenters), "segmenters": segmenters,
+                 "models": sorted(set(seg_models)), "pack": "comfyui-rmbg",
+                 "where": rmbg_dir or "models/RMBG, once the pack is installed",
+                 "install": "Install comfyui-rmbg from the Manager. " + seg_hint
+                            + " Its models download into models/RMBG the first time "
+                            "they run."},
+    }
+
+
+# ---------------------------------------------------------------------------
 # Saved ORDERS: a name and the run order of the effects that were on when it was
 # saved, as instance ids. A look saves the whole chain (dials, switches and order);
 # an order saves the order alone, so one order can be laid over any look. Applying

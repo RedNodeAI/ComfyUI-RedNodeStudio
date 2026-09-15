@@ -610,6 +610,21 @@ css.textContent = `
 .rn-ws-fxcard .acts button:hover{color:#fff;border-color:#b8283c}
 .rn-ws-fxcard.drop{box-shadow:-4px 0 0 0 #b8283c}
 .rn-ws-fxcard.focus{border-color:#fff;box-shadow:0 0 0 2px #ffffff55}
+.rn-ws-modelchip{display:inline-flex;align-items:center;gap:6px}
+.rn-ws-modellink{background:none;border:0;color:#8fb7ff;font-size:11.5px;cursor:pointer;padding:0 2px}
+.rn-ws-modellink:hover{color:#fff;text-decoration:underline}
+.rn-ws-fxwarn{flex:none;width:16px;height:16px;border-radius:50%;background:#b8283c;color:#fff;
+  font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-left:auto}
+.rn-ws-fxwarn + .rn-ws-fxlimitpill{margin-left:6px}
+.rn-ws-modelstat{display:flex;flex-direction:column;gap:5px;padding:10px 12px;border-radius:8px;
+  border:1px solid #2a2e35;background:#121418;font-size:12px}
+.rn-ws-modelstat.ok{border-color:#1f6b45}
+.rn-ws-modelstat.missing{border-color:#b8283c}
+.rn-ws-modelstat .head{font-weight:600;color:#e8ecf1}
+.rn-ws-modelstat.ok .head{color:#7fe0a8}
+.rn-ws-modelstat.missing .head{color:#ff9aa6}
+.rn-ws-modelstat .dim{color:#8a919b;word-break:break-all}
+.rn-ws-modelstat .install{color:#f0c58a}
 .rn-ws-refdrop{display:flex;gap:14px;align-items:center;padding:10px;border:1px dashed #3a3f47;
   border-radius:8px;background:#121418}
 .rn-ws-refdrop.live{border-color:#b8283c;border-style:solid}
@@ -12629,7 +12644,12 @@ export function render(node) {
     autoSection(node, body, cur);                  // captions for this tab's image
   }
   converterSection(node, body, cur);               // the built-in Prompt Converter
+  node._rnAfterMount = null;
   host.appendChild(body);
+  // a tab that needs its own scroll back (the Post list) sets this while building;
+  // it runs now, with the body in the page and nothing painted yet
+  try { node._rnAfterMount?.(); } catch (e) { /* a restore is never worth a broken panel */ }
+  node._rnAfterMount = null;
   node._rnBodyEl = body;
   node._rnBodyTab = cur;
   if (previousBody && previousBodyTab === cur) {

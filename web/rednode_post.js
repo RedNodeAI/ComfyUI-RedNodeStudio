@@ -78,8 +78,11 @@ function render(node) {
   const body = document.createElement("div");
   body.className = "rn-ws-body";
   body.style.borderRadius = "7px";
+  node._rnAfterMount = null;
   postBody(node, body);
   root.appendChild(body);
+  try { node._rnAfterMount?.(); } catch (e) { /* never worth a broken panel */ }
+  node._rnAfterMount = null;
   if (!node._rnSized) {
     node._rnSized = true;
     node.setSize([Math.max(node.size[0], NODE_MIN_W), Math.max(node.size[1], 520)]);

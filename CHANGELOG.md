@@ -91,7 +91,15 @@ cheap to judge.
   order-at-a-glance map of small coloured squares jumps to a card when
   clicked; right-click a card or a square to type the place it should take.
   Saved orders keep the run order alone, apart from looks: applying one
-  moves the effects it names and skips the rest. Every effect always
+  moves the effects it names and skips the rest.
+- The Post tab says when a model is missing. Depth of field, haze and
+  Relight carry a depth chip that reads No depth model when no estimator is
+  installed, and a card limited to the subject or background reads No mask
+  model without a segmenter; each links to its settings card, which lists
+  what is installed, where the weights live and what to install. An effect
+  that is on without its model gets a warning mark in the list
+- Clicking in the Post list no longer makes it jump: the list keeps its
+  scroll position through every click Every effect always
   stays in the chain and only switches on or off; the extra copies you add
   are the ones that can be deleted. An effect can be in the chain more than once,
   each instance with its own dials and Limit, so a sharpen can work the

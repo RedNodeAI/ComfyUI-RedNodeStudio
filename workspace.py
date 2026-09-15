@@ -3516,6 +3516,14 @@ try:
             "last_thumb": postprocess.LAST_THUMB["uri"],
         })
 
+    @PromptServer.instance.routes.get("/rednode/post_status")
+    async def _rednode_post_status(request):
+        # which depth estimator and which segmenter the Post tab can drive here
+        try:
+            return web.json_response(postprocess.model_status())
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
     @PromptServer.instance.routes.get("/rednode/post_orders")
     async def _rednode_post_orders(request):
         orders = postprocess.load_orders()

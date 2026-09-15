@@ -27,6 +27,100 @@ async function fetchLuts(node) {
   if (node) postRender(node);
 }
 let postLastThumb = "";
+// what this install can drive: {depth: {ready, estimators, ...}, mask: {...}};
+// null until asked, {} when the server did not answer (then nothing is claimed)
+let postStatus = null;
+export async function refreshPostStatus(node) {
+  try {
+    const res = await api.fetchApi("/rednode/post_status");
+    const d = await res.json();
+    postStatus = d && typeof d === "object" && !d.error ? d : {};
+  } catch (e) { postStatus = {}; }
+  if (node) postRender(node);
+}
+const depthMissing = () => postStatus?.depth && postStatus.depth.ready === false;
+const maskMissing = () => postStatus?.mask && postStatus.mask.ready === false;
+
+// the status block on the Depth and Mask cards: what is here, where it lives,
+// and what to install when it is not
+function modelStatusBox(kind) {
+  const st = postStatus?.[kind];
+  const box = document.createElement("div");
+  box.className = "rn-ws-modelstat" + (st ? (st.ready ? " ok" : " missing") : "");
+  const line = (text, cls) => {
+    const l = document.createElement("div");
+    if (cls) l.className = cls;
+    l.textContent = text;
+    box.appendChild(l);
+  };
+  if (!st) {
+    line(postStatus === undefined ? "Checking what is installed..."
+                                  : "The server did not say what is installed.", "dim");
+    return box;
+  }
+  if (kind === "depth") {
+    line(st.ready
+      ? "Depth estimator installed: " + st.estimators.map((k) => st.labels?.[k] || k).join(", ")
+      : "No depth estimator is installed, so Depth of field, Atmospheric haze and Relight "
+        + "do nothing.", "head");
+    if (st.ready) {
+      line(st.weights?.length ? "Weights downloaded: " + st.weights.join(", ")
+                              : "No weights downloaded yet: the first run fetches them, "
+                                + "which takes a minute.", "dim");
+    }
+  } else {
+    line(st.ready
+      ? "Segmenter installed: " + st.segmenters.join(", ")
+      : "No segmenter is installed, so Subject only and Background only run on the whole "
+        + "frame.", "head");
+    if (st.ready) {
+      line(st.models?.length ? "Models on disk: " + st.models.join(", ")
+                             : "No models downloaded yet: the first run fetches them.", "dim");
+    }
+  }
+  line("Where the weights live: " + st.where, "dim");
+  if (!st.ready) line(st.install, "install");
+  return box;
+}
+
+function checkAgainButton(node) {
+  const b = document.createElement("button");
+  b.className = "rn-ws-btn";
+  b.style.cssText = "width:auto;padding:0 12px;align-self:flex-start";
+  b.textContent = "Check again";
+  b.title = "Ask the server again what is installed. A pack added in the Manager needs a "
+          + "ComfyUI restart before it shows here.";
+  b.onclick = () => refreshPostStatus(node);
+  return b;
+}
+
+// a chip on an effect's editor saying the model it needs is (or is not) there,
+// with a link to the settings card that picks it
+function modelChip(node, kind, label) {
+  const wrap = document.createElement("span");
+  wrap.className = "rn-ws-modelchip";
+  const missing = kind === "depth" ? depthMissing() : maskMissing();
+  const chip = document.createElement("span");
+  chip.className = "rn-ws-vram " + (missing ? "high" : "med");
+  chip.textContent = missing ? (kind === "depth" ? "No depth model" : "No mask model") : label;
+  const st = postStatus?.[kind];
+  chip.title = missing
+    ? st.install
+    : kind === "depth"
+      ? "This effect works out what is near and what is far. The node does that for you "
+        + "with the estimator set on the Depth card, so there is nothing to wire. The depth "
+        + "input is only there if you would rather supply your own map."
+      : "Subject only and Background only use the pack's auto-mask, set up on the Mask card.";
+  const link = document.createElement("button");
+  link.className = "rn-ws-modellink";
+  link.textContent = (kind === "depth" ? "Depth" : "Mask") + " settings \u203a";
+  link.title = "Open the " + (kind === "depth" ? "Depth" : "Mask") + " card: what is installed "
+             + "and which model it uses.";
+  link.onclick = (e) => { e.stopPropagation(); node._rnFxSel = kind; postRender(node); };
+  wrap.append(chip, link);
+  return wrap;
+}
+
 // saved orders, fetched once and after every change: [{name, ids}]
 let postOrders = null;
 export async function refreshPostOrders(node) {
@@ -921,6 +1015,15 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
   });
   wrap.append(left, cards, right);
   body.appendChild(wrap);
+  cards.addEventListener("scroll", () => { node._rnCardScroll = cards.scrollLeft; });
+  node._rnAfterMount = () => {
+    if (node._rnOrderFocus) return;              // the focused card scrolls itself into view
+    if (node._rnCardScroll) {
+      cards.style.scrollBehavior = "auto";
+      cards.scrollLeft = node._rnCardScroll;
+      cards.style.scrollBehavior = "";
+    }
+  };
 
   // THE MAP: the same run order as small coloured squares, number and name,
   // wrapping into rows so the whole chain reads at a glance. Click a square to
@@ -1167,6 +1270,18 @@ export function postBody(node, body) {
     nm.className = "rn-ws-fxname";
     nm.textContent = fx.settings ? fx.label : labels[b.id];
     row.appendChild(nm);
+    if (!fx.settings && b.on && ((fx.depth && depthMissing())
+        || ((b.limit === "subject" || b.limit === "background") && maskMissing()))) {
+      const warn = document.createElement("span");
+      warn.className = "rn-ws-fxwarn";
+      warn.textContent = "!";
+      warn.title = fx.depth && depthMissing()
+        ? "This effect needs a depth model and none is installed, so it does nothing. "
+          + "Open the Depth card for what to install."
+        : "This effect is limited to the " + b.limit + " but no segmenter is installed, "
+          + "so it runs on the whole frame. Open the Mask card for what to install.";
+      row.appendChild(warn);
+    }
     if (!fx.settings && b.limit && b.limit !== "off") {
       const pill = document.createElement("span");
       pill.className = "rn-ws-fxlimitpill";
@@ -1281,15 +1396,10 @@ export function postBody(node, body) {
   }
   // an effect that costs real time says so here, because this is where somebody
   // asks "why did that take twenty seconds"; the chips sit after the switch
-  if (fx.depth) {
-    const chip = document.createElement("span");
-    chip.className = "rn-ws-vram med";
-    chip.textContent = "Uses depth";
-    chip.title = "This effect works out what is near and what is far. The node does "
-               + "that for you with the estimator set on the Depth card, so there is "
-               + "nothing to wire. The depth input is only there if you would rather "
-               + "supply your own map.";
-    h.appendChild(chip);
+  if (postStatus === null) { postStatus = undefined; refreshPostStatus(node); }
+  if (fx.depth && !fx.settings) h.appendChild(modelChip(node, "depth", "Uses depth"));
+  if (!fx.settings && (b.limit === "subject" || b.limit === "background")) {
+    h.appendChild(modelChip(node, "mask", "Uses the mask"));
   }
   if (fx.cost) {
     const cost = document.createElement("span");
@@ -1318,6 +1428,10 @@ export function postBody(node, body) {
   for (const c of fx.controls) grid.appendChild(renderControl(node, cfg, fx, b, c));
   edit.appendChild(grid);
   if (fx.id === "match") edit.appendChild(matchRefBox(node, b));
+  if (fx.id === "depth" || fx.id === "mask") {
+    edit.appendChild(modelStatusBox(fx.id));
+    edit.appendChild(checkAgainButton(node));
+  }
   // LIMIT: the effect's result only on the subject or the background, through the
   // mask the Mask card describes, with that card's feather beside it
   if (!fx.settings) {
@@ -1362,9 +1476,11 @@ export function postBody(node, body) {
   }
   split.appendChild(edit);
   body.appendChild(split);
-  if (node._rnFxListScroll) {
-    list.scrollTop = node._rnFxListScroll;
-    // a list that is not yet laid out cannot scroll: try again once it is
-    setTimeout(() => { list.scrollTop = node._rnFxListScroll || 0; }, 0);
-  }
+  // the list comes back where it was, with no jump. The panel builds its body off
+  // the page and attaches it afterwards, and a list that is not in the page cannot
+  // hold a scroll offset, so the restore runs from the panel's after-mount hook,
+  // which fires right after the body is attached and before anything is painted.
+  const restore = () => { if (node._rnFxListScroll) list.scrollTop = node._rnFxListScroll; };
+  node._rnAfterMount = restore;
+  restore();
 }
