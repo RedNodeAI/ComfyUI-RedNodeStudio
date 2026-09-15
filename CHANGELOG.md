@@ -98,6 +98,10 @@ cheap to judge.
   puts it on screen. De-yellow, rosy, skin saturation, brightness with a
   highlight guard, shadow lift, evenness, and smoothing with a texture dial,
   all starting at 0
+- A lens picker on Lens distortion: ten named lenses fill the distortion and
+  chromatic aberration dials at once, every dial still editable, and both
+  cards can size their pixel amounts against the frame so a lens reads the
+  same at 1024 as at 4K
 - A Detail band mode on Sharpen: a guided-filter base, the detail layer
   soft-clipped so halos stop growing as the amount rises, a noise gate so AI
   skin grain does not become speckles, and shadow, highlight, hair edge and

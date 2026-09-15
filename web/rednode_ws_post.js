@@ -1,7 +1,7 @@
 import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
-import { POST_FX, snapStep } from "./rednode_ws_tables.js";
+import { POST_FX, LENS_PRESETS, snapStep } from "./rednode_ws_tables.js";
 import { postWrite, postRender, readCfg, writeCfg, render } from "./rednode_workspace.js";
 
 // The Post tab: the grading chain's whole panel.
@@ -698,6 +698,34 @@ function fxGroups() {
 
 // one control of the selected effect: a choice, a random range, or a slider;
 // right-click on a slider flips it to a range and back
+// A lens pick fills the distortion instance it was made on and the base Chromatic
+// aberration instance, switches both on and sizes them to the frame. Any later dial
+// edit on either card puts the name back to Custom, so it never claims a stale pick.
+function applyLens(cfg, b, name) {
+  const p = LENS_PRESETS[name];
+  if (!p) return;
+  b.amount = p.amount;
+  b.edge_softness = p.edge_softness;
+  b.scale_by_size = 1;
+  b.on = true;
+  const a = (cfg.post.chain || []).find((x) => x.id === "aberration");
+  if (!a) return;
+  a.amount = p.ca_amount;
+  a.red_shift = p.red_shift;
+  a.green_shift = p.green_shift;
+  a.blue_shift = p.blue_shift;
+  a.direction = p.direction;
+  a.scale_by_size = 1;
+  a.on = true;
+}
+
+function clearLens(cfg, fx, b) {
+  const c = fx.clears;
+  if (!c) return;
+  const target = fx.id === c.card ? b : (cfg.post.chain || []).find((x) => x.id === c.card);
+  if (target && target[c.key] !== undefined && target[c.key] !== c.to) target[c.key] = c.to;
+}
+
 function renderControl(node, cfg, fx, b, c) {
   const cell = document.createElement("div");
   cell.className = "rn-ws-fxc";
@@ -749,7 +777,13 @@ function renderControl(node, cfg, fx, b, c) {
       sel.appendChild(o);
     }
     sel.title = c.hint;
-    sel.onchange = () => { b[c.key] = sel.value; postWrite(node); postRender(node); };
+    sel.onchange = () => {
+      b[c.key] = sel.value;
+      if (c.fills === "lens") applyLens(cfg, b, sel.value);
+      else clearLens(cfg, fx, b);
+      postWrite(node);
+      postRender(node);
+    };
     line.appendChild(sel);
     if (c.dynamic === "luts") {
       const rf = document.createElement("button");
@@ -830,6 +864,7 @@ function renderControl(node, cfg, fx, b, c) {
       if (num === null) return;
       b[c.key] = num;
       range.value = num; val.value = String(num);
+      clearLens(cfg, fx, b);
       postWrite(node);
     };
     range.addEventListener("input", () => apply(range.value));

@@ -128,9 +128,12 @@ DEFAULTS = {
               "radius_multiplier": 1.0, "saturation": 0.77, "exposure": 1.0},
     "halation": {"on": False, "strength": 0.35, "threshold": 0.75, "radius": 3.0,
                  "warmth": 0.7},
-    "distortion": {"on": False, "amount": 0.0, "edge_softness": 0.0},
+    # LENS DISTORTION: `lens` is which named lens filled the dials (panel memory, never
+    # an argument); scale_by_size sizes the pixel amounts against a 1024 short edge.
+    "distortion": {"on": False, "amount": 0.0, "edge_softness": 0.0,
+                   "lens": "custom", "scale_by_size": False},
     "aberration": {"on": False, "amount": 0.47, "red_shift": 1.0, "green_shift": -1.0,
-                   "blue_shift": -3.0, "direction": "horizontal"},
+                   "blue_shift": -3.0, "direction": "horizontal", "scale_by_size": False},
     "grain": {"on": False, "power": 0.09, "scale": 1.0, "saturation": 1.0, "seed": 0},
     # VIGNETTE: two falloff laws. "smooth" is the shipped one, a flat centre and a
     # soft ring near the edge; "cos4" is what real glass does, cosine to the fourth
@@ -175,6 +178,10 @@ MASK_EFFECTS = ("relight", "skin")
 # colour card's auto white balance estimator
 NON_ARG_KEYS = ("on", "rand", "limit", "fx", "id", "ref_file", "lens", "awb")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
+# the lens picker's names; the values live in web/rednode_ws_tables.js (LENS_PRESETS)
+LENS_NAMES = ("custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
+              "portrait_85", "long_135", "vintage_55", "anamorphic_40",
+              "phone_main", "phone_ultrawide")
 
 # the chain order: repair, tone, detail, light, lens
 ORDER = ("denoise", "color", "match", "lut", "skin", "clarity", "sharpen",   # repair and grade
@@ -1046,7 +1053,7 @@ def halation(img, strength=0.35, threshold=0.75, radius=3.0, warmth=0.7):
     return _clamp01(_nhwc(t + glow * tint * float(strength)))
 
 
-def distortion(img, amount=0.0, edge_softness=0.0):
+def distortion(img, amount=0.0, edge_softness=0.0, scale_by_size=False):
     """Barrel (positive) or pincushion (negative) lens distortion.
 
     Real glass never maps the world to a perfect rectangle. A little barrel reads
@@ -1070,7 +1077,8 @@ def distortion(img, amount=0.0, edge_softness=0.0):
         ys = torch.linspace(-1, 1, h, device=t.device, dtype=t.dtype).view(1, 1, h, 1)
         xs = torch.linspace(-1, 1, w, device=t.device, dtype=t.dtype).view(1, 1, 1, w)
         d = (torch.sqrt(xs * xs + ys * ys) / math.sqrt(2.0)).clamp(0, 1)
-        soft = gaussian_blur(t, 1.0 + 3.0 * e)
+        s = (min(t.shape[2], t.shape[3]) / 1024.0) if scale_by_size else 1.0
+        soft = gaussian_blur(t, max(0.3, (1.0 + 3.0 * e) * s))
         k = (d ** 2) * e
         t = t * (1 - k) + soft * k
     return _clamp01(_nhwc(t))
@@ -1093,7 +1101,7 @@ def _shift(plane, px, direction):
 
 
 def aberration(img, amount=0.47, red_shift=1.0, green_shift=-1.0, blue_shift=-3.0,
-               direction="horizontal"):
+               direction="horizontal", scale_by_size=False):
     """Split the colour channels the way a cheap lens does.
 
     `amount` scales the per-channel shifts, so one dial rides the whole effect
@@ -1103,6 +1111,11 @@ def aberration(img, amount=0.47, red_shift=1.0, green_shift=-1.0, blue_shift=-3.
     """
     t = _nchw(img)
     shifts = [float(red_shift), float(green_shift), float(blue_shift)]
+    # flat shifts are pixels, so size them to the frame on request; radial is already
+    # a share of the frame
+    if scale_by_size and direction != "radial":
+        s = min(t.shape[2], t.shape[3]) / 1024.0
+        shifts = [v * s for v in shifts]
     a = float(amount)
     if direction == "radial":
         out = []
@@ -1209,6 +1222,8 @@ def _guard(name, cur):
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")
+    elif name == "distortion":
+        cur["lens"] = cur["lens"] if cur["lens"] in LENS_NAMES else "custom"
     elif name == "skin":
         cur["subject"] = cur["subject"] if cur["subject"] in SKIN_SUBJECT else "auto"
         cur["show"] = cur["show"] if cur["show"] in SKIN_SHOWS else "off"

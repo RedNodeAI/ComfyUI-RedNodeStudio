@@ -463,10 +463,33 @@ export const POST_FX = [
         hint: "Set to 1 if the foreground hazes instead of the background." },
     ] },
   { id: "distortion", label: "Lens distortion",
+    clears: { card: "distortion", key: "lens", to: "custom" },
     blurb: "Real glass never maps the world to a perfect rectangle. A little barrel "
          + "reads as a wide lens, a little pincushion as a long one. The frame is "
-         + "resampled, so no black corners appear.",
+         + "resampled, so no black corners appear. Pick a lens to fill these dials and "
+         + "the fringing on the Chromatic aberration card in one go.",
     controls: [
+      { key: "lens", label: "Lens", def: "custom", step: 1, fills: "lens",
+        choice: ["custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
+                 "portrait_85", "long_135", "vintage_55", "anamorphic_40",
+                 "phone_main", "phone_ultrawide"],
+        labels: { custom: "Custom (your own dials)", ultrawide_14: "14 mm ultra wide",
+                  wide_24: "24 mm wide", reportage_35: "35 mm reportage",
+                  normal_50: "50 mm normal", portrait_85: "85 mm portrait",
+                  long_135: "135 mm long", vintage_55: "55 mm vintage",
+                  anamorphic_40: "40 mm anamorphic", phone_main: "Phone, main camera",
+                  phone_ultrawide: "Phone, ultra wide" },
+        hint: "Fills this card's dials and the Chromatic aberration card's with the way "
+            + "that kind of glass bends and splits light: barrel on the wide lenses, a "
+            + "touch of pincushion on the long ones, soft corners on the cheap and the "
+            + "old ones. Picking one switches both cards on. Every dial stays yours "
+            + "afterwards, and moving one puts this back to Custom. The amounts are "
+            + "sized to the frame, so a lens looks the same at any resolution. These are "
+            + "characterful values for that kind of glass, not measured profiles." },
+      { key: "scale_by_size", label: "Scale to the frame", min: 0, max: 1, step: 1, def: 0,
+        hint: "Sizes the edge softness against the frame's short edge, with 1024 as the "
+            + "reference, so a picture twice as big gets twice the softness in pixels "
+            + "and the same look. 0 keeps it in fixed pixels. Picking a lens sets it to 1." },
       { key: "amount", label: "Amount", min: -0.5, max: 0.5, step: 0.005, def: 0.0,
         hint: "Positive is barrel (bulges out, wide-angle). Negative is pincushion "
             + "(pinches in, telephoto). 0 is off. Small values, 0.02 to 0.08, sell "
@@ -493,6 +516,7 @@ export const POST_FX = [
             + "of the image blurs, set this to 1." },
     ] },
   { id: "aberration", label: "Chromatic aberration",
+    clears: { card: "distortion", key: "lens", to: "custom" },
     blurb: "Splits the colour channels apart like cheap glass. One amount dial rides "
          + "all three offsets, so you can dial the whole effect without losing its "
          + "character.",
@@ -512,6 +536,11 @@ export const POST_FX = [
         hint: "Horizontal and vertical are the flat, stylised split. Radial pushes "
             + "the channels apart from the centre outwards, which is what a real "
             + "lens does: clean in the middle, fringing at the corners." },
+      { key: "scale_by_size", label: "Scale to the frame", min: 0, max: 1, step: 1, def: 0,
+        hint: "Sizes the three shifts against the frame's short edge, with 1024 as the "
+            + "reference, so the same settings fringe by the same amount at any "
+            + "resolution. Radial is already a share of the frame and ignores this. 0 "
+            + "keeps the shifts in fixed pixels. Picking a lens sets it to 1." },
     ] },
   { id: "bloom", label: "Bloom",
     blurb: "Bright areas bleed light into their surroundings, the way a real lens "
@@ -781,3 +810,29 @@ export function snapStep(v, min, max, step) {
   const dec = (String(s).split(".")[1] || "").length;
   return parseFloat(Math.max(min, Math.min(max, snapped)).toFixed(dec));
 }
+
+// The named lenses the Lens distortion card's picker fills in, for a 1024 px short
+// edge (both cards size them to the frame). Characterful values for that kind of
+// glass, not measured profiles of any one lens.
+export const LENS_PRESETS = {
+  ultrawide_14: { amount: 0.115, edge_softness: 0.22, ca_amount: 0.90,
+                  red_shift: 1.5, green_shift: 0, blue_shift: -2.5, direction: "radial" },
+  wide_24: { amount: 0.06, edge_softness: 0.12, ca_amount: 0.55,
+             red_shift: 1, green_shift: -0.5, blue_shift: -2, direction: "radial" },
+  reportage_35: { amount: 0.028, edge_softness: 0.08, ca_amount: 0.4,
+                  red_shift: 0.8, green_shift: 0, blue_shift: -1.4, direction: "radial" },
+  normal_50: { amount: 0.008, edge_softness: 0.04, ca_amount: 0.22,
+               red_shift: 0.5, green_shift: 0, blue_shift: -1, direction: "radial" },
+  portrait_85: { amount: -0.012, edge_softness: 0.03, ca_amount: 0.18,
+                 red_shift: 0.4, green_shift: 0, blue_shift: -0.8, direction: "radial" },
+  long_135: { amount: -0.03, edge_softness: 0.02, ca_amount: 0.15,
+              red_shift: 0.3, green_shift: 0, blue_shift: -0.7, direction: "radial" },
+  vintage_55: { amount: 0.02, edge_softness: 0.35, ca_amount: 0.8,
+                red_shift: 1.2, green_shift: -0.4, blue_shift: -2.2, direction: "radial" },
+  anamorphic_40: { amount: 0.05, edge_softness: 0.18, ca_amount: 0.7,
+                   red_shift: 1.6, green_shift: 0, blue_shift: -1.6, direction: "horizontal" },
+  phone_main: { amount: 0.075, edge_softness: 0.10, ca_amount: 0.35,
+                red_shift: 0.6, green_shift: 0, blue_shift: -1.2, direction: "radial" },
+  phone_ultrawide: { amount: 0.16, edge_softness: 0.30, ca_amount: 0.9,
+                     red_shift: 1.4, green_shift: -0.3, blue_shift: -2.6, direction: "radial" },
+};
