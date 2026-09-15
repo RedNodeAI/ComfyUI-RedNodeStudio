@@ -45,9 +45,35 @@ class RedNodeLivePreview(nodes.PreviewImage):
                   flush=True)
             from .workspace import blocked
             return {"ui": {"images": []}, "result": (blocked(),)}
-        out = super().save_images(images=images, **kw)
+        # the panel only ever shows this small, so it is SAVED small: a full-size PNG
+        # per run per node was disk written, then decoded and scaled in the browser on
+        # every pan. The output socket still carries the full picture.
+        out = super().save_images(images=preview_size(images), **kw)
         out["result"] = (images,)
+        from .review import prune_temp
+        prune_temp((out.get("ui") or {}).get("images") or [], 0)   # the latest run only
         return out
+
+
+DONE_MAX = 512           # the long edge the finished frame is saved and shown at
+
+
+def preview_size(images, long_edge=DONE_MAX):
+    """IMAGE [B, H, W, C] scaled so the long edge is at most `long_edge`, area resampled."""
+    try:
+        import torch.nn.functional as F
+        t = images
+        while t.ndim > 4:
+            t = t[0]
+        h, w = int(t.shape[1]), int(t.shape[2])
+        s = float(long_edge) / max(h, w)
+        if s >= 1.0:
+            return t
+        size = (max(1, round(h * s)), max(1, round(w * s)))
+        x = F.interpolate(t.movedim(-1, 1).float(), size=size, mode="area")
+        return x.movedim(1, -1).clamp(0, 1)
+    except Exception:
+        return images
 
 
 # ---- the stream ------------------------------------------------------------------

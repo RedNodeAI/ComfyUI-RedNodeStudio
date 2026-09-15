@@ -15,7 +15,8 @@ const ID = {
   captionCache: "RedNode.Captions.Cache",
   captionCap: "RedNode.Captions.CacheSize",
   lookThumbs: "RedNode.Post.LookThumbnails",
-  reviewKeep: "RedNode.Review.HistoryLength",
+  reviewKeep: "RedNode.Review.ImagesKept",
+  reviewSize: "RedNode.Review.NodePictureSize",
   savedCap: "RedNode.Save.IndexSize",
   switchAsks: "RedNode.Switch.ResolveRounds",
 };
@@ -282,14 +283,27 @@ app.registerExtension({
     },
     {
       id: ID.reviewKeep,
-      name: "Runs kept in the Review strip",
+      name: "Pictures kept in each Image Review",
       category: ["RedNode", "Image Review", "History"],
-      tooltip: "This history is stored in your WORKFLOW file, not globally, so a longer "
-             + "strip makes every save of that workflow slightly bigger. It is small: "
-             + "24 runs costs about half a kilobyte.",
+      tooltip: "How many pictures each Image Review node remembers before the oldest drop "
+             + "off, counting every picture of a batch. The same number is kept on disk: "
+             + "older preview files that node wrote are deleted from ComfyUI's temp "
+             + "folder, so several Review nodes on a long session no longer fill it. "
+             + "Pictures a Save node wrote are never touched.",
       type: "slider",
-      attrs: { min: 4, max: 100, step: 4 },
+      attrs: { min: 4, max: 200, step: 4 },
       defaultValue: 24,
+    },
+    {
+      id: ID.reviewSize,
+      name: "Picture size on the Review node",
+      category: ["RedNode", "Image Review", "Picture size"],
+      tooltip: "The long edge the big picture on an Image Review node is loaded at. Full "
+             + "screen always shows the original. Smaller keeps a workflow with several "
+             + "Review nodes smooth to pan; 768 is sharp at any normal node size.",
+      type: "combo",
+      options: ["512", "768", "1024"],
+      defaultValue: "768",
     },
     {
       id: ID.savedCap,
@@ -362,6 +376,7 @@ app.registerExtension({
           caption_cache: !!setting(ID.captionCache, true),
           caption_cap: parseInt(setting(ID.captionCap, 800)) || 800,
           look_thumbs: !!setting(ID.lookThumbs, true),
+          review_keep: parseInt(setting(ID.reviewKeep, 24)) || 24,
           saved_cap: parseInt(setting(ID.savedCap, 200)) || 200,
           switch_lazy_asks: parseInt(setting(ID.switchAsks, 64)) || 64,
         });

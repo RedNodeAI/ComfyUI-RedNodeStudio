@@ -27,6 +27,8 @@ css.textContent = `
    edge and a node is often bigger, so capping at natural size left a small
    picture in a large box. contain scales it up as far as the pane allows. */
 .rn-lp-main img{width:100%;height:100%;object-fit:contain}
+/* the finished frame is saved at 512 px (live_preview.py), so the pane never holds a
+   full-size picture to re-scale on every pan */
 .rn-lp-tag{position:absolute;top:5px;left:5px;background:#000c;color:#d4ffe4;font-size:10.5px;
   padding:2px 7px;border-radius:4px;pointer-events:none;font-variant-numeric:tabular-nums}
 .rn-lp-tag.live{color:#ffd58a}
@@ -125,6 +127,7 @@ function render(node) {
     main.appendChild(empty);
   } else {
     const img = document.createElement("img");
+    img.decoding = "async";
     img.src = s.src;
     main.appendChild(img);
   }

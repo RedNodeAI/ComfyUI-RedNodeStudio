@@ -122,6 +122,10 @@ const fileUrl = (f) => api.apiURL(`/view?${fileArgs(f)}`);
 // costs twenty full bitmaps in memory. /view's own preview= only re-encodes and never
 // resizes, which saves nothing here, so this goes through our own route instead.
 const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=320`);
+// the big picture on the node: a copy at the chosen size, never the original, which
+// the browser would keep re-scaling on every pan. Full screen loads the original.
+const nodePx = () => Math.max(256, Math.min(1024, parseInt(setting("RedNode.Review.NodePictureSize", "768")) || 768));
+const nodeUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=${nodePx()}`);
 
 // When each queued run started. ComfyUI's executed event carries no duration, but
 // execution_start carries the prompt id, which is all that is needed to time it.
@@ -184,10 +188,12 @@ function pushEntry(node, images, promptId) {
   const began = runStarted.get(promptId);
   h.unshift({ files: images, prompt: promptId || null, ts: Date.now(),
               secs: began ? (Date.now() - began) / 1000 : null });
-  // this history rides in the workflow file, so its length is 
-  const keep = Math.max(1, parseInt(setting("RedNode.Review.HistoryLength", MAX_KEEP))
+  // capped by PICTURES, every frame of a batch counted, and always keeping the newest
+  // run whole; the server deletes this node's older temp files to the same number
+  const keep = Math.max(1, parseInt(setting("RedNode.Review.ImagesKept", MAX_KEEP))
                           || MAX_KEEP);
-  while (h.length > keep) h.pop();
+  const count = () => h.reduce((a, e) => a + (e.files?.length || 1), 0);
+  while (h.length > 1 && count() > keep) h.pop();
   node._rnView = 0;                      // a new arrival always takes the top spot
   node._rnSlot = 0;                      // ...its first frame...
   node._rnSlotFor = 0;
@@ -704,8 +710,17 @@ function render(node) {
     node._rnSlot = slot;
     node._rnSlotFor = view;
     const img = document.createElement("img");
-    img.src = fileUrl(entry.files[slot]);
+    const fullPic = !!node._rnFsPrev;
+    img.decoding = "async";
+    img.src = fullPic ? fileUrl(entry.files[slot]) : nodeUrl(entry.files[slot]);
     img.onerror = () => {
+      // the resize route first failing (an older install, no webp encoder) costs
+      // sharpness, never the picture: try the original before calling it gone
+      if (!fullPic && !img.dataset.rnFullTried) {
+        img.dataset.rnFullTried = "1";
+        img.src = fileUrl(entry.files[slot]);
+        return;
+      }
       const gone = document.createElement("div");
       gone.className = "rn-rv-empty";
       // A preview lives in temp and does not survive a restart. If a RedNode Save

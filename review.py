@@ -14,7 +14,52 @@ temp images do not survive a ComfyUI restart — slots whose file is gone show a
 rather than pretending otherwise.
 """
 
+import os
+import re
+
 import nodes
+
+# core's SaveImage name: <prefix>_<5-digit counter>_.png
+_COUNTED = re.compile(r"^(?P<stem>.+)_(?P<n>\d{5})_\.png$")
+
+
+def prune_temp(saved, keep):
+    """Delete this node's older temp previews past the newest `keep`.
+
+    A preview node writes a PNG into the temp folder on every run and nothing removes
+    them before a restart, so several of these nodes on a long session fill the disk.
+    Only files carrying this node instance's own name stem go (core gives every preview
+    node a random suffix), only in the temp folder, and never the ones just saved.
+    Returns how many went; any failure keeps the files rather than raising.
+    """
+    try:
+        import folder_paths
+        if not saved or saved[0].get("type") != "temp":
+            return 0
+        m = _COUNTED.match(str(saved[0].get("filename") or ""))
+        if not m:
+            return 0
+        stem = m.group("stem")
+        temp = os.path.abspath(folder_paths.get_temp_directory())
+        folder = os.path.abspath(os.path.join(temp, saved[0].get("subfolder") or ""))
+        if os.path.commonpath([temp, folder]) != temp:
+            return 0
+        mine = []
+        for name in os.listdir(folder):
+            mm = _COUNTED.match(name)
+            if mm and mm.group("stem") == stem:
+                mine.append((int(mm.group("n")), name))
+        mine.sort(reverse=True)
+        gone = 0
+        for _, name in mine[max(int(keep), len(saved)):]:
+            try:
+                os.remove(os.path.join(folder, name))
+                gone += 1
+            except OSError:
+                pass
+        return gone
+    except Exception:
+        return 0
 
 
 class RedNodeImageReview(nodes.PreviewImage):
@@ -42,6 +87,13 @@ class RedNodeImageReview(nodes.PreviewImage):
             return {"ui": {"images": []}, "result": (blocked(),)}
         out = super().save_images(images=images, **kw)
         out["result"] = (images,)
+        # the strip keeps this many pictures, so the temp folder keeps no more of them
+        try:
+            from . import settings
+            keep = settings.get("review_keep", 24)
+        except Exception:
+            keep = 24
+        prune_temp((out.get("ui") or {}).get("images") or [], keep)
         return out
 
 

@@ -19,6 +19,7 @@ DEFAULTS = {
     "caption_cache": True,     # reuse a caption already made for an image
     "caption_cap": 800,        # how many captions to remember
     "look_thumbs": True,       # store a thumbnail with each Look preset
+    "review_keep": 24,         # pictures each Image Review keeps, in its strip and on disk
     "saved_cap": 500,          # how many saved images the index remembers
     "switch_lazy_asks": 64,    # rounds a Switch branch gets before it is called dead
 }

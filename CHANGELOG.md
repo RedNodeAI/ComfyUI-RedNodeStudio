@@ -10,6 +10,18 @@ The sampler learned some tricks, the Detailer grew four kinds of pass, the
 Post tab became a list beside one editor, and a Draft switch makes a seed
 cheap to judge.
 
+### Previews
+
+- Live Preview saves and shows its finished frame at 512 px instead of the full
+  picture, and keeps only its latest file in the temp folder. Several Live
+  Previews showing full-size pictures made the whole canvas lag while panning,
+  and every run left another full-size PNG behind until ComfyUI restarted
+- Image Review loads its big picture on the node at 768 px (512 or 1024 in the
+  settings) and the original only in full screen. It keeps a set number of
+  pictures, 24 by default, counting every frame of a batch, and deletes its own
+  older preview files from the temp folder to the same number. Files a Save node
+  wrote are never touched
+
 ### Workspace
 
 - A new Workspace starts ready to render: the built-in sampler, and the latent

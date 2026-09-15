@@ -216,7 +216,8 @@ output into a Stage View strip, so a chain can be read step by step.
 
 **RedNode Live Preview** shows the picture forming. Wire an image output into it and every step of
 that node's render lands on it, decoded by the small VAE, with a bar and the pass it belongs to,
-then the finished frame. Both the workspace's built-in sampler and the Detailer's passes stream,
+then the finished frame, kept at 512 px since it is a preview; the output passes the full picture
+on. Both the workspace's built-in sampler and the Detailer's passes stream,
 whatever ComfyUI's own preview setting is. For Krea 2 the sharp version needs
 `lighttaew2_1.safetensors` in `models/vae_approx`; without it the frames are the colour smear.
 
@@ -619,7 +620,8 @@ runs a different model from the main pass.
 
 Global preferences live in ComfyUI's own settings dialog, under **RedNode**: whether
 captions are remembered between runs and how many, whether saved effects keep a picture, how
-many runs the Review strip keeps, how many saved images the index remembers, and a button
+many pictures each Image Review keeps (on its strip and in the temp folder) and the size its big
+picture loads at on the node, how many saved images the index remembers, and a button
 to clear the regenerable caches. Anything that belongs to a single workflow, the grading
 chain, the paint strokes, which images are on a tab, stays on its node instead.
 
