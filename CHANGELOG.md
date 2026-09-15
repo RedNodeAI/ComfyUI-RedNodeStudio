@@ -81,6 +81,12 @@ cheap to judge.
 - A Relight card: a new key light over the depth map's relief, direction,
   height, strength, ambient, warmth, contact shadows, and the subject mask
   rounding the subject off
+- The chain is yours to order: a Run order map of numbered chips above the
+  list, drag a chip or use a row's arrows to move an effect, and Camera order
+  puts everything back. An effect can be in the chain more than once, each
+  instance with its own dials and Limit, so a sharpen can work the subject
+  early and the whole frame at the end; Another and Remove on the editor, an
+  add row at the foot of the list. Saved chains render exactly as before
 
 ### Camera Studio
 

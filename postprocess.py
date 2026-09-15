@@ -943,78 +943,140 @@ EFFECTS = {
 }
 
 
-def parse_post(data):
-    """Normalise a post config dict: every block present, every value in range."""
-    out = {}
-    src = data if isinstance(data, dict) else {}
-    for name, defaults in DEFAULTS.items():
-        block = src.get(name) if isinstance(src.get(name), dict) else {}
-        cur = dict(defaults)
-        for key, dv in defaults.items():
-            if key not in block:
-                continue
-            v = block[key]
-            if isinstance(dv, bool):
-                cur[key] = bool(v)
-            elif isinstance(dv, str):
-                cur[key] = str(v)
-            elif isinstance(dv, int):
-                try:
-                    cur[key] = int(v)
-                except (TypeError, ValueError):
-                    pass
-            else:
-                try:
-                    cur[key] = float(v)
-                except (TypeError, ValueError):
-                    pass
-        out[name] = cur
+def _guard(name, cur):
+    """The per-card rules a typed coercion cannot express: a choice must be one of
+    the card's own list, a size must sit inside what the card offers."""
+    if name == "clarity":
+        cur["blend_mode"] = cur["blend_mode"] if cur["blend_mode"] in BLEND_MODES else "soft light"
+        cur["radius"] = max(1, min(64, cur["radius"]))
+    elif name == "sharpen":
+        cur["mode"] = cur["mode"] if cur["mode"] in SHARPEN_MODES else "lucy"
+        cur["iterations"] = max(1, min(20, cur["iterations"]))
+        cur["kernel_size"] = max(1, min(31, cur["kernel_size"]))
+    elif name == "aberration":
+        cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
+                            else "horizontal")
+    elif name == "depth":
+        cur["estimator"] = cur["estimator"] if cur["estimator"] in DEPTH_ESTIMATORS else "auto"
+        cur["model"] = cur["model"] if cur["model"] in DEPTH_MODELS else "auto"
+        cur["resolution"] = max(128, min(2048, cur["resolution"]))
+    elif name == "mask":
+        cur["source"] = cur["source"] if cur["source"] in MASK_SOURCES else "auto"
+        cur["feather"] = max(0, min(128, cur["feather"]))
+    elif name == "match":
+        cur["method"] = cur["method"] if cur["method"] in MATCH_METHODS else "adain"
+        cur["source"] = cur["source"] if cur["source"] in MATCH_SOURCES else "moodboard"
+    if name not in SETTINGS_CARDS and cur.get("limit") not in LIMITS:
+        cur["limit"] = "off"
+    return cur
+
+
+def _parse_block(name, block):
+    """One card's block, normalised: every key present, every value typed by its
+    default, the random ranges kept only for numeric keys, then the card's guards."""
+    defaults = DEFAULTS[name]
+    block = block if isinstance(block, dict) else {}
+    cur = dict(defaults)
+    for key, dv in defaults.items():
+        if key not in block:
+            continue
+        v = block[key]
+        if isinstance(dv, bool):
+            cur[key] = bool(v)
+        elif isinstance(dv, str):
+            cur[key] = str(v)
+        elif isinstance(dv, int):
+            try:
+                cur[key] = int(v)
+            except (TypeError, ValueError):
+                pass
+        else:
+            try:
+                cur[key] = float(v)
+            except (TypeError, ValueError):
+                pass
     # random ranges: {"rand": {"intensity": [lo, hi]}} on any block, rolled fresh
     # each queue. Only keys the block actually has, and only numeric ones.
-    for name, defaults in DEFAULTS.items():
-        raw = src.get(name) if isinstance(src.get(name), dict) else {}
-        rin = raw.get("rand") if isinstance(raw.get("rand"), dict) else {}
-        rand = {}
-        for key, pair in rin.items():
-            if key not in defaults or isinstance(defaults[key], (bool, str)):
+    rin = block.get("rand") if isinstance(block.get("rand"), dict) else {}
+    rand = {}
+    for key, pair in rin.items():
+        if key not in defaults or isinstance(defaults[key], (bool, str)):
+            continue
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            continue
+        try:
+            lo, hi = float(pair[0]), float(pair[1])
+        except (TypeError, ValueError):
+            continue
+        rand[key] = [min(lo, hi), max(lo, hi)]
+    if rand:
+        cur["rand"] = rand
+    return _guard(name, cur)
+
+
+def parse_post(data):
+    """Normalise a post config dict: every block present, every value in range,
+    and the CHAIN, the effects in the order they run.
+
+    The chain is a list of INSTANCES: one entry per run of an effect, in run
+    order, each carrying its own dials, switch and Limit. The same effect may
+    appear twice (a sharpen on the subject early, another on the whole frame at
+    the end). A config with no chain, every config saved before the chain
+    existed, gets the camera order with one instance of each effect, carrying
+    the block it had, so nothing renders differently.
+
+    The per-effect blocks stay in the result as a MIRROR of the first instance
+    of each effect, for every reader that asks "is bloom on" without walking
+    the chain; an effect with no instance reads as off.
+    """
+    out = {}
+    src = data if isinstance(data, dict) else {}
+    for name in DEFAULTS:
+        out[name] = _parse_block(name, src.get(name))
+    raw_chain = src.get("chain")
+    chain = []
+    if isinstance(raw_chain, list) and raw_chain:
+        seen = set()
+        for item in raw_chain:
+            if not isinstance(item, dict):
                 continue
-            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-                continue
-            try:
-                lo, hi = float(pair[0]), float(pair[1])
-            except (TypeError, ValueError):
-                continue
-            rand[key] = [min(lo, hi), max(lo, hi)]
-        if rand:
-            out[name]["rand"] = rand
-    out["clarity"]["blend_mode"] = (out["clarity"]["blend_mode"]
-                                    if out["clarity"]["blend_mode"] in BLEND_MODES
-                                    else "soft light")
-    out["sharpen"]["mode"] = (out["sharpen"]["mode"]
-                              if out["sharpen"]["mode"] in SHARPEN_MODES else "lucy")
-    out["aberration"]["direction"] = (out["aberration"]["direction"]
-                                      if out["aberration"]["direction"] in CA_DIRECTIONS
-                                      else "horizontal")
-    out["depth"]["estimator"] = (out["depth"]["estimator"]
-                                 if out["depth"]["estimator"] in DEPTH_ESTIMATORS
-                                 else "auto")
-    out["depth"]["model"] = (out["depth"]["model"]
-                             if out["depth"]["model"] in DEPTH_MODELS else "auto")
-    out["depth"]["resolution"] = max(128, min(2048, out["depth"]["resolution"]))
-    out["mask"]["source"] = (out["mask"]["source"] if out["mask"]["source"] in MASK_SOURCES
-                             else "auto")
-    out["mask"]["feather"] = max(0, min(128, out["mask"]["feather"]))
-    out["match"]["method"] = (out["match"]["method"] if out["match"]["method"] in MATCH_METHODS
-                              else "adain")
-    out["match"]["source"] = (out["match"]["source"] if out["match"]["source"] in MATCH_SOURCES
-                              else "moodboard")
-    for name in out:
-        if name not in SETTINGS_CARDS and out[name].get("limit") not in LIMITS:
-            out[name]["limit"] = "off"
-    out["sharpen"]["iterations"] = max(1, min(20, out["sharpen"]["iterations"]))
-    out["sharpen"]["kernel_size"] = max(1, min(31, out["sharpen"]["kernel_size"]))
-    out["clarity"]["radius"] = max(1, min(64, out["clarity"]["radius"]))
+            fx = str(item.get("fx") or "")
+            if fx not in EFFECTS:
+                continue                    # unknown, or a settings card
+            cur = _parse_block(fx, item)
+            cur["fx"] = fx
+            base = str(item.get("id") or "").strip() or fx
+            iid, n = base, 2
+            while iid in seen:
+                iid = "%s#%d" % (base, n)
+                n += 1
+            seen.add(iid)
+            cur["id"] = iid
+            chain.append(cur)
+    explicit = bool(chain)
+    if not chain:
+        for fx in ORDER:
+            cur = dict(out[fx])
+            cur["fx"] = fx
+            cur["id"] = fx
+            chain.append(cur)
+    out["chain"] = chain
+    if explicit:
+        first = {}
+        for cur in chain:
+            first.setdefault(cur["fx"], cur)
+        for fx in ORDER:
+            if fx in first:
+                out[fx] = {k: v for k, v in first[fx].items() if k not in ("fx", "id")}
+            else:
+                out[fx] = dict(out[fx])
+                out[fx]["on"] = False
     return out
+
+
+def active_fx(cfg):
+    """The effects with at least one instance switched on, as a set of names."""
+    return {c["fx"] for c in (cfg.get("chain") or []) if c.get("on")}
 
 
 def roll_block(name, block):
@@ -1036,9 +1098,9 @@ SLOW_CHAIN_SECONDS = 2.0
 
 
 def needs_mask(cfg):
-    """True when any card that is on is limited to the subject or the background."""
-    return any(cfg[n].get("on") and cfg[n].get("limit") in ("subject", "background")
-               for n in ORDER)
+    """True when any instance that is on is limited to the subject or the background."""
+    return any(c.get("on") and c.get("limit") in ("subject", "background")
+               for c in (cfg.get("chain") or []))
 
 
 def auto_mask(image):
@@ -1063,18 +1125,19 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
     cfg = parse_post(config)
     out = image
     timings = []
-    for name in ORDER:
-        block = cfg[name]
-        if not block.get("on"):
+    for item in cfg.get("chain") or []:
+        name = item["fx"]
+        if not item.get("on"):
             continue
-        args = {k: v for k, v in block.items() if k not in ("on", "rand", "limit")}
-        drawn = roll_block(name, block)
+        args = {k: v for k, v in item.items()
+                if k not in ("on", "rand", "limit", "fx", "id")}
+        drawn = roll_block(name, item)
         if drawn:
             args.update(drawn)
             if rolls is not None:
-                rolls[name] = drawn
+                rolls[item["id"]] = drawn
             shown = ", ".join(f"{k} {v}" for k, v in sorted(drawn.items()))
-            print(f"[RedNode Post] {name} rolled {shown}", flush=True)
+            print(f"[RedNode Post] {item['id']} rolled {shown}", flush=True)
         if name in DEPTH_EFFECTS:
             args["depth"] = depth
         if name == "match":
@@ -1083,13 +1146,13 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
             args["mask"] = mask
         started = time.time()
         res = EFFECTS[name](out, **args)
-        # LIMITED TO THE SUBJECT OR THE BACKGROUND: the card's result only under
-        # the mask, softened by the Mask card's feather; the rest of the frame as
-        # it was before the card
-        res = limit_to(out, res, mask, block.get("limit", "off"),
-                       cfg["mask"]["feather"], name)
+        # LIMITED TO THE SUBJECT OR THE BACKGROUND: this instance's result only
+        # under the mask, softened by the Mask card's feather; the rest of the
+        # frame as it was before it
+        res = limit_to(out, res, mask, item.get("limit", "off"),
+                       cfg["mask"]["feather"], item["id"])
         out = res
-        timings.append((name, time.time() - started))
+        timings.append((item["id"], time.time() - started))
         if on_effect:
             on_effect(name)
     report_timings(timings, extra_timings)
@@ -1412,7 +1475,7 @@ class RedNodePostProcess:
         # user to build a second branch of the graph for it
         depth = None
         extra = []
-        if any(cfg[n].get("on") for n in DEPTH_EFFECTS):
+        if active_fx(cfg) & set(DEPTH_EFFECTS):
             _t0 = time.time()
             depth = auto_depth(image, settings=cfg.get("depth"))
             extra.append(("depth map", time.time() - _t0))
@@ -1424,7 +1487,7 @@ class RedNodePostProcess:
             extra.append(("subject mask", time.time() - _t0))
         # the match card's reference is a Workspace tab's picture
         reference = None
-        if cfg["match"].get("on"):
+        if "match" in active_fx(cfg):
             reference = tab_reference(ws_raw, cfg["match"].get("source"))
         ran = []
         LAST_ROLLS.clear()

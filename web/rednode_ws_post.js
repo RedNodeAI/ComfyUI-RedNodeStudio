@@ -123,6 +123,102 @@ export function cardOrder(cfg) {
   return [...saved, ...known.filter((id) => !saved.includes(id))];
 }
 
+// THE CHAIN: the effects as an ordered list of INSTANCES. One entry per run of
+// an effect, in run order, each with its own dials, switch and Limit, so the
+// same effect can run twice (a sharpen on the subject early, another on the
+// whole frame at the end) and the order is yours. A config saved before the
+// chain existed gets the camera order with one instance of each effect,
+// carrying the block it had, so nothing renders differently.
+export function chainBand(fxId) {
+  for (const [label, ids] of FX_GROUPS) if (ids.includes(fxId)) return label;
+  return "MORE";
+}
+
+function normItem(item, fx) {
+  const b = item && typeof item === "object" ? item : {};
+  b.fx = fx.id;
+  b.on = !!b.on;
+  b.rand = b.rand && typeof b.rand === "object" ? b.rand : {};
+  if (!["off", "subject", "background"].includes(b.limit)) b.limit = "off";
+  for (const c of fx.controls) {
+    if (c.head || c.button) continue;
+    if (c.choice) { if (typeof b[c.key] !== "string") b[c.key] = c.def; }
+    else if (typeof b[c.key] !== "number") b[c.key] = c.def;
+  }
+  return b;
+}
+
+export function normalisePostChain(d) {
+  if (!d || !d.post || typeof d.post !== "object") return [];
+  const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
+  const effects = POST_FX.filter((fx) => !fx.settings);
+  let chain = Array.isArray(d.post.chain) ? d.post.chain : null;
+  if (!chain || !chain.length) {
+    chain = effects.map((fx) => normItem({ ...(d.post[fx.id] || {}) }, fx));
+    for (const b of chain) b.id = b.fx;
+  } else {
+    chain = chain.filter((it) => it && typeof it === "object" && byId[it.fx] && !byId[it.fx].settings)
+                 .map((it) => normItem(it, byId[it.fx]));
+    const seen = new Set();
+    for (const b of chain) {
+      const base = String(b.id || b.fx);
+      let id = base, n = 2;
+      while (seen.has(id)) id = `${base}#${n++}`;
+      seen.add(id);
+      b.id = id;
+    }
+    if (!chain.length) {
+      chain = effects.map((fx) => normItem({ ...(d.post[fx.id] || {}) }, fx));
+      for (const b of chain) b.id = b.fx;
+    }
+  }
+  d.post.chain = chain;
+  mirrorChain(d);
+  return chain;
+}
+
+// the per-effect blocks mirror the FIRST instance of each effect, for every
+// reader that asks "is bloom on" without walking the chain (the Looks strip,
+// the server's older readers); an effect with no instance reads as off
+export function mirrorChain(d) {
+  if (!d || !d.post || !Array.isArray(d.post.chain)) return;
+  const first = {};
+  for (const b of d.post.chain) if (!first[b.fx]) first[b.fx] = b;
+  for (const fx of POST_FX) {
+    if (fx.settings) continue;
+    const src = first[fx.id];
+    if (src) {
+      const copy = { ...src };
+      delete copy.fx; delete copy.id;
+      d.post[fx.id] = copy;
+    } else if (d.post[fx.id]) {
+      d.post[fx.id].on = false;
+    }
+  }
+}
+
+// a fresh instance of an effect: a copy of `from` when given (Another), else the
+// card's defaults; its id is unique in the chain
+export function newChainItem(d, fxId, from) {
+  const fx = POST_FX.find((x) => x.id === fxId);
+  if (!fx || fx.settings) return null;
+  const b = normItem(from ? JSON.parse(JSON.stringify(from)) : {}, fx);
+  const seen = new Set((d.post.chain || []).map((x) => x.id));
+  let id = fxId, n = 2;
+  while (seen.has(id)) id = `${fxId}#${n++}`;
+  b.id = id;
+  return b;
+}
+
+// the camera order: every instance sorted by its effect's place in the shipped
+// chain, instances of one effect keeping their relative order
+export function cameraOrder(d) {
+  const rank = Object.fromEntries(POST_FX.map((fx, i) => [fx.id, i]));
+  d.post.chain = (d.post.chain || []).map((b, i) => [b, i])
+    .sort((x, y) => (rank[x[0].fx] - rank[y[0].fx]) || (x[1] - y[1]))
+    .map(([b]) => b);
+}
+
 export function fxStep(cfg, c) {
   const p = cfg.post_ui?.precision;
   if (p === undefined || p === "default" || c.step >= 1) return c.step;
@@ -452,7 +548,7 @@ function renderControl(node, cfg, fx, b, c) {
     val.className = "val rng";
     val.readOnly = true;
     const pos = (v) => ((v - c.min) / Math.max(1e-9, c.max - c.min)) * 100;
-    const rolled = postLastRolls?.[fx.id]?.[c.key];
+    const rolled = postLastRolls?.[b.id || fx.id]?.[c.key];
     const paint = () => {
       const a = parseFloat(rLo.value), z = parseFloat(rHi.value);
       fil.style.left = pos(a) + "%";
@@ -513,12 +609,37 @@ function renderControl(node, cfg, fx, b, c) {
 export function postBody(node, body) {
   const cfg = node._rnCfg;
   const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
-  if (!node._rnFxSel || !byId[node._rnFxSel]) {
-    // open on the first effect that is on, else the first effect
-    const on = POST_FX.find((fx) => !fx.settings && cfg.post[fx.id]?.on);
-    node._rnFxSel = (on || POST_FX.find((fx) => !fx.settings) || POST_FX[0]).id;
+  const chain = normalisePostChain(cfg);
+  const itemById = Object.fromEntries(chain.map((b) => [b.id, b]));
+  // the selection is an INSTANCE id (or a settings card's id); open on the first
+  // instance that is on, else the first instance
+  const selOk = (id) => !!itemById[id] || (byId[id] && byId[id].settings);
+  if (!node._rnFxSel || !selOk(node._rnFxSel)) {
+    const on = chain.find((b) => b.on);
+    node._rnFxSel = (on || chain[0] || POST_FX[0]).id;
   }
-
+  const moveItem = (id, to) => {
+    const from = chain.findIndex((b) => b.id === id);
+    if (from < 0) return;
+    const [b] = chain.splice(from, 1);
+    chain.splice(Math.max(0, Math.min(chain.length, to)), 0, b);
+    postWrite(node);
+    postRender(node);
+  };
+  let dragId = null;
+  const dragHandlers = (el, id) => {
+    el.draggable = true;
+    el.addEventListener("dragstart", (e) => { dragId = id; e.dataTransfer?.setData?.("text/plain", id); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); });
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (!dragId || dragId === id) return;
+      const to = chain.findIndex((b) => b.id === id);
+      const from = chain.findIndex((b) => b.id === dragId);
+      moveItem(dragId, from < to ? to : to);
+      dragId = null;
+    });
+  };
   const bar = document.createElement("div");
   bar.className = "rn-ws-row";
   const cog = document.createElement("button");
@@ -535,72 +656,179 @@ export function postBody(node, body) {
   body.appendChild(bar);
   looksSection(node, body);
 
+  // THE ORDER MAP: the chain as numbered chips, left to right in run order.
+  // Drag a chip onto another to move it there; click one to edit it. The list
+  // below is the same order with the dials; this is the order at a glance.
+  const mapBar = document.createElement("div");
+  mapBar.className = "rn-ws-fxmapbar";
+  const mapLab = document.createElement("span");
+  mapLab.className = "rn-ws-note";
+  mapLab.textContent = "Run order";
+  mapLab.title = "The chain runs left to right. Drag a chip onto another to move it; "
+               + "the arrows on a row do the same one step at a time.";
+  const reset = document.createElement("button");
+  reset.className = "rn-ws-btn";
+  reset.style.cssText = "width:auto;padding:0 10px;font-size:11px";
+  reset.textContent = "Camera order";
+  reset.title = "Put every effect back in the order light meets a camera: repair, "
+              + "grade, light, air, lens, film. Instances stay; only the order moves.";
+  reset.onclick = () => { cameraOrder(cfg); postWrite(node); postRender(node); };
+  mapBar.append(mapLab, reset);
+  body.appendChild(mapBar);
+  const map = document.createElement("div");
+  map.className = "rn-ws-fxmap";
+  const countOf = {};
+  for (const b of chain) countOf[b.fx] = (countOf[b.fx] || 0) + 1;
+  const nthOf = {};
+  const instanceLabel = (b) => {
+    nthOf[b.fx] = (nthOf[b.fx] || 0) + 1;
+    return byId[b.fx].label + (countOf[b.fx] > 1 ? " " + nthOf[b.fx] : "");
+  };
+  const labels = {};
+  for (const b of chain) labels[b.id] = instanceLabel(b);
+  chain.forEach((b, i) => {
+    const chip = document.createElement("button");
+    chip.className = "rn-ws-fxchip" + (b.on ? " on" : "") + (node._rnFxSel === b.id ? " sel" : "");
+    chip.textContent = (i + 1) + " " + labels[b.id];
+    chip.title = labels[b.id] + (b.on ? ", on" : ", off") + ". Click to edit; drag onto "
+               + "another chip to move it there.";
+    chip.onclick = () => { node._rnFxSel = b.id; postRender(node); };
+    dragHandlers(chip, b.id);
+    map.appendChild(chip);
+  });
+  body.appendChild(map);
+
   const split = document.createElement("div");
   split.className = "rn-ws-fxsplit";
   const list = document.createElement("div");
   list.className = "rn-ws-fxlist";
-  for (const [label, ids] of fxGroups()) {
-    const band = document.createElement("div");
-    band.className = "rn-ws-fxband";
-    band.textContent = label;
-    list.appendChild(band);
-    for (const id of ids) {
-      const fx = byId[id];
-      const b = cfg.post[fx.id];
-      const row = document.createElement("div");
-      row.className = "rn-ws-fxrow" + (node._rnFxSel === fx.id ? " sel" : "")
-                    + (b.on && !fx.settings ? " on" : "");
-      if (fx.settings) {
-        const gear = document.createElement("span");
-        gear.className = "rn-ws-eye gear";
-        gear.textContent = "⚙";
-        gear.title = "Settings, not an effect: it never runs on its own.";
-        row.appendChild(gear);
-      } else {
-        const eye = document.createElement("button");
-        eye.className = "rn-ws-eye" + (b.on ? " on" : "");
-        eye.textContent = b.on ? "●" : "○";
-        eye.title = (b.on ? "On. Click to switch off." : "Off. Click to switch on.")
-                  + "\n\n" + fx.blurb;
-        eye.onclick = (e) => {
-          e.stopPropagation();
-          b.on = !b.on;
-          postWrite(node);
-          postRender(node);
-        };
-        row.appendChild(eye);
-      }
-      const nm = document.createElement("span");
-      nm.className = "rn-ws-fxname";
-      nm.textContent = fx.label;
-      row.appendChild(nm);
-      if (!fx.settings && b.limit && b.limit !== "off") {
-        const pill = document.createElement("span");
-        pill.className = "rn-ws-fxlimitpill";
-        pill.textContent = b.limit;
-        pill.title = "Limited to the " + b.limit + ".";
-        row.appendChild(pill);
-      }
-      row.title = fx.blurb;
-      row.onclick = () => { node._rnFxSel = fx.id; postRender(node); };
-      list.appendChild(row);
+  let lastBand = null;
+  const addRow = (b, fx, i) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-fxrow" + (node._rnFxSel === b.id ? " sel" : "")
+                  + (b.on && !fx.settings ? " on" : "");
+    if (fx.settings) {
+      const gear = document.createElement("span");
+      gear.className = "rn-ws-eye gear";
+      gear.textContent = "⚙";
+      gear.title = "Settings, not an effect: it never runs on its own.";
+      row.appendChild(gear);
+    } else {
+      const num = document.createElement("span");
+      num.className = "rn-ws-fxnum";
+      num.textContent = String(i + 1);
+      row.appendChild(num);
+      const eye = document.createElement("button");
+      eye.className = "rn-ws-eye" + (b.on ? " on" : "");
+      eye.textContent = b.on ? "●" : "○";
+      eye.title = (b.on ? "On. Click to switch off." : "Off. Click to switch on.")
+                + "\n\n" + fx.blurb;
+      eye.onclick = (e) => {
+        e.stopPropagation();
+        b.on = !b.on;
+        postWrite(node);
+        postRender(node);
+      };
+      row.appendChild(eye);
     }
+    const nm = document.createElement("span");
+    nm.className = "rn-ws-fxname";
+    nm.textContent = fx.settings ? fx.label : labels[b.id];
+    row.appendChild(nm);
+    if (!fx.settings && b.limit && b.limit !== "off") {
+      const pill = document.createElement("span");
+      pill.className = "rn-ws-fxlimitpill";
+      pill.textContent = b.limit;
+      pill.title = "Limited to the " + b.limit + ".";
+      row.appendChild(pill);
+    }
+    if (!fx.settings) {
+      const mv = document.createElement("span");
+      mv.className = "rn-ws-fxmove";
+      for (const [txt, delta, tip] of [["▲", -1, "Run this one step earlier."],
+                                       ["▼", 1, "Run this one step later."]]) {
+        const mb = document.createElement("button");
+        mb.textContent = txt;
+        mb.title = tip;
+        mb.disabled = (delta < 0 && i === 0) || (delta > 0 && i === chain.length - 1);
+        mb.onclick = (e) => { e.stopPropagation(); moveItem(b.id, i + delta); };
+        mv.appendChild(mb);
+      }
+      row.appendChild(mv);
+      dragHandlers(row, b.id);
+    }
+    row.title = fx.blurb;
+    row.onclick = () => { node._rnFxSel = b.id; postRender(node); };
+    list.appendChild(row);
+  };
+  chain.forEach((b, i) => {
+    const fx = byId[b.fx];
+    const band = chainBand(b.fx);
+    if (band !== lastBand) {
+      const bandEl = document.createElement("div");
+      bandEl.className = "rn-ws-fxband";
+      bandEl.textContent = band;
+      list.appendChild(bandEl);
+      lastBand = band;
+    }
+    addRow(b, fx, i);
+  });
+  // ADD AN EFFECT: any effect, another instance at the end of the chain (the
+  // editor's Another button copies the one on screen right after itself)
+  const addRowEl = document.createElement("div");
+  addRowEl.className = "rn-ws-fxadd";
+  const addSel = document.createElement("select");
+  addSel.className = "rn-ws-res";
+  for (const fx of POST_FX) {
+    if (fx.settings) continue;
+    const o = document.createElement("option");
+    o.value = fx.id;
+    o.textContent = fx.label;
+    addSel.appendChild(o);
+  }
+  addSel.title = "Which effect to add at the end of the chain. An effect can be in "
+               + "the chain more than once, each with its own dials and Limit.";
+  const addBtn = document.createElement("button");
+  addBtn.className = "rn-ws-btn";
+  addBtn.style.cssText = "width:auto;padding:0 10px";
+  addBtn.textContent = "＋ Add";
+  addBtn.title = "Add that effect to the end of the chain, switched on.";
+  addBtn.onclick = () => {
+    const b = newChainItem(cfg, addSel.value);
+    if (!b) return;
+    b.on = true;
+    chain.push(b);
+    node._rnFxSel = b.id;
+    postWrite(node);
+    postRender(node);
+  };
+  addRowEl.append(addSel, addBtn);
+  list.appendChild(addRowEl);
+  const sband = document.createElement("div");
+  sband.className = "rn-ws-fxband";
+  sband.textContent = "SETTINGS";
+  list.appendChild(sband);
+  for (const fx of POST_FX.filter((x) => x.settings)) {
+    addRow({ id: fx.id, fx: fx.id, on: false }, fx, -1);
   }
   // the panel re-renders on every click, which rebuilt the list at the top and
   // threw a scrolled reader back up; the position is kept on the node instead
   list.addEventListener("scroll", () => { node._rnFxListScroll = list.scrollTop; });
   split.appendChild(list);
 
-  // the editor: the selected effect, its switch, its controls, its limit
-  const fx = byId[node._rnFxSel];
-  const b = cfg.post[fx.id];
+  // the editor: the selected INSTANCE, its switch, its controls, its limit
+  const item = itemById[node._rnFxSel];
+  const fx = item ? byId[item.fx] : byId[node._rnFxSel];
+  const b = item || cfg.post[fx.id];
   const edit = document.createElement("div");
   edit.className = "rn-ws-fxedit";
   const h = document.createElement("div");
   h.className = "head";
   const ttl = document.createElement("span");
   ttl.className = "ttl";
-  ttl.textContent = fx.label.toUpperCase();
+  ttl.textContent = fx.settings ? fx.label.toUpperCase()
+    : (labels[b.id] || fx.label).toUpperCase()
+      + (countOf[b.fx] > 1 ? "  (" + (chain.findIndex((x) => x.id === b.id) + 1) + " in the chain)" : "");
   h.appendChild(ttl);
   if (!fx.settings) {
     const onB = document.createElement("button");
@@ -609,6 +837,41 @@ export function postBody(node, body) {
     onB.title = fx.blurb;
     onB.onclick = () => { b.on = !b.on; postWrite(node); postRender(node); };
     h.appendChild(onB);
+    // ANOTHER: a second instance of this effect right after this one, with the
+    // same dials, so a sharpen on the subject can be followed by one on the
+    // whole frame. REMOVE takes this instance out of the chain; the add row at
+    // the foot of the list brings an effect back.
+    const dup = document.createElement("button");
+    dup.className = "rn-ws-btn";
+    dup.style.cssText = "width:auto;padding:0 9px;font-size:11px";
+    dup.textContent = "＋ Another";
+    dup.title = "Add another " + fx.label + " right after this one, with the same dials. "
+              + "Each instance has its own switch, dials and Limit, so one can work "
+              + "the subject and the next the whole frame.";
+    dup.onclick = () => {
+      const nb = newChainItem(cfg, fx.id, b);
+      if (!nb) return;
+      const at = chain.findIndex((x) => x.id === b.id);
+      chain.splice(at + 1, 0, nb);
+      node._rnFxSel = nb.id;
+      postWrite(node);
+      postRender(node);
+    };
+    const rm = document.createElement("button");
+    rm.className = "rn-ws-btn";
+    rm.style.cssText = "width:auto;padding:0 9px;font-size:11px";
+    rm.textContent = "✕ Remove";
+    rm.title = "Take this instance out of the chain. The add row at the foot of the "
+             + "list puts an effect back.";
+    rm.onclick = () => {
+      const at = chain.findIndex((x) => x.id === b.id);
+      if (at < 0) return;
+      chain.splice(at, 1);
+      node._rnFxSel = (chain[Math.max(0, at - 1)] || POST_FX.find((x) => x.settings)).id;
+      postWrite(node);
+      postRender(node);
+    };
+    h.append(dup, rm);
   }
   // an effect that costs real time says so here, because this is where somebody
   // asks "why did that take twenty seconds"; the chips sit after the switch

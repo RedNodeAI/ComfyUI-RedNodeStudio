@@ -154,7 +154,7 @@ def vram_report(cfg, tabs, post_cfg):
                 engines.append(eng)
     if engines:
         heavy.append(f"{', '.join(engines)} each load a model to caption")
-    post_on = [n for n in postprocess.ORDER if post_cfg[n]["on"]]
+    post_on = sorted(postprocess.active_fx(post_cfg))
     if any(n in postprocess.DEPTH_EFFECTS for n in post_on):
         heavy.append("depth of field / haze load a depth estimator")
     if d.get("boosts_off"):

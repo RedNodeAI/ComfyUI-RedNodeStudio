@@ -9,7 +9,7 @@ const { app } = _appmod;
 const ComfyApp = _appmod.ComfyApp || {};
 import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
-         fxStep, cardOrder } from "./rednode_ws_post.js";
+         fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
 import { TAB_ORDER, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
@@ -576,6 +576,23 @@ css.textContent = `
 .rn-ws-fxrow:hover{background:#1b1f25}
 .rn-ws-fxrow.sel{background:#20242b;border-left-color:#b8283c;color:#fff}
 .rn-ws-fxname{overflow:hidden;text-overflow:ellipsis}
+.rn-ws-fxnum{flex:none;width:18px;text-align:right;font-size:10px;color:#6b7480;font-variant-numeric:tabular-nums}
+.rn-ws-fxmove{margin-left:auto;display:flex;gap:2px;flex:none}
+.rn-ws-fxmove button{background:none;border:1px solid transparent;color:#6b7480;font-size:9px;
+  padding:1px 4px;border-radius:3px;cursor:pointer}
+.rn-ws-fxmove button:hover{color:#fff;border-color:#33373d}
+.rn-ws-fxmove button:disabled{opacity:.25;cursor:default}
+.rn-ws-fxrow .rn-ws-fxlimitpill{margin-left:6px}
+.rn-ws-fxadd{display:flex;gap:6px;align-items:center;padding:6px 8px}
+.rn-ws-fxadd select{flex:1;min-width:0}
+.rn-ws-fxmapbar{display:flex;align-items:center;gap:8px;margin:4px 0 2px}
+.rn-ws-fxmap{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding:6px;
+  background:#101216;border:1px solid #262a30;border-radius:6px}
+.rn-ws-fxchip{background:#1a1d22;border:1px solid #33373d;color:#8a919b;border-radius:14px;
+  font-size:11px;padding:3px 9px;cursor:grab;white-space:nowrap}
+.rn-ws-fxchip.on{color:#e8ecf1;border-color:#4a5058}
+.rn-ws-fxchip.sel{border-color:#b8283c;color:#fff}
+.rn-ws-fxchip:hover{border-color:#b8283c}
 .rn-ws-eye{width:16px;height:16px;flex:none;border:none;background:none;color:#474b52;
   padding:0;cursor:pointer;font-size:11px;line-height:16px;text-align:center}
 .rn-ws-eye.on{color:#b8283c}
@@ -1139,6 +1156,7 @@ export function readCfg(node) {
       else if (typeof b[c.key] !== "number") b[c.key] = c.def;
     }
   }
+  normalisePostChain(d);                              // the chain of instances, in run order
   d.latent.on = !!d.latent.on;
   d.latent.random = !!d.latent.random;
   d.latent.source = d.latent.source === "input" ? "input" : "tab";
@@ -4336,7 +4354,10 @@ function vramState(d, v) {
 // The post panel is shared with the standalone RedNode Post Process node, which
 // owns a different config widget and redraws only itself. Both hooks default to
 // the workspace's own.
-export const postWrite = (node) => (node._rnPostWrite || writeCfg)(node);
+export const postWrite = (node) => {
+  mirrorChain(node._rnCfg);                           // the per-effect blocks follow the chain
+  return (node._rnPostWrite || writeCfg)(node);
+};
 export const postRender = (node) => (node._rnPostRender || render)(node);
 
 

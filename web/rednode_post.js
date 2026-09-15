@@ -2,7 +2,7 @@ import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 // the panel itself now lives in its own module; the workspace only supplies the
 // write/redraw hooks that let it not care which node is hosting it
-import { postBody, refreshPostPresets } from "./rednode_ws_post.js";
+import { postBody, refreshPostPresets, normalisePostChain } from "./rednode_ws_post.js";
 import { POST_FX } from "./rednode_ws_tables.js";
 import { postWrite, postRender } from "./rednode_workspace.js";
 
@@ -48,6 +48,7 @@ function readCfg(node) {
       else if (typeof b[c.key] !== "number") b[c.key] = c.def;
     }
   }
+  normalisePostChain(d);                              // the chain of instances, in run order
   if (typeof d.look_thumb !== "number") d.look_thumb = 76;
   d.look_thumb = Math.max(48, Math.min(180, d.look_thumb));
   d.post_ui = d.post_ui && typeof d.post_ui === "object" ? d.post_ui : {};
