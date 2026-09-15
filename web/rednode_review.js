@@ -126,6 +126,13 @@ const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=320`);
 // the browser would keep re-scaling on every pan. Full screen loads the original.
 const nodePx = () => Math.max(256, Math.min(1024, parseInt(setting("RedNode.Review.NodePictureSize", "768")) || 768));
 const nodeUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=${nodePx()}`);
+// per node, from its right-click menu: the big picture on the node at full size
+const fullOnNode = (node) => !!node.properties?.rn_full_preview;
+function toggleFullOnNode(node) {
+  (node.properties ||= {}).rn_full_preview = !fullOnNode(node);
+  node.graph?.change?.();
+  render(node);
+}
 
 // When each queued run started. ComfyUI's executed event carries no duration, but
 // execution_start carries the prompt id, which is all that is needed to time it.
@@ -423,6 +430,8 @@ function openMenu(node, entry, index, ev, slot = 0) {
                     : "copies the positive prompt that produced this image",
     }),
     mk("Open in a new tab", () => { window.open(fileUrl(f), "_blank"); }),
+    mk(fullOnNode(node) ? "Show the smaller picture on the node" : "Show the full-size picture on the node",
+       () => toggleFullOnNode(node)),
     mk(node._rnFsPrev ? "Leave full screen" : "View full screen", () => {
       if (node._rnFsPrev) { node._rnFsClose?.(); return; }
       node._rnView = index;                // the one you clicked is the one shown big
@@ -710,7 +719,7 @@ function render(node) {
     node._rnSlot = slot;
     node._rnSlotFor = view;
     const img = document.createElement("img");
-    const fullPic = !!node._rnFsPrev;
+    const fullPic = !!node._rnFsPrev || fullOnNode(node);
     img.decoding = "async";
     img.src = fullPic ? fileUrl(entry.files[slot]) : nodeUrl(entry.files[slot]);
     img.onerror = () => {
@@ -1029,5 +1038,17 @@ app.registerExtension({
 
     // PreviewImage's own onExecuted would draw the stock image widget under our panel
     nodeType.prototype.onExecuted = function () {};
+
+    const onMenu = nodeType.prototype.getExtraMenuOptions;
+    nodeType.prototype.getExtraMenuOptions = function (canvas, options) {
+      const out = onMenu?.apply(this, arguments);
+      const node = this;
+      (options || []).push({
+        content: fullOnNode(node) ? "Show the smaller picture on the node"
+                                  : "Show the full-size picture on the node",
+        callback: () => toggleFullOnNode(node),
+      });
+      return out;
+    };
   },
 });

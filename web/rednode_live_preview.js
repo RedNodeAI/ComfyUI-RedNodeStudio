@@ -92,6 +92,30 @@ function watches(node, ...ids) {
   return ids.some((x) => x != null && String(x) === want);
 }
 
+// FULL SIZE, per node: the right-click menu flips it. It lives on a hidden widget, so
+// the run saves the whole picture instead of the 512 px copy, and on the node's
+// properties as a mirror for a graph built before the widget existed.
+const fullWidget = (node) => (node.widgets || []).find((w) => w.name === "full_size");
+function hideFullWidget(node) {
+  const w = fullWidget(node);
+  if (!w || w._rnHidden) return;
+  w._rnHidden = true;
+  w.type = "hidden";
+  w.hidden = true;
+  w.computeSize = () => [0, -4];
+}
+const fullOn = (node) => {
+  const w = fullWidget(node);
+  return w ? !!w.value : !!node.properties?.rn_full_preview;
+};
+function setFull(node, on) {
+  const w = fullWidget(node);
+  if (w) w.value = !!on;
+  (node.properties ||= {}).rn_full_preview = !!on;
+  node.graph?.change?.();
+  render(node);
+}
+
 function state(node) {
   return (node._rnLp ||= { kind: "idle", src: "", step: 0, total: 0, blobUrl: "" });
 }
@@ -137,7 +161,7 @@ function render(node) {
     ? (s.label ? `${s.label} · ` : "")
       + (s.total ? `rendering ${s.step} / ${s.total}` : "rendering")
       + (s.decoder ? ` · ${String(s.decoder).replace(/\.safetensors$/i, "")}` : "")
-    : s.kind === "done" ? "done"
+    : s.kind === "done" ? (fullOn(node) ? "done · full size" : "done")
     : s.kind === "wait" ? "waiting for the run" : "";
   if (tag.textContent) main.appendChild(tag);
   if (s.kind === "live" && s.total) {
@@ -171,6 +195,7 @@ function build(node) {
     app.canvas?.processMouseWheel?.(e);
   }, { passive: false });
   node._rnRootEl = wrap;
+  hideFullWidget(node);
   const w = node.addDOMWidget("rednode_live_preview_ui", "rednode_live_preview_ui", wrap, {
     serialize: false,
     getMinHeight: () => MIN_PANEL_H,
@@ -287,7 +312,17 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
       onConfigure?.apply(this, arguments);
-      requestAnimationFrame(() => render(this));
+      requestAnimationFrame(() => { hideFullWidget(this); render(this); });
+    };
+    const onMenu = nodeType.prototype.getExtraMenuOptions;
+    nodeType.prototype.getExtraMenuOptions = function (canvas, options) {
+      const out = onMenu?.apply(this, arguments);
+      const node = this;
+      (options || []).push({
+        content: fullOn(node) ? "Show the small preview (512 px)" : "Show the full-size preview",
+        callback: () => setFull(node, !fullOn(node)),
+      });
+      return out;
     };
     // rewiring the input changes which node is watched; redraw the hint
     const onConn = nodeType.prototype.onConnectionsChange;

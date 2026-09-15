@@ -21,6 +21,10 @@ cheap to judge.
   pictures, 24 by default, counting every frame of a batch, and deletes its own
   older preview files from the temp folder to the same number. Files a Save node
   wrote are never touched
+- Either preview node can show its picture at full size instead, chosen per node
+  from its right-click menu: Show the full-size preview on Live Preview (the run
+  then saves the whole frame), Show the full-size picture on the node on Image
+  Review
 
 ### Workspace
 

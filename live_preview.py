@@ -37,7 +37,18 @@ class RedNodeLivePreview(nodes.PreviewImage):
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("images",)
 
-    def save_images(self, images=None, **kw):
+    @classmethod
+    def INPUT_TYPES(cls):
+        # the node's right-click "Show the full-size preview" writes this hidden switch,
+        # so the run knows whether to save the small copy or the whole picture
+        types = {k: dict(v) for k, v in nodes.PreviewImage.INPUT_TYPES().items()}
+        types.setdefault("optional", {})["full_size"] = (
+            "BOOLEAN", {"default": False,
+                        "tooltip": "Save and show the finished frame at full size instead of "
+                                   "the 512 px preview. Set from the node's right-click menu."})
+        return types
+
+    def save_images(self, images=None, full_size=False, **kw):
         # nothing rendered (external sampler, a paint run): an empty pane, and a
         # blocked output rather than a None a core node cannot take
         if images is None:
@@ -48,7 +59,7 @@ class RedNodeLivePreview(nodes.PreviewImage):
         # the panel only ever shows this small, so it is SAVED small: a full-size PNG
         # per run per node was disk written, then decoded and scaled in the browser on
         # every pan. The output socket still carries the full picture.
-        out = super().save_images(images=preview_size(images), **kw)
+        out = super().save_images(images=images if full_size else preview_size(images), **kw)
         out["result"] = (images,)
         from .review import prune_temp
         prune_temp((out.get("ui") or {}).get("images") or [], 0)   # the latest run only
