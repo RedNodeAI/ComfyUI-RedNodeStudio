@@ -701,6 +701,50 @@ export const POST_FX = [
         hint: "How red the bleed is. 0 is a neutral white glow, 1 is full orange-red, "
             + "the classic look on backlit hair and window frames." },
     ] },
+  { id: "film", label: "Film stock",
+    blurb: "A named stock's own response: how it turns light into density. Shadows "
+         + "and highlights flatten at the two ends of its curve, it sits on a little "
+         + "base fog, and it has its own saturation and its own colour in the shadows "
+         + "and the highlights. Grain is its own card; the two together are the whole "
+         + "emulsion. These are readings of each stock's character, not measured "
+         + "profiles.",
+    controls: [
+      { key: "stock", label: "Stock", def: "none", step: 1,
+        choice: ["none", "portra400", "ektar100", "gold200", "fuji400h", "superia400",
+                 "ektachrome100", "cinestill800t", "instant600", "trix400", "hp5",
+                 "acros100"],
+        labels: { none: "(none)", portra400: "Portra 400", ektar100: "Ektar 100",
+                  gold200: "Gold 200", fuji400h: "Fuji Pro 400H",
+                  superia400: "Superia 400", ektachrome100: "Ektachrome 100 (slide)",
+                  cinestill800t: "Cinestill 800T", instant600: "Instant film",
+                  trix400: "Tri-X 400 (black and white)",
+                  hp5: "HP5 Plus 400 (black and white)",
+                  acros100: "Acros 100 (black and white)" },
+        hint: "Which stock. Portra 400 is soft, warm and forgiving, the portrait answer. "
+            + "Ektar 100 is contrasty, fine and saturated, for landscape and colour. Gold "
+            + "200 is the warm, yellow consumer film of holiday snaps. Fuji Pro 400H runs "
+            + "cool and pastel. Superia 400 carries green in the shadows. Ektachrome is "
+            + "slide film: deep blacks, clean colour, steep contrast. Cinestill 800T is a "
+            + "tungsten cinema stock, so daylight goes blue and night lights come out "
+            + "right. Instant film is the milky, low contrast print with cyan shadows and "
+            + "warm highlights. Tri-X is the gritty black and white, HP5 the gentler one, "
+            + "Acros the fine, smooth one. (none) leaves the picture as it is." },
+      { key: "wratten", label: "Filter", def: "none", step: 1,
+        choice: ["none", "yellow8", "orange16", "red25", "green11"],
+        labels: { none: "(none)", yellow8: "Yellow 8", orange16: "Orange 16",
+                  red25: "Red 25", green11: "Green 11" },
+        hint: "Black and white stocks only: the glass filter on the front of the lens. "
+            + "Yellow 8 darkens a blue sky a little. Orange 16 goes further and smooths "
+            + "skin. Red 25 is the dramatic one: near-black sky, white clouds. Green 11 "
+            + "lifts foliage and darkens skin. The picture's brightness is held steady "
+            + "whichever you pick." },
+      { key: "strength", label: "Strength", min: 0, max: 1, step: 0.01, def: 1.0,
+        hint: "How far toward the stock. 1 is the stock as it is; half way is a hint of "
+            + "it over the picture you already had." },
+      { key: "fade", label: "Fade", min: 0, max: 1, step: 0.01, def: 0.0,
+        hint: "Raises the base fog, the expired-film look: the blacks go milky while "
+            + "everything brighter barely moves. 0 is fresh film." },
+    ] },
   { id: "rolloff", label: "Highlight roll-off",
     blurb: "A soft shoulder near white so highlights compress instead of clipping "
          + "to a flat blob. Sensors clip abruptly, film shoulders off; this is the "

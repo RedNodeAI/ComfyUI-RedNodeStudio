@@ -40,8 +40,9 @@ order light actually meets a physical camera, so the chain is:
                                     (focus), chromatic aberration (dispersion),
                                     bloom (veiling glare), light wrap, diffusion
                                     (front filter), vignette (cos^4 falloff)
-  4. the film behind it             halation (base reflection), highlight
-                                    roll-off (response curve), grain (emulsion)
+  4. the film behind it             halation (base reflection), film stock
+                                    (the characteristic curve), highlight
+                                    roll-off (a shoulder by hand), grain (emulsion)
 
 Two consequences are worth stating because they are easy to get backwards:
 sharpening runs BEFORE depth of field, or it re-sharpens what the defocus just
@@ -133,6 +134,11 @@ DEFAULTS = {
     "rolloff": {"on": False, "knee": 0.75, "strength": 0.6},
     "bloom": {"on": False, "intensity": 1.16, "threshold": 0.62, "smoothing": 0.23,
               "radius_multiplier": 1.0, "saturation": 0.77, "exposure": 1.0},
+    # THE FILM CARD: a named stock's response (toe, shoulder and contrast per channel,
+    # base fog, saturation, shadow and highlight colour). "none" is a passthrough.
+    # The Wratten filter is for the black and white stocks.
+    "film": {"on": False, "stock": "none", "wratten": "none", "strength": 1.0,
+             "fade": 0.0},
     "halation": {"on": False, "strength": 0.35, "threshold": 0.75, "radius": 3.0,
                  "warmth": 0.7},
     # LENS DISTORTION: `lens` is which named lens filled the dials (panel memory, never
@@ -186,6 +192,81 @@ MASK_EFFECTS = ("relight", "skin")
 NON_ARG_KEYS = ("on", "rand", "limit", "fx", "id", "ref_file", "lens", "awb")
 AWB_METHODS = ("grey_world", "white_patch", "shades_of_grey", "grey_edge")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
+FILM_PIVOT = 0.18                      # scene mid grey, in linear light
+
+# What each lens filter passes to a black and white stock, normalised to sum to 1 so
+# a grey card reads the same through every filter.
+WRATTEN = {
+    "none": (0.299, 0.587, 0.114),
+    "yellow8": (0.42, 0.52, 0.06),
+    "orange16": (0.55, 0.42, 0.03),
+    "red25": (0.80, 0.19, 0.01),
+    "green11": (0.18, 0.74, 0.08),
+}
+
+# Readings of each stock's character, not measurements: gamma is the straight
+# line's slope, toe and shoulder how hard the two ends flatten, fog the base density
+# in linear light, sat the colour, and the offsets the tint the shadows and the
+# highlights carry.
+FILM_STOCKS = {
+    "portra400": {
+        "label": "Portra 400", "bw": False,
+        "gamma": (0.92, 0.94, 0.90), "toe": (0.085, 0.080, 0.075),
+        "shoulder": (0.150, 0.140, 0.125), "fog": 0.008, "sat": 0.96,
+        "shadow_off": (-0.004, 0.000, 0.010), "high_off": (0.014, 0.006, -0.008)},
+    "ektar100": {
+        "label": "Ektar 100", "bw": False,
+        "gamma": (1.10, 1.08, 1.12), "toe": (0.050, 0.050, 0.045),
+        "shoulder": (0.095, 0.095, 0.085), "fog": 0.004, "sat": 1.18,
+        "shadow_off": (0.000, 0.000, 0.012), "high_off": (0.008, 0.000, -0.004)},
+    "gold200": {
+        "label": "Gold 200", "bw": False,
+        "gamma": (0.98, 0.96, 0.92), "toe": (0.070, 0.070, 0.065),
+        "shoulder": (0.130, 0.130, 0.120), "fog": 0.010, "sat": 1.12,
+        "shadow_off": (0.006, 0.002, -0.006), "high_off": (0.020, 0.010, -0.018)},
+    "fuji400h": {
+        "label": "Fuji Pro 400H", "bw": False,
+        "gamma": (0.88, 0.90, 0.92), "toe": (0.100, 0.095, 0.090),
+        "shoulder": (0.170, 0.160, 0.150), "fog": 0.010, "sat": 0.92,
+        "shadow_off": (-0.006, 0.004, 0.012), "high_off": (0.004, 0.008, 0.004)},
+    "superia400": {
+        "label": "Superia 400", "bw": False,
+        "gamma": (0.96, 1.00, 0.96), "toe": (0.080, 0.080, 0.075),
+        "shoulder": (0.140, 0.140, 0.130), "fog": 0.010, "sat": 1.06,
+        "shadow_off": (-0.008, 0.008, 0.004), "high_off": (0.004, 0.002, -0.004)},
+    "ektachrome100": {
+        "label": "Ektachrome 100 (slide)", "bw": False,
+        "gamma": (1.25, 1.22, 1.25), "toe": (0.030, 0.030, 0.028),
+        "shoulder": (0.200, 0.200, 0.190), "fog": 0.002, "sat": 1.12,
+        "shadow_off": (0.000, 0.000, 0.008), "high_off": (-0.002, 0.000, 0.006)},
+    "cinestill800t": {
+        "label": "Cinestill 800T", "bw": False,
+        "gamma": (0.95, 0.95, 0.98), "toe": (0.070, 0.070, 0.060),
+        "shoulder": (0.135, 0.135, 0.115), "fog": 0.012, "sat": 1.05,
+        "shadow_off": (-0.010, -0.002, 0.024), "high_off": (0.010, 0.000, 0.006)},
+    "instant600": {
+        "label": "Instant film", "bw": False,
+        "gamma": (0.80, 0.80, 0.78), "toe": (0.140, 0.140, 0.130),
+        "shoulder": (0.220, 0.220, 0.200), "fog": 0.030, "sat": 0.85,
+        "shadow_off": (-0.012, 0.006, 0.014), "high_off": (0.018, 0.010, -0.012)},
+    "trix400": {
+        "label": "Tri-X 400", "bw": True,
+        "gamma": (1.12, 1.12, 1.12), "toe": (0.060, 0.060, 0.060),
+        "shoulder": (0.125, 0.125, 0.125), "fog": 0.012, "sat": 1.0,
+        "shadow_off": (0.002, 0.000, -0.002), "high_off": (0.002, 0.001, -0.002)},
+    "hp5": {
+        "label": "HP5 Plus 400", "bw": True,
+        "gamma": (0.98, 0.98, 0.98), "toe": (0.085, 0.085, 0.085),
+        "shoulder": (0.165, 0.165, 0.165), "fog": 0.010, "sat": 1.0,
+        "shadow_off": (0.000, 0.000, 0.000), "high_off": (0.000, 0.000, 0.000)},
+    "acros100": {
+        "label": "Acros 100", "bw": True,
+        "gamma": (1.05, 1.05, 1.05), "toe": (0.050, 0.050, 0.050),
+        "shoulder": (0.100, 0.100, 0.100), "fog": 0.006, "sat": 1.0,
+        "shadow_off": (0.000, 0.000, 0.000), "high_off": (0.000, 0.000, 0.000)},
+}
+FILM_STOCK_NAMES = ("none",) + tuple(FILM_STOCKS)
+WRATTEN_NAMES = tuple(WRATTEN)
 # the lens picker's names; the values live in web/rednode_ws_tables.js (LENS_PRESETS)
 LENS_NAMES = ("custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
               "portrait_85", "long_135", "vintage_55", "anamorphic_40",
@@ -197,7 +278,7 @@ ORDER = ("denoise", "color", "match", "lut", "skin", "clarity", "sharpen",   # r
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
          "light_wrap", "diffusion", "vignette",              # ...and its glare
-         "halation", "rolloff", "grain")                     # the film
+         "halation", "film", "rolloff", "grain")             # the film
 
 # effects that cannot run without a depth map wired into the node
 DEPTH_EFFECTS = ("dof", "haze", "relight")
@@ -1089,6 +1170,44 @@ def rolloff(img, knee=0.75, strength=0.6):
     return _clamp01(_nhwc(t - over * s + compressed * s))
 
 
+def film(img, stock="none", wratten="none", strength=1.0, fade=0.0):
+    """A named stock's characteristic curve. Stops from mid grey go through the
+    stock's slope, then d / (1 + k|d|) flattens the toe and the shoulder (strictly
+    increasing, so a highlight never folds back), base fog is added in linear light,
+    and the stock's saturation and shadow and highlight colour go on in sRGB. A
+    black and white stock first mixes one channel through the Wratten filter."""
+    spec = FILM_STOCKS.get(stock)
+    s = max(0.0, min(1.0, float(strength)))
+    if spec is None or s <= 0:
+        return img
+    x = _nchw(img).float()[:, :3]
+    lin = _srgb_to_linear(x.clamp(0, 1))
+    dev = x.device
+
+    def v3(key):
+        return torch.tensor(spec[key], device=dev, dtype=x.dtype).view(1, 3, 1, 1)
+
+    if spec["bw"]:
+        w = torch.tensor(WRATTEN.get(wratten, WRATTEN["none"]), device=dev,
+                         dtype=x.dtype).view(1, 3, 1, 1)
+        lin = (lin * w).sum(1, keepdim=True).expand(-1, 3, -1, -1)
+    e = torch.log2(lin.clamp_min(1e-5) / FILM_PIVOT)
+    d = e * v3("gamma")
+    d = torch.where(d < 0, d / (1 + v3("toe") * d.abs()), d / (1 + v3("shoulder") * d.abs()))
+    out = FILM_PIVOT * torch.pow(2.0, d)
+    out = out + float(spec["fog"]) + float(fade) * 0.035
+    out = _linear_to_srgb(out.clamp(0, 1))
+    if not spec["bw"] and spec["sat"] != 1.0:
+        lum = _luma(out)
+        out = lum + (out - lum) * float(spec["sat"])
+    y = _luma(out).clamp(0, 1)
+    lo = (1 - 2 * y).clamp(0, 1)
+    hi = (2 * y - 1).clamp(0, 1)
+    out = (out + v3("shadow_off") * lo + v3("high_off") * hi).clamp(0, 1)
+    res = x + (out - x) * s
+    return _nhwc(_clamp01(res)).to(img.dtype)
+
+
 def halation(img, strength=0.35, threshold=0.75, radius=3.0, warmth=0.7):
     """The warm bleed film gets around bright edges.
 
@@ -1255,7 +1374,7 @@ EFFECTS = {
     "sharpen": sharpen, "bloom": bloom, "halation": halation, "light_wrap": light_wrap,
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
-    "match": match, "lut": lut, "relight": relight, "skin": skin,
+    "match": match, "lut": lut, "relight": relight, "skin": skin, "film": film,
 }
 
 
@@ -1278,6 +1397,11 @@ def _guard(name, cur):
                             else "horizontal")
     elif name == "distortion":
         cur["lens"] = cur["lens"] if cur["lens"] in LENS_NAMES else "custom"
+    elif name == "film":
+        cur["stock"] = cur["stock"] if cur["stock"] in FILM_STOCK_NAMES else "none"
+        cur["wratten"] = cur["wratten"] if cur["wratten"] in WRATTEN_NAMES else "none"
+        cur["strength"] = max(0.0, min(1.0, cur["strength"]))
+        cur["fade"] = max(0.0, min(1.0, cur["fade"]))
     elif name == "color":
         cur["awb"] = cur["awb"] if cur["awb"] in AWB_METHODS else "shades_of_grey"
         cur["exposure"] = max(-3.0, min(3.0, cur["exposure"]))

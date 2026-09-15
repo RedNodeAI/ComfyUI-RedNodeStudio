@@ -98,6 +98,10 @@ cheap to judge.
   puts it on screen. De-yellow, rosy, skin saturation, brightness with a
   highlight guard, shadow lift, evenness, and smoothing with a texture dial,
   all starting at 0
+- A Film stock card between Halation and Highlight roll-off: twelve stock
+  looks (colour negative, slide, tungsten cinema, instant and three black and
+  white) as a characteristic curve with base fog and shadow and highlight
+  colour, Wratten filters for the black and white stocks, strength and fade
 - The Colour card grows into a full grade: exposure in stops, shadows,
   highlights, local HDR, lift, gamma and gain, vibrance that holds skin, and
   split tone, in headed groups. Temperature and tint now put the frame's
