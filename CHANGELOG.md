@@ -85,7 +85,9 @@ cheap to judge.
   list beside one editor as before, with an Additional row that adds any
   effect to the end of the chain; and Order, the effects that are on as a
   row of numbered cards you drag about, where an effect is doubled in place
-  or taken out, and Camera order puts everything back. An effect can be in the chain more than once,
+  or taken out, and Camera order puts everything back. Every effect always
+  stays in the chain and only switches on or off; the extra copies you add
+  are the ones that can be deleted. An effect can be in the chain more than once,
   each instance with its own dials and Limit, so a sharpen can work the
   subject early and the whole frame at the end. Saved chains render exactly
   as before

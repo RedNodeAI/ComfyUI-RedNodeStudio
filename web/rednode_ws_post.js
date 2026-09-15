@@ -171,11 +171,29 @@ export function normalisePostChain(d) {
       chain = effects.map((fx) => normItem({ ...(d.post[fx.id] || {}) }, fx));
       for (const b of chain) b.id = b.fx;
     }
+    // THE FULL RANGE IS ALWAYS THERE: every effect keeps one BASE instance, its
+    // id the effect's own name, which switches on and off but is never removed.
+    // A chain missing an effect gets its base back, off, at its camera position.
+    const rank = Object.fromEntries(POST_FX.map((fx, i) => [fx.id, i]));
+    for (const fx of effects) {
+      if (chain.some((b) => b.id === fx.id)) continue;
+      const mine = chain.find((b) => b.fx === fx.id);
+      if (mine) { mine.id = fx.id; continue; }
+      const nb = normItem({ ...(d.post[fx.id] || {}) }, fx);
+      nb.on = false;
+      nb.id = fx.id;
+      const at = chain.findIndex((b) => rank[b.fx] > rank[fx.id]);
+      chain.splice(at < 0 ? chain.length : at, 0, nb);
+    }
   }
   d.post.chain = chain;
   mirrorChain(d);
   return chain;
 }
+
+// an EXTRA instance, added on top of the full range: the only kind that can be
+// deleted. The base instance of an effect carries the effect's own name as id.
+export const isExtra = (b) => !!b && b.id !== b.fx;
 
 // the per-effect blocks mirror the FIRST instance of each effect, for every
 // reader that asks "is bloom on" without walking the chain (the Looks strip,
@@ -183,6 +201,7 @@ export function normalisePostChain(d) {
 export function mirrorChain(d) {
   if (!d || !d.post || !Array.isArray(d.post.chain)) return;
   const first = {};
+  for (const b of d.post.chain) if (b.id === b.fx) first[b.fx] = b;
   for (const b of d.post.chain) if (!first[b.fx]) first[b.fx] = b;
   for (const fx of POST_FX) {
     if (fx.settings) continue;
@@ -695,8 +714,8 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
     };
     const rm = document.createElement("button");
     rm.textContent = "\u2715";
-    rm.title = "Take this " + fx.label + " out of the chain. The Additional row on the "
-             + "Effects view puts an effect back.";
+    rm.title = "Delete this extra " + fx.label + ". The first " + fx.label + " always stays "
+             + "in the chain; switch it off in the Effects view instead.";
     rm.onclick = (e) => {
       e.stopPropagation();
       const at = chain.findIndex((x) => x.id === b.id);
@@ -706,7 +725,8 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
       postWrite(node);
       postRender(node);
     };
-    acts.append(dup, rm);
+    acts.append(dup);
+    if (isExtra(b)) acts.append(rm);
     card.append(big, n, nm, st, lim, foot, acts);
     card.title = fx.blurb + "\n\nDouble-click to open it in Effects.";
     card.ondblclick = () => { node._rnFxSel = b.id; node._rnPostSub = "effects"; postRender(node); };
@@ -777,9 +797,12 @@ export function postBody(node, body) {
   for (const b of chain) countOf[b.fx] = (countOf[b.fx] || 0) + 1;
   const nthOf = {};
   const labels = {};
+  // the base instance keeps the plain name; the extras are numbered from 2 in
+  // the order they sit in the chain, so "Sharpen 2" is always a deletable copy
   for (const b of chain) {
-    nthOf[b.fx] = (nthOf[b.fx] || 0) + 1;
-    labels[b.id] = byId[b.fx].label + (countOf[b.fx] > 1 ? " " + nthOf[b.fx] : "");
+    if (b.id === b.fx) { labels[b.id] = byId[b.fx].label; continue; }
+    nthOf[b.fx] = (nthOf[b.fx] || 1) + 1;
+    labels[b.id] = byId[b.fx].label + " " + nthOf[b.fx];
   }
   const sub = node._rnPostSub === "order" ? "order" : "effects";
   {
@@ -842,6 +865,24 @@ export function postBody(node, body) {
       pill.textContent = b.limit;
       pill.title = "Limited to the " + b.limit + ".";
       row.appendChild(pill);
+    }
+    if (!fx.settings && isExtra(b)) {
+      // only an EXTRA instance can be deleted; the full range always stays
+      const del = document.createElement("button");
+      del.className = "rn-ws-fxdel";
+      del.textContent = "\u2715";
+      del.title = "Delete this extra " + fx.label + ". The first " + fx.label
+                + " always stays in the chain.";
+      del.onclick = (e) => {
+        e.stopPropagation();
+        const at = chain.findIndex((x) => x.id === b.id);
+        if (at < 0) return;
+        chain.splice(at, 1);
+        if (node._rnFxSel === b.id) node._rnFxSel = b.fx;
+        postWrite(node);
+        postRender(node);
+      };
+      row.appendChild(del);
     }
     row.title = fx.blurb;
     row.onclick = () => { node._rnFxSel = b.id; postRender(node); };

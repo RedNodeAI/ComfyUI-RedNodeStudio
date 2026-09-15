@@ -1060,14 +1060,32 @@ def parse_post(data):
             cur["fx"] = fx
             cur["id"] = fx
             chain.append(cur)
+    # THE FULL RANGE IS ALWAYS THERE. Every effect keeps one BASE instance, whose
+    # id is the effect's own name: it switches on and off but is never removed.
+    # Extra instances (sharpen#2 ...) are the only ones that can be deleted. A
+    # chain missing an effect gets its base back, off, at its camera position.
+    if explicit:
+        rank = {fx: i for i, fx in enumerate(ORDER)}
+        for fx in ORDER:
+            if any(c["id"] == fx for c in chain):
+                continue
+            mine = [c for c in chain if c["fx"] == fx]
+            if mine:
+                mine[0]["id"] = fx          # the first copy becomes the base
+                continue
+            cur = dict(out[fx])
+            cur["on"] = False
+            cur["fx"] = fx
+            cur["id"] = fx
+            at = next((i for i, c in enumerate(chain) if rank[c["fx"]] > rank[fx]),
+                      len(chain))
+            chain.insert(at, cur)
     out["chain"] = chain
     if explicit:
-        first = {}
-        for cur in chain:
-            first.setdefault(cur["fx"], cur)
+        base = {c["fx"]: c for c in chain if c["id"] == c["fx"]}
         for fx in ORDER:
-            if fx in first:
-                out[fx] = {k: v for k, v in first[fx].items() if k not in ("fx", "id")}
+            if fx in base:
+                out[fx] = {k: v for k, v in base[fx].items() if k not in ("fx", "id")}
             else:
                 out[fx] = dict(out[fx])
                 out[fx]["on"] = False

@@ -577,6 +577,10 @@ css.textContent = `
 .rn-ws-fxrow.sel{background:#20242b;border-left-color:#b8283c;color:#fff}
 .rn-ws-fxname{overflow:hidden;text-overflow:ellipsis}
 .rn-ws-fxadd{display:flex;gap:6px;align-items:center;padding:6px 8px 10px}
+.rn-ws-fxdel{margin-left:auto;flex:none;background:none;border:1px solid transparent;color:#6b7480;
+  font-size:11px;padding:1px 5px;border-radius:4px;cursor:pointer}
+.rn-ws-fxdel:hover{color:#fff;border-color:#b8283c}
+.rn-ws-fxrow .rn-ws-fxlimitpill + .rn-ws-fxdel{margin-left:6px}
 .rn-ws-fxadd select{flex:1;min-width:0}
 .rn-ws-fxboard{display:flex;align-items:stretch;gap:6px;margin-top:6px}
 .rn-ws-fxscroll{flex:none;width:26px;background:none;border:0;color:#6b7480;font-size:22px;cursor:pointer;
