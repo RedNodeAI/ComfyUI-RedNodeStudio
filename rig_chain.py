@@ -130,6 +130,36 @@ def _signature(prompt, nid, memo):
 
 
 # ---- calling a node the way ComfyUI does -------------------------------------------
+_CASTS = {"INT": int, "FLOAT": float, "STRING": str, "BOOLEAN": bool}
+
+
+def _typed_value(nid, class_type, class_def, name, val):
+    """A typed-in value, converted and range-checked the way ComfyUI's validation does.
+    Nothing links a rig's nodes to an output, so ComfyUI never validates them itself; a
+    widget saved as 0.5 on an INT would otherwise reach the node as a float."""
+    if isinstance(val, dict) and "__value__" in val:
+        val = val["__value__"]
+    try:
+        from comfy_execution.graph import get_input_info
+        input_type, _cat, extra = get_input_info(class_def, name)
+    except Exception:
+        return val
+    cast = _CASTS.get(input_type) if isinstance(input_type, str) else None
+    if cast is None:
+        return val
+    try:
+        val = cast(val)
+    except (TypeError, ValueError):
+        raise RuntimeError("%s is %r, which is not a %s" % (name, val, input_type))
+    if hasattr(class_def, "VALIDATE_INPUTS") or not isinstance(extra, dict):
+        return val
+    if "min" in extra and val < extra["min"]:
+        raise RuntimeError("%s is %s, below its minimum of %s" % (name, val, extra["min"]))
+    if "max" in extra and val > extra["max"]:
+        raise RuntimeError("%s is %s, above its maximum of %s" % (name, val, extra["max"]))
+    return val
+
+
 async def _call_node(nid, node, values, prompt):
     import nodes
     import execution
@@ -147,7 +177,7 @@ async def _call_node(nid, node, values, prompt):
                 continue
             inputs[k] = src[v[1]]
         else:
-            inputs[k] = v
+            inputs[k] = _typed_value(nid, class_type, class_def, k, v)
     input_data_all, _missing, v3_data = execution.get_input_data(
         inputs, class_def, nid, None, DynamicPrompt(prompt), {})
     obj = class_def()
