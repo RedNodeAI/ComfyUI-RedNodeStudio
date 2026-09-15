@@ -49,6 +49,23 @@ export function linkCustomRigs(output) {
   }
   if (!Object.keys(nodeFor).length) return 0;
 
+  // does `from` depend on `to` through the prompt's links? A Custom Rig fed by its own
+  // consumer (the Workspace's positive into a sampler into the rig) would become a loop
+  // with the added link, and ComfyUI refuses the whole queue for a loop
+  const dependsOn = (from, to) => {
+    const seen = new Set();
+    const stack = [String(from)];
+    while (stack.length) {
+      const id = stack.pop();
+      if (id === String(to)) return true;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const v of Object.values(output[id]?.inputs || {})) {
+        if (Array.isArray(v) && v.length === 2 && output[String(v[0])]) stack.push(String(v[0]));
+      }
+    }
+    return false;
+  };
   let added = 0;
   const link = (consumerId, rigName) => {
     const target = nodeFor[rigName];
@@ -57,6 +74,11 @@ export function linkCustomRigs(output) {
       const key = `rn_rig_${rid}`;
       const inputs = (output[consumerId].inputs ||= {});
       if (inputs[key]) continue;
+      if (dependsOn(rid, consumerId)) {
+        console.warn(`[RedNode Custom Rig] "${target}" is fed by the node that would use it, so `
+          + "linking it would make a loop. It is left out of this queue.");
+        continue;
+      }
       inputs[key] = [rid, 0];
       added++;
     }
