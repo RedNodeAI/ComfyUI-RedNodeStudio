@@ -28,6 +28,16 @@ cheap to judge.
 
 ### Rigs
 
+- Your own sampler chain for any rig: build it between RedNode Sampler Start,
+  which hands out the model, positive, negative, latent, seed, steps, CFG,
+  sampler, scheduler, denoise, step window and VAE, and RedNode Sampler End,
+  which takes the finished latent under a name. A rig's Sampler chain choice
+  on the Models tab names it, and the main render, every Latent and Img2Img
+  pass, the paint pass and every Detailer pass on that rig sample through it,
+  each with its own values. No wires; the pack runs the chain's nodes itself
+  through ComfyUI's own node calls, and nodes that do not depend on Sampler
+  Start run once per queue. A KSampler chain renders pixel for pixel what the
+  built-in sampler does. The Tiled upscale pass keeps its own sampler
 - A RedNode Custom Rig node: your own model, CLIP and VAE from any loaders, or a
   finished latent or picture from your own sampler chain, as a named rig. A
   Models tab rig of kind Custom node takes it, and the built-in sampler, every

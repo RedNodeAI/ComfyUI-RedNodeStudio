@@ -920,6 +920,8 @@ def parse_config(config_json):
             # SAMPLER DIALS, per rig, all off by default: AuraFlow shift, Detail
             # Daemon, Seed Variance, densify the tail (sampler_dials.py)
             "dials": _dials.parse_dials(r),
+            # a RedNode Sampler End's name: this rig samples through that chain
+            "custom_sampler": str(r.get("custom_sampler") or "")[:64],
         })
     try:
         active = int(min_.get("active", 0))
@@ -3160,8 +3162,10 @@ class RedNodeStudioWorkspace:
                     _lc = cfg["latent"]
                     _lat = {"samples": torch.zeros(
                         [_lc["batch"], 16, _lc["h"] // 8, _lc["w"] // 8])}
-                print("[RedNode Workspace] built-in sampler: seed %d, %d steps, "
+                _chain0 = _ar.get("custom_sampler") or ""
+                print("[RedNode Workspace] %s: seed %d, %d steps, "
                       "cfg %.1f, %s/%s, denoise %.2f" % (
+                          ("sampler chain %r" % _chain0) if _chain0 else "built-in sampler",
                           _seed, rig_steps, rig_cfg, rig_sampler, rig_scheduler,
                           _dn), flush=True)
                 # PASSES, the Paint tab's iteration on the i2i chain: each pass
@@ -3349,12 +3353,17 @@ class RedNodeStudioWorkspace:
                             ("pass %d of %d" % (_p + 1, _npass) if _npass > 1 else ""),
                             _rig_p,
                         ] if x)
-                        _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
-                            _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
-                            _sched_p, _pos_i, negative, _out,
-                            denoise=_dnp, dials=_dials_p,
-                            sigmas=(_segs[_p] if _segs is not None else None),
-                            disable_noise=bool(_segs is not None and _p > 0))
+                        from . import custom_sampler as _custom
+                        _rig_rec = (next((r for r in cfg["models"]["rigs"]
+                                          if r.get("name") == _rig_p), None)
+                                    if _rig_p else _ar) or {}
+                        with _custom.using(_rig_rec.get("custom_sampler") or "", prompt):
+                            _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
+                                _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
+                                _sched_p, _pos_i, negative, _out,
+                                denoise=_dnp, dials=_dials_p,
+                                sigmas=(_segs[_p] if _segs is not None else None),
+                                disable_noise=bool(_segs is not None and _p > 0))
                     _last_out = _out
                     if _v is not None:
                         # the same courtesy the encode gets: past roughly 2

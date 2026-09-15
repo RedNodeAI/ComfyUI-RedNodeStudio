@@ -1124,6 +1124,7 @@ export function readCfg(node) {
     if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
     if (r.kind !== "external" && r.kind !== "node") r.kind = "";
     if (typeof r.node !== "string") r.node = "";          // a "node" rig's Custom Rig name
+    if (typeof r.custom_sampler !== "string") r.custom_sampler = "";   // a Sampler End's name
     if (typeof r.denoise !== "number") r.denoise = 1.0;
     // the LoRAs-tab SET this rig renders with; "" = Main
     if (typeof r.lora_set !== "string") r.lora_set = "";
@@ -1329,6 +1330,12 @@ export function setupProblems(node, cfg) {
   if (!rig) {
     if (!wired("model")) out.push("There is no rig. Press New Rig and choose its model, CLIP and VAE.");
     return out;
+  }
+  if (rig.custom_sampler && !allNodes().some((n) => n?.type === "RedNodeSamplerEnd"
+      && !(n.mode === 2 || n.mode === 4)
+      && (String((n.widgets || []).find((w) => w?.name === "name")?.value ?? "").trim()
+          || "My sampler") === rig.custom_sampler)) {
+    out.push(`No RedNode Sampler End named "${rig.custom_sampler}" is on the canvas.`);
   }
   if (rig.kind === "node") {
     const want = rig.node || rig.name;
@@ -9959,6 +9966,31 @@ function modelsBody(node, page) {
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
+  if (rig.kind !== "external") {
+    // YOUR OWN SAMPLER: a chain between RedNode Sampler Start and Sampler End, by name
+    const chains = [...new Set(allNodes().filter((n) => n?.type === "RedNodeSamplerEnd"
+      && !(n.mode === 2 || n.mode === 4)).map((n) => String((n.widgets || [])
+      .find((w) => w?.name === "name")?.value ?? "").trim() || "My sampler"))];
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-select";
+    const cur = rig.custom_sampler || "";
+    const opts = [["", "Built-in"], ...chains.map((c) => [c, c])];
+    if (cur && !chains.includes(cur)) opts.push([cur, cur + "  (not on the canvas)"]);
+    for (const [v, t] of opts) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      o.selected = v === cur;
+      sel.appendChild(o);
+    }
+    const hint = "Built-in samples with the numbers here. A named chain samples through your "
+               + "own nodes between RedNode Sampler Start and Sampler End instead, for every "
+               + "render, pass and Detailer pass on this rig; it takes the numbers here from "
+               + "Sampler Start. Nothing is wired.";
+    sel.title = hint;
+    sel.onchange = () => { rig.custom_sampler = sel.value; writeCfg(node); render(node); };
+    pill(body, "Sampler chain", sel, hint);
+  }
   if (rig.kind && rig.kind !== "node") {
     // an external engine names its own samplers, so these are free text notes
     // riding the sockets, not comfy's lists

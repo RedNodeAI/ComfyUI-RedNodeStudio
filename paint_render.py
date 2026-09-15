@@ -248,6 +248,17 @@ def _fit_region(t_nhwc, budget_side, cap=0, floor=False):
     return t.permute(0, 2, 3, 1)
 
 
+
+def _paint_chain(prompt):
+    """The active rig's own sampler chain name, "" for the built-in sampler."""
+    try:
+        from .workspace import parse_config as _pcfg
+        cfg = _pcfg(json.dumps(_workspace_cfg(prompt)))
+        rigs = cfg["models"]["rigs"]
+        return (rigs[cfg["models"]["active"]].get("custom_sampler") or "") if rigs else ""
+    except Exception:
+        return ""
+
 class RedNodePaintRender:
     @classmethod
     def INPUT_TYPES(cls):
@@ -751,13 +762,15 @@ class RedNodePaintRender:
             # on the built-in paint door) and the run (live_preview.py)
             # through the sampler dials' entry: with nothing on it is core's
             # common_ksampler; an extra scheduler name on the rig builds its schedule
-            out = _live.sampled(unique_id, _dials.sample_with_dials,
-                                label=("pass %d of %d" % (i + 1, passes))
-                                      if passes > 1 else "",
-                                size=live_px or None)(
-                model, (seed + i) % (2 ** 64), steps, cfg,
-                sampler_name, scheduler, pos, neg, latent,
-                denoise=denoise)
+            from . import custom_sampler as _custom
+            with _custom.using(_paint_chain(prompt), prompt):
+                out = _live.sampled(unique_id, _dials.sample_with_dials,
+                                    label=("pass %d of %d" % (i + 1, passes))
+                                          if passes > 1 else "",
+                                    size=live_px or None)(
+                    model, (seed + i) % (2 ** 64), steps, cfg,
+                    sampler_name, scheduler, pos, neg, latent,
+                    denoise=denoise)
             if i + 1 >= passes:
                 break
             if work_mask is None:
