@@ -117,7 +117,14 @@ DEFAULTS = {
     "aberration": {"on": False, "amount": 0.47, "red_shift": 1.0, "green_shift": -1.0,
                    "blue_shift": -3.0, "direction": "horizontal"},
     "grain": {"on": False, "power": 0.09, "scale": 1.0, "saturation": 1.0, "seed": 0},
-    "vignette": {"on": False, "amount": 0.10, "feather": 0.6},
+    # VIGNETTE: two falloff laws. "smooth" is the shipped one, a flat centre and a
+    # soft ring near the edge; "cos4" is what real glass does, cosine to the fourth
+    # of the field angle, normalised so the corner lands at the same darkness either
+    # way and Amount means one thing. Roundness runs from the frame's own oval to a
+    # true circle; the ring colour lands in the falloff only, as a gain that changes
+    # colour without changing brightness.
+    "vignette": {"on": False, "amount": 0.10, "feather": 0.6, "law": "smooth",
+                 "roundness": 0.0, "tint_hue": 30.0, "tint_amount": 0.0},
 }
 
 BLEND_MODES = ("soft light", "overlay", "normal", "linear light")
@@ -142,6 +149,12 @@ DEPTH_ESTIMATORS = {
 DEPTH_MODELS = {"vitg": "depth_anything_v2_vitg.pth", "vitl": "depth_anything_v2_vitl.pth",
                 "vitb": "depth_anything_v2_vitb.pth", "vits": "depth_anything_v2_vits.pth"}
 SHARPEN_MODES = ("lucy", "unsharp")
+VIGNETTE_LAWS = ("smooth", "cos4")
+# keys a chain instance carries for the panel's sake that are NOT arguments to the
+# effect function: the switch, the random ranges, the Limit row, the instance's
+# identity, the Match card's dropped picture, the lens picker's memory and the
+# colour card's auto white balance estimator
+NON_ARG_KEYS = ("on", "rand", "limit", "fx", "id", "ref_file", "lens", "awb")
 CA_DIRECTIONS = ("horizontal", "vertical", "radial")
 
 # the chain order: repair, tone, detail, light, lens
@@ -920,17 +933,45 @@ def grain(img, power=0.09, scale=1.0, saturation=1.0, seed=0):
     return _clamp01(_nhwc(t + noise * float(power) * weight))
 
 
-def vignette(img, amount=0.10, feather=0.6):
-    """Radial falloff towards the corners. feather sets how soon it starts."""
+def vignette(img, amount=0.10, feather=0.6, law="smooth", roundness=0.0,
+             tint_hue=30.0, tint_amount=0.0):
+    """Radial falloff towards the corners.
+
+    feather sets how soon it starts. Smooth is a flat centre and a soft ring; cos4
+    is the natural law, the light dropping from the middle outward by the fourth
+    power of the cosine of the field angle, normalised so the corner lands at the
+    same darkness as the smooth law. Roundness runs from the frame's own oval to a
+    true circle. The ring colour is a gain in the falloff only, normalised so it
+    changes colour without changing brightness.
+    """
     t = _nchw(img)
     b, c, h, w = t.shape
     ys = torch.linspace(-1, 1, h, device=t.device, dtype=t.dtype).view(1, 1, h, 1)
     xs = torch.linspace(-1, 1, w, device=t.device, dtype=t.dtype).view(1, 1, 1, w)
     d = torch.sqrt(xs * xs + ys * ys) / math.sqrt(2.0)
-    edge = max(1e-3, float(feather))
-    fall = ((d - (1.0 - edge)) / edge).clamp(0.0, 1.0)
-    fall = fall * fall * (3 - 2 * fall)
-    return _clamp01(_nhwc(t * (1.0 - fall * float(amount))))
+    q = max(0.0, min(1.0, float(roundness)))
+    if q > 0:
+        s = float(max(h, w))
+        px, py = xs * (w / s), ys * (h / s)
+        n = math.sqrt((w / s) ** 2 + (h / s) ** 2)
+        d = (1.0 - q) * d + q * (torch.sqrt(px * px + py * py) / n)
+    if law == "cos4":
+        cc = max(0.2, min(2.0, 2.0 - 1.6 * float(feather)))
+        raw = lambda u: 1.0 - 1.0 / (1.0 + (u * cc) ** 2) ** 2   # noqa: E731
+        fall = (raw(d) / raw(torch.ones(1, device=t.device, dtype=t.dtype))).clamp(0.0, 1.0)
+    else:
+        edge = max(1e-3, float(feather))
+        fall = ((d - (1.0 - edge)) / edge).clamp(0.0, 1.0)
+        fall = fall * fall * (3 - 2 * fall)
+    out = t * (1.0 - fall * float(amount))
+    ta = max(0.0, min(1.0, float(tint_amount)))
+    if ta > 0:
+        hue = torch.full((1, 1, 1, 1), (float(tint_hue) % 360.0) / 360.0,
+                         device=t.device, dtype=t.dtype)
+        tint = _hsv_to_rgb(hue, torch.full_like(hue, 0.8), torch.ones_like(hue))
+        tint_n = (tint / _luma(tint).clamp_min(1e-4)).clamp(0.0, 4.0)
+        out = out * (1.0 + (tint_n - 1.0) * (ta * fall))
+    return _clamp01(_nhwc(out))
 
 
 # ---------------------------------------------------------------------------
@@ -956,6 +997,11 @@ def _guard(name, cur):
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")
+    elif name == "vignette":
+        cur["law"] = cur["law"] if cur["law"] in VIGNETTE_LAWS else "smooth"
+        cur["roundness"] = max(0.0, min(1.0, cur["roundness"]))
+        cur["tint_hue"] = float(cur["tint_hue"]) % 360.0
+        cur["tint_amount"] = max(0.0, min(1.0, cur["tint_amount"]))
     elif name == "depth":
         cur["estimator"] = cur["estimator"] if cur["estimator"] in DEPTH_ESTIMATORS else "auto"
         cur["model"] = cur["model"] if cur["model"] in DEPTH_MODELS else "auto"
@@ -1147,8 +1193,7 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
         name = item["fx"]
         if not item.get("on"):
             continue
-        args = {k: v for k, v in item.items()
-                if k not in ("on", "rand", "limit", "fx", "id", "ref_file")}
+        args = {k: v for k, v in item.items() if k not in NON_ARG_KEYS}
         drawn = roll_block(name, item)
         if drawn:
             args.update(drawn)

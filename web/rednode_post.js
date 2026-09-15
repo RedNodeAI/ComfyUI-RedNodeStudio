@@ -44,6 +44,7 @@ function readCfg(node) {
     b.on = !!b.on;
     b.rand = b.rand && typeof b.rand === "object" ? b.rand : {};
     for (const c of fx.controls) {
+      if (c.head || c.button) continue;   // a heading or a button holds no value
       if (c.choice) { if (typeof b[c.key] !== "string") b[c.key] = c.def; }
       else if (typeof b[c.key] !== "number") b[c.key] = c.def;
     }

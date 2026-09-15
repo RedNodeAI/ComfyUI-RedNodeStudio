@@ -465,14 +465,38 @@ export const POST_FX = [
             + "little; that is what stops the image looking digitally clean." },
     ] },
   { id: "vignette", label: "Vignette",
-    blurb: "Darkens towards the corners to pull the eye inward. Last in the chain, "
-         + "on top of everything else.",
+    blurb: "Darkens towards the corners to pull the eye inward. Two falloff laws, a "
+         + "shape that runs from the frame's own oval to a true circle, and a colour "
+         + "that lands in the darkened band and nowhere else.",
     controls: [
       { key: "amount", label: "Amount", min: 0, max: 1, step: 0.01, def: 0.10,
         hint: "How dark the corners go. Small values read as a lens, large as a mood." },
       { key: "feather", label: "Feather", min: 0.05, max: 1, step: 0.01, def: 0.6,
         hint: "How gradually it falls off. Low is a hard circle, high is a soft, "
             + "barely-there fade." },
+      { key: "law", label: "Falloff", def: "smooth", step: 1, choice: ["smooth", "cos4"],
+        labels: { smooth: "Smooth band (the shipped look)",
+                  cos4: "Natural (cosine to the fourth)" },
+        hint: "How the light falls away. Smooth band holds the centre flat and fades in "
+            + "a ring near the edge, which is the graphic look. Natural is what glass "
+            + "actually does: the light drops from the middle outward, so there is no "
+            + "ring at all, just a gentle bowl. Both reach the same darkness in the "
+            + "corners, so Amount means one thing either way." },
+      { key: "roundness", label: "Roundness", min: 0, max: 1, step: 0.01, def: 0,
+        hint: "0 follows the frame's own shape, so a wide picture gets an oval and every "
+            + "edge darkens alike. 1 is a true circle, which on a wide picture darkens "
+            + "the left and right more than the top and bottom. On a square picture it "
+            + "does nothing." },
+      { key: "tint_hue", label: "Ring colour", min: 0, max: 359, step: 1, def: 30,
+        hint: "The colour the darkened band takes, as a hue: 0 red, 30 amber, 60 yellow, "
+            + "120 green, 210 blue, 300 magenta. It does nothing until the strength "
+            + "below is above 0." },
+      { key: "tint_amount", label: "Ring colour strength", min: 0, max: 1, step: 0.01,
+        def: 0,
+        hint: "How much of that colour lands in the falloff, and only there: the centre "
+            + "is never tinted. It rides as a filter, so raising it does not make the "
+            + "corners any darker. 0.15 to 0.35 with an amber hue reads as warm old "
+            + "glass; a blue at the same strength reads as cold and modern." },
     ] },
   { id: "halation", label: "Halation",
     blurb: "The warm bleed film gets around bright edges. Light passes through the "

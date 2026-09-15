@@ -92,6 +92,10 @@ cheap to judge.
   clicked; right-click a card or a square to type the place it should take.
   Saved orders keep the run order alone, apart from looks: applying one
   moves the effects it names and skips the rest.
+- Vignette gains a falloff law (the smooth band, or the natural cosine to the
+  fourth that real glass follows), a roundness dial from the frame's oval to a
+  true circle, and a ring colour that lands in the falloff only and tints
+  without darkening
 - The Post tab says when a model is missing. Depth of field, haze and
   Relight carry a depth chip that reads No depth model when no estimator is
   installed, and a card limited to the subject or background reads No mask
