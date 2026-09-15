@@ -249,7 +249,7 @@ FILM_STOCKS = {
     "instant600": {
         "label": "Instant film", "bw": False,
         "gamma": (0.80, 0.80, 0.78), "toe": (0.140, 0.140, 0.130),
-        "shoulder": (0.220, 0.220, 0.200), "fog": 0.030, "sat": 0.85,
+        "shoulder": (0.220, 0.220, 0.200), "fog": 0.012, "sat": 0.9,
         "shadow_off": (-0.012, 0.006, 0.014), "high_off": (0.018, 0.010, -0.012)},
     "trix400": {
         "label": "Tri-X 400", "bw": True,
@@ -468,7 +468,12 @@ def color(img, brightness=1.0, contrast=1.0, saturation=1.0, temperature=0.0,
         if sh:
             t = t * (1.0 + sh * 0.8 * (1.0 - y) ** 2)
         if hl:
-            t = t * (1.0 + hl * 0.6 * ((y - 0.5) * 2.0).clamp(0.0, 1.0) ** 2)
+            # a bump on the bright half, u^2 (1 - u), that is 0 at mid grey AND at white,
+            # so a white background stays white; the gains keep the curve rising
+            u = ((y - 0.5) * 2.0).clamp(0.0, 1.0)
+            k_hl = 1.0 if hl < 0 else 0.5
+            y2 = y + hl * k_hl * u * u * (1.0 - u)
+            t = t * (y2 / y.clamp_min(1e-4))
     a = max(0.0, min(1.0, float(local_hdr)))
     if a:
         lin = _srgb_to_linear(_clamp01(t))
@@ -1809,8 +1814,8 @@ BUILTIN_LOOKS = {
                     "smooth": 0.04, "texture_preserve": 0.88, "saturation": -0.06},
             "clarity": {"on": True, "strength": 0.3},
             "sharpen": {"on": True, "mode": "band", "amount": 0.3, "skin_protect": 0.6},
-            "color": {"on": True, "temperature": -0.06, "highlights": -0.1,
-                     "split_shadow": -0.1},
+            "color": {"on": True, "temperature": -0.02, "highlights": -0.15,
+                     "split_shadow": -0.12},
         },
     },
     "Pro Grade Z-Image": {
@@ -1858,6 +1863,79 @@ BUILTIN_LOOKS = {
             "sharpen": {"on": True, "mode": "band", "amount": 0.4, "skin_protect": 0.7},
         },
     },
+    "Beauty Editorial": {
+        "swatch": ("#4a3532", "#f7e6dc"),
+        "blurb": "Bright, even skin with the pores kept, lifted exposure and clean "
+                "highlights: the magazine beauty and model campaign look.",
+        "config": {
+            "skin": {"on": True, "de_yellow": 3.0, "brighten": 2.0, "rosy": 1.0,
+                    "evenness": 0.3, "smooth": 0.15, "texture_preserve": 0.8},
+            "color": {"on": True, "exposure": 0.15, "contrast": 1.05, "highlights": -0.25,
+                     "saturation": 0.95, "split_highlight": 0.08},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.5, "skin_protect": 0.8},
+        },
+    },
+    "Product Luxury Dark": {
+        "swatch": ("#0f0f12", "#c9a55c"),
+        "blurb": "Deep blacks, warm glints and a gentle glow on the highlights, with crisp "
+                "edges: premium advertising for watches, bottles and jewellery.",
+        "config": {
+            "color": {"on": True, "contrast": 1.15, "black_point": 0.02, "shadows": -0.1,
+                     "highlights": -0.1, "split_shadow": -0.15, "split_highlight": 0.15,
+                     "saturation": 0.95},
+            "clarity": {"on": True, "strength": 0.4},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.8, "radius": 1.0},
+            "bloom": {"on": True, "intensity": 0.35, "threshold": 0.85},
+            "vignette": {"on": True, "amount": 0.18, "law": "cos4"},
+        },
+    },
+    "Food Warm": {
+        "swatch": ("#5a3a22", "#f2c98a"),
+        "blurb": "A warm, inviting white balance, vibrance rather than saturation, and a "
+                "little texture: food that looks as good as it tastes.",
+        "config": {
+            "color": {"on": True, "temperature": 0.08, "vibrance": 0.25, "saturation": 1.03,
+                     "split_highlight": 0.12, "shadows": 0.05},
+            "clarity": {"on": True, "strength": 0.3},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.6},
+            "vignette": {"on": True, "amount": 0.08, "law": "cos4"},
+        },
+    },
+    "Portra Portrait": {
+        "swatch": ("#4b3a30", "#ecd2b4"),
+        "blurb": "The soft, warm, forgiving colour negative portrait photographers reach "
+                "for, with fine grain and a gentle highlight shoulder.",
+        "config": {
+            "film": {"on": True, "stock": "portra400", "strength": 0.85},
+            "grain": {"on": True, "power": 0.035, "scale": 1.2, "saturation": 0.0,
+                     "softness": 0.6},
+            "rolloff": {"on": True, "knee": 0.75, "strength": 0.3},
+            "halation": {"on": True, "strength": 0.12, "threshold": 0.88},
+        },
+    },
+    "Early Digital Compact": {
+        "swatch": ("#2d3a55", "#f4f4f4"),
+        "blurb": "A 2000s pocket camera: punchy colour, bright skies that clip to white, a "
+                "touch of magenta in the skin and in-camera sharpening.",
+        "config": {
+            "color": {"on": True, "contrast": 1.12, "highlights": 0.3, "saturation": 1.12,
+                     "tint": -0.04},
+            "sharpen": {"on": True, "mode": "unsharp", "amount": 0.6, "radius": 1.2},
+            "bloom": {"on": True, "intensity": 0.25, "threshold": 0.85},
+            "vignette": {"on": True, "amount": 0.05},
+        },
+    },
+    "Low Key Moody": {
+        "swatch": ("#0c0e12", "#6a6f78"),
+        "blurb": "Darker and quieter: exposure down, muted colour and cool shadows, the "
+                "detail kept in the dark end rather than crushed.",
+        "config": {
+            "color": {"on": True, "exposure": -0.2, "contrast": 1.1, "shadows": -0.1,
+                     "highlights": -0.1, "saturation": 0.85, "split_shadow": -0.2},
+            "vignette": {"on": True, "amount": 0.2, "law": "cos4"},
+            "grain": {"on": True, "power": 0.03, "saturation": 0.0, "softness": 0.6},
+        },
+    },
     "Product Clean": {
         "swatch": ("#1c2024", "#f4f4f0"),
         "blurb": "Crisp edges, a little extra punch and clean highlights: the e-commerce "
@@ -1869,7 +1947,6 @@ BUILTIN_LOOKS = {
             "clarity": {"on": True, "strength": 0.35},
             "sharpen": {"on": True, "mode": "band", "amount": 1.0, "radius": 1.0,
                        "noise_gate": 0.04, "highlight_protect": 0.3},
-            "rolloff": {"on": True, "knee": 0.85, "strength": 0.4},
         },
     },
     "Cinematic Teal and Orange": {
@@ -1879,7 +1956,7 @@ BUILTIN_LOOKS = {
         "config": {
             "color": {"on": True, "split_shadow": -0.35, "split_highlight": 0.25,
                      "contrast": 1.05, "black_point": -0.02, "saturation": 0.95},
-            "halation": {"on": True, "strength": 0.15},
+            "halation": {"on": True, "strength": 0.12, "threshold": 0.88},
             "diffusion": {"on": True, "strength": 0.08},
             "grain": {"on": True, "power": 0.03, "saturation": 0.0},
             "vignette": {"on": True, "amount": 0.12},
@@ -1890,9 +1967,10 @@ BUILTIN_LOOKS = {
         "blurb": "Tungsten-balanced night colour with the red halation the stock is known "
                 "for around bright points of light.",
         "config": {
-            "film": {"on": True, "stock": "cinestill800t", "strength": 0.8},
-            "halation": {"on": True, "strength": 0.6, "threshold": 0.7, "warmth": 0.9},
-            "bloom": {"on": True, "intensity": 0.5, "threshold": 0.75},
+            "film": {"on": True, "stock": "cinestill800t", "strength": 0.75},
+            "color": {"on": True, "black_point": 0.035, "contrast": 1.04},
+            "halation": {"on": True, "strength": 0.6, "threshold": 0.85, "warmth": 0.9},
+            "bloom": {"on": True, "intensity": 0.5, "threshold": 0.88},
             "grain": {"on": True, "power": 0.05, "scale": 1.4, "saturation": 0.2,
                      "softness": 0.5},
         },
@@ -1906,8 +1984,8 @@ BUILTIN_LOOKS = {
                      "temperature": 0.15, "tint": -0.12, "saturation": 0.75,
                      "split_highlight": 0.2},
             "film": {"on": True, "stock": "gold200", "strength": 0.8, "fade": 0.6},
-            "grain": {"on": True, "power": 0.12, "scale": 1.8, "saturation": 0.3,
-                     "softness": 0.5},
+            "grain": {"on": True, "power": 0.04, "scale": 1.4, "saturation": 0.15,
+                     "softness": 0.7},
             "vignette": {"on": True, "amount": 0.2, "feather": 0.7},
             "diffusion": {"on": True, "strength": 0.1},
             "distortion": {"on": True, "amount": 0.02, "edge_softness": 0.35,
@@ -1919,12 +1997,12 @@ BUILTIN_LOOKS = {
         "blurb": "Low-contrast instant-film colour with a creamy highlight, a green cast "
                 "in the shade and a heavy soft-edged vignette.",
         "config": {
-            "film": {"on": True, "stock": "instant600", "strength": 0.9},
-            "color": {"on": True, "black_point": -0.05, "highlights": -0.15,
-                     "saturation": 0.9, "split_shadow": -0.15, "split_highlight": 0.2},
+            "film": {"on": True, "stock": "instant600", "strength": 0.85},
+            "color": {"on": True, "black_point": -0.02, "highlights": -0.15,
+                     "split_shadow": -0.15, "split_highlight": 0.2},
             "vignette": {"on": True, "amount": 0.22, "feather": 0.6},
-            "grain": {"on": True, "power": 0.05, "softness": 0.8},
-            "diffusion": {"on": True, "strength": 0.1},
+            "grain": {"on": True, "power": 0.03, "saturation": 0.3, "softness": 0.8},
+            "diffusion": {"on": True, "strength": 0.06},
             "distortion": {"on": True, "edge_softness": 0.25},
         },
     },
@@ -1937,7 +2015,8 @@ BUILTIN_LOOKS = {
                      "saturation": 1.15},
             "film": {"on": True, "stock": "gold200", "strength": 0.7},
             "vignette": {"on": True, "amount": 0.3, "law": "cos4"},
-            "grain": {"on": True, "power": 0.09, "scale": 1.6, "saturation": 0.35},
+            "grain": {"on": True, "power": 0.05, "scale": 1.5, "saturation": 0.15,
+                     "softness": 0.5},
             "aberration": {"on": True, "amount": 0.6},
             "distortion": {"on": True, "edge_softness": 0.3},
         },
@@ -1949,8 +2028,8 @@ BUILTIN_LOOKS = {
         "config": {
             "film": {"on": True, "stock": "trix400", "wratten": "yellow8"},
             "color": {"on": True, "contrast": 1.05},
-            "grain": {"on": True, "power": 0.08, "scale": 1.3, "saturation": 0.0,
-                     "softness": 0.4},
+            "grain": {"on": True, "power": 0.055, "scale": 1.3, "saturation": 0.0,
+                     "softness": 0.5},
             "vignette": {"on": True, "amount": 0.1},
         },
     },

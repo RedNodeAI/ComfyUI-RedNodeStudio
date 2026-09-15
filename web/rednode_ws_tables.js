@@ -193,7 +193,8 @@ export const POST_FX = [
             + "instead of turning into grey haze. White is not touched." },
       { key: "highlights", label: "Highlights", min: -1, max: 1, step: 0.01, def: 0.0,
         hint: "Negative pulls a bright sky or a lit cheek back down, positive pushes it "
-            + "up. Nothing below mid grey moves." },
+            + "up. Nothing below mid grey moves, and pure white stays white, so a white "
+            + "background is never turned grey." },
       { key: "local_hdr", label: "Local HDR", min: 0, max: 1, step: 0.01, def: 0.0,
         hint: "Flattens the big tonal swing across the frame and leaves the fine detail "
             + "alone: shadows open, bright windows come back, the way a phone's HDR "
