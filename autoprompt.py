@@ -416,9 +416,21 @@ def _wd14_node():
 
 def _call_filtered(fn, **kwargs):
     """Call another pack's node function with only the parameters it accepts, letting
-    its own defaults cover the rest. Survives their signature growing or shrinking."""
-    accepted = set(inspect.signature(fn).parameters)
-    return fn(**{k: v for k, v in kwargs.items() if k in accepted})
+    its own defaults cover the rest. Survives their signature growing or shrinking.
+    A required parameter this call does not name takes the node's widget default:
+    two packs can register the same node name at different versions (an older
+    Florence2ModelLoader with a required attention), and whichever loaded last wins."""
+    params = inspect.signature(fn).parameters
+    call = {k: v for k, v in kwargs.items() if k in params}
+    owner = getattr(fn, "__self__", None)
+    for name, p in params.items():
+        if (name in call or p.default is not inspect.Parameter.empty
+                or p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) or owner is None):
+            continue
+        d = _widget_default(type(owner), name)
+        if d is not None:
+            call[name] = d
+    return fn(**call)
 
 
 def _first_string(result):
