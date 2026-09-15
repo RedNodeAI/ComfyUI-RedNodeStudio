@@ -562,6 +562,7 @@ css.textContent = `
 .rn-ws-sect > .head{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
 .rn-ws-sect > .head .arr{font-size:13px;color:#9aa0a8;width:16px}
 .rn-ws-sect > .head .ttl{font-size:11.5px;font-weight:700;letter-spacing:.4px;opacity:.7;flex:1}
+.rn-ws-sect > .head .ttl.rn-ws-savedttl{font-size:13px;letter-spacing:0;opacity:.9}
 .rn-ws-sect .rn-ws-dial{margin-left:12px}
 /* The Post tab: the chain list beside one editor. */
 .rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px}

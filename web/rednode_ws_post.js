@@ -281,12 +281,12 @@ function openLookMenu(node, preset, applyLook, ev) {
   sep.className = "sep";
   m.append(
     note,
-    mk("Apply this look", () => applyLook()),
+    mk("Apply these effects", () => applyLook()),
     mk("Overwrite with the settings on this tab", () =>
       postPresetAction(node, { action: "save", name: preset.name,
                                config: node._rnCfg.post })),
     mk("Rename…", async () => {
-      const name = prompt("Rename this look", preset.name);
+      const name = prompt("Rename these saved effects", preset.name);
       if (!name || name === preset.name) return;
       // save under the new name carrying the old thumbnail, then drop the old one
       await postPresetAction(node, { action: "save", name,
@@ -533,14 +533,26 @@ export function looksSection(node, body) {
   sect.className = "rn-ws-sect rn-ws-looks";
   const head = document.createElement("div");
   head.className = "head";
+  // folds away like any section; whether it is open is where the panel was left
+  // standing, so it lives in node.properties and survives a reload
+  const folded = !!node.properties?.rn_saved_fx_folded;
   const arr = document.createElement("span");
   arr.className = "arr";
-  arr.textContent = "▾";
+  arr.textContent = folded ? "▸" : "▾";
   const ttl = document.createElement("span");
-  ttl.className = "ttl";
-  ttl.textContent = "LOOKS" + (postPresets.length ? `: ${postPresets.length} saved` : "");
+  ttl.className = "ttl rn-ws-savedttl";
+  ttl.textContent = "Saved effects" + (postPresets.length ? ` (${postPresets.length})` : "");
   head.append(arr, ttl);
+  head.title = folded ? "Show the saved effects." : "Fold the saved effects away.";
+  head.onclick = () => {
+    (node.properties ||= {}).rn_saved_fx_folded = !folded;
+    postRender(node);
+  };
   sect.appendChild(head);
+  if (folded) {
+    body.appendChild(sect);
+    return;
+  }
 
   const grid = document.createElement("div");
   grid.className = "rn-ws-lookgrid";
@@ -550,8 +562,8 @@ export function looksSection(node, body) {
   live.className = "rn-ws-look live";
   live.style.width = live.style.height = cfg.look_thumb + "px";
   live.title = postLastThumb
-    ? "The last image this chain graded. Save it as a look to keep these settings "
-      + "with that picture."
+    ? "The last image this chain graded. Save effects keeps these settings with that "
+      + "picture."
     : "Queue a run with a RedNode Post Process node wired up and the result appears "
       + "here.";
   if (postLastThumb) {
@@ -623,7 +635,7 @@ export function looksSection(node, body) {
   tr.min = 48; tr.max = 180; tr.step = 4;
   tr.value = cfg.look_thumb;
   tr.style.cssText = "width:90px;accent-color:#22a39f";
-  tr.title = "How big the look thumbnails are drawn.";
+  tr.title = "How big the saved effects thumbnails are drawn.";
   tr.addEventListener("input", () => {
     cfg.look_thumb = parseInt(tr.value, 10);
     for (const el of grid.children) {
@@ -635,11 +647,12 @@ export function looksSection(node, body) {
   save.className = "rn-ws-btn";
   save.style.width = "auto";
   save.style.padding = "0 10px";
-  save.textContent = "Save this look";
-  save.title = "Stores every setting on this tab under a name, with the last graded "
-             + "frame as its thumbnail, so you can recognise the look by eye later.";
+  save.textContent = "Save effects";
+  save.title = "Stores every setting on this tab under a name, the effects, their dials "
+             + "and their order, with the last graded frame as its thumbnail, so you can "
+             + "recognise it by eye later.";
   save.onclick = async () => {
-    const name = prompt("Name this look");
+    const name = prompt("Name these saved effects");
     if (!name) return;
     try {
       const res = await api.fetchApi("/rednode/post_presets", {
@@ -653,7 +666,7 @@ export function looksSection(node, body) {
       postRender(node);
     } catch (e) {
       console.error("[RedNode Workspace] save failed:", e);
-      alert(`Could not save that look: ${e.message}`);
+      alert(`Could not save these effects: ${e.message}`);
     }
   };
   row.append(tl, tr, save);
@@ -896,7 +909,7 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
   osave.style.cssText = "width:auto;padding:0 12px";
   osave.textContent = "Save order";
   osave.title = "Save the order of the effects that are on now, under a name. It saves the "
-              + "order only; Save this look above saves the dials and the switches too.";
+              + "order only; Save effects above saves the dials and the switches too.";
   osave.onclick = async () => {
     const ids = chain.filter((b) => b.on).map((b) => b.id);
     if (!ids.length) { alert("Switch some effects on first: an order is the order of the effects that are on."); return; }
