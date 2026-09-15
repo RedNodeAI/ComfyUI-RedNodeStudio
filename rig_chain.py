@@ -160,6 +160,14 @@ def _typed_value(nid, class_type, class_def, name, val):
     return val
 
 
+def _finish_progress(nid):
+    try:
+        from comfy_execution.progress import get_progress_state
+        get_progress_state().finish_progress(str(nid))
+    except Exception:
+        pass
+
+
 async def _call_node(nid, node, values, prompt):
     import nodes
     import execution
@@ -181,11 +189,22 @@ async def _call_node(nid, node, values, prompt):
     input_data_all, _missing, v3_data = execution.get_input_data(
         inputs, class_def, nid, None, DynamicPrompt(prompt), {})
     obj = class_def()
-    out, _ui, has_subgraph, pending = await execution.get_output_data(
-        "rednode-rig", nid, obj, input_data_all, v3_data=v3_data)
-    if pending:
-        done = [await r if isinstance(r, asyncio.Task) else r for r in out]
-        out, _ui, has_subgraph = execution.get_output_from_returns(done, obj)
+    # the run's own prompt id, so a sampler's progress lands on this queue; and each
+    # node marked finished after, or the page keeps showing it running
+    try:
+        from comfy_execution.utils import get_executing_context
+        _ctx = get_executing_context()
+        run_id = _ctx.prompt_id if _ctx is not None and _ctx.prompt_id else "rednode-rig"
+    except Exception:
+        run_id = "rednode-rig"
+    try:
+        out, _ui, has_subgraph, pending = await execution.get_output_data(
+            run_id, nid, obj, input_data_all, v3_data=v3_data)
+        if pending:
+            done = [await r if isinstance(r, asyncio.Task) else r for r in out]
+            out, _ui, has_subgraph = execution.get_output_from_returns(done, obj)
+    finally:
+        _finish_progress(nid)
     if has_subgraph:
         raise RuntimeError("node %s (%s) expands into a subgraph at run time, which a rig "
                            "cannot run" % (nid, class_type))
