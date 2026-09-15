@@ -50,6 +50,14 @@ def _resolve(filename, kind, subfolder):
     return path if os.path.isfile(path) else None
 
 
+def image_size(path):
+    """(width, height) of the file on disk, read from its header: the picture is never
+    decoded, so this is cheap enough to ask for every card that shows a size."""
+    from PIL import Image
+    with Image.open(path) as im:
+        return int(im.width), int(im.height)
+
+
 def thumbnail(path, px=THUMB_PX):
     """WEBP bytes of `path`, long edge at most px. Cached on (path, mtime, px).
 
@@ -105,6 +113,19 @@ try:
             return web.Response(status=500)
         return web.Response(body=data, content_type="image/webp",
                             headers={"Cache-Control": "no-cache"})
+
+    @PromptServer.instance.routes.get("/rednode/image_size")
+    async def _rednode_image_size(request):
+        # the ORIGINAL's size, for a label beside a picture that was loaded resized
+        q = request.rel_url.query
+        path = _resolve(q.get("filename", ""), q.get("type", "temp"), q.get("subfolder", ""))
+        if path is None:
+            return web.json_response({"error": "not found"}, status=404)
+        try:
+            w, h = image_size(path)
+        except Exception:
+            return web.json_response({"error": "unreadable"}, status=500)
+        return web.json_response({"w": w, "h": h})
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)
     print(f"[RedNode Krea2] thumbnail route not registered: {e}", flush=True)

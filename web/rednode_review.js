@@ -738,13 +738,28 @@ function render(node) {
         main.replaceChildren(gone);
       });
     };
-    img.onload = () => {
-      const dims = `${img.naturalWidth} × ${img.naturalHeight}`;
-      if (entry.dims === dims) return;
-      entry.dims = dims;                      // the picture knows its own size
+    // THE SIZE IS THE ORIGINAL'S. On the node the picture is a resized copy, so its own
+    // naturalWidth would label the copy; only a loaded original may set the size, and
+    // otherwise the server reads it from the file's header. `dimsFor` says which file the
+    // size belongs to, so a label saved from a copy before this is checked again once.
+    const f0 = entry.files[slot];
+    const setDims = (w, h) => {
+      const dims = `${w} × ${h}`;
+      if (entry.dims === dims && entry.dimsFor === f0.filename) return;
+      entry.dims = dims;
+      entry.dimsFor = f0.filename;
       node.graph?.change?.();
       if (node._rnStatsEl) node._rnStatsEl.textContent = statsLine(entry);
     };
+    img.onload = () => {
+      if (fullPic || img.dataset.rnFullTried) setDims(img.naturalWidth, img.naturalHeight);
+    };
+    if (!fullPic && entry.dimsFor !== f0.filename) {
+      api.fetchApi(`/rednode/image_size?${fileArgs(f0)}`)
+        .then((r) => r.json())
+        .then((d) => { if (d && d.w && d.h) setDims(d.w, d.h); })
+        .catch(() => { /* no size is better than the copy's size */ });
+    }
     main.appendChild(img);
     if (node._rnFsPrev) roomZoom(node, main, img, view);
     const corner = document.createElement("div");
