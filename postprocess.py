@@ -80,7 +80,7 @@ DEFAULTS = {
     # their hue. source names where the reference comes from: a Workspace tab
     # for the wireless node, the reference input for the standalone one.
     "match": {"on": False, "source": "moodboard", "method": "adain", "strength": 1.0,
-              "skin_protect": 0.5},
+              "skin_protect": 0.5, "ref_file": ""},
     # A LUT: a .cube file from models/luts, trilinear, strength past 1 overdrives
     "lut": {"on": False, "file": "", "strength": 1.0, "log": False},
     "clarity": {"on": False, "radius": 3, "offset": 2.0, "strength": 0.4,
@@ -124,7 +124,7 @@ BLEND_MODES = ("soft light", "overlay", "normal", "linear light")
 SETTINGS_CARDS = ("depth", "mask")
 LIMITS = ("off", "subject", "background")
 MATCH_METHODS = ("adain", "linear")
-MATCH_SOURCES = ("moodboard", "subject", "scene", "wired")
+MATCH_SOURCES = ("file", "moodboard", "subject", "scene", "i2i", "wired")
 MASK_SOURCES = ("auto", "wired")
 # every effect can be limited to the subject or the background; the settings
 # cards cannot, they are not effects
@@ -360,7 +360,7 @@ _MATCH_SAID = {"no_ref": False}
 
 
 def match(img, reference=None, method="adain", strength=1.0, skin_protect=0.5,
-          source="moodboard"):
+          source="moodboard", ref_file=""):
     """Move the picture's per-channel mean and spread onto the reference's. adain
     works in sRGB, linear in linear light. The reference's first frame is used."""
     if reference is None or strength <= 0:
@@ -1148,7 +1148,7 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
         if not item.get("on"):
             continue
         args = {k: v for k, v in item.items()
-                if k not in ("on", "rand", "limit", "fx", "id")}
+                if k not in ("on", "rand", "limit", "fx", "id", "ref_file")}
         drawn = roll_block(name, item)
         if drawn:
             args.update(drawn)
@@ -1159,7 +1159,10 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
         if name in DEPTH_EFFECTS:
             args["depth"] = depth
         if name == "match":
-            args["reference"] = reference
+            ref = reference(item) if callable(reference) else reference
+            if ref is None and item.get("source") == "file":
+                ref = file_reference(item.get("ref_file", ""))
+            args["reference"] = ref
         if name == "relight":
             args["mask"] = mask
         started = time.time()
@@ -1475,10 +1478,55 @@ def workspaces_from_prompt(prompt):
     return found[0]
 
 
+def file_reference(name, long_edge=1024):
+    """A picture dropped onto the Match card, from the input folder, as an IMAGE
+    tensor; None, said once, when it is gone or unreadable. ComfyUI's own path
+    helper refuses a name that climbs out of the input folder."""
+    name = str(name or "").strip()
+    if not name:
+        return None
+    try:
+        import numpy as np
+        import folder_paths
+        from PIL import Image, ImageOps
+        path = folder_paths.get_annotated_filepath(name)
+        with Image.open(path) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((long_edge, long_edge))
+            arr = np.asarray(im).astype(np.float32) / 255.0
+        return torch.from_numpy(arr)[None]
+    except Exception as exc:
+        print("[RedNode Post] the Match card's reference picture %r could not be read (%s)"
+              % (name, exc), flush=True)
+        return None
+
+
+def match_resolver(ws_raw=None, wired=None):
+    """A reference per Match instance: its own dropped picture, a Workspace tab's
+    picture, or the wired input. Each source is read once per run however many
+    Match instances use it."""
+    cache = {}
+
+    def resolve(item):
+        src = str(item.get("source") or "moodboard")
+        key = (src, item.get("ref_file", "") if src == "file" else "")
+        if key in cache:
+            return cache[key]
+        if src == "file":
+            ref = file_reference(item.get("ref_file", ""))
+        elif src == "wired":
+            ref = wired
+        else:
+            ref = tab_reference(ws_raw, src)
+        cache[key] = ref
+        return ref
+    return resolve
+
+
 def tab_reference(ws_raw, name):
-    """The picture a Workspace tab has selected (moodboard, subject, scene), as an
-    IMAGE tensor, through the Detailer's tab reader; None when the tab is off."""
-    if name not in ("moodboard", "subject", "scene") or not isinstance(ws_raw, dict):
+    """The picture a Workspace tab has selected (moodboard, subject, scene, i2i), as
+    an IMAGE tensor, through the Detailer's tab reader; None when the tab is off."""
+    if name not in ("moodboard", "subject", "scene", "i2i") or not isinstance(ws_raw, dict):
         return None
     try:
         from . import workspace as _ws
@@ -1557,7 +1605,7 @@ class RedNodePostProcess:
         # the match card's reference is a Workspace tab's picture
         reference = None
         if "match" in active_fx(cfg):
-            reference = tab_reference(ws_raw, cfg["match"].get("source"))
+            reference = match_resolver(ws_raw=ws_raw)
         ran = []
         LAST_ROLLS.clear()
         out = apply_post(image, cfg, depth=depth, on_effect=ran.append,
@@ -1601,7 +1649,9 @@ class RedNodePostFX:
                                   "node makes its own with the pack's auto-mask; the "
                                   "Mask card chooses which"}),
                 "reference": ("IMAGE", {"tooltip": "OPTIONAL. The picture the Match "
-                                        "reference card matches the frame's colour to"}),
+                                        "reference card matches the frame's colour to, "
+                                        "when the card's Reference is The reference input. "
+                                        "A picture dropped on the card needs no wire"}),
             },
         }
 
@@ -1641,8 +1691,13 @@ class RedNodePostFX:
             mask = None
         ran = []
         LAST_ROLLS.clear()
+        # the Match card: a dropped picture or the wired input. This node reads
+        # nothing from the rest of the graph, so the Workspace tabs are not its to use
+        resolver = reference
+        if "match" in active_fx(cfg):
+            resolver = match_resolver(ws_raw=None, wired=reference)
         out = apply_post(image, cfg, depth=depth, on_effect=ran.append, rolls=LAST_ROLLS,
-                         mask=mask, reference=reference)
+                         mask=mask, reference=resolver)
         if ran:
             print(f"[RedNode Post FX] applied: {', '.join(ran)}", flush=True)
         try:

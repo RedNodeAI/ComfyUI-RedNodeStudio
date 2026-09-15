@@ -955,6 +955,96 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
   }
 }
 
+// THE MATCH CARD'S OWN PICTURE: drop an image on the box (or choose one) and it
+// is uploaded to the input folder and used as this Match's reference, on the
+// Workspace and on the standalone node alike, no tab or wire needed.
+async function uploadReference(node, b, file) {
+  if (!file || !String(file.type || "").startsWith("image/")) return;
+  const body = new FormData();
+  body.append("image", file, file.name || "reference.png");
+  body.append("type", "input");
+  body.append("subfolder", "rednode/post_refs");
+  try {
+    const res = await api.fetchApi("/upload/image", { method: "POST", body });
+    const d = await res.json();
+    if (!d.name) throw new Error("the upload returned no name");
+    b.ref_file = d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
+    b.source = "file";
+    postWrite(node);
+    postRender(node);
+  } catch (e) {
+    console.error("[RedNode Workspace] the reference upload failed:", e);
+    alert("Could not upload that picture: " + e.message);
+  }
+}
+
+function matchRefBox(node, b) {
+  const box = document.createElement("div");
+  box.className = "rn-ws-refdrop" + (b.source === "file" ? " live" : "");
+  const pic = document.createElement("div");
+  pic.className = "pic";
+  if (b.ref_file) {
+    const parts = String(b.ref_file).split("/");
+    const filename = parts.pop();
+    const img = document.createElement("img");
+    img.draggable = false;
+    img.src = api.apiURL(`/view?filename=${encodeURIComponent(filename)}&type=input`
+                         + `&subfolder=${encodeURIComponent(parts.join("/"))}`);
+    pic.appendChild(img);
+  } else {
+    pic.textContent = "No picture";
+  }
+  const side = document.createElement("div");
+  side.className = "side";
+  const say = document.createElement("div");
+  say.className = "rn-ws-note";
+  say.textContent = b.ref_file
+    ? (b.source === "file" ? "This picture is the reference." : "Dropped picture kept; pick "
+       + "\"A picture dropped here\" above to use it.")
+    : "Drop a picture here to match the frame's colour to it.";
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = "image/*";
+  file.style.display = "none";
+  file.onchange = () => uploadReference(node, b, file.files?.[0]);
+  const choose = document.createElement("button");
+  choose.className = "rn-ws-btn";
+  choose.style.cssText = "width:auto;padding:0 12px";
+  choose.textContent = b.ref_file ? "Replace" : "Choose a picture";
+  choose.title = "Pick an image file to use as this Match's reference.";
+  choose.onclick = () => file.click();
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  row.append(choose);
+  if (b.ref_file) {
+    const clear = document.createElement("button");
+    clear.className = "rn-ws-btn";
+    clear.style.cssText = "width:auto;padding:0 10px";
+    clear.textContent = "\u2715";
+    clear.title = "Forget the dropped picture. The file stays in the input folder.";
+    clear.onclick = () => {
+      b.ref_file = "";
+      if (b.source === "file") b.source = "moodboard";
+      postWrite(node);
+      postRender(node);
+    };
+    row.appendChild(clear);
+  }
+  side.append(say, row, file);
+  box.append(pic, side);
+  box.title = "Drop an image here to use it as the reference.";
+  box.addEventListener("dragover", (e) => { e.preventDefault(); box.classList.add("over"); });
+  box.addEventListener("dragleave", () => box.classList.remove("over"));
+  box.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    box.classList.remove("over");
+    const f = e.dataTransfer?.files?.[0];
+    if (f) uploadReference(node, b, f);
+  });
+  return box;
+}
+
 export function postBody(node, body) {
   const cfg = node._rnCfg;
   const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
@@ -1227,6 +1317,7 @@ export function postBody(node, body) {
   grid.className = "rn-ws-fxgrid";
   for (const c of fx.controls) grid.appendChild(renderControl(node, cfg, fx, b, c));
   edit.appendChild(grid);
+  if (fx.id === "match") edit.appendChild(matchRefBox(node, b));
   // LIMIT: the effect's result only on the subject or the background, through the
   // mask the Mask card describes, with that card's feather beside it
   if (!fx.settings) {

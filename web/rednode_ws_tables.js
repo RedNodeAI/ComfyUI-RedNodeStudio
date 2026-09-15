@@ -190,17 +190,19 @@ export const POST_FX = [
     ] },
   { id: "match", label: "Match reference",
     blurb: "Moves the frame's colour onto a reference picture's: per channel, the "
-         + "average and the spread. Skin is held back so faces keep their hue. On the "
-         + "Workspace the reference is a tab's picture; on the standalone node it is "
-         + "the reference input.",
+         + "average and the spread. Skin is held back so faces keep their hue. Drop a "
+         + "picture onto the card, or use a Workspace tab's picture or the wired input.",
     controls: [
       { key: "source", label: "Reference", def: "moodboard",
-        choice: ["moodboard", "subject", "scene", "wired"],
-        labels: { moodboard: "Moodboard tab", subject: "Subject tab", scene: "Scene tab",
+        choice: ["file", "moodboard", "subject", "scene", "i2i", "wired"],
+        labels: { file: "A picture dropped here", moodboard: "Moodboard tab",
+                  subject: "Subject tab", scene: "Scene tab", i2i: "Img2Img tab",
                   wired: "The reference input" },
         step: 1,
-        hint: "Where the reference picture comes from. The tabs are the Workspace's; "
-            + "the standalone Post FX node uses whatever is wired into reference." },
+        hint: "Where the reference picture comes from. Drop a picture on the box below "
+            + "to use it and nothing else; the tabs are the Workspace's selected pictures, "
+            + "on the Workspace's Post tab only; the reference input is whatever is wired "
+            + "into the standalone Post FX node." },
       { key: "method", label: "Method", def: "adain", choice: ["adain", "linear"],
         labels: { adain: "Statistics (sRGB)", linear: "Statistics (linear light)" },
         step: 1,

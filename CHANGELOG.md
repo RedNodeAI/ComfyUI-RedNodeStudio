@@ -77,7 +77,9 @@ cheap to judge.
 - A Limit on every card: subject, background or a mask, with a feather
 - A Mask card (the auto-mask source and its feather), a Match card (the
   picture's colour moved onto a reference, AdaIN or linear, with a skin
-  hold) and a LUT card (.cube files from models/luts)
+  hold) and a LUT card (.cube files from models/luts). Drop a picture onto
+  the Match card to use it as the reference, or pick the Moodboard, Subject,
+  Scene or Img2Img tab, or the wired input; each Match reads its own
 - A Relight card: a new key light over the depth map's relief, direction,
   height, strength, ambient, warmth, contact shadows, and the subject mask
   rounding the subject off

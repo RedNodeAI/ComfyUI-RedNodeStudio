@@ -610,6 +610,14 @@ css.textContent = `
 .rn-ws-fxcard .acts button:hover{color:#fff;border-color:#b8283c}
 .rn-ws-fxcard.drop{box-shadow:-4px 0 0 0 #b8283c}
 .rn-ws-fxcard.focus{border-color:#fff;box-shadow:0 0 0 2px #ffffff55}
+.rn-ws-refdrop{display:flex;gap:14px;align-items:center;padding:10px;border:1px dashed #3a3f47;
+  border-radius:8px;background:#121418}
+.rn-ws-refdrop.live{border-color:#b8283c;border-style:solid}
+.rn-ws-refdrop.over{border-color:#fff;background:#1b1f25}
+.rn-ws-refdrop .pic{flex:none;width:120px;height:90px;border-radius:6px;background:#0c0d10;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:#6b7480;overflow:hidden}
+.rn-ws-refdrop .pic img{width:100%;height:100%;object-fit:cover}
+.rn-ws-refdrop .side{display:flex;flex-direction:column;gap:8px;min-width:0}
 .rn-ws-orderbar{gap:8px;flex-wrap:wrap}
 .rn-ws-orderbar select{min-width:180px}
 .rn-ws-fxmapcap{font-size:10.5px;letter-spacing:.12em;font-weight:700;color:#8a919b;margin:14px 0 6px 32px}
