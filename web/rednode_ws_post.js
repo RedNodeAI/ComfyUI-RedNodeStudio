@@ -618,77 +618,103 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
   bar.className = "rn-ws-row";
   const note = document.createElement("span");
   note.className = "rn-ws-note";
-  note.textContent = "Top to bottom is the order the chain runs. Drag a tile onto another "
-                   + "to move it there.";
+  note.textContent = "Left to right is the order the chain runs. Only the effects that are on "
+                   + "are here; drag a card onto another to move it there.";
   const reset = document.createElement("button");
   reset.className = "rn-ws-btn";
-  reset.style.cssText = "width:auto;padding:0 12px";
+  reset.style.cssText = "width:auto;padding:0 12px;margin-left:auto";
   reset.textContent = "Camera order";
   reset.title = "Put every effect back in the order light meets a camera: repair, grade, "
               + "light, air, lens, film. Doubled effects stay; only the order moves.";
   reset.onclick = () => { cameraOrder(cfg); postWrite(node); postRender(node); };
   bar.append(note, reset);
   body.appendChild(bar);
-  const flow = document.createElement("div");
-  flow.className = "rn-ws-fxflow";
-  chain.forEach((b, i) => {
+  const live = chain.filter((b) => b.on);
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-fxboard";
+  const left = document.createElement("button");
+  left.className = "rn-ws-fxscroll";
+  left.textContent = "\u2039";
+  const cards = document.createElement("div");
+  cards.className = "rn-ws-fxcards";
+  const right = document.createElement("button");
+  right.className = "rn-ws-fxscroll";
+  right.textContent = "\u203a";
+  left.onclick = () => { cards.scrollLeft -= 360; };
+  right.onclick = () => { cards.scrollLeft += 360; };
+  if (!live.length) {
+    const empty = document.createElement("div");
+    empty.className = "rn-ws-note";
+    empty.style.padding = "18px 8px";
+    empty.textContent = "Nothing is on yet. Switch effects on in the Effects view and they line "
+                      + "up here in the order they run.";
+    cards.appendChild(empty);
+  }
+  live.forEach((b, i) => {
     const fx = byId[b.fx];
     const band = chainBand(b.fx);
-    const tile = document.createElement("div");
-    tile.className = "rn-ws-fxtile" + (b.on ? "" : " off");
     const colour = BAND_COLOUR[band] || "#888";
-    tile.style.borderLeftColor = colour;
+    const card = document.createElement("div");
+    card.className = "rn-ws-fxcard";
+    const big = document.createElement("span");
+    big.className = "big";
+    big.textContent = String(i + 1);
     const n = document.createElement("span");
     n.className = "n";
     n.textContent = String(i + 1);
-    n.style.borderColor = colour;
-    const mid = document.createElement("div");
-    mid.style.cssText = "display:flex;flex-direction:column;gap:2px;min-width:0";
     const nm = document.createElement("span");
     nm.className = "nm";
     nm.textContent = labels[b.id];
-    const bd = document.createElement("span");
-    bd.className = "band";
-    bd.textContent = band + (b.limit && b.limit !== "off" ? " · " + b.limit + " only" : "");
-    bd.style.color = colour;
-    mid.append(nm, bd);
     const st = document.createElement("span");
-    st.className = "st" + (b.on ? " on" : "");
-    st.title = b.on ? "On." : "Off. Switch it on in the Effects view.";
+    st.className = "st on";
+    const lim = document.createElement("span");
+    lim.className = "lim";
+    lim.textContent = b.limit && b.limit !== "off" ? b.limit : "frame";
+    lim.title = b.limit && b.limit !== "off"
+      ? "Limited to the " + b.limit + "."
+      : "The whole frame.";
+    const foot = document.createElement("span");
+    foot.className = "foot";
+    foot.textContent = band;
+    foot.style.background = colour;
     const acts = document.createElement("span");
     acts.className = "acts";
     const dup = document.createElement("button");
-    dup.textContent = "⧉";
+    dup.textContent = "\u29c9";
     dup.title = "Another " + fx.label + " right after this one, with the same dials: one "
               + "can work the subject and the next the whole frame.";
     dup.onclick = (e) => {
       e.stopPropagation();
       const nb = newChainItem(cfg, fx.id, b);
       if (!nb) return;
-      chain.splice(i + 1, 0, nb);
+      const at = chain.findIndex((x) => x.id === b.id);
+      chain.splice(at + 1, 0, nb);
       node._rnFxSel = nb.id;
       postWrite(node);
       postRender(node);
     };
     const rm = document.createElement("button");
-    rm.textContent = "✕";
+    rm.textContent = "\u2715";
     rm.title = "Take this " + fx.label + " out of the chain. The Additional row on the "
              + "Effects view puts an effect back.";
     rm.onclick = (e) => {
       e.stopPropagation();
-      chain.splice(i, 1);
-      if (node._rnFxSel === b.id) node._rnFxSel = (chain[Math.max(0, i - 1)] || POST_FX[0]).id;
+      const at = chain.findIndex((x) => x.id === b.id);
+      if (at < 0) return;
+      chain.splice(at, 1);
+      if (node._rnFxSel === b.id) node._rnFxSel = (chain[Math.max(0, at - 1)] || POST_FX[0]).id;
       postWrite(node);
       postRender(node);
     };
     acts.append(dup, rm);
-    tile.append(n, mid, st, acts);
-    tile.title = fx.blurb;
-    tile.ondblclick = () => { node._rnFxSel = b.id; node._rnPostSub = "effects"; postRender(node); };
-    ops.dragHandlers(tile, b.id);
-    flow.appendChild(tile);
+    card.append(big, n, nm, st, lim, foot, acts);
+    card.title = fx.blurb + "\n\nDouble-click to open it in Effects.";
+    card.ondblclick = () => { node._rnFxSel = b.id; node._rnPostSub = "effects"; postRender(node); };
+    ops.dragHandlers(card, b.id);
+    cards.appendChild(card);
   });
-  body.appendChild(flow);
+  wrap.append(left, cards, right);
+  body.appendChild(wrap);
 }
 
 export function postBody(node, body) {
@@ -714,7 +740,8 @@ export function postBody(node, body) {
   let dragId = null;
   const dragHandlers = (el, id) => {
     el.draggable = true;
-    el.addEventListener("dragstart", (e) => { dragId = id; e.dataTransfer?.setData?.("text/plain", id); });
+    el.addEventListener("dragstart", (e) => { dragId = id; el.classList.add("dragging"); e.dataTransfer?.setData?.("text/plain", id); });
+    el.addEventListener("dragend", () => { el.classList.remove("dragging"); });
     el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("drop"); });
     el.addEventListener("dragleave", () => { el.classList.remove("drop"); });
     el.addEventListener("drop", (e) => {

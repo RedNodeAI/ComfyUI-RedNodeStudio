@@ -83,9 +83,9 @@ cheap to judge.
   rounding the subject off
 - The chain is yours to order. The Post tab has two views: Effects, the
   list beside one editor as before, with an Additional row that adds any
-  effect to the end of the chain; and Order, the chain as numbered tiles you
-  drag about, where an effect is doubled in place or taken out, and Camera
-  order puts everything back. An effect can be in the chain more than once,
+  effect to the end of the chain; and Order, the effects that are on as a
+  row of numbered cards you drag about, where an effect is doubled in place
+  or taken out, and Camera order puts everything back. An effect can be in the chain more than once,
   each instance with its own dials and Limit, so a sharpen can work the
   subject early and the whole frame at the end. Saved chains render exactly
   as before
