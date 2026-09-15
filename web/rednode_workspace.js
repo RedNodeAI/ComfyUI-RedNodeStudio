@@ -9988,6 +9988,7 @@ async function fetchFrameDef() {
         framing: defOf("framing") ?? "Balanced",
         framing_push: defOf("framing_push") ?? "Off",
         camera_height: defOf("camera_height") ?? "Eye level",
+        camera_off: defOf("camera_off") ?? false,
         placement_where: defOf("placement_where") ?? "None",
         placement_what: defOf("placement_what") ?? "None",
         placement: "", lighting: defOf("lighting") ?? "None",
@@ -10139,32 +10140,12 @@ function promptsBody(node, body) {
       node._rnPromptSel = Math.max(0, Math.min(node._rnPromptSel, R.length - 1));
       writeCfg(node); render(node);
     };
+    // the Camera words switch lives on the frame editor's Camera section
+    // (rednode_prompt_frame.js), where the chips it greys out are
     if (row.kind !== "plain") {
-      // CAMERA WORDS: one switch that stops every camera sentence this row
-      // writes, the height stop and the studio's paragraph alike, without
-      // touching the Camera tab or the row's studio camera. Off, the row reads
-      // as if the camera were at eye level and the studio never opened.
       row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
-      const camT = document.createElement("button");
-      camT.className = "rn-ws-on" + (row.frame.camera_off ? "" : " on");
-      camT.textContent = "Camera words";
-      camT.style.width = "auto";
-      camT.style.padding = "0 9px";
-      camT.title = row.frame.camera_off
-        ? "Off: this row writes no camera sentence, neither the Camera height stop "
-          + "nor the Camera Studio's paragraph, and a studio camera on the row runs "
-          + "no LoRAs or path. Click to let the camera speak again."
-        : "On: the row's Camera height stop and, when the Camera tab is on, the "
-          + "studio's paragraph lead the prompt. Click to write no camera words at "
-          + "all for this row.";
-      camT.onclick = () => {
-        row.frame.camera_off = !row.frame.camera_off;
-        writeCfg(node); render(node);
-      };
-      head.append(name, rigPick, kind, camT, del);
-    } else {
-      head.append(name, rigPick, kind, del);
     }
+    head.append(name, rigPick, kind, del);
     box.appendChild(head);
 
     if (folded()) { body.appendChild(box); return; }

@@ -273,7 +273,7 @@ def expand(text, seed=0, resolve_wildcards=True):
 
 
 def assemble(style, subject, surroundings, framing, placement, light_and_colour,
-             push=PUSH_OFF, camera_height="Eye level", camera=None):
+             push=PUSH_OFF, camera_height="Eye level", camera=None, camera_off=False):
     """Order the parts for the chosen framing. Pure text; no rewriting of user words.
 
     `camera` is a Camera Studio state (dict with camera/subjects); when given,
@@ -302,6 +302,10 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             cam = ""
     if not cam:
         cam = CAMERA_HEIGHT_TEXT.get(camera_height, "")
+    # CAMERA WORDS OFF: no paragraph, no height stop, no shot-size lead-in or
+    # cue, no closing restatement. The subject and the place stand on their own.
+    if camera_off:
+        cam, studio_live, camera_words, restate = "", False, False, False
     # ONE ENGINE FOR THE CAMERA: with the studio live its paragraph carries the
     # framing too ("framed as ..."), so the simple shot-size wording steps out.
     # Left in, "A three-quarter view of ..." after "Direct overhead photograph"
@@ -316,7 +320,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
         parts.append(_cap(style) + ".")
 
     if framing in SUBJECT_FIRST:
-        lead = "" if studio_live else LEAD_IN.get(framing, "")
+        lead = "" if (studio_live or camera_off) else LEAD_IN.get(framing, "")
         if subject:
             parts.append(_cap(lead + subject if lead else subject) + ".")
             # the tight steps carry their framing in the lead-in, so the camera word goes
@@ -329,7 +333,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
         if surroundings:
             parts.append(_cap(surroundings) + ".")
         tail = []
-        join = "" if studio_live else JOIN.get(framing, "")
+        join = "" if (studio_live or camera_off) else JOIN.get(framing, "")
         if placement:
             tail.append(placement.rstrip(",") + ",")
         elif join:
@@ -339,7 +343,7 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
         # the camera label replaces the descriptive cue rather than joining it: two
         # framing phrases in one clause read as two instructions, not a louder one
         cue = (CAMERA_CUE.get(framing) if camera_words else None) or SCALE_CUE.get(framing)
-        if studio_live:
+        if studio_live or camera_off:
             cue = None
         if cue and subject:
             tail.append("," + " " + cue)
@@ -473,6 +477,13 @@ class RedNodePromptFrame:
                     "tooltip": "Camera Studio state as JSON (the panel writes it). "
                                "When set, its paragraph leads the prompt and the "
                                "simple camera height stop is superseded."}),
+                "camera_off": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "On: no camera words at all. The shot size wording, the "
+                               "camera height stop and the Camera Studio's paragraph all "
+                               "stay out, and the subject and the place stand on their "
+                               "own. The camera settings are kept for when this goes off "
+                               "again."}),
                 "camera_height": (CAMERA_HEIGHTS, {
                     "default": "Eye level",
                     "tooltip": "Where the camera stands, from the ground looking up "
@@ -510,7 +521,8 @@ class RedNodePromptFrame:
             text_color="default",
             style=STYLE_NONE, style_extra="",
             surroundings_in="", style_in="", subject_in="", light_and_colour_in="",
-            framing_push=PUSH_OFF, camera_height="Eye level", camera=""):
+            framing_push=PUSH_OFF, camera_height="Eye level", camera="",
+            camera_off=False):
         style_text = _join_in(block(style), style_extra, style_in)
         cam_state = None
         if isinstance(camera, str) and camera.strip():
@@ -541,7 +553,8 @@ class RedNodePromptFrame:
         lit = _join_in(rig_light, lighting_text(lighting), exposure(brightness),
                        light_and_colour, light_and_colour_in)
         prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
-                          framing_push, camera_height, cam_state)
+                          framing_push, camera_height, cam_state,
+                          camera_off=bool(camera_off))
         prompt = expand(prompt, seed, resolve_wildcards)
         words = len(prompt.split())
 
@@ -690,7 +703,8 @@ try:
                 resolve_wildcards=data.get("resolve_wildcards", True),
                 framing_push=data.get("framing_push", PUSH_OFF),
                 camera_height=data.get("camera_height", "Eye level"),
-                camera=data.get("camera", ""))
+                camera=data.get("camera", ""),
+                camera_off=bool(data.get("camera_off")))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,

@@ -1813,6 +1813,7 @@ class RedNodeStudioWorkspace:
                 camera_height=("Eye level" if words_off
                                else str(fr.get("camera_height") or "Eye level")),
                 camera=cam_json,
+                camera_off=words_off,
                 seed=run_seed)
         return text
 
@@ -2554,6 +2555,7 @@ class RedNodeStudioWorkspace:
                                        else str(_fr.get("camera_height") or "Eye level")),
                         camera=(str(_fr.get("camera") or "")
                                 if camera_on(cfg) and not _fr.get("camera_off") else ""),
+                        camera_off=bool(_fr.get("camera_off")),
                         style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),

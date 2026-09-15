@@ -39,10 +39,14 @@ const FIELDS = [
   "style", "style_extra", "subject", "surroundings", "framing",
   "placement_where", "placement_what", "placement",
   "lighting", "brightness", "light_and_colour", "framing_push", "camera_height",
-  "camera",
+  "camera", "camera_off",
 ];
 
 const STYLE = `
+.rn-pf .rn-pf-off{opacity:.35;pointer-events:none}
+.rn-pf .rn-pf-camsw{margin-left:auto;margin-right:6px;font-size:11px;padding:1px 8px;
+  background:#22252b;color:#8a919b;border:1px solid #33373d}
+.rn-pf .rn-pf-camsw.on{background:#1f4d3a;color:#9be7c0;border-color:#2f7a5a}
 .rn-pf {
   --rn-line: rgba(255,255,255,0.13);
   --rn-bg: rgba(0,0,0,0.24);
@@ -532,13 +536,18 @@ export function buildFrameEditor(wrap, F) {
   // writing on the left (style, subject, surroundings, light & colour); the
   // camera and the prompt preview on the right - your arrangement
   const RIGHT = new Set(["framing"]);
-  const group = (key, title, hint, els) => {
+  const group = (key, title, hint, els, extra) => {
     const gbox = el("div", "rn-pf-box");
     const gh = el("div", "head");
     const car = el("span", "car", "\u25be");
     gh.appendChild(el("span", "ico", ICONS[key] || "\u25a0"));
     gh.appendChild(el("b", null, title));
     if (hint) gh.appendChild(el("span", "hint2", hint));
+    if (extra) {
+      // a control on the head line that must not fold the section
+      extra.addEventListener("click", (e) => e.stopPropagation());
+      gh.appendChild(extra);
+    }
     gh.appendChild(car);
     const bd = el("div", "body");
     for (const e of els) bd.appendChild(e);
@@ -645,9 +654,34 @@ export function buildFrameEditor(wrap, F) {
   const studioState = el("span", "hint2", "");
   studioBar.appendChild(modeSeg);
   studioBar.appendChild(studioState);
+  // CAMERA WORDS: the switch on the section's head. Off, the frame writes no
+  // camera sentence at all (shot size, height stop, studio paragraph) and the
+  // chips grey out; every setting is kept for when it goes on again.
+  const camBody = el("div", "rn-pf-cambody");
+  for (const e of [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap, studioBar]) {
+    camBody.appendChild(e);
+  }
+  const camSw = el("button", "rn-pf-btn rn-pf-camsw", "Camera words");
+  const applyCamSw = () => {
+    const off = !!F.get("camera_off");
+    camSw.classList.toggle("on", !off);
+    camSw.title = off
+      ? "Off: no camera words at all. The shot size wording, the camera height stop "
+        + "and the Camera Studio's paragraph stay out, and the subject and the place "
+        + "stand on their own. Click to let the camera speak again."
+      : "On: the shot size and camera height chips write the camera words, and the "
+        + "Camera Studio's paragraph leads the prompt when it is set. Click to write "
+        + "no camera words at all.";
+    camBody.classList.toggle("rn-pf-off", off);
+  };
+  camSw.addEventListener("click", () => {
+    F.set("camera_off", !F.get("camera_off"));
+    applyCamSw();
+    F.dirty?.();
+    changed();
+  });
   group("framing", "Camera", "framing, height, and the studio",
-        [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap, studioBar,
-         placementRow]);
+        [camBody, placementRow], camSw);
   const studioHost = el("div", "rn-pf-studio");
   studioHost.style.display = "none";
   wrap.appendChild(studioHost);            // full width, under the columns
@@ -844,6 +878,7 @@ export function buildFrameEditor(wrap, F) {
     whatSel.value = F.get("placement_what");
     placement.value = F.get("placement") || "";
     lightSel.value = F.get("lighting");
+    applyCamSw();
     brightRange.value = String(F.get("brightness") ?? 0);
     lac.value = F.get("light_and_colour") || "";
     frameVal.textContent = F.get("framing");
