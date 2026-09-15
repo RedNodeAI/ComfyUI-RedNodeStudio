@@ -565,7 +565,7 @@ css.textContent = `
 .rn-ws-sect .rn-ws-dial{margin-left:12px}
 /* The Post tab: the chain list beside one editor. */
 .rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px}
-.rn-ws-fxlist{flex:none;width:250px;display:flex;flex-direction:column;border:1px solid #2a2e35;
+.rn-ws-fxlist{flex:none;width:280px;display:flex;flex-direction:column;border:1px solid #2a2e35;
   border-radius:6px;background:#16181c;padding:0 0 6px;max-height:760px;overflow-y:auto}
 .rn-ws-fxband{font-size:11.5px;letter-spacing:.12em;font-weight:700;color:#e0e4ea;
   background:#252a32;border-left:2px solid #b8283c;padding:7px 10px;margin:6px 0 2px}
@@ -605,12 +605,17 @@ css.textContent = `
 .rn-ws-fxlimitpill{margin-left:auto;font-size:9px;border:1px solid #6b5a2a;color:#d4b25f;
   border-radius:8px;padding:0 5px;line-height:14px}
 .rn-ws-fxedit{flex:1;min-width:0;border:1px solid #2a2e35;border-radius:6px;background:#16181c;
-  padding:12px 16px 12px 18px;display:flex;flex-direction:column;gap:8px}
-.rn-ws-fxedit > .head{display:flex;align-items:center;gap:8px}
-.rn-ws-fxedit > .head .ttl{font-size:11.5px;font-weight:700;letter-spacing:.4px;opacity:.85}
-.rn-ws-fxedit .blurb{font-size:11px;opacity:.55;line-height:1.4;margin:0}
-.rn-ws-fxedit .rn-ws-fxc{flex-direction:row;align-items:center;gap:10px}
-.rn-ws-fxedit .rn-ws-fxc .lab{width:118px;flex:none}
+  padding:14px 20px 14px 20px;display:flex;flex-direction:column;gap:10px}
+.rn-ws-fxedit > .head{display:flex;align-items:center;gap:10px}
+.rn-ws-fxedit > .head .ttl{font-size:13px;font-weight:700;letter-spacing:.4px;opacity:.9}
+.rn-ws-fxedit .blurb{font-size:12px;opacity:.6;line-height:1.45;margin:0;max-width:900px}
+/* the controls fill the width: two columns on a wide panel, one when narrow */
+.rn-ws-fxedit .rn-ws-fxgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));
+  gap:10px 32px;margin:6px 0 4px}
+.rn-ws-fxedit .rn-ws-fxc{flex-direction:row;align-items:center;gap:12px}
+.rn-ws-fxedit .rn-ws-fxc .lab{width:132px;flex:none;font-size:12.5px}
+.rn-ws-fxedit .rn-ws-fxc .val{font-size:12.5px;width:64px}
+.rn-ws-fxedit .rn-ws-fxc input[type=range]{height:22px}
 .rn-ws-fxedit .rn-ws-fxc .line{flex:1}
 .rn-ws-fxedit .rn-ws-fxc select{width:auto;flex:1}
 .rn-ws-fxlimit{border-top:1px solid #2a2e35;padding-top:8px;margin-top:2px;gap:8px}
