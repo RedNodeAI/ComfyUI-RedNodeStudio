@@ -467,6 +467,10 @@ css.textContent = `
   width:1px;background:#3a3f47}
 .rn-ws-tab .dot{width:7px;height:7px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-tab .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
+.rn-ws-tab .dot.warn{background:#ef4444;box-shadow:0 0 5px #ef4444}
+.rn-ws-setupwarn{border:1px solid #7f1d1d;background:#2a1215;border-radius:7px;padding:8px 11px;
+  display:flex;flex-direction:column;gap:3px;font-size:12px;color:#fecaca;line-height:1.45}
+.rn-ws-setupwarn .ttl{font-weight:700;color:#fca5a5}
 .rn-ws-body{background:#242830;border:1px solid #3d434c;border-radius:7px;padding:8px;
   display:flex;flex-direction:column;gap:7px;flex:1 1 auto;min-height:0;overflow:auto}
 /* a stretched node must not stretch the reading: every tab's content stays a
@@ -1123,6 +1127,9 @@ export function readCfg(node) {
     if (typeof r.lora_set !== "string") r.lora_set = "";
     delete r.lora_groups;
   }
+  // an unnamed rig is "Rig N": the label a prompt row links by, and the name the
+  // server matches, so a first rig and a first prompt work without renaming anything
+  d.models.rigs.forEach((r, i) => { if (!r.name.trim()) r.name = "Rig " + (i + 1); });
   if (d.models.sampler_mode !== "internal") d.models.sampler_mode = "external";
   if (typeof d.models.hold_two !== "boolean") d.models.hold_two = false;
   if (typeof d.models.seed !== "number") d.models.seed = 0;
@@ -1292,6 +1299,56 @@ export function readCfg(node) {
   d.thumb = d.thumbs.i2i;
   return d;
 }
+// the first free "Rig N", counting from the number of rigs there will be
+function nextRigName(rigs) {
+  const taken = new Set((rigs || []).map((r) => r.name));
+  let n = (rigs || []).length + 1;
+  while (taken.has("Rig " + n)) n++;
+  return "Rig " + n;
+}
+
+// what stops the Workspace rendering, in plain words, before a queue finds out.
+// A wired input counts as chosen. The server says the same things when a run comes
+// out empty (nothing_rendered in workspace.py).
+export function setupProblems(node, cfg) {
+  const out = [];
+  const M = cfg?.models;
+  if (!M) return out;
+  const wired = (name) => (node?.inputs || []).some((s) => s?.name === name && s.link != null);
+  const imageUsed = (node?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length);
+  if (M.sampler_mode !== "internal") {
+    if (imageUsed) {
+      out.push("The image output is wired, but External sampler renders nothing here. Choose "
+             + "Built-in sampler, or take the picture from your own KSampler.");
+    }
+    return out;
+  }
+  const rig = M.rigs[M.active];
+  if (!rig) {
+    if (!wired("model")) out.push("There is no rig. Press New Rig and choose its model, CLIP and VAE.");
+    return out;
+  }
+  if (rig.kind) return out;                    // an engine rig loads nothing on purpose
+  const ckpt = !!rig.checkpoint;
+  if (!ckpt && !rig.unet && !wired("model")) out.push("No diffusion model or checkpoint chosen.");
+  if (!ckpt && !rig.clip && !wired("clip")) out.push("No text encoder (CLIP) chosen.");
+  if (rig.clip && !rig.clip_type) {
+    out.push("The CLIP type is empty, so it loads as Stable Diffusion. Set it to match the "
+           + "model, krea2 for Krea 2.");
+  }
+  if (!ckpt && !rig.vae && !wired("vae")) out.push("No VAE chosen, so the picture cannot be decoded.");
+  const rows = cfg.prompts?.rows || [];
+  const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
+  const hasText = (row) => String(row.text || "").trim();
+  const serves = rows.some((row) => hasText(row) && (rigsOf(row).includes(rig.name) || !rigsOf(row).length));
+  if (!serves) {
+    out.push(rows.some(hasText)
+      ? `No prompt serves ${rig.name}: every prompt with words is linked to another rig.`
+      : "No prompt yet. Write one on the Prompts tab.");
+  }
+  return out;
+}
+
 export function writeCfg(node) {
   const w = findWidget(node, "config");
   if (w) w.value = JSON.stringify(node._rnCfg);
@@ -9213,6 +9270,26 @@ function modelsBody(node, page) {
   const M = cfg.models;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
 
+  // WHAT STOPS A RENDER, at the top where it is seen: the same reasons a run that
+  // comes out empty gives, before anyone queues
+  {
+    const probs = setupProblems(node, cfg);
+    if (probs.length) {
+      const warn = document.createElement("div");
+      warn.className = "rn-ws-setupwarn";
+      const t = document.createElement("div");
+      t.className = "ttl";
+      t.textContent = "Before this renders";
+      warn.appendChild(t);
+      for (const p of probs) {
+        const line = document.createElement("div");
+        line.textContent = p;
+        warn.appendChild(line);
+      }
+      page.appendChild(warn);
+    }
+  }
+
   // Boxes with a width cap, flowing left to right and wrapping when the node is
   // narrow: a wide node stops stretching every row across the whole panel.
   const mwrap = document.createElement("div");
@@ -9338,7 +9415,7 @@ function modelsBody(node, page) {
     addChip.style.cssText = "width:auto;padding:0 14px";
     addChip.textContent = "＋ New Rig";
     addChip.onclick = () => {
-      M.rigs.push({ name: "", checkpoint: "", unet: "", clip: "",
+      M.rigs.push({ name: nextRigName(M.rigs), checkpoint: "", unet: "", clip: "",
                     clip_type: "", vae: "" });
       M.active = M.rigs.length - 1;
       node._rnRigManage = true;
@@ -9469,7 +9546,7 @@ function modelsBody(node, page) {
   add.style.padding = "0 10px";
   add.textContent = "\uFF0B Rig";
   add.onclick = () => {
-    M.rigs.push({ name: "", checkpoint: "", unet: "", clip: "", clip_type: "", vae: "" });
+    M.rigs.push({ name: nextRigName(M.rigs), checkpoint: "", unet: "", clip: "", clip_type: "", vae: "" });
     M.active = M.rigs.length - 1;
     writeCfg(node); render(node);
   };
@@ -12596,6 +12673,13 @@ export function render(node) {
     prevGroup = t.group;
     const dot = document.createElement("span");
     dot.className = "dot" + (tabLit(cfg, t.id) ? " on" : "");
+    if (t.id === "models" || t.id === "prompts") {
+      const probs = setupProblems(node, cfg).filter((p) => (t.id === "prompts") === p.startsWith("No prompt"));
+      if (probs.length) {
+        dot.className = "dot warn";
+        b.title = probs.join("\n");
+      }
+    }
     const lab = document.createElement("span");
     lab.textContent = t.label;
     b.append(dot, lab);
@@ -13014,6 +13098,16 @@ function build(node) {
   if (!node.addDOMWidget || node._rnWidget) return;
   const cfgW = findWidget(node, "config");
   if (!cfgW) { requestAnimationFrame(() => build(node)); return; }
+  // a Workspace just dropped on the canvas starts ready to render: the built-in
+  // sampler and a square latent. A loaded workflow's config replaces this on
+  // configure, so nothing saved is touched.
+  if (!node._rnSeeded && (!cfgW.value || cfgW.value === "{}")) {
+    node._rnSeeded = true;
+    cfgW.value = JSON.stringify({
+      models: { sampler_mode: "internal" },
+      latent: { on: true, aspect: "1:1", w: 1024, h: 1024, scale: 1 },
+    });
+  }
   cfgW.type = "hidden";
   cfgW.hidden = true;
   cfgW.computeSize = () => [0, -4];

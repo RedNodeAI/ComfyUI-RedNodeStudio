@@ -856,7 +856,10 @@ def parse_config(config_json):
                 v = dv
             return max(lo, min(hi, v))
         rigs.append({
-            "name": str(r.get("name") or ""),
+            # an unnamed rig is "Rig N", the same label the panel shows and links a
+            # prompt row by; left empty, a row linked to "Rig 1" never matched it and
+            # the run encoded an empty prompt without a word
+            "name": str(r.get("name") or "").strip() or "Rig %d" % (len(rigs) + 1),
             "checkpoint": str(r.get("checkpoint") or ""),
             "unet": str(r.get("unet") or ""),
             # WHICH LOADER the diffusion model file goes through: "" is by the
@@ -1239,6 +1242,8 @@ _RIG_CACHE = {"slots": []}     # newest first: {key, model, clip, vae}
 # or None. On a public install this dict is empty and such kinds simply do
 # not exist: the toggle never offers them and the parse folds them to files.
 RIG_KIND_HANDLERS = {}
+# why the active rig last failed to load ("" when it loaded, or nothing was asked)
+RIG_LOAD_ERROR = {"text": ""}
 
 
 def _rig_cache_clear():
@@ -1270,8 +1275,11 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
     return None
 
 
-def blocked():
-    """A silent ExecutionBlocker: downstream nodes skip instead of crashing.
+def blocked(message=None):
+    """An ExecutionBlocker: downstream nodes skip instead of crashing.
+
+    With a message, core stops the run there and shows the message as the error, which
+    is how a render that produced nothing says why instead of finishing quietly.
 
     Core nodes like PreviewImage have no None guard, so handing them None on a
     paint run or in external-sampler mode is a TypeError in your face.
@@ -1285,7 +1293,62 @@ def blocked():
             from comfy_execution.graph import ExecutionBlocker
         except Exception:
             return None
-    return ExecutionBlocker(None)
+    return ExecutionBlocker(message)
+
+
+def _clip_hint(rig, err=""):
+    """A sentence about the CLIP type when it is the likely cause, else ""."""
+    if rig and rig.get("clip") and not rig.get("clip_type"):
+        return (" The rig's CLIP type is empty, which loads it as Stable Diffusion; set it "
+                "to match the model, krea2 for Krea 2.")
+    e = str(err).lower()
+    if any(k in e for k in ("mat1 and mat2", "size mismatch", "shape", "dimension")):
+        return (" A shape error like this usually means the CLIP type does not match the "
+                "model; check the rig's CLIP type on the Models tab.")
+    return ""
+
+
+def nothing_rendered(cfg, rig_name, model, clip, enc_err=None, samp_err=None,
+                     no_vae=False):
+    """The sentence a run shows when the Workspace's image output came out empty."""
+    head = "RedNode Studio Workspace rendered nothing, so its image output is empty. "
+    m = cfg.get("models") or {}
+    rigs = m.get("rigs") or []
+    rig = rigs[max(0, min(int(m.get("active", 0)), len(rigs) - 1))] if rigs else None
+    who = ("the rig %r" % rig_name) if rig_name else "the active rig"
+    if m.get("sampler_mode") != "internal":
+        return head + ("The Models tab is set to External sampler, which hands the model, the "
+                       "prompts and the latent to your own KSampler and renders nothing itself. "
+                       "Choose Built-in sampler on the Models tab, or wire a KSampler and take "
+                       "the picture from there.")
+    if rig and rig.get("kind") in RIG_KIND_HANDLERS:
+        return head + ("%s renders through its own engine and returned no picture%s."
+                       % (who[0].upper() + who[1:], (": %s" % samp_err) if samp_err else ""))
+    if rig is None and model is None:
+        return head + ("There is no rig on the Models tab and no model is wired in. Add a rig "
+                       "and choose its diffusion model or checkpoint, its text encoder (CLIP) "
+                       "and its VAE.")
+    if rig and rig.get("kind") == "external":
+        return head + ("%s is an External renderer, which loads no model. Pick a rig that "
+                       "loads one." % (who[0].upper() + who[1:]))
+    if model is None:
+        if RIG_LOAD_ERROR["text"]:
+            return head + ("%s could not load: %s. Check the files chosen on the Models tab."
+                           % (who[0].upper() + who[1:], RIG_LOAD_ERROR["text"]))
+        return head + ("%s has no diffusion model or checkpoint chosen, and no model is wired "
+                       "in. Choose one on the Models tab." % (who[0].upper() + who[1:]))
+    if clip is None:
+        return head + ("%s has no text encoder (CLIP) chosen and none is wired in, so the prompt "
+                       "could not be encoded. Choose the CLIP and its type on the Models tab."
+                       % (who[0].upper() + who[1:]))
+    if enc_err:
+        return head + "Encoding the prompt failed: %s.%s" % (enc_err, _clip_hint(rig, enc_err))
+    if samp_err:
+        return head + "Sampling failed: %s.%s" % (samp_err, _clip_hint(rig, samp_err))
+    if no_vae:
+        return head + ("%s has no VAE chosen and none is wired in, so the picture could not be "
+                       "decoded. Choose a VAE on the Models tab." % (who[0].upper() + who[1:]))
+    return head + "The console lines starting with [RedNode Workspace] say what happened."
 
 
 # The loaders a diffusion model file can go through besides core's UNETLoader,
@@ -1395,6 +1458,7 @@ def load_active_rig(cfg, name=""):
         print("[RedNode Workspace] rig cache: dropping %r to make room"
               % (dropped["key"][0] or dropped["key"][1],), flush=True)
     model = clip = vae = None
+    RIG_LOAD_ERROR["text"] = ""
     try:
         import nodes as _nodes
         if rig["checkpoint"]:
@@ -1420,6 +1484,7 @@ def load_active_rig(cfg, name=""):
     except Exception as exc:
         print("[RedNode Workspace] the Models tab could not load %r: %s"
               % (rig["name"] or key, exc), flush=True)
+        RIG_LOAD_ERROR["text"] = str(exc)
         return rig["name"], None, None, None
     _RIG_CACHE["slots"].insert(0, {"key": key, "model": model, "clip": clip,
                                    "vae": vae})
@@ -2846,7 +2911,15 @@ class RedNodeStudioWorkspace:
         # win because the bundle rules are unchanged. The prompt is the Prompts tab's
         # row for the active rig, typed text first as always.
         positive = negative = rig_image = result_latent_out = None
+        _enc_err = _samp_err = None
+        _no_vae = False
         _prow = prompt_row_for(cfg["models"], cfg["prompts"])
+        if _prow is None and any(str(r.get("text") or "").strip()
+                                 for r in cfg["prompts"]["rows"]):
+            print("[RedNode Workspace] no prompt row serves the rig %r: every row with words "
+                  "is linked to another rig, so the prompt is empty this run. Link a row to "
+                  "this rig on the Prompts tab, or unlink one so it serves any rig."
+                  % (rig_name or "(active)"), flush=True)
         # THE CAMERA WORDS OFF, by the tab's switch or the row's: the panel bakes
         # the studio paragraph and the height stop into the row's text as it
         # previews, so the switch has to strip them here as well as skip the
@@ -2889,6 +2962,7 @@ class RedNodeStudioWorkspace:
                           "Krea 2 rig, so the Studio identity system sits out"
                           % (rig_name or "this rig"), flush=True)
             except Exception as exc:
+                _enc_err = exc
                 print("[RedNode Workspace] built-in encode failed: %s" % exc,
                       flush=True)
         # THE EMBEDDED SAMPLER: comfy core's common_ksampler with this rig's five
@@ -2959,6 +3033,7 @@ class RedNodeStudioWorkspace:
                     if _himg is not None:
                         _h_imgs.append(_himg)
                 except Exception as exc:
+                    _samp_err = exc
                     print("[RedNode Workspace] the %r rig's handler failed: %s"
                           % (_hk, exc), flush=True)
             if len(_h_imgs) == 1:
@@ -3217,6 +3292,7 @@ class RedNodeStudioWorkspace:
                         _shot_images.append(_img)
                 result_latent_out = _last_out
                 if _v is None:
+                    _no_vae = True
                     print("[RedNode Workspace] built-in sampler rendered, but no "
                           "VAE is wired or named on the rig, so there is no image "
                           "to decode.", flush=True)
@@ -3228,6 +3304,7 @@ class RedNodeStudioWorkspace:
                         _w = min(x.shape[2] for x in _shot_images)
                         rig_image = torch.cat([x[:, :_h, :_w, :] for x in _shot_images], dim=0)
             except Exception as exc:
+                _samp_err = exc
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)
 
@@ -3271,6 +3348,14 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in paint pass failed: %s" % exc,
                       flush=True)
 
+        _empty = None
+        if rig_image is None or result_latent_out is None:
+            _why = (None if (_prt or _stage_only)
+                    else nothing_rendered(cfg, rig_name, model, clip, _enc_err, _samp_err,
+                                          _no_vae))
+            if _why and rig_image is None:
+                print("[RedNode Workspace] %s" % _why, flush=True)
+            _empty = blocked(_why if rig_image is None else None)
         _result = (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
                 style_strength if style_strength is not None else 0.5,
                 studio_preset or "",
@@ -3305,10 +3390,12 @@ class RedNodeStudioWorkspace:
                 # the other None sockets stay None because there None means
                 # "unset", not "absent this run".
                 positive, negative,
-                rig_image if rig_image is not None else blocked(),
+                rig_image if rig_image is not None else _empty,
                 # APPENDED: the embedded sampler's latent before decode, for
                 # chaining a same-model workspace with no VAE round trip
-                result_latent_out if result_latent_out is not None else blocked(),
+                result_latent_out if result_latent_out is not None
+                else (blocked(_why) if rig_image is None and not (_prt or _stage_only)
+                      else blocked()),
                 # APPENDED: this run's seed, randomised or pinned per the Models
                 # tab. Wire it into an external renderer (the NovelAI chain) so
                 # the workspace stays the one cockpit for reproducibility too.

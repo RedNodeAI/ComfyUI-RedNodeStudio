@@ -12,6 +12,17 @@ cheap to judge.
 
 ### Workspace
 
+- A new Workspace starts ready to render: the built-in sampler, and the latent
+  on at a square 1024. Loaded workflows keep what they saved
+- A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
+  workflow reads the same way. A prompt linked to an unnamed rig used to be
+  skipped without a word, so the render ignored its prompt
+- When the Workspace renders nothing, the run stops with the reason instead of
+  finishing quietly: External sampler chosen, no rig, no model, a model that
+  failed to load, no CLIP, a failed encode or sample (with a pointer at the CLIP
+  type when that is the likely cause), or no VAE. The Models tab lists the same
+  problems at the top before a queue, and the Models and Prompts tabs show a red
+  dot while something is missing
 - A Draft switch in the footer: on, the Detailer and the Post chain pass the
   picture through, so a queue is the base render alone; off again, the next
   queue renders the keeper in full
