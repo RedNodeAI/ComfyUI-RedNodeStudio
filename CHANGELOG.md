@@ -85,7 +85,11 @@ cheap to judge.
   list beside one editor as before, with an Additional row that adds any
   effect to the end of the chain; and Order, the effects that are on as a
   row of numbered cards you drag about, where an effect is doubled in place
-  or taken out, and Camera order puts everything back. Every effect always
+  or taken out, and Camera order puts everything back. Under the cards an
+  order-at-a-glance map of small coloured squares jumps to a card when
+  clicked; right-click a card or a square to type the place it should take.
+  Saved orders keep the run order alone, apart from looks: applying one
+  moves the effects it names and skips the rest. Every effect always
   stays in the chain and only switches on or off; the extra copies you add
   are the ones that can be deleted. An effect can be in the chain more than once,
   each instance with its own dials and Limit, so a sharpen can work the

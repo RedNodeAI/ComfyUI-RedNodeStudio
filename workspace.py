@@ -3516,6 +3516,31 @@ try:
             "last_thumb": postprocess.LAST_THUMB["uri"],
         })
 
+    @PromptServer.instance.routes.get("/rednode/post_orders")
+    async def _rednode_post_orders(request):
+        orders = postprocess.load_orders()
+        return web.json_response({"orders": [{"name": n, "ids": ids}
+                                             for n, ids in sorted(orders.items())]})
+
+    @PromptServer.instance.routes.post("/rednode/post_orders")
+    async def _rednode_post_orders_post(request):
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        try:
+            if data.get("action") == "save":
+                postprocess.save_order(data.get("name", ""), data.get("ids"))
+            elif data.get("action") == "delete":
+                postprocess.delete_order(data.get("name", ""))
+            else:
+                return web.json_response({"error": "unknown action"}, status=400)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        orders = postprocess.load_orders()
+        return web.json_response({"orders": [{"name": n, "ids": ids}
+                                             for n, ids in sorted(orders.items())]})
+
     @PromptServer.instance.routes.get("/rednode/vision_prompts")
     async def _rednode_vision_prompts(request):
         return web.json_response({"prompts": load_vision_prompts(),

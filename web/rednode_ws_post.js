@@ -27,6 +27,114 @@ async function fetchLuts(node) {
   if (node) postRender(node);
 }
 let postLastThumb = "";
+// saved orders, fetched once and after every change: [{name, ids}]
+let postOrders = null;
+export async function refreshPostOrders(node) {
+  try {
+    const res = await api.fetchApi("/rednode/post_orders");
+    const d = await res.json();
+    postOrders = Array.isArray(d.orders) ? d.orders : [];
+  } catch (e) { postOrders = []; }
+  if (node) postRender(node);
+}
+async function postOrderAction(node, body) {
+  const res = await api.fetchApi("/rednode/post_orders", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const d = await res.json();
+  if (d.error) throw new Error(d.error);
+  postOrders = Array.isArray(d.orders) ? d.orders : [];
+  postRender(node);
+}
+
+// Lay a saved order over the chain. The effects the order names move into the
+// order it saved, taking the places those same effects hold now; everything it
+// does not name stays exactly where it is, and a name it holds that the chain
+// does not have is skipped.
+export function applyOrder(d, ids) {
+  const chain = d?.post?.chain || [];
+  const want = (ids || []).filter((id, i, a) => a.indexOf(id) === i
+                                               && chain.some((b) => b.id === id));
+  const named = new Set(want);
+  const picked = want.map((id) => chain.find((b) => b.id === id));
+  let k = 0;
+  d.post.chain = chain.map((b) => (named.has(b.id) ? picked[k++] : b));
+}
+
+// Move an effect to a position counted among the effects that are ON, which is
+// how the Order view numbers them. 1 is first; past the end is last.
+export function moveToPosition(chain, id, pos) {
+  const from = chain.findIndex((b) => b.id === id);
+  if (from < 0) return;
+  const [it] = chain.splice(from, 1);
+  const others = chain.filter((b) => b.on);
+  const p = Math.max(1, Math.min(others.length + 1, Math.round(Number(pos) || 1)));
+  let at;
+  if (p <= others.length) at = chain.indexOf(others[p - 1]);
+  else at = others.length ? chain.indexOf(others[others.length - 1]) + 1 : chain.length;
+  chain.splice(at, 0, it);
+}
+
+// the right-click menu on a card or a map square: type the number it should be
+function openOrderMenu(node, cfg, chain, b, label, pos, count, ev) {
+  ev.preventDefault?.();
+  ev.stopPropagation?.();
+  document.querySelector(".rn-ws-menu")?.remove();
+  const m = document.createElement("div");
+  m.className = "rn-ws-menu rn-ws-ordermenu";
+  for (const t of ["pointerdown", "click", "contextmenu"]) {
+    m.addEventListener(t, (e) => e.stopPropagation());
+  }
+  const note = document.createElement("div");
+  note.className = "note";
+  note.textContent = `${label}: ${pos} of ${count}`;
+  const done = () => { m.remove(); postWrite(node); postRender(node); };
+  const row = document.createElement("div");
+  row.className = "posrow";
+  const lab = document.createElement("span");
+  lab.textContent = "Move to";
+  const inp = document.createElement("input");
+  inp.type = "number";
+  inp.min = 1; inp.max = count; inp.step = 1;
+  inp.value = String(pos);
+  inp.title = `A number from 1 to ${count}: the place in the run order this effect takes.`;
+  const go = document.createElement("button");
+  go.textContent = "Move";
+  go.onclick = () => { moveToPosition(chain, b.id, inp.value); node._rnOrderFocus = b.id; done(); };
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") go.onclick(); });
+  row.append(lab, inp, go);
+  const mk = (text, fn) => {
+    const x = document.createElement("button");
+    x.textContent = text;
+    x.onclick = fn;
+    return x;
+  };
+  const sep = document.createElement("div");
+  sep.className = "sep";
+  m.append(note, row,
+    mk("Move to first", () => { moveToPosition(chain, b.id, 1); node._rnOrderFocus = b.id; done(); }),
+    mk("Move to last", () => { moveToPosition(chain, b.id, count); node._rnOrderFocus = b.id; done(); }),
+    sep,
+    mk("Open in Effects", () => {
+      m.remove();
+      node._rnFxSel = b.id;
+      node._rnPostSub = "effects";
+      postRender(node);
+    }));
+  document.body.appendChild(m);
+  const mw = 230, mh = m.getBoundingClientRect().height || 180;
+  m.style.left = Math.max(6, Math.min(ev.clientX || 0, (window.innerWidth || 1920) - mw - 6)) + "px";
+  m.style.top = Math.max(6, Math.min(ev.clientY || 0, (window.innerHeight || 1080) - mh - 6)) + "px";
+  const close = (e) => {
+    if (!m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener("pointerdown", close, true);
+    }
+  };
+  setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
+  setTimeout(() => inp.focus?.(), 0);
+}
 let postLastRolls = {};
 
 export async function refreshPostPresets() {
@@ -649,6 +757,77 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
   bar.append(note, reset);
   body.appendChild(bar);
   const live = chain.filter((b) => b.on);
+
+  // SAVED ORDERS: the run order alone, separate from a look (which saves the
+  // dials and the switches as well). An order holds the effects that were on
+  // when it was saved; applying it moves those into that order and skips any
+  // the chain does not have or has switched off.
+  if (postOrders === null) refreshPostOrders(node);
+  const obar = document.createElement("div");
+  obar.className = "rn-ws-row rn-ws-orderbar";
+  const olab = document.createElement("span");
+  olab.className = "rn-ws-note";
+  olab.textContent = "Saved orders";
+  const osel = document.createElement("select");
+  osel.className = "rn-ws-res";
+  const o0 = document.createElement("option");
+  o0.value = "";
+  o0.textContent = (postOrders || []).length ? "Pick an order..." : "No saved orders yet";
+  osel.appendChild(o0);
+  for (const o of postOrders || []) {
+    const opt = document.createElement("option");
+    opt.value = o.name;
+    opt.textContent = `${o.name} (${o.ids.length})`;
+    opt.selected = node._rnOrderPick === o.name;
+    osel.appendChild(opt);
+  }
+  osel.title = "A saved run order. Apply moves the effects it names into that order and "
+             + "leaves the rest where they are.";
+  osel.onchange = () => { node._rnOrderPick = osel.value; };
+  const oapply = document.createElement("button");
+  oapply.className = "rn-ws-btn";
+  oapply.style.cssText = "width:auto;padding:0 12px";
+  oapply.textContent = "Apply";
+  oapply.title = "Put the effects this order names into its order. Effects it does not name, "
+               + "or that are not in the chain, are skipped.";
+  oapply.onclick = () => {
+    const o = (postOrders || []).find((x) => x.name === osel.value);
+    if (!o) return;
+    applyOrder(cfg, o.ids);
+    postWrite(node);
+    postRender(node);
+  };
+  const osave = document.createElement("button");
+  osave.className = "rn-ws-btn";
+  osave.style.cssText = "width:auto;padding:0 12px";
+  osave.textContent = "Save order";
+  osave.title = "Save the order of the effects that are on now, under a name. It saves the "
+              + "order only; Save this look above saves the dials and the switches too.";
+  osave.onclick = async () => {
+    const ids = chain.filter((b) => b.on).map((b) => b.id);
+    if (!ids.length) { alert("Switch some effects on first: an order is the order of the effects that are on."); return; }
+    const name = prompt("Save this order as", node._rnOrderPick || "");
+    if (!name) return;
+    try {
+      node._rnOrderPick = name;
+      await postOrderAction(node, { action: "save", name, ids });
+    } catch (e) { alert("Could not save the order: " + e.message); }
+  };
+  const odel = document.createElement("button");
+  odel.className = "rn-ws-btn";
+  odel.style.cssText = "width:auto;padding:0 10px";
+  odel.textContent = "\u2715";
+  odel.title = "Delete the picked saved order.";
+  odel.onclick = async () => {
+    if (!osel.value) return;
+    if (!confirm(`Delete the saved order "${osel.value}"?`)) return;
+    try {
+      node._rnOrderPick = "";
+      await postOrderAction(node, { action: "delete", name: osel.value });
+    } catch (e) { alert("Could not delete the order: " + e.message); }
+  };
+  obar.append(olab, osel, oapply, osave, odel);
+  body.appendChild(obar);
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-fxboard";
   const left = document.createElement("button");
@@ -728,13 +907,52 @@ function orderBody(node, body, cfg, chain, byId, labels, ops) {
     acts.append(dup);
     if (isExtra(b)) acts.append(rm);
     card.append(big, n, nm, st, lim, foot, acts);
-    card.title = fx.blurb + "\n\nDouble-click to open it in Effects.";
+    card.title = fx.blurb + "\n\nDouble-click to open it in Effects; right-click to type "
+               + "the place it should take.";
     card.ondblclick = () => { node._rnFxSel = b.id; node._rnPostSub = "effects"; postRender(node); };
+    card.addEventListener("contextmenu", (e) =>
+      openOrderMenu(node, cfg, chain, b, labels[b.id], i + 1, live.length, e));
+    if (node._rnOrderFocus === b.id) {
+      card.classList.add("focus");
+      setTimeout(() => card.scrollIntoView?.({ behavior: "smooth", inline: "center", block: "nearest" }), 0);
+    }
     ops.dragHandlers(card, b.id);
     cards.appendChild(card);
   });
   wrap.append(left, cards, right);
   body.appendChild(wrap);
+
+  // THE MAP: the same run order as small coloured squares, number and name,
+  // wrapping into rows so the whole chain reads at a glance. Click a square to
+  // jump the cards above to it; right-click to type the place it should take.
+  if (live.length) {
+    const mcap = document.createElement("div");
+    mcap.className = "rn-ws-fxmapcap";
+    mcap.textContent = "ORDER AT A GLANCE";
+    body.appendChild(mcap);
+    const map = document.createElement("div");
+    map.className = "rn-ws-fxmap2";
+    live.forEach((b, i) => {
+      const band = chainBand(b.fx);
+      const sq = document.createElement("button");
+      sq.className = "rn-ws-fxsq" + (node._rnOrderFocus === b.id ? " focus" : "");
+      sq.style.background = BAND_COLOUR[band] || "#888";
+      const num = document.createElement("span");
+      num.className = "num";
+      num.textContent = String(i + 1);
+      const nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = labels[b.id];
+      sq.append(num, nm);
+      sq.title = `${i + 1}. ${labels[b.id]} (${band}${b.limit && b.limit !== "off" ? ", " + b.limit + " only" : ""}). `
+               + "Click to jump to its card; right-click to type the place it should take.";
+      sq.onclick = () => { node._rnOrderFocus = b.id; postRender(node); };
+      sq.addEventListener("contextmenu", (e) =>
+        openOrderMenu(node, cfg, chain, b, labels[b.id], i + 1, live.length, e));
+      map.appendChild(sq);
+    });
+    body.appendChild(map);
+  }
 }
 
 export function postBody(node, body) {

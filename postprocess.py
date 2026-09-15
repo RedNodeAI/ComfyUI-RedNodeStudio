@@ -1292,6 +1292,57 @@ def delete_preset(name):
     return presets
 
 
+# ---------------------------------------------------------------------------
+# Saved ORDERS: a name and the run order of the effects that were on when it was
+# saved, as instance ids. A look saves the whole chain (dials, switches and order);
+# an order saves the order alone, so one order can be laid over any look. Applying
+# one moves the effects it names into that order and skips the rest.
+def _orders_path(make=False):
+    return os.path.join(os.path.dirname(_presets_path(make=make)), "post_orders.json")
+
+
+def load_orders():
+    """{name: [instance id, ...]}"""
+    try:
+        with open(_orders_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for name, ids in (data.get("orders") or {}).items():
+        if isinstance(ids, list):
+            clean = [str(i) for i in ids if isinstance(i, str) and i]
+            out[str(name)] = list(dict.fromkeys(clean))
+    return out
+
+
+def _write_orders(orders):
+    path = _orders_path(make=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"orders": orders}, f, indent=2)
+    os.replace(tmp, path)
+
+
+def save_order(name, ids):
+    name = str(name or "").strip()
+    if not name:
+        raise ValueError("an order needs a name")
+    if not isinstance(ids, list) or not ids:
+        raise ValueError("an order needs at least one effect that is on")
+    orders = load_orders()
+    orders[name] = list(dict.fromkeys(str(i) for i in ids if isinstance(i, str) and i))
+    _write_orders(orders)
+    return orders
+
+
+def delete_order(name):
+    orders = load_orders()
+    orders.pop(str(name or ""), None)
+    _write_orders(orders)
+    return orders
+
+
 # the most recent graded frame, so "save this look" has a picture to save. Held in
 # memory only: it is a preview, not something worth writing to disk every run.
 LAST_THUMB = {"uri": ""}

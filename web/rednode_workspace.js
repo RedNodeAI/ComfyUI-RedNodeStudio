@@ -609,6 +609,25 @@ css.textContent = `
   padding:1px 5px;border-radius:4px;cursor:pointer}
 .rn-ws-fxcard .acts button:hover{color:#fff;border-color:#b8283c}
 .rn-ws-fxcard.drop{box-shadow:-4px 0 0 0 #b8283c}
+.rn-ws-fxcard.focus{border-color:#fff;box-shadow:0 0 0 2px #ffffff55}
+.rn-ws-orderbar{gap:8px;flex-wrap:wrap}
+.rn-ws-orderbar select{min-width:180px}
+.rn-ws-fxmapcap{font-size:10.5px;letter-spacing:.12em;font-weight:700;color:#8a919b;margin:14px 0 6px 32px}
+.rn-ws-fxmap2{display:flex;flex-wrap:wrap;gap:6px;margin:0 32px 8px}
+.rn-ws-fxsq{display:flex;align-items:center;gap:7px;width:132px;height:34px;padding:0 8px;border:0;
+  border-radius:5px;cursor:pointer;color:#fff;text-align:left;box-shadow:inset 0 0 0 1px #0003}
+.rn-ws-fxsq .num{flex:none;width:20px;height:20px;border-radius:50%;background:#000c;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;
+  font-variant-numeric:tabular-nums}
+.rn-ws-fxsq .nm{font-size:11.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  text-shadow:0 1px 1px #0006}
+.rn-ws-fxsq:hover{filter:brightness(1.15)}
+.rn-ws-fxsq.focus{box-shadow:0 0 0 2px #fff}
+.rn-ws-ordermenu .posrow{display:flex;align-items:center;gap:6px;padding:4px 9px}
+.rn-ws-ordermenu .posrow span{font-size:12px;color:#ddd}
+.rn-ws-ordermenu .posrow input{width:56px;background:#15171b;border:1px solid #3a3d44;color:#eee;
+  border-radius:4px;padding:3px 5px}
+.rn-ws-ordermenu .posrow button{padding:4px 10px;border:1px solid #3a3d44}
 .rn-ws-fxcard.dragging{opacity:.5;transform:rotate(-2deg)}
 .rn-ws-eye{width:16px;height:16px;flex:none;border:none;background:none;color:#474b52;
   padding:0;cursor:pointer;font-size:11px;line-height:16px;text-align:center}
