@@ -316,7 +316,9 @@ surroundings long enough to pull the camera back on their own. Wildcards and @ke
 the finished text, seeded, the same as the Prompt Box.
 
 The panel builds its preview by asking the node, so what it shows on the canvas is what renders.
-The same editor is what a Krea 2 prompt row on the Workspace's Prompts tab is.
+The same editor is what a Krea 2 prompt row on the Workspace's Prompts tab is. Each section,
+Style, Subject, Surroundings and Light and colour, saves and loads its own named snippets, and
+the camera segment reads Off, Simple or Advanced: Off writes no camera sentence at all.
 
 RedNode Describe To Boxes fills those boxes from a picture. It sends the image to a local Ollama
 vision model, asks for five labelled sections, and hands back Subject, Surroundings and Light and

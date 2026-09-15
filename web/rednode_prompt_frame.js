@@ -44,9 +44,13 @@ const FIELDS = [
 
 const STYLE = `
 .rn-pf .rn-pf-off{opacity:.35;pointer-events:none}
-.rn-pf .rn-pf-camsw{margin-left:auto;margin-right:6px;font-size:11px;padding:1px 8px;
-  background:#22252b;color:#8a919b;border:1px solid #33373d}
-.rn-pf .rn-pf-camsw.on{background:#1f4d3a;color:#9be7c0;border-color:#2f7a5a}
+.rn-pf .rn-pf-headgrp{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 6px;
+  border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:rgba(0,0,0,0.18)}
+.rn-pf .rn-pf-headcap{font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+  color:#8a919b;margin-right:2px}
+.rn-pf .rn-pf-snip{display:flex;align-items:center;gap:6px;margin-top:4px}
+.rn-pf .rn-pf-snip select{flex:1;min-width:0}
+.rn-pf .rn-pf-snip .rn-pf-btn{flex:none}
 .rn-pf {
   --rn-line: rgba(255,255,255,0.13);
   --rn-bg: rgba(0,0,0,0.24);
@@ -261,12 +265,23 @@ export function buildFrameEditor(wrap, F) {
   // ---- head: presets ------------------------------------------------------------
   const head = el("div", "rn-pf-head");
   head.appendChild(el("span", "ttl", "Prompt Frame"));
+  // TWO GROUPS on the head line, so the saved prompts (whole frames, load and
+  // save) and the tools (the two Ollama buttons) stop reading as one row
+  const grpSaved = el("div", "rn-pf-headgrp");
+  grpSaved.appendChild(el("span", "rn-pf-headcap", "Saved prompts"));
+  const grpTools = el("div", "rn-pf-headgrp");
+  grpTools.appendChild(el("span", "rn-pf-headcap", "Tools"));
+  head.appendChild(grpSaved);
+  head.appendChild(grpTools);
   const presetSel = document.createElement("select");
   presetSel.style.maxWidth = "180px";
   fillSelect(presetSel, ["Load prompts..."], "Load prompts...");
+  presetSel.title = "A saved prompt: every field of the frame at once. Yours and the "
+                  + "shipped examples.";
   const presetBtn = el("button", "rn-pf-btn", "Load");
-  head.appendChild(presetSel);
-  head.appendChild(presetBtn);
+  presetBtn.title = "Load the chosen saved prompt into every box.";
+  grpSaved.appendChild(presetSel);
+  grpSaved.appendChild(presetBtn);
   // AUTO SORT: the same Ollama the auto prompt leans on reads
   // every box and puts each phrase where it belongs - a lumped prompt tidied
   // into Style, Subject, Surroundings, Light and placement in one press.
@@ -320,15 +335,22 @@ export function buildFrameEditor(wrap, F) {
       setTimeout(() => { sortBtn.textContent = "✨ Auto sort"; }, 1800);
     }
   });
-  head.appendChild(sortBtn);
+  grpTools.appendChild(sortBtn);
   // REWRITE: the same model as a writer. Every fact stays, the wording gets
   // concrete, and the style tag beside it says what kind of picture it is for.
   // The result lands back in the boxes for editing, never straight to the queue.
   const rwStyle = document.createElement("select");
-  rwStyle.style.maxWidth = "120px";
-  fillSelect(rwStyle, ["keep", "photoreal", "cinematic", "illustration"], "keep");
-  rwStyle.title = "What the rewrite writes for: keep the style as written, or a "
-                + "photograph, a film still, an illustration.";
+  rwStyle.style.maxWidth = "190px";
+  for (const [v, t] of [["keep", "Keep the style as written"], ["photoreal", "As a photograph"],
+                        ["cinematic", "As a film still"], ["illustration", "As an illustration"]]) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = t;
+    rwStyle.appendChild(o);
+  }
+  rwStyle.value = "keep";
+  rwStyle.title = "What the rewrite writes for. Keep leaves the medium and style as you "
+                + "wrote them and only tightens the wording; the others add the words "
+                + "of that kind of picture.";
   const rwBtn = el("button", "rn-pf-btn", "✍ Rewrite");
   rwBtn.title = "Rewrite what is in the boxes so it reads well for the model: every "
               + "fact kept, the wording made concrete, in the style picked beside "
@@ -373,8 +395,9 @@ export function buildFrameEditor(wrap, F) {
       setTimeout(() => { rwBtn.textContent = "✍ Rewrite"; }, 1800);
     }
   });
-  head.appendChild(rwStyle);
-  head.appendChild(rwBtn);
+  grpTools.appendChild(el("span", "rn-pf-headcap", "Rewrite as"));
+  grpTools.appendChild(rwStyle);
+  grpTools.appendChild(rwBtn);
   wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------
@@ -487,11 +510,10 @@ export function buildFrameEditor(wrap, F) {
   pgrow.appendChild(whereSel); pgrow.appendChild(whatSel);
   placeRow.appendChild(pgrow);
 
-  const placement = document.createElement("input");
-  placement.type = "text";
-  placement.placeholder = "or type it: standing at the water's edge";
+  const placement = document.createElement("textarea");
+  placement.rows = 2;
+  placement.placeholder = "where the subject stands in the scene: standing at the water's edge";
   placement.value = F.get("placement") || "";
-  const placementRow = labelledRow("", placement);
 
   // ---- lighting + brightness ----------------------------------------------------------
   const lightSel = document.createElement("select");
@@ -629,9 +651,84 @@ export function buildFrameEditor(wrap, F) {
     ta._rnCount = upd;
     return wrapC;
   };
-  group("style", "Style", "the overall look and feel.", [styleRow, counted(styleExtra, 200, "Style wording")]);
-  group("subject", "Subject", "who or what, and how it looks.", [counted(subject, 600, "Subject")]);
-  group("surroundings", "Surroundings", "where it is.", [counted(surroundings, 300, "Surroundings")]);
+  // SAVED SNIPPETS, per section: a style, a subject, a place or a light you keep
+  // coming back to, saved and loaded on its own without touching the other boxes
+  let SNIPS = { style: {}, subject: {}, surroundings: {}, light: {} };
+  const snipRows = [];
+  const refreshSnips = async () => {
+    try {
+      const r = await fetch("/rednode/frame_snippets");
+      const j = await r.json();
+      SNIPS = j.snippets || SNIPS;
+    } catch (e) { /* API not up */ }
+    for (const fill of snipRows) fill();
+  };
+  const snipRow = (section, keys, what) => {
+    const row = el("div", "rn-pf-snip");
+    const sel = document.createElement("select");
+    sel.title = "Your saved " + what + ". Pick one and press Load; Save keeps what is "
+              + "in this section now under a name; the cross deletes the picked one.";
+    const load = el("button", "rn-pf-btn", "Load");
+    load.title = "Put the picked saved " + what + " into this section only.";
+    const save = el("button", "rn-pf-btn", "Save");
+    save.title = "Save this section as a named " + what + ", for any prompt later.";
+    const del = el("button", "rn-pf-btn", "\u2715");
+    del.title = "Delete the picked saved " + what + ".";
+    const fill = () => {
+      const names = Object.keys(SNIPS[section] || {});
+      fillSelect(sel, ["Saved " + what + "..."].concat(names),
+                 names.includes(sel.value) ? sel.value : "Saved " + what + "...");
+    };
+    fill();
+    snipRows.push(fill);
+    load.addEventListener("click", () => {
+      const v = (SNIPS[section] || {})[sel.value];
+      if (!v) return;
+      for (const k of keys) if (v[k] !== undefined) F.set(k, v[k]);
+      pullFromWidgets();
+      changed();
+    });
+    save.addEventListener("click", async () => {
+      const cur = Object.keys(SNIPS[section] || {}).includes(sel.value) ? sel.value : "";
+      const name = window.prompt("Save this " + what + " as", cur);
+      if (!name) return;
+      pushToWidgets();
+      const value = {};
+      for (const k of keys) value[k] = F.get(k);
+      try {
+        const r = await fetch("/rednode/frame_snippet_save", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section, name, value }),
+        });
+        const j = await r.json();
+        if (j.error) throw new Error(j.error);
+        await refreshSnips();
+        sel.value = name;
+      } catch (e) { alert("Could not save: " + e.message); }
+    });
+    del.addEventListener("click", async () => {
+      const name = sel.value;
+      if (!(SNIPS[section] || {})[name]) return;
+      if (!window.confirm("Delete the saved " + what + " \"" + name + "\"?")) return;
+      try {
+        await fetch("/rednode/frame_snippet_save", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section, name, action: "delete" }),
+        });
+        await refreshSnips();
+      } catch (e) { /* the list simply keeps it */ }
+    });
+    row.appendChild(sel); row.appendChild(load); row.appendChild(save); row.appendChild(del);
+    return row;
+  };
+  group("style", "Style", "the overall look and feel.",
+        [styleRow, counted(styleExtra, 200, "Style wording"),
+         snipRow("style", ["style", "style_extra"], "styles")]);
+  group("subject", "Subject", "who or what, and how it looks.",
+        [counted(subject, 600, "Subject"), snipRow("subject", ["subject"], "subjects")]);
+  group("surroundings", "Surroundings", "where it is.",
+        [counted(surroundings, 300, "Surroundings"),
+         snipRow("surroundings", ["surroundings"], "places")]);
   // CAMERA: the simple chips (framing = distance and lens, height = height and
   // pitch) drive a Camera Studio state underneath; the studio, opened from the
   // disclosure, is the advanced view and mounts FULL WIDTH below the columns.
@@ -643,6 +740,14 @@ export function buildFrameEditor(wrap, F) {
   // in the standalone node it unfolds below.
   const studioBar = el("div", "rn-pf-row");
   const modeSeg = el("div", "rn-pf-seg");
+  // OFF: no camera words at all. Simple: the chips write them. Advanced: the
+  // studio does. One segment, three states, the camera settings kept throughout.
+  const offBtn = el("button", "rn-pf-segb", "Off");
+  offBtn.title = "No camera words at all: no shot size wording, no camera height stop, "
+               + "no Camera Studio paragraph. The subject and the place stand on their "
+               + "own. Your camera settings are kept for when Simple or Advanced is "
+               + "picked again.";
+  modeSeg.appendChild(offBtn);
   const simpleBtn = el("button", "rn-pf-segb", "Simple");
   simpleBtn.title = "The Shot size and Camera height chips write the camera words.";
   const studioBtn = el("button", "rn-pf-segb", "Advanced");
@@ -654,34 +759,35 @@ export function buildFrameEditor(wrap, F) {
   const studioState = el("span", "hint2", "");
   studioBar.appendChild(modeSeg);
   studioBar.appendChild(studioState);
-  // CAMERA WORDS: the switch on the section's head. Off, the frame writes no
-  // camera sentence at all (shot size, height stop, studio paragraph) and the
-  // chips grey out; every setting is kept for when it goes on again.
+  // CAMERA WORDS OFF: the Off state of the segment. The chips and their
+  // sliders grey out; the segment itself stays live so Simple or Advanced can
+  // bring the camera back with every setting as it was.
   const camBody = el("div", "rn-pf-cambody");
-  for (const e of [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap, studioBar]) {
+  for (const e of [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap]) {
     camBody.appendChild(e);
   }
-  const camSw = el("button", "rn-pf-btn rn-pf-camsw", "Camera words");
   const applyCamSw = () => {
     const off = !!F.get("camera_off");
-    camSw.classList.toggle("on", !off);
-    camSw.title = off
-      ? "Off: no camera words at all. The shot size wording, the camera height stop "
-        + "and the Camera Studio's paragraph stay out, and the subject and the place "
-        + "stand on their own. Click to let the camera speak again."
-      : "On: the shot size and camera height chips write the camera words, and the "
-        + "Camera Studio's paragraph leads the prompt when it is set. Click to write "
-        + "no camera words at all.";
+    offBtn.classList.toggle("on", off);
+    if (off) { simpleBtn.classList.remove("on"); studioBtn.classList.remove("on"); }
     camBody.classList.toggle("rn-pf-off", off);
   };
-  camSw.addEventListener("click", () => {
-    F.set("camera_off", !F.get("camera_off"));
+  const setCameraOff = (off) => {
+    F.set("camera_off", !!off);
     applyCamSw();
+    if (!off) syncSimpleRef?.();
     F.dirty?.();
     changed();
-  });
+  };
+  offBtn.addEventListener("click", () => setCameraOff(true));
+  const placementLabel = el("div", "rn-pf-sublabel", "Placement");
+  placementLabel.title = "Where the subject stands in the scene, in your words. Optional; "
+                       + "it rides the prompt whether the camera words are on or off.";
+  const placementBox = el("div", null);
+  placementBox.appendChild(placementLabel);
+  placementBox.appendChild(counted(placement, 200, "Placement"));
   group("framing", "Camera", "framing, height, and the studio",
-        [camBody, placementRow], camSw);
+        [camBody, studioBar, placementBox]);
   const studioHost = el("div", "rn-pf-studio");
   studioHost.style.display = "none";
   wrap.appendChild(studioHost);            // full width, under the columns
@@ -766,8 +872,8 @@ export function buildFrameEditor(wrap, F) {
     showStudio(false);
     changed();
   };
-  studioBtn.addEventListener("click", openStudio);
-  simpleBtn.addEventListener("click", goSimple);
+  studioBtn.addEventListener("click", () => { if (F.get("camera_off")) setCameraOff(false); openStudio(); });
+  simpleBtn.addEventListener("click", () => { if (F.get("camera_off")) setCameraOff(false); goSimple(); });
   // on (re)build: restore the remembered state, or follow the rule
   {
     const remembered = foldGet("studio_open");
@@ -796,7 +902,9 @@ export function buildFrameEditor(wrap, F) {
   frameRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
   camRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
   group("light", "Light & colour", "lighting mood and colours.",
-        [lightRow, brightRow, counted(lac, 200, "Light and colour")]);
+        [lightRow, brightRow, counted(lac, 200, "Light and colour"),
+         snipRow("light", ["lighting", "brightness", "light_and_colour"], "lights")]);
+  refreshSnips();
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
@@ -948,7 +1056,7 @@ export function buildFrameEditor(wrap, F) {
   saveBtn.title = "Save every field of this frame as a named prompt, next to the "
                 + "examples. Yours can be overwritten and deleted; the examples "
                 + "cannot.";
-  head.appendChild(saveBtn);
+  grpSaved.appendChild(saveBtn);
   saveBtn.addEventListener("click", async () => {
     const cur = presetSel.value !== "Load prompts..." ? presetSel.value : "";
     const name = window.prompt("Save this prompt as",

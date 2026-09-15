@@ -36,11 +36,16 @@ cheap to judge.
   Prompt's Ollama model as a writer and come back for editing
 - Save writes Civitai metadata with AutoV2 hashes, and plays a finish sound
   when asked
-- A Camera words switch on the frame's Camera section: off, the row writes
-  no camera sentence at all, shot size, height stop and studio paragraph
-  alike, and the chips grey out. The Camera tab's switch now strips the
-  studio's paragraph from the queued prompt too, not only the LoRAs and
-  the path
+- The frame's camera segment is Off, Simple, Advanced: Off writes no camera
+  sentence at all, shot size, height stop and studio paragraph alike, and
+  the chips grey out. The Camera tab's switch now strips the studio's
+  paragraph from the queued prompt too, not only the LoRAs and the path
+- Saved snippets per section of the Prompt Frame: Style, Subject,
+  Surroundings and Light and colour each save and load their own named
+  pieces without touching the other boxes
+- The frame's head line is two groups, Saved prompts (load and save the
+  whole frame) and Tools (Auto sort, and Rewrite with a readable style
+  choice); the placement box is a counted box like the others
 
 ### Studio Detailer
 

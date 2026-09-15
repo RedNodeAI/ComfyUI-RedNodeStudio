@@ -360,6 +360,64 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
     return " ".join(parts)
 
 
+# SAVED SNIPPETS, one store per section of the frame: a style you keep coming
+# back to, a subject you draw every week, a place, a light. Each section saves
+# and loads its own fields only, so a saved subject never drags a style along.
+SNIPPET_KEYS = {
+    "style": ("style", "style_extra"),
+    "subject": ("subject",),
+    "surroundings": ("surroundings",),
+    "light": ("lighting", "brightness", "light_and_colour"),
+}
+_SNIPPET_PATH = {"override": ""}     # tests point this at a temp file
+
+
+def _snippet_path():
+    if _SNIPPET_PATH["override"]:
+        return _SNIPPET_PATH["override"]
+    import os as _os
+    import folder_paths as _fp
+    base = _os.path.join(_fp.get_user_directory(), "default", "rednode")
+    _os.makedirs(base, exist_ok=True)
+    return _os.path.join(base, "frame_snippets.json")
+
+
+def load_snippets():
+    """{section: {name: {field: value}}}, every section present."""
+    out = {k: {} for k in SNIPPET_KEYS}
+    try:
+        with open(_snippet_path(), encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        return out
+    if not isinstance(d, dict):
+        return out
+    for sec, keys in SNIPPET_KEYS.items():
+        items = d.get(sec) if isinstance(d.get(sec), dict) else {}
+        for name, val in items.items():
+            if isinstance(val, dict) and str(name).strip():
+                out[sec][str(name).strip()[:64]] = {k: val[k] for k in keys if k in val}
+    return out
+
+
+def save_snippet(section, name, value=None, delete=False):
+    """Save or delete one snippet; returns the section's names or raises ValueError."""
+    if section not in SNIPPET_KEYS:
+        raise ValueError("no such section: %r" % section)
+    name = str(name or "").strip()[:64]
+    if not name:
+        raise ValueError("a snippet needs a name")
+    lib = load_snippets()
+    if delete:
+        lib[section].pop(name, None)
+    else:
+        val = value if isinstance(value, dict) else {}
+        lib[section][name] = {k: val[k] for k in SNIPPET_KEYS[section] if k in val}
+    with open(_snippet_path(), "w", encoding="utf-8") as f:
+        json.dump(lib, f, indent=1)
+    return sorted(lib[section])
+
+
 class RedNodePromptFrame:
     """Subject + Surroundings, emitted in the order that sets the framing."""
 
@@ -667,6 +725,25 @@ try:
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=500)
         return web.json_response({"ok": True, "user": sorted(users)})
+
+    @PromptServer.instance.routes.get("/rednode/frame_snippets")
+    async def _rednode_frame_snippets(request):
+        return web.json_response({"snippets": load_snippets()})
+
+    @PromptServer.instance.routes.post("/rednode/frame_snippet_save")
+    async def _rednode_frame_snippet_save(request):
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        try:
+            names = save_snippet(str(data.get("section") or ""), data.get("name"),
+                                 data.get("value"), delete=data.get("action") == "delete")
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+        except Exception as exc:
+            return web.json_response({"error": str(exc)}, status=500)
+        return web.json_response({"ok": True, "names": names})
 
     @PromptServer.instance.routes.get("/rednode/prompt_frame_presets")
     async def _rednode_prompt_frame_presets(request):
