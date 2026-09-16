@@ -222,7 +222,10 @@ cheap to judge.
   forming shows beside a VRAM chart with model loads and unloads marked, the
   card's size dashed, and the models on the card now; a log says what is
   happening in plain words (captions made, models loaded and freed, a pass on
-  another model family). The server sends these as rednode.run_stage events
+  another model family). The server sends these as rednode.run_stage events.
+  The VRAM chart has a GB scale, times, the peak and the latest value marked,
+  and with the VRAM limit on Low or Medium a line at the card that limit suits
+  (16 or 24 GB); the line under the chart says when a run went over it
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

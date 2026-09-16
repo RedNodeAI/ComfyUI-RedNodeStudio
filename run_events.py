@@ -81,7 +81,8 @@ def _model_name(lm):
             return _NAMES[cls]
         low = cls.lower()
         if "clip" in low or "text" in low or low.endswith("te") or "temodel" in low:
-            return "Text encoder (%s)" % cls
+            fam = cls.replace("TEModel", "").replace("_", "").strip()
+            return "Text encoder" + (" (%s)" % _NAMES.get(fam, fam) if fam else "")
         return cls
     except Exception:
         return "Model"

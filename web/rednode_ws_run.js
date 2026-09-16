@@ -324,11 +324,12 @@ export function runTabBody(node, body) {
   const mem = el("div", "rn-ws-card rn-run-mem");
   mem.appendChild(el("div", "ch", "VRAM"));
   const chart = el("canvas", "rn-run-chart");
-  chart.height = 140;
+  chart.height = 180;
   const memLine = el("div", "rn-ws-note rn-run-memline");
   const legend = el("div", "rn-run-legend");
   for (const [cls, text] of [["use", "In use"], ["load", "Model loaded"],
-                             ["unload", "Model unloaded"], ["cap", "Card size"]]) {
+                             ["unload", "Model unloaded"], ["cap", "Card size"],
+                             ["tgt", "VRAM limit"]]) {
     const k = el("span", "k " + cls);
     k.appendChild(el("i"));
     k.appendChild(document.createTextNode(text));
@@ -401,7 +402,7 @@ function refresh(view) {
   for (const r of stageRows(node)) {
     const b = el("div", `rn-run-box ${r.state}`);
     b.dataset.stage = r.key;
-    b.appendChild(el("div", "t", r.label));
+    b.appendChild(el("div", "t", r.s?.label || r.label));
     const st = el("div", "st");
     let text = STATE_TEXT[r.state] || r.state;
     if (r.state === "done" && r.s?.secs != null) text = `Done · ${Number(r.s.secs).toFixed(1)} s`;
@@ -440,12 +441,14 @@ function refresh(view) {
   }
 
   // memory
-  drawChart(refs.chart);
+  drawChart(refs.chart, node._rnCfg.vram_tier || "high");
   const last = RUN.vram[RUN.vram.length - 1];
   const gb = (mb) => `${(mb / 1024).toFixed(1)} GB`;
   const peak = RUN.vram.reduce((m, v) => Math.max(m, v.used), 0);
+  const tgt = TIER_TARGET_GB[node._rnCfg.vram_tier];
   refs.memLine.textContent = RUN.total
     ? `${last ? gb(last.used) : "-"} of ${gb(RUN.total)} in use${peak ? ` · peak ${gb(peak)}` : ""}`
+      + (tgt ? ` · limit ${tgt} GB${peak > tgt * 1024 ? `, went over by ${gb(peak - tgt * 1024)}` : ""}` : "")
     : "Memory figures arrive with the first run.";
   refs.onCard.replaceChildren();
   if (!RUN.models.length) {
@@ -474,35 +477,81 @@ function refresh(view) {
   if (atBottom) refs.log.scrollTop = refs.log.scrollHeight;
 }
 
-function drawChart(cv) {
+// What each VRAM limit is sized for. The limit itself only holds the expensive dials
+// down; these are the cards it suits, drawn so a run that goes past one shows it.
+export const TIER_TARGET_GB = { low: 16, medium: 24 };
+const TIER_NAME = { low: "Low", medium: "Medium" };
+
+function niceStep(maxGb) {
+  for (const s of [1, 2, 4, 8, 16, 32]) if (maxGb / s <= 5) return s;
+  return 64;
+}
+
+function drawChart(cv, tier) {
   const ctx = cv.getContext?.("2d");
   if (!ctx) return;
-  const w = Math.max(200, Math.round(cv.clientWidth || cv.parentNode?.clientWidth || 360));
+  const w = Math.max(240, Math.round(cv.clientWidth || cv.parentNode?.clientWidth || 360));
   const h = cv.height;
   if (cv.width !== w) cv.width = w;
   ctx.clearRect(0, 0, w, h);
   const total = RUN.total || 1;
   const pts = RUN.vram;
   const tMax = Math.max(10, secs(), pts.length ? pts[pts.length - 1].t : 0);
-  const x = (t) => 4 + (t / tMax) * (w - 8);
-  const y = (mb) => h - 4 - (mb / total) * (h - 16);
+  const L = 38, Rm = 8, T = 10, B = 20;             // room for the axis labels
+  const x = (t) => L + (t / tMax) * (w - L - Rm);
+  const y = (mb) => h - B - (mb / total) * (h - B - T);
+  const gb = (mb) => mb / 1024;
+  const txt = (s, px, py, align = "left", color = "#8a919b") => {
+    if (!ctx.fillText) return;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.fillText(s, px, py);
+  };
+  ctx.font = "10px sans-serif";
+  ctx.lineWidth = 1;
+  // the GB scale, with faint grid lines
+  const step = niceStep(gb(total));
+  for (let g = 0; g <= gb(total) + 0.01; g += step) {
+    const yy = y(g * 1024);
+    ctx.strokeStyle = "#1f2329";
+    ctx.beginPath();
+    ctx.moveTo(L, yy);
+    ctx.lineTo(w - Rm, yy);
+    ctx.stroke();
+    txt(`${g} GB`, L - 5, yy + 3, "right");
+  }
+  // the time along the bottom
+  for (const f of [0, 0.5, 1]) txt(clock(tMax * f), x(tMax * f), h - 5,
+                                     f === 0 ? "left" : f === 1 ? "right" : "center");
   // the card's size
   ctx.strokeStyle = "#6b7280";
   ctx.setLineDash?.([4, 4]);
   ctx.beginPath();
-  ctx.moveTo(0, y(total));
-  ctx.lineTo(w, y(total));
+  ctx.moveTo(L, y(total));
+  ctx.lineTo(w - Rm, y(total));
   ctx.stroke();
+  txt(`Card ${gb(total).toFixed(1)} GB`, w - Rm - 2, y(total) - 3, "right");
+  // the VRAM limit's target card, when one is set
+  const target = TIER_TARGET_GB[tier];
+  if (target && target * 1024 < total) {
+    const ty = y(target * 1024);
+    ctx.strokeStyle = "#e0a84a";
+    ctx.beginPath();
+    ctx.moveTo(L, ty);
+    ctx.lineTo(w - Rm, ty);
+    ctx.stroke();
+    txt(`${TIER_NAME[tier]} limit ${target} GB`, w - Rm - 2, ty - 3, "right", "#e0a84a");
+  }
   ctx.setLineDash?.([]);
   // loads and unloads
   for (const m of RUN.marks) {
     ctx.strokeStyle = m.level === "load" ? "#22c55e" : "#e0a84a";
     ctx.beginPath();
-    ctx.moveTo(x(m.t), 8);
-    ctx.lineTo(x(m.t), h - 4);
+    ctx.moveTo(x(m.t), T);
+    ctx.lineTo(x(m.t), h - B);
     ctx.stroke();
   }
-  // in use
+  // in use, its peak and where it is now
   if (pts.length) {
     ctx.strokeStyle = "#e0435a";
     ctx.lineWidth = 2;
@@ -510,6 +559,19 @@ function drawChart(cv) {
     pts.forEach((p, i) => (i ? ctx.lineTo(x(p.t), y(p.used)) : ctx.moveTo(x(p.t), y(p.used))));
     ctx.stroke();
     ctx.lineWidth = 1;
+    const peak = pts.reduce((m, p) => (p.used > m.used ? p : m), pts[0]);
+    ctx.fillStyle = "#e0435a";
+    ctx.beginPath?.();
+    ctx.arc?.(x(peak.t), y(peak.used), 3, 0, Math.PI * 2);
+    ctx.fill?.();
+    const px = x(peak.t);
+    txt(`Peak ${gb(peak.used).toFixed(1)}`, px, y(peak.used) - 6,
+        px < L + 40 ? "left" : px > w - 60 ? "right" : "center", "#f3b0ba");
+    const last = pts[pts.length - 1];
+    if (last !== peak) {
+      txt(`${gb(last.used).toFixed(1)}`, Math.min(x(last.t) + 4, w - Rm), y(last.used) + 12,
+          x(last.t) > w - 40 ? "right" : "left", "#f3b0ba");
+    }
   }
 }
 
@@ -545,7 +607,7 @@ export const RUN_CSS = `
 .rn-run-img{width:100%;max-height:420px;object-fit:contain;border-radius:6px;background:#0f1114}
 .rn-run-picempty{padding:40px 0;text-align:center}
 .rn-run-piclabel{font-size:12px;color:#cfe0f5;text-align:center}
-.rn-run-chart{width:100%;height:140px;background:#0f1114;border-radius:6px;display:block}
+.rn-run-chart{width:100%;height:180px;background:#0f1114;border-radius:6px;display:block}
 .rn-run-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#9aa0a8}
 .rn-run-legend .k{display:inline-flex;align-items:center;gap:5px}
 .rn-run-legend i{display:inline-block;width:14px;height:0;border-top:2px solid}
@@ -553,6 +615,7 @@ export const RUN_CSS = `
 .rn-run-legend .load i{border-color:#22c55e}
 .rn-run-legend .unload i{border-color:#e0a84a}
 .rn-run-legend .cap i{border-top:2px dashed #6b7280}
+.rn-run-legend .tgt i{border-top:2px dashed #e0a84a}
 .rn-run-sub{font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#8a919b;margin-top:4px}
 .rn-run-oncard{display:flex;flex-direction:column;gap:5px}
 .rn-run-model{display:grid;grid-template-columns:minmax(80px,1fr) 2fr auto;gap:8px;
