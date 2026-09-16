@@ -2320,15 +2320,16 @@ class RedNodeStudioWorkspace:
         except Exception as _ee:
             print("[RedNode Workspace] VRAM estimate failed: %s" % _ee, flush=True)
             _est = None
-        _held = _hold.apply(cfg, _est["peak"] if _est else None)
+        _held = _hold.apply(cfg, _est)
         _lim = _hold.limit_gb(cfg)
         if _est and _lim:
             _run.note("Estimated peak about %.1f GB against the %d GB card's %.1f GB limit"
                       % (_est["peak"], _hold.card_gb(cfg), _lim))
         if _held:
-            _run.note("Holding under %.1f GB (%s): ComfyUI keeps %.1f GB free, so a model "
-                      "that does not fit loads in part"
-                      % (_held[0], _hold.hold_mode(cfg).capitalize(), _held[1] / 1024), "unload")
+            _run.note("Holding under %.1f GB (%s): the weights are held at %.1f GB to leave "
+                      "room for the working memory, and ComfyUI keeps %.1f GB free"
+                      % (_held[0], _hold.hold_mode(cfg).capitalize(),
+                         _hold._current["held"], _held[1] / 1024), "unload")
         elif _lim and _hold.hold_mode(cfg) == "auto":
             _run.note("Not holding: the run fits under the limit, so it keeps its speed")
         _taps = cfg["taps"]

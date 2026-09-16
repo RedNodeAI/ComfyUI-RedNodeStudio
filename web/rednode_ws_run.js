@@ -941,7 +941,7 @@ export const RUN_CSS = `
 .rn-run-status.done{border-color:#2e7d4f;color:#9fe0b4}
 .rn-run-status.error,.rn-run-status.stopped{border-color:#b8283c;color:#f3b0ba}
 .rn-run-boxes{display:flex;gap:8px;flex-wrap:wrap}
-.rn-run-box{flex:1 1 120px;min-width:110px;background:#15171b;border:1px solid #33373d;
+.rn-run-box{flex:1 1 100px;min-width:96px;background:#15171b;border:1px solid #33373d;
   border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
 .rn-run-box .t{font-weight:700;font-size:12.5px;color:#e8ecf1}
 .rn-run-box .st{font-size:11.5px;color:#9aa0a8}

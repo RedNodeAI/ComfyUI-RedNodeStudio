@@ -30,7 +30,7 @@ LEGACY_GB = {"low": 16, "medium": 24}
 HOLD_MODES = ("auto", "on", "off")
 _orig = {"reserve": None, "headroom": None}
 # this queue's decision, read by the Detailer and Post that run after the Workspace
-_current = {"limit": None}
+_current = {"limit": None, "held": None}
 
 
 def card_gb(cfg):
@@ -63,7 +63,17 @@ def hold_mode(cfg):
     return "on" if cfg.get("vram_hold") is True else "auto"
 
 
+def _peak_and_work(estimate):
+    """(peak GB, working GB) from estimate_vram's dict, a bare peak, or nothing."""
+    if isinstance(estimate, dict):
+        work = sum(float(g) for n, g in estimate.get("parts", [])
+                   if "Working memory" in str(n) or "boost matrix" in str(n))
+        return float(estimate.get("peak") or 0) or None, work
+    return (float(estimate) if estimate is not None else None), 0.0
+
+
 def should_hold(cfg, estimate_gb=None):
+    estimate_gb, _w = _peak_and_work(estimate_gb)
     lim = limit_gb(cfg)
     if lim is None:
         return False
@@ -122,26 +132,33 @@ def apply(cfg, estimate_gb=None):
                       flush=True)
             return None
         lim = limit_gb(cfg)
+        # the allocator only evicts weight pages when a new page is needed, so the
+        # sampler's own working memory lands on top of whatever is resident: the
+        # weights are held that much lower, and the peak lands on the line
+        _peak, work = _peak_and_work(estimate_gb)
+        held = max(1.0, lim - work)
         total = int(mm.get_total_memory(mm.get_torch_device()))
-        reserve = max(_orig["reserve"], int(total - lim * GB))
+        reserve = max(_orig["reserve"], int(total - held * GB))
         changed = mm.EXTRA_RESERVED_VRAM != reserve
         mm.EXTRA_RESERVED_VRAM = int(reserve)
         how = "models that do not fit load in part"
         if ctl is not None:
             # dynamic VRAM: the allocator keeps this much free by evicting weight
             # pages, so the weights stream and the run stays near the line
-            head = max(_orig["headroom"], int(total - lim * GB))
+            head = max(_orig["headroom"], int(total - held * GB))
             if ctl.get_simple_vram_headroom() != head:
                 ctl.set_simple_vram_headroom(head)
                 changed = True
             how = "model weights stream through instead of sitting whole on the card"
         _current["limit"] = lim
+        _current["held"] = held
         if changed:
             # what is already on the card was loaded under the old rule
             mm.unload_all_models()
             mm.soft_empty_cache()
             print("[RedNode Workspace] VRAM hold: keeping %.1f GB of the card free so the "
-                  "run stays near %.1f GB; %s" % (reserve / GB, lim, how), flush=True)
+                  "run stays near %.1f GB (weights held at %.1f GB, the rest is working "
+                  "memory); %s" % (reserve / GB, lim, held, how), flush=True)
         return lim, reserve // (1024 * 1024)
     except Exception as exc:
         print("[RedNode Workspace] VRAM hold could not be set: %s" % exc, flush=True)

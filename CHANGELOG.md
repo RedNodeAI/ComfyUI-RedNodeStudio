@@ -279,6 +279,10 @@ cheap to judge.
   allocator's headroom to the card past the limit, so weight pages are evicted
   and the run stays near the line. The old reserve stays for installs without
   dynamic VRAM
+- While holding, the weights are held under the limit less the run's estimated
+  working memory, so the sampler's own memory lands on the line instead of over
+  it. The log says the held figure. The Run tab's pipeline boxes are narrower,
+  so a chain with a rig load fits on one row
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
