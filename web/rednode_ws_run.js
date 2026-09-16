@@ -544,10 +544,13 @@ export function plannedStages(node, cfg) {
     && (t.images?.length || 0) > 0);
   if (captions) out.push(["captions", "Captions"]);
   const internal = cfg.models?.sampler_mode === "internal";
+  const I = tabs.i2i || {};
+  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
+  // the edit stages on the source run before the encode
+  if (i2iRun && I.reangle?.on) out.push(["reangle", "Re-angle"]);
+  if (i2iRun && I.swap?.on && I.swap.target !== "render") out.push(["swap", "Swap"]);
   if (internal) {
     out.push(["encode", "Encode"]);
-    const I = tabs.i2i || {};
-    const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
     const n = Math.max(1, Math.round(Number(i2iRun ? I.passes : cfg.latent?.passes) || 1));
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
     out.push(["decode", "Decode"]);
@@ -615,6 +618,7 @@ export function jumpForStage(key, cfg) {
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
   if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
+  if (key === "reangle") return { tab: "i2i", sub: "reangle" };
   if (key === "detailer") return { tab: "detailer" };
   if (key === "post") return { tab: "post" };
   if (key === "save") return { tab: "run", sub: "save" };
@@ -634,6 +638,7 @@ export function jumpForLine(text, cfg) {
   if (/^Pass \d+/.test(t)) return passesPage(cfg);
   if (/^Decode /.test(t)) return { tab: "models" };
   if (/^Swap /.test(t)) return { tab: "i2i", sub: "swap" };
+  if (/^Re-angle /.test(t)) return { tab: "i2i", sub: "reangle" };
   if (/^Detailer/.test(t)) return { tab: "detailer" };
   if (/^Post FX/.test(t)) return { tab: "post" };
   if (/^Save /.test(t)) return { tab: "run", sub: "save" };

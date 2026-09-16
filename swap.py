@@ -177,14 +177,14 @@ def _valid_sampling(sampler, scheduler):
     return sampler, scheduler
 
 
-def render(sc, source, reference, seed):
+def render(sc, source, reference, seed, node_id=None):
     """IMAGE tensor [N,H,W,3]: every frame of `source` with the person swapped
     for `reference` (one image). Cached."""
     with torch.inference_mode():
-        return _render(sc, source, reference, seed)
+        return _render(sc, source, reference, seed, node_id)
 
 
-def _render(sc, source, reference, seed):
+def _render(sc, source, reference, seed, node_id=None):
     import nodes as _core
     lora, order, prompt = resolve(sc)
     if not lora:
@@ -225,8 +225,11 @@ def _render(sc, source, reference, seed):
         latent = {"samples": vae.encode(scaled)}
         if len(src_frames) > 1:
             print("[RedNode Swap] frame %d of %d" % (i + 1, len(src_frames)), flush=True)
-        out = _core.common_ksampler(model, int(seed) + i, int(sc["steps"]), float(sc["cfg"]),
-                                    sampler, scheduler, pos, neg, latent, denoise=1.0)[0]
+        label = "swap" + (" \u00b7 image %d of %d" % (i + 1, len(src_frames))
+                          if len(src_frames) > 1 else "")
+        out = _engine.sampler_for(node_id, label)(
+            model, int(seed) + i, int(sc["steps"]), float(sc["cfg"]),
+            sampler, scheduler, pos, neg, latent, denoise=1.0)[0]
         img = vae.decode(out["samples"])
         while img.ndim > 4:
             img = img[0]

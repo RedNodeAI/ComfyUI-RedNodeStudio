@@ -2720,7 +2720,10 @@ class RedNodeStudioWorkspace:
                 _prompts = _re.prompts_for(_rg, _cams)
                 _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
                 _before = tuple(i2i_img.shape)
-                i2i_img = _re.render(_rg, i2i_img, _prompts, _rseed)
+                _run.begin("reangle", "Re-angle", steps=int(_rg["steps"]),
+                           batch=len(_prompts))
+                i2i_img = _re.render(_rg, i2i_img, _prompts, _rseed, node_id=unique_id)
+                _run.end("reangle", "Re-angle")
                 _tap("reangle", "Re-angle result", i2i_img)
                 print("[RedNode Workspace] re-angle: %d view(s) from %s -> the i2i source "
                       "(%d x %d)" % (i2i_img.shape[0], "the studio" if _cams else "the bands",
@@ -2734,6 +2737,7 @@ class RedNodeStudioWorkspace:
                               "as wired, with the re-shot picture on i2i_image",
                               flush=True)
             except Exception as exc:
+                _run.end("reangle", "Re-angle", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
                       % exc, flush=True)
         # SWAP: the Subject onto the person in the
@@ -2763,13 +2767,17 @@ class RedNodeStudioWorkspace:
                 try:
                     from . import swap as _swap
                     _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
-                    i2i_img = _swap.render(_sw, i2i_img, _ref, _sseed)
+                    _run.begin("swap", "Swap", steps=int(_sw["steps"]),
+                               batch=int(i2i_img.shape[0]))
+                    i2i_img = _swap.render(_sw, i2i_img, _ref, _sseed, node_id=unique_id)
+                    _run.end("swap", "Swap")
                     _tap("swap", "Swap result", i2i_img)
                     print("[RedNode Workspace] swap: %d frame(s), %s from the %s tab -> "
                           "the i2i source (%d x %d)" % (i2i_img.shape[0], _sw["mode"],
                                                         _sw["reference"], i2i_img.shape[2],
                                                         i2i_img.shape[1]), flush=True)
                 except Exception as exc:
+                    _run.end("swap", "Swap", "error", error=str(exc)[:200])
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
                           % exc, flush=True)
 
@@ -4163,8 +4171,10 @@ class RedNodeStudioWorkspace:
                 try:
                     from . import swap as _swap
                     _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
-                    _run.begin("swap", "Swap", batch=int(rig_image.shape[0]))
-                    _swapped = _swap.render(_sw, rig_image, _ref, _sseed)[:, :, :, :3]
+                    _run.begin("swap", "Swap", steps=int(_sw["steps"]),
+                               batch=int(rig_image.shape[0]))
+                    _swapped = _swap.render(_sw, rig_image, _ref, _sseed,
+                                            node_id=unique_id)[:, :, :, :3]
                     _run.end("swap", "Swap")
                     _tap("swap", "Swap result", _swapped)
                     print("[RedNode Workspace] swap: %d picture(s), %s from the %s gallery, "

@@ -346,6 +346,10 @@ cheap to judge.
   an Attention choice in their engine settings (PyTorch or ComfyUI's). Qwen
   Image breaks under SageAttention, so a ComfyUI started with Sage gave broken
   swaps and re-shots; the rest of the run keeps Sage
+- Swap and Re-angle show their steps forming on the Run tab's live picture and
+  on a Live Preview, like any pass, with a step count on their pipeline box.
+  Re-angle and a swap on the Img2Img source have boxes of their own, before
+  the encode, where they run
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a

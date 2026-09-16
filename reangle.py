@@ -277,13 +277,27 @@ def _source_key(img):
     return hashlib.sha1(b).hexdigest() + ":%dx%d" % (img.shape[2], img.shape[1])
 
 
-def render(rc, source, prompts, seed):
-    """IMAGE tensor [N,H,W,3] - the source re-shot for each prompt. Cached."""
+def sampler_for(node_id, label):
+    """core's common_ksampler, streaming a frame a step to the Live Preview and the
+    Run tab under `node_id` (live_preview.py). Plain when there is no node."""
+    import nodes as _core
+    if node_id is None:
+        return _core.common_ksampler
+    try:
+        from . import live_preview as _live
+        return _live.sampled(node_id, _core.common_ksampler, label=label)
+    except Exception:
+        return _core.common_ksampler
+
+
+def render(rc, source, prompts, seed, node_id=None):
+    """IMAGE tensor [N,H,W,3] - the source re-shot for each prompt. Cached.
+    `node_id` streams the steps as live frames under that node."""
     with torch.inference_mode():
-        return _render(rc, source, prompts, seed)
+        return _render(rc, source, prompts, seed, node_id)
 
 
-def _render(rc, source, prompts, seed):
+def _render(rc, source, prompts, seed, node_id=None):
     import nodes as _core
     key = json.dumps({"src": _source_key(source), "p": prompts, "seed": int(seed),
                       "steps": rc["steps"], "cfg": rc["cfg"], "sampler": rc["sampler"],
@@ -307,8 +321,11 @@ def _render(rc, source, prompts, seed):
     for i, p in enumerate(prompts):
         pos = _call("TextEncodeQwenImageEditPlus", clip=clip, prompt=p, vae=vae, image1=scaled)
         print("[RedNode Re-angle] view %d of %d: %s" % (i + 1, len(prompts), p), flush=True)
-        out = _core.common_ksampler(model, int(seed) + i, int(rc["steps"]), float(rc["cfg"]),
-                                    rc["sampler"], rc["scheduler"], pos, neg, latent, denoise=1.0)[0]
+        label = "re-angle" + (" \u00b7 view %d of %d" % (i + 1, len(prompts))
+                              if len(prompts) > 1 else "")
+        out = sampler_for(node_id, label)(
+            model, int(seed) + i, int(rc["steps"]), float(rc["cfg"]),
+            rc["sampler"], rc["scheduler"], pos, neg, latent, denoise=1.0)[0]
         img = vae.decode(out["samples"])
         while img.ndim > 4:
             img = img[0]
