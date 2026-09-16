@@ -1645,19 +1645,28 @@ def load_active_rig(cfg, name="", prompt=None):
            (rig.get("unet_loader") or "", rig.get("int8_type") or ""))
     if not any(key[:5]):
         return rig["name"], None, None, None
+    from . import run_events as _rev
     for n, slot in enumerate(_RIG_CACHE["slots"]):
         if slot["key"] == key:
             _RIG_CACHE["slots"].insert(0, _RIG_CACHE["slots"].pop(n))
+            _rev.note_once(("rig", rig["name"]), "%s ready: already in RAM" % rig["name"])
+            _rev.name_rig(rig["name"], slot["model"], slot["clip"], slot["vae"])
             return rig["name"], slot["model"], slot["clip"], slot["vae"]
     # make room BEFORE loading, so the cap is a peak-RAM promise, not a tidy-up:
     # one slot by default, two when the Models tab's Hold-two toggle says so
     cap = 2 if (cfg.get("models") or {}).get("hold_two") else 1
     while len(_RIG_CACHE["slots"]) >= cap:
         dropped = _RIG_CACHE["slots"].pop()
+        _rev.note("%s dropped from RAM to make room for %s"
+                  % (dropped.get("name") or dropped["key"][0] or dropped["key"][1],
+                     rig["name"]), "unload")
         print("[RedNode Workspace] rig cache: dropping %r to make room"
               % (dropped["key"][0] or dropped["key"][1],), flush=True)
     model = clip = vae = None
     RIG_LOAD_ERROR["text"] = ""
+    import time as _time
+    _t0 = _time.time()
+    _rev.begin("rig:" + rig["name"], "Load %s" % rig["name"])
     try:
         import nodes as _nodes
         if rig["checkpoint"]:
@@ -1684,10 +1693,15 @@ def load_active_rig(cfg, name="", prompt=None):
         print("[RedNode Workspace] the Models tab could not load %r: %s"
               % (rig["name"] or key, exc), flush=True)
         RIG_LOAD_ERROR["text"] = str(exc)
+        _rev.end("rig:" + rig["name"], "Load %s" % rig["name"], "error", error=str(exc)[:200])
         return rig["name"], None, None, None
     _RIG_CACHE["slots"].insert(0, {"key": key, "model": model, "clip": clip,
-                                   "vae": vae})
+                                   "vae": vae, "name": rig["name"]})
     kinds = [k for k, v in (("model", model), ("clip", clip), ("vae", vae)) if v is not None]
+    _rev.name_rig(rig["name"], model, clip, vae)
+    _rev.end("rig:" + rig["name"], "Load %s" % rig["name"], parts=kinds)
+    _rev.note("%s loaded from disk into RAM in %.1f s (%s)"
+              % (rig["name"], _time.time() - _t0, ", ".join(kinds)), "load")
     print("[RedNode Workspace] Models tab loaded %s (%s)"
           % (rig["name"] or rig["checkpoint"] or rig["unet"], ", ".join(kinds)),
           flush=True)

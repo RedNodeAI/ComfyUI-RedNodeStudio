@@ -14524,7 +14524,7 @@ const tabLit = (cfg, id) =>
   : id === "moodboard" ? cfg.tabs.moodboard.on && cfg.tabs.moodboard.sel.length
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)
   : id === "paint" ? cfg.paint?.on
-  : id === "post" ? POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
+  : id === "post" ? cfg.post_on !== false && POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
   : id === "latent" ? cfg.latent.on
   : id === "models" ? !!cfg.models?.rigs?.some?.((r) =>
       r.checkpoint || r.unet || r.clip || r.vae)
@@ -14700,7 +14700,36 @@ export function render(node) {
   else if (cur === "prompts") promptsBody(node, body);
   else if (cur === "camera") cameraBody(node, body);
   else if (cur === "latent") latentBody(node, body);
-  else if (cur === "post") postBody(node, body);
+  else if (cur === "post") {
+    // the Workspace's master switch for the chain; the standalone Post FX node has
+    // no such switch, so it lives here rather than in the shared panel
+    const bar = document.createElement("div");
+    bar.className = "rn-ws-status rn-ws-postbar";
+    const on = document.createElement("button");
+    on.className = "rn-ws-sw" + (cfg.post_on !== false ? " on" : "");
+    on.dataset.choice = "post_on";
+    on.title = cfg.post_on !== false
+      ? "Post FX runs after the render. Click to pass the picture through untouched."
+      : "Off: RedNode Post Process passes the picture through; the cards keep their settings.";
+    on.onclick = () => { cfg.post_on = cfg.post_on === false; writeCfg(node); render(node); };
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = "Post FX";
+    const n = POST_FX.filter((fx) => cfg.post?.[fx.id]?.on).length;
+    const chip = document.createElement("span");
+    chip.className = "rn-ws-chip";
+    chip.textContent = cfg.post_on === false ? "Off" : `${n} Effect${n === 1 ? "" : "s"} on`;
+    bar.append(on, nm, chip);
+    body.appendChild(bar);
+    if (cfg.post_on === false) {
+      const note = document.createElement("div");
+      note.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-offnote";
+      note.textContent = "Post FX is off, so the picture passes through untouched. The cards "
+                       + "below keep their settings for when it is back on.";
+      body.appendChild(note);
+    }
+    postBody(node, body);
+  }
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);

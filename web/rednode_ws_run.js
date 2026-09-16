@@ -541,7 +541,7 @@ function runPage(node, body) {
   const mem = el("div", "rn-ws-card rn-run-mem");
   mem.appendChild(el("div", "ch", "VRAM"));
   const chart = el("canvas", "rn-run-chart");
-  chart.height = 180;
+  chart.height = 260;
   const memLine = el("div", "rn-ws-note rn-run-memline");
   const legend = el("div", "rn-run-legend");
   for (const [cls, text] of [["use", "In use"], ["load", "Model loaded"],
@@ -585,7 +585,9 @@ function stageRows(node) {
   // stages the server reported that the plan did not foresee
   for (const [key, s] of RUN.stages) {
     if (!rows.some((r) => r.key === key)) {
-      const at = key.startsWith("pass") ? rows.findIndex((r) => r.key === "decode") : -1;
+      const at = key.startsWith("pass") ? rows.findIndex((r) => r.key === "decode")
+        : key.startsWith("rig:") ? rows.findIndex((r) => r.key === "encode" || r.key.startsWith("pass"))
+        : -1;
       const row = { key, label: s.label || key };
       if (at >= 0) rows.splice(at, 0, row); else rows.push(row);
     }
@@ -752,7 +754,7 @@ function drawChart(cv, tier) {
   ctx.moveTo(L, y(total));
   ctx.lineTo(w - Rm, y(total));
   ctx.stroke();
-  txt(`Card ${gb(total).toFixed(1)} GB`, w - Rm - 2, y(total) - 3, "right");
+  txt(`Card ${gb(total).toFixed(1)} GB`, L + 4, y(total) + 11, "left");
   // the VRAM limit's target card, when one is set
   const target = TIER_TARGET_GB[tier];
   if (target && target * 1024 < total) {
@@ -762,7 +764,7 @@ function drawChart(cv, tier) {
     ctx.moveTo(L, ty);
     ctx.lineTo(w - Rm, ty);
     ctx.stroke();
-    txt(`${TIER_NAME[tier]} limit ${target} GB`, L + 4, ty - 3, "left", "#e0a84a");
+    txt(`${TIER_NAME[tier]} limit ${target} GB`, L + 4, ty + 11, "left", "#e0a84a");
   }
   ctx.setLineDash?.([]);
   // loads and unloads
@@ -787,7 +789,10 @@ function drawChart(cv, tier) {
     ctx.arc?.(x(peak.t), y(peak.used), 3, 0, Math.PI * 2);
     ctx.fill?.();
     const px = x(peak.t);
-    txt(`Peak ${gb(peak.used).toFixed(1)}`, px, y(peak.used) - 6,
+    const py = y(peak.used);
+    // above the dot unless that would sit on the card's line, then below it
+    const labelY = py - 6 < y(total) + 4 ? py + 14 : py - 6;
+    txt(`Peak ${gb(peak.used).toFixed(1)}`, px, labelY,
         px < L + 40 ? "left" : px > w - 60 ? "right" : "center", "#f3b0ba");
     const last = pts[pts.length - 1];
     if (last !== peak) {
@@ -829,7 +834,7 @@ export const RUN_CSS = `
 .rn-run-img{width:100%;max-height:420px;object-fit:contain;border-radius:6px;background:#0f1114}
 .rn-run-picempty{padding:40px 0;text-align:center}
 .rn-run-piclabel{font-size:12px;color:#cfe0f5;text-align:center}
-.rn-run-chart{width:100%;height:180px;background:#0f1114;border-radius:6px;display:block}
+.rn-run-chart{width:100%;height:260px;background:#0f1114;border-radius:6px;display:block}
 .rn-run-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#9aa0a8}
 .rn-run-legend .k{display:inline-flex;align-items:center;gap:5px}
 .rn-run-legend i{display:inline-block;width:14px;height:0;border-top:2px solid}

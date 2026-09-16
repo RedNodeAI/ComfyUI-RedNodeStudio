@@ -42,6 +42,12 @@ TICK = 1.0             # seconds between samples while a stage runs
 IDLE_STOP = 30.0       # the sampler stops after this long with nothing running
 STUCK_STOP = 1800.0    # and after this long with no stage news at all
 LOAD_NOTE_MB = 100     # a load is said once the model holds this much
+LIST_MIN_MB = 50       # the card list leaves out anything smaller
+
+# which rig a loaded model came from, by the id of its ModelPatcher (and of the
+# patcher a LoRA clone was made from), so the card list can say "Krea 2 · Rig 2"
+_RIG_OF = {}
+_ONCE = set()
 
 
 def _send(payload):
@@ -73,19 +79,44 @@ _NAMES = {"Krea2": "Krea 2", "Flux": "Flux", "SDXL": "SDXL", "ZImage": "Z-Image"
           "Florence2": "Florence-2"}
 
 
+def name_rig(rig, *parts):
+    """Remember which rig these loaded parts (model, clip, vae) belong to."""
+    for p in parts:
+        patcher = getattr(p, "patcher", p)
+        if patcher is not None:
+            _RIG_OF[id(patcher)] = str(rig)
+    if len(_RIG_OF) > 64:
+        for k in list(_RIG_OF)[:-64]:
+            _RIG_OF.pop(k, None)
+
+
+def _rig_of(patcher):
+    seen = 0
+    while patcher is not None and seen < 8:
+        name = _RIG_OF.get(id(patcher))
+        if name:
+            return name
+        patcher = getattr(patcher, "parent", None)
+        seen += 1
+    return ""
+
+
 def _model_name(lm):
     """A readable name for one entry of comfy's loaded model list."""
     try:
         m = lm.model
         inner = getattr(m, "model", None)
         cls = type(inner if inner is not None else m).__name__
-        if cls in _NAMES:
-            return _NAMES[cls]
         low = cls.lower()
-        if "clip" in low or "text" in low or low.endswith("te") or "temodel" in low:
+        if cls in _NAMES:
+            base = _NAMES[cls]
+        elif "clip" in low or "text" in low or low.endswith("te") or "temodel" in low:
             fam = cls.replace("TEModel", "").replace("_", "").strip()
-            return "Text encoder" + (" (%s)" % _NAMES.get(fam, fam) if fam else "")
-        return cls
+            base = "Text encoder" + (" (%s)" % _NAMES.get(fam, fam) if fam else "")
+        else:
+            base = cls
+        rig = _rig_of(m)
+        return "%s · %s" % (base, rig) if rig else base
     except Exception:
         return "Model"
 
@@ -100,7 +131,7 @@ def loaded_models():
                 mb = round(lm.model_loaded_memory() / 2 ** 20)
             except Exception:
                 mb = 0
-            if mb <= 0:
+            if mb < LIST_MIN_MB:
                 continue
             out.append({"name": _model_name(lm), "mb": mb})
     except Exception:
@@ -281,6 +312,17 @@ def info(**fields):
                "node": _state["node"], "info": fields})
     except Exception:
         pass
+
+
+def note_once(key, text, level="info"):
+    """A note said once per run, for things asked many times (a rig per pass)."""
+    k = (_state["run"], key)
+    if k in _ONCE:
+        return
+    _ONCE.add(k)
+    if len(_ONCE) > 500:
+        _ONCE.clear()
+    note(text, level)
 
 
 def note(text, level="info"):

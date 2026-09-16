@@ -56,17 +56,38 @@ def apply(cfg):
         return None
 
 
+def _is_text_encoder(lm):
+    m = getattr(lm, "model", None)
+    inner = getattr(m, "model", None)
+    cls = type(inner if inner is not None else m).__name__.lower()
+    return "clip" in cls or "text" in cls or "temodel" in cls or cls.endswith("te")
+
+
 def before_sampling(cfg):
-    """While holding: the text encoder and anything else loaded for the encode leave
-    the card before the diffusion model loads. True when models were unloaded."""
+    """While holding: the text encoders leave the card before sampling; the diffusion
+    model stays, so a Detailer pass does not reload it every time. True when a
+    text encoder was unloaded."""
     if target_gb(cfg) is None:
         return False
     try:
         import comfy.model_management as mm
-        mm.unload_all_models()
-        mm.soft_empty_cache()
-        return True
+        gone = False
+        for i in range(len(mm.current_loaded_models) - 1, -1, -1):
+            lm = mm.current_loaded_models[i]
+            if _is_text_encoder(lm):
+                lm.model_unload()
+                mm.current_loaded_models.pop(i)
+                gone = True
+        if gone:
+            mm.soft_empty_cache()
+        return gone
     except Exception as exc:
-        print("[RedNode Workspace] VRAM hold: could not unload before sampling: %s" % exc,
+        print("[RedNode Workspace] VRAM hold: could not unload the text encoder: %s" % exc,
               flush=True)
-        return False
+        try:
+            import comfy.model_management as mm
+            mm.unload_all_models()
+            mm.soft_empty_cache()
+            return True
+        except Exception:
+            return False

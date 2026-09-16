@@ -246,6 +246,16 @@ cheap to judge.
 - The Run tab's log says a model loaded once it holds a real share of the card
   (no more "loaded (0.0 GB)"), and the limit's label on the chart sits on the
   left, clear of the latest value
+- The Run tab says which rigs a run used: loaded from disk with how long it took
+  (a Load box in the pipeline too), already in RAM, or dropped from RAM to make
+  room. The card list names each model's rig ("Krea 2 · Rig 2") and leaves out
+  anything under 50 MB. The VRAM chart is taller, and its labels keep clear of
+  each other
+- Hold under it reaches the Detailer: before each Detailer pass samples, the
+  text encoder leaves the card. Holding now unloads only the text encoders, so
+  the diffusion model is not reloaded for every pass
+- The Workspace's Post tab has an on and off switch. Off, RedNode Post Process
+  passes the picture through and the cards keep their settings
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

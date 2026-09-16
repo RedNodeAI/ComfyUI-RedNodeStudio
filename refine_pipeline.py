@@ -650,6 +650,14 @@ class RedNodeStudioDetailer:
         except Exception:
             pass
 
+    def _hold_before_sampling(self):
+        """The Workspace's Hold under it, here too: text encoders off the card."""
+        from . import vram_hold as _hold
+        if _hold.before_sampling(getattr(self, "_rn_ws_cfg", None) or {}):
+            _run_events.note_once(("detailer-hold", id(self)),
+                                  "Detailer: text encoder unloaded before sampling "
+                                  "(holding the limit)", "unload")
+
     @_run_events.tracked("detailer", "Detailer")
     def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
@@ -673,6 +681,7 @@ class RedNodeStudioDetailer:
             ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
         except Exception:
             ws_cfg = _ws.parse_config("{}")
+        self._rn_ws_cfg = ws_cfg              # the VRAM hold reads it before each pass
         if ws_cfg.get("draft"):
             # the Workspace's Draft switch: every pass skipped, the frame through,
             # so a seed can be judged on the base render before it costs anything
@@ -1004,6 +1013,7 @@ class RedNodeStudioDetailer:
                 fn = lambda: _call_node(cls_no, _fill(cls_no, dict(kw, upscaled_image=big)))
             # the tiler samples through core's common_ksampler, so every tile's
             # steps stream to the Live Preview like any pass
+            self._hold_before_sampling()
             outs = _live.sampled(self._rn_uid, fn,
                                  label=getattr(self, "_rn_live_label", ""))()
         except Exception as exc:
@@ -1125,6 +1135,7 @@ class RedNodeStudioDetailer:
                   % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]),
                   flush=True)
         lat = {"samples": vae.encode(work[:, :, :, :3])}
+        self._hold_before_sampling()
         out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
                             label=getattr(self, "_rn_live_label", ""))(
             model, seed, steps, cfg_v, sampler, scheduler, pos,
@@ -1194,6 +1205,7 @@ class RedNodeStudioDetailer:
             # swap lands on the face it is looking at, not on the whole frame
             pos, neg = encode_for(work)
         lat = {"samples": vae.encode(work)}
+        self._hold_before_sampling()
         out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
                             label=getattr(self, "_rn_live_label", ""))(
             model, seed, steps, cfg_v, sampler, scheduler, pos,

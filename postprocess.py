@@ -2519,6 +2519,11 @@ class RedNodePostProcess:
         if not cfg or not any(cfg[n].get("on") for n in ORDER):
             _re.skip("post", "Post FX", "no effects switched on")
             return (image,)
+        if isinstance(ws_raw, dict) and ws_raw.get("post_on") is False:
+            _re.skip("post", "Post FX", "Post FX is switched off")
+            print("[RedNode Post] Post FX is switched off on the Workspace; the picture "
+                  "passes through", flush=True)
+            return (image,)
         if isinstance(ws_raw, dict) and ws_raw.get("draft"):
             _re.skip("post", "Post FX", "Draft is on")
             print("[RedNode Post] the Workspace's Draft switch is on; the chain is skipped "
