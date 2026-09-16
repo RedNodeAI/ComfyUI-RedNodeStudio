@@ -207,7 +207,13 @@ cheap to judge.
   described and the words join the chosen prompt (Style, Subject and
   Surroundings by default). The pictures never reach the model, so it works on
   any rig, and it runs with the Img2Img tab switched off. Scene reads the
-  Background or the Situation. Right-click Send to reaches all three
+  Background or the Situation. Right-click Send to reaches all three. Each side
+  tab's own switch runs its auto prompt; there is no second switch
+- The Florence auto prompt uses comfyui-florence2's own nodes even when another
+  installed pack registers Florence2ModelLoader under the same name. Such a copy
+  runs Florence on the older transformers path, which on current transformers
+  captions nothing but a line of <s> tokens. The console says when a copy is
+  being passed over, and when Florence returns no words
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

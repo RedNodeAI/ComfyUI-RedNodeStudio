@@ -676,6 +676,9 @@ def parse_config(config_json):
                          "auto": (bool(v.get("auto")) if isinstance(v, dict) and "auto" in v
                                   else None)}
                 for k, v in pm_in.items() if isinstance(v, dict)}
+        if name in TEXT_TABS:
+            # an Image to text tab exists to be captioned: its switch is the auto prompt's
+            tabs[name]["auto"]["on"] = tabs[name]["on"]
         if name == "scene":
             # words only: the Scene picture is captioned but not sent as a reference
             tabs[name]["words_only"] = bool(t.get("words_only"))

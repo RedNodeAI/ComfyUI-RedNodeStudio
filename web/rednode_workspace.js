@@ -1110,6 +1110,7 @@ export function readCfg(node) {
                    : name === "moodboard" || name === "text_style" ? "style"
                    : name === "i2i" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode);
+    if (TEXT_TAB_IDS.includes(name)) t.auto.on = !!t.on;   // the tab's switch runs it
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
                                || Array.isArray(t.people_meta))) {
       t.people_meta = {};
@@ -4259,7 +4260,14 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       if (visible) schedulePaintAutoPrompt(node, visible);
     }
   };
-  if (flat) {
+  if (flat && TEXT_TAB_IDS.includes(tabName)) {
+    // the side tab's own switch runs it: a second one here only confused
+    a.on = !!cfg.tabs[tabName].on;
+    arr.style.display = "none";
+    head.style.cursor = "default";
+    ttl.textContent = `AUTO PROMPT (${a.mode.replace("_", " ")})`;
+    head.append(arr, ttl);
+  } else if (flat) {
     arr.style.display = "none";
     head.style.cursor = "default";
     head.append(arr, on, ttl);
@@ -12546,7 +12554,7 @@ function i2iSubLit(cfg, id) {
 
 const textTabLit = (cfg, id) => {
   const t = cfg.tabs[id];
-  return !!(t?.on && t.auto?.on && t.sel?.length);
+  return !!(t?.on && t.sel?.length);
 };
 
 function i2iAutoPage(node, body) {
@@ -12612,14 +12620,13 @@ function i2iAutoPage(node, body) {
   on.className = "rn-ws-sw" + (t.on ? " on" : "");
   on.title = t.on ? "These pictures are described into the prompt. Click to switch off."
                   : "Off: nothing here is described.";
-  on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
+  on.onclick = () => { t.on = !t.on; t.auto.on = t.on; writeCfg(node); render(node); };
   const nm = document.createElement("span");
   nm.className = "nm";
   nm.textContent = `Image to text: ${TEXT_TABS_META[side].label}`;
   bar.append(on, nm);
   for (const text of [
     `${t.sel.length} of ${t.images.length} Picked`,
-    t.auto?.on ? "Auto prompt on" : "Auto prompt off",
     t.auto?.inject_row ? `Into ${t.auto.inject_row}` : "Not injected",
   ]) {
     const c = document.createElement("span");

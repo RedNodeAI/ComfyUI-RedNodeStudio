@@ -24,6 +24,8 @@ import base64
 import hashlib
 import inspect
 import json
+import re
+import sys
 import urllib.error
 import urllib.request
 
@@ -697,13 +699,40 @@ def engine_defaults():
     }
 
 
+_fl_warned = set()
+
+
+def _florence_classes():
+    """The Florence-2 loader and run node to use.
+
+    kijai's comfyui-florence2 runs its own native model. Other packs register nodes
+    under the same names on the older transformers path, which on current
+    transformers generates nothing but <s> tokens; whichever pack loads last owns
+    the names. So kijai's module is found directly when it is loaded, and the
+    registered names are only the fallback."""
+    for m in list(sys.modules.values()):
+        if (callable(getattr(m, "load_florence2", None))
+                and isinstance(getattr(m, "Florence2ModelLoader", None), type)
+                and isinstance(getattr(m, "Florence2Run", None), type)):
+            loader, run = m.Florence2ModelLoader, m.Florence2Run
+            reg = _node_cls("Florence2ModelLoader")
+            if reg is not None and reg is not loader and "shadowed" not in _fl_warned:
+                _fl_warned.add("shadowed")
+                print("[RedNode AutoPrompt] another pack registers Florence2ModelLoader "
+                      "(%s); the auto prompt uses comfyui-florence2's own nodes instead"
+                      % getattr(reg, "__module__", "?"), flush=True)
+            return loader, run
+    return _node_cls("Florence2ModelLoader"), _node_cls("Florence2Run")
+
+
 def florence_available():
-    return _node_cls("Florence2Run") is not None and _node_cls("Florence2ModelLoader") is not None
+    loader, run = _florence_classes()
+    return loader is not None and run is not None
 
 
 def florence_models():
     """The Florence-2 folders in models/LLM, as the pack's loader lists them."""
-    cls = _node_cls("Florence2ModelLoader")
+    cls = _florence_classes()[0]
     try:
         return [str(x) for x in cls.INPUT_TYPES()["required"]["model"][0]]
     except Exception:
@@ -719,7 +748,7 @@ def florence_caption(image_tensor, task="more_detailed_caption", model="", unloa
                      precision="fp16"):
     """One caption from the installed Florence-2 pack; "" and one line on failure.
     "" for the model picks the first folder the loader lists."""
-    loader, run = _node_cls("Florence2ModelLoader"), _node_cls("Florence2Run")
+    loader, run = _florence_classes()
     if loader is None or run is None:
         print("[RedNode AutoPrompt] comfyui-florence2 is not installed; skipping Florence",
               flush=True)
@@ -748,6 +777,12 @@ def florence_caption(image_tensor, task="more_detailed_caption", model="", unloa
         if vals is None:
             vals = out.get("result", ()) if isinstance(out, dict) else out
         text = _first_string(vals[2]) if isinstance(vals, (list, tuple)) and len(vals) > 2 else ""
+        text = re.sub(r"</?s>", "", text or "").strip()
+        if not text:
+            print("[RedNode AutoPrompt] Florence-2 returned no words for this picture. "
+                  "If the console shows a line of <s> tokens, the Florence node in use is "
+                  "not comfyui-florence2's own; update or reinstall comfyui-florence2.",
+                  flush=True)
         if unload:
             florence_release()
             free_vram()                      # hand the space back before the next engine loads
