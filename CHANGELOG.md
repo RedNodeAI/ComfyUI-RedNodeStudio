@@ -299,6 +299,13 @@ cheap to judge.
   Camera card is Camera and placement. The prompt preview has a column of its
   own on a wide panel, with a live dot and the warning as a red callout, and
   the Negative is one labelled strip under the frame
+- An Anything else box under the prompt frame, with the tools bar right above
+  it. Type freely, a whole prompt if you like, and press Auto sort: every
+  phrase is filed into Style, Subject, Surroundings, Light and colour or
+  Placement and the box empties. Whatever stays in it is added at the end of
+  the prompt as written. A plain prompt switched to a Frame box lands here
+  whole, ready to sort. The Prompt Frame node has the same box as its last
+  input
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

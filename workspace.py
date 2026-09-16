@@ -3153,6 +3153,7 @@ class RedNodeStudioWorkspace:
                         camera=(str(_fr.get("camera") or "")
                                 if camera_on(cfg) and not _fr.get("camera_off") else ""),
                         camera_off=bool(_fr.get("camera_off")),
+                        extra=str(_fr.get("extra") or ""),
                         style_in=_ins.get("style", ""),
                         subject_in=_ins.get("subject", ""),
                         surroundings_in=_ins.get("surroundings", ""),

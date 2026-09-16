@@ -25,6 +25,9 @@ except ImportError:  # loaded as a plain file (tests)
     from prompt_lists import LIGHTING_CHOICES
 
 FIELDS = ("subject", "surroundings", "style_extra", "light_and_colour", "placement")
+# the boxes read in: the five above, and the Anything else box, which is unsorted
+# text the sorter empties into them
+IN_FIELDS = FIELDS + ("extra",)
 
 SYSTEM = """You reorganise an image prompt into labelled boxes. You are a sorter, not a writer.
 
@@ -34,6 +37,7 @@ Boxes:
 - style_extra: how the picture is MADE - medium, rendering, camera/lens words, film stock, art style wording.
 - light_and_colour: lighting mood, time of day light, colour palette, tonal mood.
 - placement: where the subject stands IN the scene, as one short phrase (e.g. "standing at the water's edge"), or empty.
+An "extra" line in the input is unsorted text: file every phrase of it into one of the boxes above.
 
 Rules:
 1. Every phrase from the input must land in exactly one box. Do not invent anything. Do not drop anything.
@@ -133,7 +137,7 @@ def sort_fields(fields, model, url=_ap.OLLAMA_URL, transport=None, generate=None
     returns the reply text. Returns None on any failure, having printed why.
     """
     lump = "\n".join("%s: %s" % (k, str(fields.get(k) or "").strip())
-                     for k in FIELDS if str(fields.get(k) or "").strip())
+                     for k in IN_FIELDS if str(fields.get(k) or "").strip())
     if not lump.strip():
         print("[RedNode Prompt Sort] nothing to sort", flush=True)
         return None

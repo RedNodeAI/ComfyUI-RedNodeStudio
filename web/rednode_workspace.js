@@ -11515,13 +11515,14 @@ function promptsBody(node, body) {
                              + "you want typed as is."],
     ], row.kind === "krea2" ? "krea2" : "plain",
     (v) => {
-      // a Krea 2 box writes its text from the Frame's boxes, so a plain prompt
-      // moving over would be replaced by an empty one: its words go into Subject
+      // a Frame box writes its text from the frame's boxes, so a plain prompt
+      // moving over would be replaced by an empty one: its words go into the
+      // Anything else box, whole, ready for Auto sort
       if (v === "krea2" && row.kind !== "krea2") {
         row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
-        const boxes = ["subject", "surroundings", "light_and_colour", "placement", "style_extra"];
+        const boxes = ["subject", "surroundings", "light_and_colour", "placement", "style_extra", "extra"];
         const empty = !boxes.some((k) => String(row.frame[k] || "").trim());
-        if (empty && String(row.text || "").trim()) row.frame.subject = String(row.text).trim();
+        if (empty && String(row.text || "").trim()) row.frame.extra = String(row.text).trim();
       }
       row.kind = v;
       writeCfg(node);

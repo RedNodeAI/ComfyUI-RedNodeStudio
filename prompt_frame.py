@@ -565,6 +565,21 @@ class RedNodePromptFrame:
                                "(\"extreme long shot\" rather than \"small in the "
                                "distance\"), which is read as an instruction about the "
                                "camera. Off leaves the prompt exactly as it was."}),
+                "extra": ("STRING", {
+                    "multiline": True, "default": "", "dynamicPrompts": False,
+                    "tooltip": "Anything else, typed as is and added after everything "
+                               "the frame placed. Press Auto sort to file it into the "
+                               "boxes instead."}),
+                "extra": ("STRING", {
+                    "multiline": True, "default": "", "dynamicPrompts": False,
+                    "tooltip": "Anything else, typed as is and added after everything "
+                               "the frame placed. Press Auto sort to file it into the "
+                               "boxes instead."}),
+                "extra": ("STRING", {
+                    "multiline": True, "default": "", "dynamicPrompts": False,
+                    "tooltip": "Anything else, typed as is and added after everything "
+                               "the frame placed. Press Auto sort to file it into the "
+                               "boxes instead."}),
             },
         }
 
@@ -580,7 +595,7 @@ class RedNodePromptFrame:
             style=STYLE_NONE, style_extra="",
             surroundings_in="", style_in="", subject_in="", light_and_colour_in="",
             framing_push=PUSH_OFF, camera_height="Eye level", camera="",
-            camera_off=False):
+            camera_off=False, extra=""):
         style_text = _join_in(block(style), style_extra, style_in)
         cam_state = None
         if isinstance(camera, str) and camera.strip():
@@ -613,6 +628,11 @@ class RedNodePromptFrame:
         prompt = assemble(style_text, subject, surroundings, framing, placed, lit,
                           framing_push, camera_height, cam_state,
                           camera_off=bool(camera_off))
+        # THE EXTRA BOX: anything typed there rides at the end, as written, after
+        # everything the frame placed (Auto sort files it into the boxes instead)
+        if _clean(extra):
+            tail = _cap(_sentence(extra)) + "."
+            prompt = (prompt.rstrip() + (" " if prompt.strip() else "") + tail).strip()
         prompt = expand(prompt, seed, resolve_wildcards)
         words = len(prompt.split())
 
@@ -781,7 +801,8 @@ try:
                 framing_push=data.get("framing_push", PUSH_OFF),
                 camera_height=data.get("camera_height", "Eye level"),
                 camera=data.get("camera", ""),
-                camera_off=bool(data.get("camera_off")))
+                camera_off=bool(data.get("camera_off")),
+                extra=data.get("extra", ""))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,

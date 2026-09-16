@@ -39,7 +39,7 @@ const FIELDS = [
   "style", "style_extra", "subject", "surroundings", "framing",
   "placement_where", "placement_what", "placement",
   "lighting", "brightness", "light_and_colour", "framing_push", "camera_height",
-  "camera", "camera_off",
+  "camera", "camera_off", "extra",
 ];
 
 const STYLE = `
@@ -323,7 +323,7 @@ export function buildFrameEditor(wrap, F) {
       const fields = {
         subject: subject.value, surroundings: surroundings.value,
         style_extra: styleExtra.value, light_and_colour: lac.value,
-        placement: placement.value,
+        placement: placement.value, extra: extra.value,
       };
       const r = await fetch("/rednode/prompt_sort", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -337,6 +337,8 @@ export function buildFrameEditor(wrap, F) {
       styleExtra.value = f.style_extra ?? styleExtra.value;
       lac.value = f.light_and_colour ?? lac.value;
       placement.value = f.placement ?? placement.value;
+      extra.value = "";                      // every phrase of it was filed into a box
+      extra._rnCount?.();
       if (f.style && [...styleSel.options].some((o) => o.value === f.style)) {
         styleSel.value = f.style;
       }
@@ -430,6 +432,7 @@ export function buildFrameEditor(wrap, F) {
     subject.value = "";
     surroundings.value = "";
     placement.value = "";
+    extra.value = "";
     lightSel.value = (F.opts.lighting || [])[0] ?? "None";
     lac.value = "";
     for (const ta of [styleExtra, subject, surroundings, placement, lac]) ta._rnCount?.();
@@ -437,7 +440,6 @@ export function buildFrameEditor(wrap, F) {
     changed();
   });
   grpTools.appendChild(clearBtn);
-  wrap.appendChild(head);
 
   // ---- style --------------------------------------------------------------------
   const styleSel = document.createElement("select");
@@ -576,6 +578,15 @@ export function buildFrameEditor(wrap, F) {
   lac.rows = 3;
   lac.placeholder = "palette and mood: muted slate and rust, quiet and still";
   lac.value = F.get("light_and_colour") || "";
+  // ANYTHING ELSE: a lump of text, typed freely. Auto sort files it into the boxes;
+  // what stays here rides at the end of the prompt as written.
+  const extra = document.createElement("textarea");
+  extra.rows = 4;
+  extra.placeholder = "Type anything here, a whole prompt if you like, then press Auto sort "
+                    + "to file it into the boxes above. What stays here is added at the "
+                    + "end of the prompt as written.";
+  extra.value = F.get("extra") || "";
+  extra.addEventListener("input", () => changed());
 
   // ---- the groups: every section folds, so a row can be as small as its writing.
   // State goes through F.folds when the host remembers it (node.properties, so a
@@ -977,6 +988,23 @@ export function buildFrameEditor(wrap, F) {
         [lightRow, brightRow, counted(lac, 200, "Light and colour"), lightSnip],
         presetsBtn(lightSnip));
   refreshSnips();
+  // the tools sit right above the Anything else box, under the columns: type a
+  // lump, press Auto sort, and it lands in the boxes above
+  wrap.appendChild(head);
+  {
+    const xbox = el("div", "rn-pf-box rn-pf-extrabox");
+    const xh = el("div", "head");
+    xh.style.cursor = "default";
+    xh.appendChild(el("span", "ico", "\u270E"));
+    xh.appendChild(el("b", null, "Anything else"));
+    xh.appendChild(el("span", "hint2", "Type freely, then Auto sort files it into the boxes "
+                                       + "above. What stays here is added at the end of the prompt."));
+    const xb = el("div", "body");
+    xb.appendChild(counted(extra, 1000, "Anything else"));
+    xbox.appendChild(xh);
+    xbox.appendChild(xb);
+    wrap.appendChild(xbox);
+  }
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
@@ -1039,6 +1067,7 @@ export function buildFrameEditor(wrap, F) {
     F.set("lighting", lightSel.value);
     F.set("brightness", Number(brightRange.value));
     F.set("light_and_colour", lac.value);
+    F.set("extra", extra.value);
     frameVal.textContent = F.get("framing");
     camVal.textContent = F.get("camera_height") || "Eye level";
     brightVal.textContent = brightLabel(Number(brightRange.value));
@@ -1063,6 +1092,7 @@ export function buildFrameEditor(wrap, F) {
     applyCamSw();
     brightRange.value = String(F.get("brightness") ?? 0);
     lac.value = F.get("light_and_colour") || "";
+    extra.value = F.get("extra") || "";
     frameVal.textContent = F.get("framing");
     brightVal.textContent = brightLabel(Number(brightRange.value));
     for (const t of [styleExtra, subject, surroundings, lac]) t._rnCount?.();
@@ -1170,7 +1200,7 @@ export function buildFrameEditor(wrap, F) {
 
   return { head, refresh: pullFromWidgets, collect: pushToWidgets,
            previewNow: preview, changed,
-           boxes: { styleExtra, subject, surroundings, placement, lac, out } };
+           boxes: { styleExtra, subject, surroundings, placement, lac, extra, out } };
 }
 
 function buildPanel(node) {
