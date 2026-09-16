@@ -10653,6 +10653,7 @@ function modelsBody(node, page) {
               + "the masks are in the positive your sampler gets. Other is a plain text encode.";
     fam.onchange = () => { rig.clip_type = fam.value; writeCfg(node); render(node); };
     pill(body, "Model family", fam, fam.title);
+    if (rig.clip_type === "krea2") officialRow(node, body, rig);
     const addB = document.createElement("button");
     addB.className = "rn-ws-btn";
     addB.style.cssText = "width:auto;padding:0 12px";
@@ -10765,8 +10766,9 @@ function modelsBody(node, page) {
     sel.title = "How the CLIP file is interpreted. krea2 for the Krea 2 encoder. "
               + "This also decides how the built-in render encodes prompts: krea2 "
               + "runs the Studio identity system, anything else encodes plain text.";
-    sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); };
+    sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); render(node); };
     pill(body, "CLIP type", sel);
+    if (rig.clip_type === "krea2") officialRow(node, body, rig);
   }
   pickRow("VAE", "vae", () => L.vaes, "vaes",
           "The VAE. Comes out on the workspace's vae output and through Paint Out. "
@@ -12530,6 +12532,51 @@ function i2iTabs(node, body) {
   } else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
 }
 
+// The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community mixes
+// lose it. A rig says so itself, or its model file's name does (matching workspace.py).
+const rigOfficial = (rig) => (typeof rig?.official === "boolean" ? rig.official
+  : /official/i.test(`${rig?.unet || ""} ${rig?.checkpoint || ""}`));
+
+// The switch on a Krea 2 rig's card
+function officialRow(node, body, rig) {
+  const on = rigOfficial(rig);
+  const r = document.createElement("div");
+  r.className = "rn-ws-row rn-ws-officialrow";
+  r.style.flexWrap = "wrap";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (on ? " on" : "");
+  sw.title = "Mark whether this rig's model is the official Krea 2 Turbo.";
+  sw.onclick = () => { rig.official = !on; writeCfg(node); render(node); };
+  const l = document.createElement("span");
+  l.className = "rn-ws-swlabel";
+  l.style.fontWeight = "600";
+  l.textContent = "Official Krea 2 model";
+  const n = document.createElement("span");
+  n.className = "rn-ws-note";
+  n.style.flex = "1 1 220px";
+  n.textContent = (on
+    ? "Subject and Scene faces land on this rig."
+    : "A community mix: Subject and Scene faces rarely land. The Krea 2 Identity tab warns.")
+    + (typeof rig.official === "boolean" ? "" : " Guessed from the file name.");
+  r.append(sw, l, n);
+  body.appendChild(r);
+}
+
+// The warning on Krea 2 Identity when the render's rig is not the official model
+function officialWarn(cfg) {
+  const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0];
+  if (!rig || rig.clip_type !== "krea2" || rigOfficial(rig)) return null;
+  const used = [cfg.tabs.subject, cfg.tabs.scene].some((t) => t?.on && t.images?.length);
+  if (!used) return null;
+  const w = document.createElement("div");
+  w.className = "rn-ws-card rn-ws-note rn-ws-peoplewarn rn-ws-officialwarn";
+  w.textContent = `The render's rig, ${rig.name}, is not marked as the official Krea 2 model. `
+    + "Krea 2 Identity is trained on the official Turbo, so Subject and Scene faces rarely "
+    + "land on a community mix. Render on the official Turbo rig, or put a Detailer pass on "
+    + "it, or mark this rig official on the Models tab if it is.";
+  return w;
+}
+
 // ---- Krea 2 Identity as sub-tabs ---------------------------------------------------
 // Subject, People, Scene and Masks under one tab: the same strip and status bar as
 // Img2Img. Subject and Scene get the toolbar gallery with its dials, auto prompt and
@@ -12590,6 +12637,8 @@ function identityTabs(node, body) {
     bar.appendChild(c);
   }
   body.appendChild(bar);
+  const offWarn = officialWarn(cfg);
+  if (offWarn) body.appendChild(offWarn);
 
   if (sub === "masks") { masksBody(node, body); return; }
   // Subject and Scene: the same inner tabs, Gallery, Boosts, Auto prompt, Converter

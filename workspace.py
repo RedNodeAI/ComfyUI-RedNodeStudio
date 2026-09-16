@@ -953,6 +953,10 @@ def parse_config(config_json):
             # touches back toward the named base checkpoint before the stack
             # lands, which is what makes an identity LoRA fire on a merged
             # model. Off unless every piece is named, per the house rule.
+            # whether this rig's model is the official Krea 2 Turbo the identity
+            # system was trained on; None until set, then the file name decides
+            "official": (bool(r.get("official")) if isinstance(r.get("official"), bool)
+                         else None),
             "rescue": bool(r.get("rescue")),
             "rescue_base": str(r.get("rescue_base") or ""),
             "rescue_lora": str(r.get("rescue_lora") or ""),
@@ -1368,6 +1372,15 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
         if not (row.get("rigs") or (row.get("rig") or "").strip()) and row["text"].strip():
             return row
     return None
+
+
+def rig_is_official(rec):
+    """The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community
+    mixes lose it. A rig says so itself, or its model file's name does."""
+    rec = rec or {}
+    if isinstance(rec.get("official"), bool):
+        return rec["official"]
+    return "official" in ("%s %s" % (rec.get("unet") or "", rec.get("checkpoint") or "")).lower()
 
 
 def rig_text_key(rec, clip, from_rec=True):
@@ -3219,6 +3232,13 @@ class RedNodeStudioWorkspace:
         _rig_is_krea2 = (not _rigs_now
                          or _rigs_now[cfg["models"]["active"]].get("clip_type")
                          == "krea2")
+        if (_rigs_now and _rig_is_krea2 and (subject is not None or scene is not None)
+                and not rig_is_official(_rigs_now[cfg["models"]["active"]])):
+            print("[RedNode Workspace] identity: the rig '%s' is not marked as the "
+                  "official Krea 2 model. Subject and Scene references rarely land on "
+                  "community mixes; render on the official Turbo, or mark the rig "
+                  "official on the Models tab if it is."
+                  % _rigs_now[cfg["models"]["active"]]["name"], flush=True)
         if clip is not None and not _stage_only and (
                 _mode == "internal" or (_prow or {}).get("text", "").strip()):
             try:

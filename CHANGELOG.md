@@ -183,6 +183,10 @@ cheap to judge.
   with every switch off is left out of the caption and still styles the render
 - Combine and Style lock are labelled button switches with a line saying what
   the pick does. Combine reads Append or Blend with Ollama
+- A Krea 2 rig has an Official Krea 2 model switch on the Models tab. Until it
+  is set, a model file with "official" in its name counts as official. When
+  Subject or Scene has pictures and the render's rig is not official, the Krea 2
+  Identity tab and the console warn that faces rarely land on community mixes
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
