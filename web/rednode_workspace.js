@@ -529,6 +529,9 @@ css.textContent = `
 .rn-ws-note{font-size:11.5px;opacity:.5;line-height:1.45}
 /* a switch's label row: note-coloured words, but the switch stays at full strength */
 .rn-ws-bpresets{display:flex;gap:6px;flex-wrap:wrap}
+.rn-ws-choicelab{min-width:84px;font-weight:600;color:#c8ccd2}
+.rn-ws-moodpics .rn-ws-reads{flex:none}
+.rn-ws-moodpics .cap b{color:#c8ccd2;font-weight:600}
 .rn-ws-says{margin:-2px 0 4px 2px;opacity:.75;font-size:11.5px}
 .rn-ws-bpreset{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#c8ccd2;
   cursor:pointer;font-size:12.5px;font-weight:600;padding:7px 12px}
@@ -2109,7 +2112,7 @@ async function runPaintFinal(node, r, withPost) {
 
 /** Run one image through the standalone caption route. Gallery thumbnails and Paint
  *  results share this path so the server's 409 and the panel's busy state cannot drift. */
-async function runStandaloneAutoPrompt(node, tabName, entry, { keepTab = false } = {}) {
+async function runStandaloneAutoPrompt(node, tabName, entry, { keepTab = false, mode = "" } = {}) {
   if (node._rnAutoBusy && !keepTab) {
     throw new Error("An auto prompt is already running.");
   }
@@ -2120,7 +2123,7 @@ async function runStandaloneAutoPrompt(node, tabName, entry, { keepTab = false }
     const res = await api.fetchApi("/rednode/autoprompt_run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tab: tabName, entry, config: cfgW?.value ?? "{}" }),
+      body: JSON.stringify({ tab: tabName, entry, mode, config: cfgW?.value ?? "{}" }),
     });
     const d = await res.json();
     if (res.status === 409 || res.ok === false || d.error) {
@@ -4118,6 +4121,45 @@ function personCaption(node, entry) {
   return "";
 }
 
+// A Moodboard picture's last caption for one read, keyed "entry|read"
+function readCaption(node, entry, mode) {
+  const key = `${entry}|${mode}`;
+  const cached = node._rnPersonCaps?.[key];
+  if (cached !== undefined) return cached;
+  const fk = "reads:" + entry;
+  if (!_personFetched.has(fk)) {
+    _personFetched.add(fk);
+    api.fetchApi(`/rednode/image_prompts?entry=${encodeURIComponent(entry)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        let hit = false;
+        for (const [m, parts] of Object.entries(d?.by_mode || {})) {
+          const text = String(Object.values(parts || {})[0] || "");
+          const k = `${entry}|${m}`;
+          if (text && node._rnPersonCaps?.[k] === undefined) {
+            (node._rnPersonCaps ||= {})[k] = text;
+            hit = true;
+          }
+        }
+        if (hit) render(node);
+      })
+      .catch(() => {});
+  }
+  return "";
+}
+
+// The Moodboard's reads, in the order the queue joins them
+const MOOD_READS = [
+  ["style", "Style", "The look: palette, lighting, texture and rendering."],
+  ["subject", "Subject", "The person: face, hair, build, clothing and accessories."],
+  ["scene_action", "Situation", "What is happening: the activity and where the people are."],
+];
+const moodReadsOf = (t, entry) => {
+  const r = t.pic_meta?.[entry]?.reads;
+  if (Array.isArray(r)) return MOOD_READS.map(([v]) => v).filter((v) => r.includes(v));
+  return [MOOD_READS.some(([v]) => v === t.auto?.mode) ? t.auto.mode : "style"];
+};
+
 function autoSection(node, body, tabName, { flat = false } = {}) {
   if (!["subject", "scene", "moodboard", "i2i", "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
@@ -4586,7 +4628,130 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
 
     // THE PICTURE, on the other gallery tabs: the one being captioned, with its own
     // Generate and its latest caption, the People card's row for a single picture
-    if (tabName !== "subject" && !isPaint) {
+    // THE PICTURES, on the Moodboard: a row per batch picture, each choosing any mix
+    // of Style, Subject and Situation, with its own Generate and a caption per read
+    if (tabName === "moodboard") {
+      const M = cfg.tabs.moodboard;
+      const meta = (M.pic_meta ||= {});
+      const idxs = M.random ? M.images.map((_, i) => i) : M.sel;
+      const mc = document.createElement("div");
+      mc.className = "rn-ws-card rn-ws-describe rn-ws-moodpics";
+      const mh = document.createElement("div");
+      mh.className = "ch";
+      mh.textContent = "PICTURES";
+      mc.appendChild(mh);
+      const mn = document.createElement("div");
+      mn.className = "rn-ws-note";
+      mn.textContent = !idxs.length
+        ? "No pictures in the batch yet. Pick them in the Gallery."
+        : (M.random ? "Random is on: the picture rolled each run uses its own choice. " : "")
+          + "Pick what each picture gives: Style is the look, Subject the person, "
+          + "Situation what is happening. Each one on writes its own caption.";
+      mc.appendChild(mn);
+      idxs.forEach((imgIdx, k) => {
+        const entry = M.images[imgIdx];
+        if (!entry) return;
+        const reads = moodReadsOf(M, entry);
+        const row = document.createElement("div");
+        row.className = "rn-ws-person" + (reads.length ? "" : " off");
+        row.dataset.moodpic = String(k);
+        const im = document.createElement("img");
+        im.src = thumbUrl(entry, 120);
+        im.alt = "";
+        im.title = entry;
+        const pb = document.createElement("div");
+        pb.className = "pb";
+        const top = document.createElement("div");
+        top.className = "top";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = `#${k + 1}`;
+        const nm = document.createElement("span");
+        nm.className = "rn-ws-note";
+        nm.style.cssText = "flex:1;min-width:60px;overflow:hidden;text-overflow:ellipsis;"
+                         + "white-space:nowrap;color:#e8ecf1";
+        nm.textContent = parseName(entry).filename;
+        // several can be on at once, so these are toggles, not a single choice
+        const seg = document.createElement("div");
+        seg.className = "rn-ws-seg rn-ws-switch rn-ws-reads";
+        seg.dataset.reads = entry;
+        for (const [v, label, tip] of MOOD_READS) {
+          const b = document.createElement("button");
+          const on = reads.includes(v);
+          b.className = "rn-ws-segb" + (on ? " on" : "");
+          b.textContent = label;
+          b.title = tip + (on ? " Click to leave it out." : " Click to add it.");
+          b.onclick = () => {
+            const next = on ? reads.filter((x) => x !== v) : [...reads, v];
+            meta[entry] = { reads: MOOD_READS.map(([x]) => x).filter((x) => next.includes(x)) };
+            writeCfg(node);
+            render(node);
+          };
+          seg.appendChild(b);
+        }
+        const capBtn = document.createElement("button");
+        capBtn.className = "rn-ws-btn rn-ws-compact";
+        capBtn.style.padding = "0 10px";
+        const busy = node._rnAutoBusy === "moodboard:" + entry;
+        capBtn.textContent = busy ? "Generating…" : "Generate";
+        capBtn.disabled = !!node._rnAutoBusy || !reads.length;
+        capBtn.title = reads.length
+          ? "Caption this picture now, once for each choice that is on, with the engines "
+            + "below. Saved beside the picture and reused by the next queue."
+          : "Switch on Style, Subject or Situation first.";
+        capBtn.onclick = async () => {
+          node._rnAutoBusy = "moodboard:" + entry;
+          render(node);
+          try {
+            for (const m of reads) {
+              const key = `${entry}|${m}`;
+              try {
+                const text = await runStandaloneAutoPrompt(node, "moodboard", entry,
+                                                           { keepTab: true, mode: m });
+                (node._rnPersonCaps ||= {})[key] = text || "";
+              } catch (e) {
+                (node._rnPersonCaps ||= {})[key] = `Could not caption: ${e.message}`;
+              }
+              render(node);
+            }
+          } finally {
+            node._rnAutoBusy = null;
+            render(node);
+          }
+        };
+        top.append(tag, nm, seg, capBtn);
+        pb.appendChild(top);
+        if (!reads.length) {
+          const cap = document.createElement("div");
+          cap.className = "cap";
+          cap.textContent = "Nothing is taken from this picture's caption. Its look still "
+                          + "reaches the render through the batch.";
+          pb.appendChild(cap);
+        }
+        for (const [v, label] of MOOD_READS) {
+          if (!reads.includes(v)) continue;
+          const cap = document.createElement("div");
+          cap.className = "cap";
+          const text = readCaption(node, entry, v);
+          const b = document.createElement("b");
+          b.textContent = `${label}: `;
+          const s = document.createElement("span");
+          s.textContent = text || "No caption yet. Generate one, or queue a run.";
+          cap.append(b, s);
+          if (text) {
+            cap.style.cursor = "pointer";
+            cap.title = "Click to copy.";
+            cap.onclick = () => navigator.clipboard?.writeText?.(text);
+          }
+          pb.appendChild(cap);
+        }
+        row.append(im, pb);
+        mc.appendChild(row);
+      });
+      sect.appendChild(mc);
+    }
+
+    if (tabName !== "subject" && tabName !== "moodboard" && !isPaint) {
       const entry = autoEntry(cfg, tabName);
       const pc = document.createElement("div");
       pc.className = "rn-ws-card rn-ws-picturecard";
@@ -4650,8 +4815,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         row.append(im, pb);
         pc.appendChild(row);
       }
-      // WHAT THE PICTURE GIVES: Scene reads the place, what is going on, or only the
-      // look; the Moodboard reads the look, the person, or what is going on
+      // WHAT THE PICTURE GIVES: the place, what is going on, or only the look
       const READS = {
         scene: ["Take from the scene", [
           ["scene_view", "Background", "The place: location, layout, light and camera. "
@@ -4659,13 +4823,6 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
           ["scene_action", "Situation", "What is happening: the activity, where the people "
                                         + "are and what they do. Nobody's looks are described."],
           ["scene_style", "Style", "Only the look: palette, lighting, texture and rendering."],
-        ]],
-        moodboard: ["Take from the pictures", [
-          ["style", "Style", "Only the look: palette, lighting, texture and rendering."],
-          ["subject", "Subject", "The person: face, hair, build, clothing and accessories. "
-                                 + "No place, light or pose."],
-          ["scene_action", "Situation", "What is happening: the activity, where the people "
-                                        + "are and what they do. Nobody's looks are described."],
         ]],
       };
       if (READS[tabName]) {
@@ -4845,56 +5002,47 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       shared.appendChild(mrow);
     }
 
+    // a labelled button switch with a line under it saying what the pick does
+    const choiceRow = (label, options, cur, onPick, key) => {
+      const r = document.createElement("div");
+      r.className = "rn-ws-row rn-ws-choicerow";
+      r.style.flexWrap = "wrap";
+      const l = document.createElement("span");
+      l.className = "rn-ws-swlabel rn-ws-choicelab";
+      l.textContent = label;
+      const pick = options.find(([v]) => v === cur) || options[0];
+      const seg = segSwitch(options.map(([v, lab, tip]) => [v, lab, tip]), pick[0], onPick);
+      seg.dataset.choice = key;
+      const n = document.createElement("span");
+      n.className = "rn-ws-note";
+      n.style.flex = "1 1 220px";
+      n.textContent = pick[2];
+      r.append(l, seg, n);
+      shared.appendChild(r);
+    };
     if (tabName === "moodboard") {
-      const lrow = document.createElement("div");
-      lrow.className = "rn-ws-row";
-      const llab = document.createElement("span");
-      llab.className = "rn-ws-note";
-      llab.textContent = "Style lock";
-      const lsel = document.createElement("select");
-      lsel.className = "rn-ws-res";
-      for (const [v, label] of [["off", "Off"],
-                                ["scrub", "Scrub: strip conflicting style words"],
-                                ["rewrite", "Rewrite: the loaded CLIP reworks them"]]) {
-        const o = document.createElement("option");
-        o.value = v;
-        o.textContent = label;
-        o.selected = cfg.auto.style_lock === v;
-        lsel.appendChild(o);
-      }
-      lsel.title = "Makes THIS tab's prompt the style authority: style vocabulary in the "
-                 + "subject and scene prompts that the mood prompt does not itself use is "
-                 + "removed (scrub) or reworded (rewrite). Rewrite uses the loaded CLIP "
-                 + "first (free, wire the clip input), Ollama as backup, the scrub as the "
-                 + "floor. A photo source can no longer drag photorealistic wording into "
-                 + "an anime moodboard.";
-      lsel.onchange = () => { cfg.auto.style_lock = lsel.value; writeCfg(node); };
-      lrow.append(llab, lsel);
-      shared.appendChild(lrow);
+      choiceRow("Style lock", [
+        ["off", "Off", "The other tabs' prompts keep their own style words."],
+        ["scrub", "Scrub", "Style words in the Subject and Scene prompts that this tab's "
+                           + "prompt does not use are removed, so this tab sets the look."],
+        ["rewrite", "Rewrite", "Those style words are reworded to match this tab, by the "
+                               + "loaded CLIP (wire the clip input), then Ollama, with Scrub "
+                               + "as the fallback."],
+      ], cfg.auto.style_lock, (v) => { cfg.auto.style_lock = v; writeCfg(node); render(node); },
+      "style_lock");
     }
+    choiceRow("Combine", [
+      ["append", "Append", "Keeps every engine's words as they came: the paragraphs, then "
+                           + "the tag line."],
+      ["blend", "Blend with Ollama", "One more Ollama pass rewords every engine's words into "
+                                     + "one prompt. Needs the Ollama engine on."],
+    ], a.combine, (v) => { a.combine = v; writeCfg(node); render(node); }, "combine");
 
     const crow = document.createElement("div");
     crow.className = "rn-ws-row";
     crow.style.flexWrap = "wrap";
-    const clab = document.createElement("span");
-    clab.className = "rn-ws-note";
-    clab.textContent = "Combine";
-    const csel = document.createElement("select");
-    csel.className = "rn-ws-res";
-    for (const [v, label] of [["append", "Append: paragraph, then tag line"],
-                              ["blend", "Blend: Ollama rewrites them into one"]]) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = label;
-      o.selected = a.combine === v;
-      csel.appendChild(o);
-    }
-    csel.title = "Append keeps every engine's words as they came. Blend costs one more "
-               + "Ollama pass and rewords everything into one prompt; only Ollama can do "
-               + "that, so its engine has to be on for this tab.";
-    csel.onchange = () => { a.combine = csel.value; writeCfg(node); render(node); };
     const llab = document.createElement("span");
-    llab.className = "rn-ws-note";
+    llab.className = "rn-ws-swlabel rn-ws-choicelab";
     llab.textContent = "Length";
     const lsel = document.createElement("select");
     lsel.className = "rn-ws-res";
@@ -4911,7 +5059,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                + "into its rewrite instruction; append trims at a sentence break. Long "
                + "prompts overpower the mood, so tight keeps the mood in charge.";
     lsel.onchange = () => { a.length = parseInt(lsel.value, 10) || 0; writeCfg(node); };
-    crow.append(clab, csel, llab, lsel);
+    crow.append(llab, lsel);
     shared.appendChild(crow);
     if (a.combine === "blend" && !(a.ollama && autoStatus.ollama)) {
       const bw = document.createElement("div");

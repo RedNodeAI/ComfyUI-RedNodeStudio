@@ -513,6 +513,19 @@ def _announce_held(tier, held):
         print(msg, flush=True)
 
 
+# What a Moodboard picture gives its auto prompt, any mix of the three, captioned
+# one read at a time and joined in this order
+MOOD_READS = ("style", "subject", "scene_action")
+
+
+def mood_reads(meta, default="style"):
+    """A Moodboard picture's reads; a picture never set takes the tab's mode."""
+    r = meta.get("reads") if isinstance(meta, dict) else None
+    if isinstance(r, list):
+        return [m for m in MOOD_READS if m in r]
+    return [default if default in MOOD_READS else "style"]
+
+
 def _normalise_auto(auto_in, default_mode):
     """Return the shared per-image auto-prompt contract."""
     auto_in = auto_in if isinstance(auto_in, dict) else {}
@@ -639,6 +652,13 @@ def parse_config(config_json):
                          "auto": (bool(v.get("auto")) if isinstance(v, dict) and "auto" in v
                                   else None)}
                 for k, v in pm_in.items() if isinstance(v, dict)}
+        if name == "moodboard":
+            # per picture: which reads its auto prompt takes
+            pm_in = t.get("pic_meta") if isinstance(t.get("pic_meta"), dict) else {}
+            tabs[name]["pic_meta"] = {
+                str(k): {"reads": [m for m in MOOD_READS if m in v["reads"]]}
+                for k, v in pm_in.items()
+                if isinstance(v, dict) and isinstance(v.get("reads"), list)}
         if name == "i2i":
             tabs[name]["prompt_only"] = bool(t.get("prompt_only"))
             # the i2i canvas source: the gallery as always, or a wired image or
@@ -2612,7 +2632,7 @@ class RedNodeStudioWorkspace:
                 entry = t["images"][idx]
             # WHO IS CAPTIONED: the one picture on most tabs; on Subject, every picked
             # person whose auto prompt is on (the main one by default), each by name
-            targets = [(0, entry, False)]
+            targets = [(0, entry, False, a["mode"])]
             if tab_name == "subject" and entry:
                 _meta = t.get("people_meta") or {}
                 _people = [idx] + [i for i in (t.get("extra_sel") or []) if i != idx]
@@ -2621,7 +2641,18 @@ class RedNodeStudioWorkspace:
                     _pm = _meta.get(t["images"][_i]) or {}
                     _on = _pm.get("auto")
                     if (_k == 0) if _on is None else _on:
-                        targets.append((_k, t["images"][_i], _k > 0))
+                        targets.append((_k, t["images"][_i], _k > 0, a["mode"]))
+            if tab_name == "moodboard" and entry:
+                # every picture in the batch (the rolled one when random), once per
+                # read switched on for it
+                _pmeta = t.get("pic_meta") or {}
+                _idx = chosen_index(tab_name)
+                _batch = _idx if isinstance(_idx, list) else [_idx]
+                targets = [(_k, t["images"][_i], True, _m)
+                           for _k, _i in enumerate(_batch)
+                           for _m in mood_reads(_pmeta.get(t["images"][_i]), a["mode"])]
+                if not targets and wired:
+                    targets = [(0, None, False, a["mode"])]
             ga = cfg["auto"]
 
             # every tensor engine needs the image, not just WD14 — gating on WD14 alone
@@ -2630,7 +2661,7 @@ class RedNodeStudioWorkspace:
             need_tensor = (a["wd14"] or a["joy"] or a["qwen"] or a["clipgen"]
                            or a["florence"])
             _caps = []
-            for _k, entry, _own_img in targets:
+            for _n, (_k, entry, _own_img, _mode) in enumerate(targets):
                 img_bytes = None
                 if entry and a["ollama"]:
                     # re-encoded, not the raw file: a webp the endpoint cannot read, or
@@ -2649,10 +2680,12 @@ class RedNodeStudioWorkspace:
                 if t_img is not None and t_img.shape[0] > 1:
                     t_img = t_img[:1]
 
-                def _build(a=a, img_bytes=img_bytes, tab_name=tab_name, wired=wired, ga=ga,
-                           t_img=t_img, entry=entry, mtime=mtime):
+                # a wired caption joins once, not once per picture
+                def _build(a=a, img_bytes=img_bytes, tab_name=tab_name,
+                           wired=(wired if _n == 0 else []), ga=ga,
+                           t_img=t_img, entry=entry, mtime=mtime, mode=_mode):
                     return autoprompt.build_prompt(
-                        a["mode"], image_bytes=img_bytes,
+                        mode, image_bytes=img_bytes,
                         image_tensor=t_img,
                         wired=wired, use_ollama=a["ollama"], use_wd14=a["wd14"],
                         use_joy=a["joy"], use_qwen=a["qwen"],
@@ -2679,7 +2712,7 @@ class RedNodeStudioWorkspace:
                         # cache_base stays exactly as it was. build_prompt folds the
                         # instruction into Ollama's own key, and only once one is typed,
                         # so nobody's saved captions move.
-                        cache_base=[tab_name, entry, mtime, a["mode"], ga["frank"]],
+                        cache_base=[tab_name, entry, mtime, mode, ga["frank"]],
                         use_cache=a["fixed"],
                         sidecar=(_filepath(entry) + ".rn.json")
                                 if entry and _managed(entry) else None)
@@ -2689,17 +2722,22 @@ class RedNodeStudioWorkspace:
                 # FRESH (fixed off) rebuilds but still stores, so flipping back is warm.
                 _cap = _build()
                 if _cap:
-                    _caps.append((_k, entry, _cap))
+                    _caps.append((_k, entry, _cap, _mode))
             if tab_name == "subject" and targets:
                 _meta = t.get("people_meta") or {}
                 subject_people = [((_meta.get(e) or {}).get("name") or "Person %d" % (k + 1), c)
-                                  for k, e, c in _caps]
-                people_caps.update({e: c for _, e, c in _caps})
-                _named = any((_meta.get(e) or {}).get("name") for _, e, _c in _caps)
+                                  for k, e, c, _m in _caps]
+                people_caps.update({e: c for _, e, c, _m in _caps})
+                _named = any((_meta.get(e) or {}).get("name") for _, e, _c, _m in _caps)
                 if len(_caps) == 1 and _caps[0][0] == 0 and not _named:
                     prompts[tab_name] = _caps[0][2]           # one person: as it always was
                 else:
                     prompts[tab_name] = "\n".join("%s: %s" % p for p in subject_people)
+            elif tab_name == "moodboard" and targets and targets[0][1]:
+                # the panel shows each read's caption under its picture
+                people_caps.update({"%s|%s" % (e, m): c for _, e, c, m in _caps})
+                prompts[tab_name] = "\n".join(c for m0 in MOOD_READS
+                                              for _, _, c, m in _caps if m == m0)
             else:
                 prompts[tab_name] = _caps[0][2] if _caps else ""
             if prompts[tab_name]:
@@ -3750,7 +3788,7 @@ class RedNodeStudioWorkspace:
 # ---------------------------------------------------------------------------
 # HTTP API for the panel (presets live on disk, shared by every workflow)
 # ---------------------------------------------------------------------------
-def standalone_autoprompt(config_json, tab_name, entry):
+def standalone_autoprompt(config_json, tab_name, entry, mode=None):
     """One tab's caption engines for one image, right now, outside the queue.
 
     Runs with the exact cache keys a queued run uses, so every part it bakes is
@@ -3769,9 +3807,11 @@ def standalone_autoprompt(config_json, tab_name, entry):
         raise ValueError("no engines that can run standalone are on for this tab"
                          + (" (CLIP gen only runs with the queue)"
                             if a["clipgen"] else ""))
+    # a Moodboard picture is captioned once per read, each asked for by name
+    mode = mode if mode in autoprompt.SYSTEM_PROMPTS else a["mode"]
     path = _filepath(entry)
     print(f"[RedNode Workspace] standalone auto prompt captioning {entry} "
-          f"for {tab_name}", flush=True)
+          f"for {tab_name} ({mode})", flush=True)
     img_bytes = None
     if a["ollama"]:
         img_bytes = autoprompt.vision_payload(path)
@@ -3782,7 +3822,7 @@ def standalone_autoprompt(config_json, tab_name, entry):
     t_img = (load_image(entry, cfg["resize"])
              if (a["wd14"] or a["joy"] or a["qwen"] or a["florence"]) else None)
     prompt = autoprompt.build_prompt(
-        a["mode"], image_bytes=img_bytes, image_tensor=t_img,
+        mode, image_bytes=img_bytes, image_tensor=t_img,
         wired=(), use_ollama=a["ollama"], use_wd14=a["wd14"],
         use_joy=a["joy"], use_qwen=a["qwen"],
         use_clip=False, clip=None,
@@ -3804,10 +3844,10 @@ def standalone_autoprompt(config_json, tab_name, entry):
                   "caption_length": ga["joy_length"], "memory": ga["joy_memory"],
                   "use_mode_prompt": ga["joy_mode_prompts"]},
         instruction=ga["instruction"], question=ga["question"],
-        cache_base=[tab_name, entry, mtime, a["mode"], ga["frank"]],
+        cache_base=[tab_name, entry, mtime, mode, ga["frank"]],
         use_cache=a["fixed"],
         sidecar=(path + ".rn.json") if _managed(entry) else None)
-    return {"prompt": prompt, "skipped": skipped}
+    return {"prompt": prompt, "skipped": skipped, "mode": mode}
 
 
 try:
@@ -3855,7 +3895,8 @@ try:
             import asyncio
             result = await asyncio.get_event_loop().run_in_executor(
                 None, standalone_autoprompt, str(data.get("config") or "{}"),
-                str(data.get("tab") or ""), str(data.get("entry") or ""))
+                str(data.get("tab") or ""), str(data.get("entry") or ""),
+                str(data.get("mode") or "") or None)
             return web.json_response(result)
         except Exception as e:
             return web.json_response({"error": str(e)}, status=400)

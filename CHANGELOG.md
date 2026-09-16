@@ -175,9 +175,14 @@ cheap to judge.
   in-place edits, with a denoise. A painted edit mask in an older workflow is
   ignored; a MASK wired into edit_mask_in still goes out with its latent. The
   Subject boost mask card opens by itself
-- The Moodboard's Picture card chooses what its auto prompt takes from the
-  pictures, like the Scene's: Style (the default, only the look), Subject (the
-  person's traits and clothing) or Situation (what is happening)
+- The Moodboard's auto prompt captions every picture in the batch, not only the
+  first. Its Pictures card has a row per picture with Style, Subject and
+  Situation switches (any mix; Style by default), a Generate button that
+  captions each one that is on, and a caption per switch. The captions join as
+  the style lines, then the subject lines, then the situation lines. A picture
+  with every switch off is left out of the caption and still styles the render
+- Combine and Style lock are labelled button switches with a line saying what
+  the pick does. Combine reads Append or Blend with Ollama
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

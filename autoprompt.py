@@ -1200,6 +1200,7 @@ def saved_parts(path):
     """
     data = _sidecar_read(path)
     out = {}
+    by_mode = {}
     for entry in (data.get("parts") or {}).values():
         if not isinstance(entry, dict):
             continue
@@ -1211,7 +1212,8 @@ def saved_parts(path):
         # later writes win: the file is written in order, so the last one for an
         # engine is the newest description of this picture
         out[eng] = {"text": text, "mode": mode}
-    return {"parts": out, "updated": data.get("updated", "")}
+        by_mode.setdefault(mode, {})[eng] = text
+    return {"parts": out, "by_mode": by_mode, "updated": data.get("updated", "")}
 
 
 def cached_part(key_parts, builder, use_cache=True, sidecar=None, engine="", mode=""):
