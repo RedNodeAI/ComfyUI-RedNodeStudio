@@ -273,6 +273,12 @@ cheap to judge.
   and holds only when that is over the limit, so a run that fits keeps its
   speed. The Run tab shows the estimate with its parts and what Hold will do;
   the log says it again when the run starts
+- Holding works on ComfyUI's dynamic VRAM (the default on NVIDIA). That
+  allocator ignores the old reserve and keeps every weight it has room for on
+  the card, so a held run still loaded the whole model; holding now raises the
+  allocator's headroom to the card past the limit, so weight pages are evicted
+  and the run stays near the line. The old reserve stays for installs without
+  dynamic VRAM
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

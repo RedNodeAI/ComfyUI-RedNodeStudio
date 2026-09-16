@@ -4,11 +4,13 @@ The VRAM limit is the card's size: 8, 12, 16 or 24 GB, or free range. A run is h
 under that size less a little headroom (a 16 GB card is held near 15.5 GB), because
 the card also carries the desktop and the browser.
 
-Holding tells ComfyUI to keep the rest of the card free, the same knob its
---reserve-vram flag sets. Its loader reads that number at every load, so a model
-that does not fit loads in part, with the rest of its weights kept in RAM and
-brought over as they are needed, and the text encoders leave the card before
-sampling. Slower, and it stays near the line.
+Holding tells ComfyUI to keep the rest of the card free. On an install with
+dynamic VRAM (comfy-aimdo, the default on NVIDIA) that is the allocator's simple
+headroom: it evicts model weight pages to keep that much free, so the weights
+stream through and the run stays near the line. On the older estimate-based
+loader it is the reserve the --reserve-vram flag sets, and a model that does not
+fit loads in part. Either way the text encoders leave the card before sampling.
+Slower, and it stays near the line.
 
 Hold is Auto, On or Off. Auto holds only when the run's estimated peak (the model
 files it will load plus the working memory its size needs) is over the limit, so a
@@ -26,7 +28,7 @@ HEADROOM_GB = 0.5
 TIER_FOR_GB = {8: "low", 12: "low", 16: "low", 24: "medium"}
 LEGACY_GB = {"low": 16, "medium": 24}
 HOLD_MODES = ("auto", "on", "off")
-_orig = {"reserve": None}
+_orig = {"reserve": None, "headroom": None}
 # this queue's decision, read by the Detailer and Post that run after the Workspace
 _current = {"limit": None}
 
@@ -73,6 +75,21 @@ def should_hold(cfg, estimate_gb=None):
     return estimate_gb is None or estimate_gb > lim
 
 
+def _aimdo():
+    """The dynamic VRAM allocator's control module, when that is what runs."""
+    try:
+        import comfy.memory_management as cmm
+        if not getattr(cmm, "aimdo_enabled", False):
+            return None
+        import sys
+        ctl = sys.modules.get("comfy_aimdo.control")
+        if ctl is None:
+            import comfy_aimdo.control as ctl
+        return ctl if getattr(ctl, "lib", None) is not None else None
+    except Exception:
+        return None
+
+
 def target_gb(cfg=None):
     """The GB this queue is held under, or None (decided by the Workspace's apply)."""
     return _current["limit"]
@@ -89,9 +106,18 @@ def apply(cfg, estimate_gb=None):
     try:
         if _orig["reserve"] is None:
             _orig["reserve"] = int(mm.EXTRA_RESERVED_VRAM)
+        ctl = _aimdo()
+        if ctl is not None and _orig["headroom"] is None:
+            _orig["headroom"] = int(ctl.get_simple_vram_headroom())
         if not should_hold(cfg, estimate_gb):
+            back = False
             if mm.EXTRA_RESERVED_VRAM != _orig["reserve"]:
                 mm.EXTRA_RESERVED_VRAM = _orig["reserve"]
+                back = True
+            if ctl is not None and ctl.get_simple_vram_headroom() != _orig["headroom"]:
+                ctl.set_simple_vram_headroom(_orig["headroom"])
+                back = True
+            if back:
                 print("[RedNode Workspace] VRAM hold off: ComfyUI's own reserve is back",
                       flush=True)
             return None
@@ -100,14 +126,22 @@ def apply(cfg, estimate_gb=None):
         reserve = max(_orig["reserve"], int(total - lim * GB))
         changed = mm.EXTRA_RESERVED_VRAM != reserve
         mm.EXTRA_RESERVED_VRAM = int(reserve)
+        how = "models that do not fit load in part"
+        if ctl is not None:
+            # dynamic VRAM: the allocator keeps this much free by evicting weight
+            # pages, so the weights stream and the run stays near the line
+            head = max(_orig["headroom"], int(total - lim * GB))
+            if ctl.get_simple_vram_headroom() != head:
+                ctl.set_simple_vram_headroom(head)
+                changed = True
+            how = "model weights stream through instead of sitting whole on the card"
         _current["limit"] = lim
         if changed:
             # what is already on the card was loaded under the old rule
             mm.unload_all_models()
             mm.soft_empty_cache()
             print("[RedNode Workspace] VRAM hold: keeping %.1f GB of the card free so the "
-                  "run stays near %.1f GB; models that do not fit load in part"
-                  % (reserve / GB, lim), flush=True)
+                  "run stays near %.1f GB; %s" % (reserve / GB, lim, how), flush=True)
         return lim, reserve // (1024 * 1024)
     except Exception as exc:
         print("[RedNode Workspace] VRAM hold could not be set: %s" % exc, flush=True)
