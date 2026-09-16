@@ -2513,6 +2513,10 @@ class RedNodePostProcess:
 
     def _run(self, image, prompt=None):
         from . import run_events as _re
+        from . import builtin_chain as _chain
+        if _chain.done("post"):
+            _re.skip("post", "Post FX", "done inside the Workspace")
+            return (image,)
         remember_source(image)
         got = workspaces_from_prompt(prompt)
         cfg, ws_raw = (got if got else (None, {}))

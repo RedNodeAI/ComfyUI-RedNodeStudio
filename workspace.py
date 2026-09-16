@@ -1328,6 +1328,14 @@ def parse_config(config_json):
             "draft": bool(data.get("draft")),
             # hold the run under the VRAM limit's card size (vram_hold.py)
             "vram_hold": bool(data.get("vram_hold")),
+            # THE BUILT-IN CHAIN: the Workspace runs the Detailer passes, Post FX and
+            # the save itself when these are on. The settings are the Detailer and
+            # Save nodes' own, so a card means the same thing in either place.
+            "detailer_on": bool(data.get("detailer_on")),
+            "detailer": data.get("detailer") if isinstance(data.get("detailer"), dict) else {},
+            "post_on": data.get("post_on") is not False,
+            "save_on": bool(data.get("save_on")),
+            "save": data.get("save") if isinstance(data.get("save"), dict) else {},
             "taps": _normalise_taps(data.get("taps")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
@@ -1946,7 +1954,8 @@ class RedNodeStudioWorkspace:
                                        "dials). 'custom (live)' leaves it as it is. Presets "
                                        "store filenames, so they are per-machine."}),
             },
-            "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"},
+            "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT",
+                       "extra_pnginfo": "EXTRA_PNGINFO"},
             "optional": {
                 # the loaded text encoder: CLIP gen captions with it, comfy-core style,
                 # so auto prompting costs no extra model at all
@@ -2023,6 +2032,8 @@ class RedNodeStudioWorkspace:
                     "steps", "cfg", "sampler_name", "scheduler", "detailer_steps",
                     "positive", "negative", "image", "result_latent", "seed",
                     "prompt_text", "negative_text")
+    # an output node: with the save built in, a one-node workflow is a whole run
+    OUTPUT_NODE = True
     FUNCTION = "build"
     CATEGORY = "RedNode/Studio"
     DESCRIPTION = ("The whole studio input rig in one tabbed panel: per-tab image galleries, "
@@ -2197,7 +2208,7 @@ class RedNodeStudioWorkspace:
             flush=True)
         return pos, model_i
 
-    def build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None,
+    def build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None, extra_pnginfo=None,
               boost_mask_in=None, edit_mask_in=None,
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
                mood_caption_in=None, clip=None, i2i_caption_in=None, vae=None,
@@ -3923,6 +3934,47 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 print("[RedNode Workspace] built-in paint pass failed: %s" % exc,
                       flush=True)
+
+        # THE BUILT-IN CHAIN, on a normal render: the Detailer passes, then Post FX,
+        # then the save, each only when switched on here. The image output carries
+        # the finished picture, and a separate node after this one steps aside.
+        if rig_image is not None and not _prt:
+            from . import builtin_chain as _chain
+            if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
+                try:
+                    from .refine_pipeline import RedNodeStudioDetailer
+                    _dout = RedNodeStudioDetailer().run(
+                        rig_image, config=json.dumps(cfg["detailer"]), prompt=prompt,
+                        unique_id=unique_id, **_custom_rigs)
+                    if _dout and _dout[0] is not None and torch.is_tensor(_dout[0]):
+                        rig_image = _dout[0]
+                    _chain.mark("detailer")
+                except Exception as exc:
+                    print("[RedNode Workspace] the built-in Detailer failed: %s; the "
+                          "render goes on without it" % exc, flush=True)
+            if cfg["post_on"] and postprocess.active_fx(post_cfg):
+                try:
+                    rig_image = postprocess.RedNodePostProcess().run(rig_image, prompt=prompt)[0]
+                    _chain.mark("post")
+                except Exception as exc:
+                    print("[RedNode Workspace] the built-in Post FX failed: %s; the "
+                          "picture goes on ungraded" % exc, flush=True)
+            if cfg["save_on"]:
+                try:
+                    from .save_node import RedNodeSave
+                    _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
+                                             seed=run_seed, prompt=prompt,
+                                             extra_pnginfo=extra_pnginfo)
+                    _chain.mark("save")
+                    _simgs = ((_sv or {}).get("ui") or {}).get("images") or []
+                    if _simgs:
+                        # private, like the paint pass: core would draw a ui "images"
+                        # list as a second copy of the picture under the panel
+                        ui_extra = dict(ui_extra or {})
+                        ui_extra["rn_run_images"] = _simgs
+                except Exception as exc:
+                    print("[RedNode Workspace] the built-in save failed: %s" % exc,
+                          flush=True)
 
         _empty = None
         if rig_image is None or result_latent_out is None:

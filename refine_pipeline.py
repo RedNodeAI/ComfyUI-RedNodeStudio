@@ -662,6 +662,10 @@ class RedNodeStudioDetailer:
     def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
         self._rn_prompt = prompt              # a rig's own sampler chain reads it
+        from . import builtin_chain as _chain
+        if _chain.done("detailer"):
+            _run_events.skip("detailer", "Detailer", "done inside the Workspace")
+            return (image, "the Workspace already ran the Detailer passes; passed through")
         # A paint-door run or an external-sampler workspace hands over no image
         # at all; pass the nothing along like Review and Save do, don't crash
         if image is None:

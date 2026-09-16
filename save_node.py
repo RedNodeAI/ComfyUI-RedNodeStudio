@@ -1278,6 +1278,13 @@ class RedNodeSave:
             images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo)
 
     def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None):
+        from . import builtin_chain as _chain
+        if _chain.done("save"):
+            from . import run_events as _re
+            _re.skip("save", "Save", "filed by the Workspace")
+            print("[RedNode Save] the Workspace already filed this run; passed through",
+                  flush=True)
+            return {"ui": {"images": []}, "result": (images,)}
         # an empty run (external mode, or a paint-only queue) passes None through
         # Review: file nothing, quietly, rather than TypeError inside the writer
         if images is None:
