@@ -30,7 +30,8 @@ import torch
 from . import reangle as _engine
 
 MODES = ("face", "head", "person")
-REFS = ("subject", "subject2", "subject3")
+# the Subject gallery's people, or "own": the Swap page's own gallery
+REFS = ("subject", "subject2", "subject3", "own")
 ORDERS = ("auto", "body_first", "face_first")
 
 DEFAULTS = {

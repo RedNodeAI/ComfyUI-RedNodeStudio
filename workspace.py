@@ -462,7 +462,9 @@ RUN_TAB_NAMES = {"subject": "Subject", "scene": "Scene", "moodboard": "Moodboard
 # IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only ever captioned.
 # Their pictures never reach the model, so they work on any rig.
 TEXT_TABS = ("text_style", "text_subject", "text_scene")
-IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard") + TEXT_TABS
+# swap_ref: the Swap page's own gallery, read only when Swap's reference is "own"
+IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard",
+              "swap_ref") + TEXT_TABS
 # the tabs with an auto prompt, and the ones whose selection is a list
 AUTO_TABS = ("subject", "scene", "moodboard", "i2i") + TEXT_TABS
 MULTI_TABS = ("moodboard",) + TEXT_TABS
@@ -792,6 +794,8 @@ def parse_config(config_json):
                          "auto": (bool(v.get("auto")) if isinstance(v, dict) and "auto" in v
                                   else None)}
                 for k, v in pm_in.items() if isinstance(v, dict)}
+        if name == "swap_ref":
+            tabs[name]["on"] = True          # Swap's own switch decides; this has none
         if name in TEXT_TABS:
             # an Image to text tab exists to be captioned: its switch is the auto prompt's
             tabs[name]["auto"]["on"] = tabs[name]["on"]
@@ -2622,13 +2626,17 @@ class RedNodeStudioWorkspace:
             # Person 2 and 3 are the Subject gallery's picks in order, or the old
             # galleries of the same name on a workflow saved before they merged
             _people = [subject] + list(extra or [])
-            _pk = {"subject": 0, "subject2": 1, "subject3": 2}.get(_sw["reference"], 0)
-            _ref = (_people[_pk] if _pk < len(_people) and _people[_pk] is not None
-                    else tab_image(_sw["reference"]))
+            if _sw["reference"] == "own":
+                _ref = tab_image("swap_ref")
+                _ref_name = "Swap page's own"
+            else:
+                _pk = {"subject": 0, "subject2": 1, "subject3": 2}.get(_sw["reference"], 0)
+                _ref = (_people[_pk] if _pk < len(_people) and _people[_pk] is not None
+                        else tab_image(_sw["reference"]))
+                _ref_name = _sw["reference"].replace("subject", "Subject ").strip()
             if _ref is None:
-                print("[RedNode Workspace] swap: the %s tab is off or empty, so there is "
-                      "no reference; the source is used as it is"
-                      % _sw["reference"].replace("subject", "Subject ").strip(), flush=True)
+                print("[RedNode Workspace] swap: the %s gallery is off or empty, so there "
+                      "is no reference; the source is used as it is" % _ref_name, flush=True)
             else:
                 try:
                     from . import swap as _swap

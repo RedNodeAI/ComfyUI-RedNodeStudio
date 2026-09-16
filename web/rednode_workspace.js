@@ -1062,12 +1062,12 @@ const TEXT_TABS_META = {
 };
 const MULTI_TAB_IDS = ["moodboard", ...TEXT_TAB_IDS];
 const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
-const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", ...TEXT_TAB_IDS]);
+const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", ...TEXT_TAB_IDS]);
 // Galleries are grouped into named COLLECTIONS ("red dress", "castle set"…). The legacy
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py
 // and old workflows read exactly what they always did.
 const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      ...TEXT_TAB_IDS];
+                      "swap_ref", ...TEXT_TAB_IDS];
 // tabs that carry a built-in Prompt Converter, matching workspace.py
 const CONVERTER_TABS = ["i2i", "subject", "scene"];
 const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_style",
@@ -1129,7 +1129,7 @@ export function readCfg(node) {
   if (!d || typeof d !== "object") d = {};
   d.tabs = d.tabs && typeof d.tabs === "object" ? d.tabs : {};
   for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
+                      "swap_ref", ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
     const t = (d.tabs[name] = d.tabs[name] && typeof d.tabs[name] === "object" ? d.tabs[name] : {});
     t.images = Array.isArray(t.images) ? t.images : [];
     if (MULTI_TAB_IDS.includes(name)) t.sel = Array.isArray(t.sel) ? t.sel : (typeof t.sel === "number" ? [t.sel] : []);
@@ -1140,6 +1140,7 @@ export function readCfg(node) {
                    : name === "i2i" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode);
     if (TEXT_TAB_IDS.includes(name)) t.auto.on = !!t.on;   // the tab's switch runs it
+    if (name === "swap_ref") t.on = true;                  // Swap's switch decides
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
                                || Array.isArray(t.people_meta))) {
       t.people_meta = {};
@@ -13571,7 +13572,7 @@ const RA_AZ = ["front view", "front-right quarter view", "right side view", "bac
 const RA_EL = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle shot"];
 const RA_DI = ["close-up", "medium shot", "wide shot"];
 const SW_MODES = ["face", "head", "person"];
-const SW_REFS = ["subject", "subject2", "subject3"];
+const SW_REFS = ["subject", "subject2", "subject3", "own"];
 const SW_MODE_TIP = {
   face: "Only the face. Hair, head shape and everything else stay from the picture (BFS Face).",
   head: "The whole head, hair included: the strongest identity (BFS Head, the author's recommended one).",
@@ -13805,9 +13806,10 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
   const open = (node._rnSwapOpen ||= { engine: false });
-  const refName = (r) => r === "subject" ? "Main subject" : "Person " + r.replace("subject", "");
+  const refName = (r) => r === "subject" ? "Main subject" : r === "own" ? "Own picture"
+    : "Person " + r.replace("subject", "");
   const card = sectionCard("SWAP", "#e08fb0",
-    !S.on ? "off" : S.mode + " from " + refName(S.reference),
+    !S.on ? "off" : capFirst(S.mode) + " from " + refName(S.reference),
     flat ? null : { node, key: "i2i_swap", open: !!S.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
@@ -13836,7 +13838,7 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
     for (const m of SW_MODES) {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (S.mode === m ? " on" : "");
-      b.textContent = m; b.title = SW_MODE_TIP[m];
+      b.textContent = capFirst(m); b.title = SW_MODE_TIP[m];
       b.onclick = () => { S.mode = m; writeCfg(node); render(node); };
       mseg.appendChild(b);
     }
@@ -13849,13 +13851,32 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (S.reference === r ? " on" : "");
       b.textContent = refName(r);
-      b.title = "The reference person, as picked in order in the Subject gallery: the "
-              + "main subject, then Person 2 and 3. The Subject tab must be on.";
+      b.title = r === "own"
+        ? "A picture from the gallery below, kept for Swap alone: the person to put "
+          + "onto the picture, with no need for the Subject tab."
+        : "The reference person, as picked in order in the Subject gallery: the "
+          + "main subject, then Person 2 and 3. The Subject tab must be on.";
       b.onclick = () => { S.reference = r; writeCfg(node); render(node); };
       rseg.appendChild(b);
     }
     mrow.append(ml, mseg, rl, rseg);
     card.appendChild(mrow);
+    // OWN PICTURE: a gallery of Swap's own, one picture picked
+    if (S.reference === "own") {
+      const g = document.createElement("div");
+      g.className = "rn-ws-swapgal";
+      const n = document.createElement("div");
+      n.className = "rn-ws-note";
+      n.textContent = node._rnCfg.tabs.swap_ref.images.length
+        ? "The picked picture is the person put onto the picture."
+        : "Add a picture of the person here. Until then the swap is skipped.";
+      g.appendChild(n);
+      galleryBody(node, g, "swap_ref",
+                  { label: "Swap picture",
+                    hint: "The person to put onto the picture. Add pictures and pick one." },
+                  { layout: "tabs" });
+      card.appendChild(g);
+    }
     // prompt: the author's words for the mode, or your own
     const prow = document.createElement("div");
     prow.className = "rn-ws-row";

@@ -317,6 +317,10 @@ cheap to judge.
   under the big one; a click puts it up, and full screen and the right-click
   menu open on that picture. The live picture shows up to four pictures of a
   batch forming, two to a row, instead of only the first
+- Swap on Img2Img has an Own picture reference beside Main subject, Person 2
+  and Person 3: a gallery on the Swap page, kept for the swap alone, so the
+  person to put in does not have to be the Subject. Face, Head and Person
+  read with capitals
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a
