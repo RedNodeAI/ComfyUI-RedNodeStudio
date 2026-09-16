@@ -803,6 +803,12 @@ css.textContent = `
 .rn-ws-stepper input{width:48px;height:28px;box-sizing:border-box;text-align:center;
   background:#0f1114;border:1px solid #33373d;border-left:0;border-right:0;color:#fff}
 .rn-ws-stepper.on input,.rn-ws-stepper.on button{border-color:#b8283c}
+/* the number sits dead centre: no padding, and no native spin arrows reserving room
+   on the right (the minus and plus buttons already do that job) */
+.rn-ws-stepper input{text-align:center!important;padding:0!important;
+  -moz-appearance:textfield;appearance:textfield}
+.rn-ws-stepper input::-webkit-outer-spin-button,
+.rn-ws-stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .rn-ws-shdial{display:flex;align-items:center;gap:8px}
 .rn-ws-shdial .k{font-size:12px;color:#9aa0a8;min-width:52px}
 .rn-ws-shdial input[type=range]{flex:1;min-width:0;height:20px}
