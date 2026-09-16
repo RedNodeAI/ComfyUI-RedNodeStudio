@@ -28,6 +28,7 @@ hard error kills a queue over an optional dependency.
 """
 
 import json
+import re
 
 import torch
 import torch.nn.functional as F
@@ -388,8 +389,8 @@ def _seedvr2(image, s, seed):
                 if not (s["tiled"] and tile > 64 and _is_oom(exc)):
                     raise
                 tile = max(64, tile // 2)
-                print("[RedNode Detailer] SeedVR2 ran out of memory; the tile is "
-                      "halved to %d and the pass tried again" % tile, flush=True)
+                _say("SeedVR2 ran out of memory; the tile is "
+                     "halved to %d and the pass tried again" % tile)
                 try:
                     import comfy.model_management as _mm
                     _mm.soft_empty_cache()
@@ -422,8 +423,8 @@ def _pass_prompt_row(ws_cfg, s):
                     return rows[idx]
             except ValueError:
                 pass
-        print("[RedNode Detailer] prompt row %r is not on the Prompts tab; "
-              "using the rig's" % want, flush=True)
+        _say("prompt row %r is not on the Prompts tab; "
+             "using the rig's" % want)
     return _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"], s["rig"])
 
 
@@ -582,6 +583,29 @@ def _sam3_mask(image, target, threshold, sam_model="", precision=""):
 
 from . import run_events as _run_events
 
+PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
+              "usdu": "Tiled upscale"}
+WARN_WORDS = ("failed", "missing", "passed through", "not installed",
+              "out of memory", "could not", "skipped")
+
+
+def pass_name(s):
+    """A pass as its card names it: Sampler pass, Face detailer, ..."""
+    if s.get("type") == "detailer":
+        t = str(s.get("target") or "face").strip() or "face"
+        return "%s detailer" % (t[:1].upper() + t[1:])
+    return PASS_NAMES.get(s.get("type"), str(s.get("type") or "pass").capitalize())
+
+
+def _say(line, level=None):
+    """A Detailer line on the console and in the Run tab's log."""
+    print("[RedNode Detailer] " + line, flush=True)
+    if level is None:
+        low = line.lower()
+        level = "warn" if any(w in low for w in WARN_WORDS) else "info"
+    lead = "Detailer " if re.match(r"pass \d+ of \d+", line) else "Detailer: "
+    _run_events.note(lead + line, level)
+
 class RedNodeStudioDetailer:
     @classmethod
     def INPUT_TYPES(cls):
@@ -629,8 +653,8 @@ class RedNodeStudioDetailer:
             j = max(0, min(int(j), len(t["images"]) - 1))
             return _ws.load_image(t["images"][j], target)
         except Exception as exc:
-            print("[RedNode Detailer] could not load the %s reference: %s"
-                  % (name, exc), flush=True)
+            _say("could not load the %s reference: %s"
+                 % (name, exc))
             return None
 
     @staticmethod
@@ -708,16 +732,19 @@ class RedNodeStudioDetailer:
                 tap = lambda img, label: _stages.record(
                     img, label, prompt=prompt, source="detailer", px=cfg["tap_px"])
             except Exception as exc:
-                print("[RedNode Detailer] taps unavailable: %s" % exc, flush=True)
+                _say("taps unavailable: %s" % exc)
         if tap:
             tap(image, "Detailer in")
 
         out = image
         for i, (card_idx, s) in enumerate(stages, 1):
             self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
+            name = pass_name(s)
             _run_events.progress("detailer", "Detailer", current=i, of=len(stages),
-                                 what=str(s.get("title") or s["type"]))
-            tag = "%d/%d %s" % (i, len(stages), s["type"])
+                                 what=name)
+            tag = "pass %d of %d, %s" % (i, len(stages), name)
+            nimg = int(out.shape[0])
+            _say("%s started%s" % (tag, " on %d images" % nimg if nimg > 1 else ""))
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
                      sam_precision=cfg["sam_precision"])
             pass_in = out
@@ -731,7 +758,7 @@ class RedNodeStudioDetailer:
                         tag, count, freed // (1024 * 1024))
                 except Exception as exc:
                     line = "%s: free VRAM failed: %s" % (tag, exc)
-                print("[RedNode Detailer] " + line, flush=True)
+                _say(line)
                 report.append(line)
             # A SEEDVR2 UPSCALE loads no rig: the pack's own loaders do the
             # loading, and a pass that could not run passes the picture on.
@@ -747,18 +774,19 @@ class RedNodeStudioDetailer:
                     if why is not None:
                         up = None
                 else:
-                    up, why = _seedvr2(out, s, seed + i)
+                    self._rn_live_label = "upscale %d of %d" % (i, len(stages))
+                    up, why = self._upscale_each(out, s, seed + i)
                 if up is not None:
-                    line = ("%s: SeedVR2 %s on %s, %d x %d kept" % (
+                    line = ("%s: %s on the %s, %d x %d kept" % (
                                 tag, s["size"], s["region"], out.shape[2], out.shape[1])
                             if s["region"] else
-                            "%s: SeedVR2 %s, %d x %d -> %d x %d" % (
+                            "%s: %s, %d x %d to %d x %d" % (
                                 tag, s["size"], out.shape[2], out.shape[1],
                                 up.shape[2], up.shape[1]))
                     out = self._tone(up, pass_in, s, tag, report)
                 else:
                     line = "%s: %s; passed through" % (tag, why)
-                print("[RedNode Detailer] " + line, flush=True)
+                _say(line)
                 report.append(line)
                 if tap and up is not None:
                     tap(out, "%d upscale %s" % (i, s["size"]))
@@ -770,13 +798,13 @@ class RedNodeStudioDetailer:
                 if s["type"] == "usdu":
                     line = ("%s: a tiled upscale needs a model rig and %r is an "
                             "engine rig; passed through" % (tag, rigd.get("name") or s["rig"]))
-                    print("[RedNode Detailer] " + line, flush=True)
+                    _say(line)
                     report.append(line)
                     continue
                 out, lines = self._handler_pass(out, rigd, s, ws_cfg,
                                                 seed + i, tag, tap)
                 for line in lines:
-                    print("[RedNode Detailer] " + line, flush=True)
+                    _say(line)
                     report.append(line)
                 out = self._tone(out, pass_in, s, tag, report)
                 continue
@@ -788,7 +816,7 @@ class RedNodeStudioDetailer:
                     tag, s["rig"] or rig_name or "(active)",
                     "model" if model is None else
                     "clip" if clip is None else "vae")
-                print("[RedNode Detailer] " + line, flush=True)
+                _say(line)
                 report.append(line)
                 continue
             rig = _rig_settings(ws_cfg, s["rig"])
@@ -816,16 +844,14 @@ class RedNodeStudioDetailer:
                         tag="Detailer LoRAs (%s)" % lc["name"])
                     clip = _c2 if _c2 is not None else clip
                 except Exception as exc:
-                    print("[RedNode Detailer] LoRAs failed on this pass: %s" % exc,
-                          flush=True)
+                    _say("LoRAs failed on this pass: %s" % exc)
             if s["lora"] and s["lora"] != "None" and s["lora_strength"] > 0:
                 try:
                     model = _pass_lora(model, s["lora"], s["lora_strength"])
-                    print("[RedNode Detailer] pass LoRA %s @ %.2f" % (
-                        s["lora"], s["lora_strength"]), flush=True)
+                    _say("pass LoRA %s at %.2f" % (s["lora"], s["lora_strength"]))
                 except Exception as exc:
-                    print("[RedNode Detailer] pass LoRA %s failed: %s" % (
-                        s["lora"], exc), flush=True)
+                    _say("pass LoRA %s failed: %s" % (
+                        s["lora"], exc))
             # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
             # the same text the main render used, wildcards rolled on this seed.
             # Typed text in the pass wins, the standing rule.
@@ -846,9 +872,9 @@ class RedNodeStudioDetailer:
                            or s["use_moodboard"] or s["use_picture"])
             rig_is_krea2 = rig.get("clip_type") == "krea2"
             if refs_wanted and not rig_is_krea2:
-                print("[RedNode Detailer] references are Krea 2 conditioning and "
-                      "rig %r is not a Krea 2 rig; encoding plain text"
-                      % (rig_name or "(active)"), flush=True)
+                _say("references are Krea 2 conditioning and "
+                     "rig %r is not a Krea 2 rig; encoding plain text"
+                     % (rig_name or "(active)"))
             # PICTURE makes the encode depend on what the pass is looking at
             # (the frame for a sampler pass, the crop for a detailer), so the
             # encode is a function and runs where the picture is known.
@@ -891,8 +917,8 @@ class RedNodeStudioDetailer:
                                              if s["use_moodboard"] else None),
                             output_latent=target, settings=settings)
                     except Exception as exc:
-                        print("[RedNode Detailer] reference encode failed, plain "
-                              "text instead: %s" % exc, flush=True)
+                        _say("reference encode failed, plain "
+                             "text instead: %s" % exc)
                 return _encode_text(clip, text), _encode_text(clip, s["negative"])
 
             pos = neg = None
@@ -930,7 +956,7 @@ class RedNodeStudioDetailer:
                             "%.2f" % (tag, rig_name, steps, window, cfg_v,
                                       sampler, scheduler, sr["denoise"]))
                     if abs(sr["scale"] - 1.0) >= 1e-3:
-                        line += ", scale %.2f -> %d x %d" % (
+                        line += ", scale %.2f to %d x %d" % (
                             sr["scale"], out.shape[2], out.shape[1])
                 elif s["type"] == "usdu":
                     before = (out.shape[2], out.shape[1])
@@ -938,10 +964,10 @@ class RedNodeStudioDetailer:
                         return self._usdu(frame, model, pos, neg, vae, _sr, _seed,
                                           steps, cfg_v, sampler, scheduler)
                     out, why = self._each_frame(out, _one)
-                    line = "%s: tiled upscale on rig %r, %s" % (
+                    line = "%s: on rig %r, %s" % (
                         tag, rig_name,
                         why or ("x%.2f %s, %d steps, %s/%s, denoise %.2f, tile %d, "
-                                "%d x %d -> %d x %d"
+                                "%d x %d to %d x %d"
                                 % (sr["upscale_by"], sr["usdu_model"] or "resize",
                                    steps, sampler, scheduler, sr["denoise"],
                                    sr["usdu_tile"], before[0], before[1],
@@ -953,14 +979,14 @@ class RedNodeStudioDetailer:
                                             start, end,
                                             encode_for=_encode if use_picture else None)
                     out, why = self._each_frame(out, _one)
-                    line = "%s: %s on rig %r, %s" % (
-                        tag, s["target"], rig_name,
+                    line = "%s: on rig %r, %s" % (
+                        tag, rig_name,
                         why or ("%d steps%s, %s/%s, denoise %.2f"
                                 % (steps, window, sampler, scheduler,
                                    sr["denoise"])))
                 if reps > 1:
                     line += ", repeat %d of %d" % (r + 1, reps)
-                print("[RedNode Detailer] " + line, flush=True)
+                _say(line)
                 report.append(line)
                 if tap and not why:
                     tap(out, "%d %s%s" % (i, s["target"] if s["type"] == "detailer"
@@ -990,8 +1016,8 @@ class RedNodeStudioDetailer:
         if scheduler not in comfy.samplers.KSampler.SCHEDULERS:
             # the pack's own schedules are built for the built-in sampler; the
             # tiler takes core's names only
-            print("[RedNode Detailer] scheduler %r is the pack's own; the tiled "
-                  "upscale runs simple" % scheduler, flush=True)
+            _say("scheduler %r is the pack's own; the tiled "
+                 "upscale runs simple" % scheduler)
             scheduler = "simple"
         img = frame[:, :, :, :3]
         kw = {"model": model, "positive": pos, "negative": neg, "vae": vae,
@@ -1039,7 +1065,7 @@ class RedNodeStudioDetailer:
         except Exception as exc:
             res = img
             line = "%s: tone lock failed: %s" % (tag, exc)
-        print("[RedNode Detailer] " + line, flush=True)
+        _say(line)
         report.append(line)
         return res
 
@@ -1063,6 +1089,31 @@ class RedNodeStudioDetailer:
                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
         return self._paste(frame, crop, up.to(crop.dtype), mask, (y0, y1, x0, x1),
                            s["feather"], s["blend"]), None
+
+    def _upscale_each(self, image, s, seed):
+        """SeedVR2 on every picture of a batch, one call each. It is a video
+        upscaler: a batch in one call is a clip, and a clip of two came back as
+        one picture. Any picture failing passes the whole batch through."""
+        n = int(image.shape[0])
+        if n <= 1:
+            return _seedvr2(image, s, seed)
+        base = getattr(self, "_rn_live_label", "")
+        outs = []
+        try:
+            for k in range(n):
+                self._rn_live_label = base + " \u00b7 image %d of %d" % (k + 1, n)
+                up, why = _seedvr2(image[k:k + 1], s, seed + k)
+                if up is None:
+                    return None, "image %d of %d: %s" % (k + 1, n, why)
+                outs.append(up)
+        finally:
+            self._rn_live_label = base
+        h, w = outs[0].shape[1], outs[0].shape[2]
+        outs = [o if o.shape[1:3] == (h, w)
+                else F.interpolate(o.permute(0, 3, 1, 2), size=(h, w), mode="bilinear",
+                                   align_corners=False).permute(0, 2, 3, 1)
+                for o in outs]
+        return torch.cat(outs, 0), None
 
     def _each_frame(self, image, fn):
         """A batch goes through a pass one frame at a time.
@@ -1096,8 +1147,8 @@ class RedNodeStudioDetailer:
         missed = [k + 1 for k, w in enumerate(whys) if w]
         why = whys[0] if len(missed) == n else None
         if why is None and missed:
-            print("[RedNode Detailer] passed through on image %s of %d: %s"
-                  % (", ".join(map(str, missed)), n, whys[missed[0] - 1]), flush=True)
+            _say("passed through on image %s of %d: %s"
+                 % (", ".join(map(str, missed)), n, whys[missed[0] - 1]))
         return torch.cat(outs, 0), why
 
     def _ksample(self, model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
@@ -1135,9 +1186,8 @@ class RedNodeStudioDetailer:
         if s.get("crop_res"):
             f = s["crop_res"] / max(image.shape[1], image.shape[2])
             work = self._resize(image, f)
-            print("[RedNode Detailer] frame %d x %d, working at %d x %d"
-                  % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]),
-                  flush=True)
+            _say("frame %d x %d, working at %d x %d"
+                 % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]))
         lat = {"samples": vae.encode(work[:, :, :, :3])}
         self._hold_before_sampling()
         out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
@@ -1168,6 +1218,8 @@ class RedNodeStudioDetailer:
             return None, None, "nothing matched %r; passed through" % s["target"]
         box = grow_to_aspect(box, h, w, region_aspect(box[3] - box[2],
                                                       box[1] - box[0], "auto"))
+        _say("found the %s, a %d x %d area" % (s["target"], box[3] - box[2],
+                                               box[1] - box[0]))
         return mask, box, None
 
     @staticmethod
@@ -1199,9 +1251,9 @@ class RedNodeStudioDetailer:
         if s.get("crop_res"):
             f = s["crop_res"] / max(crop.shape[1], crop.shape[2])
             work = self._resize(crop, f)
-            print("[RedNode Detailer] %s crop %d x %d, working at %d x %d"
-                  % (s["target"], crop.shape[2], crop.shape[1],
-                     work.shape[2], work.shape[1]), flush=True)
+            _say("%s crop %d x %d, working at %d x %d"
+                 % (s["target"], crop.shape[2], crop.shape[1],
+                    work.shape[2], work.shape[1]))
         else:
             work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
         if encode_for is not None:

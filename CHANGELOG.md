@@ -312,6 +312,22 @@ cheap to judge.
   own pages. The finished picture opens full screen on a click or the Full
   screen button, and a right-click on it gives the Image Review menu (Copy
   image, Copy prompt, Open in a new tab, Rerun)
+- Batches on the Run tab: the estimate counts the batch, the pass line and the
+  chips say "batch of N", and every finished picture sits as a thumbnail
+  under the big one; a click puts it up, and full screen and the right-click
+  menu open on that picture. The live picture shows up to four pictures of a
+  batch forming, two to a row, instead of only the first
+- The Run tab's log no longer says a model unloaded and loaded again when the
+  sampler dials swap it for their patched copy. Nothing left the card; a model
+  is said to unload only when its memory comes back
+- The Detailer reports on the Run tab: each pass is named the way its card
+  is (Sampler pass, Face detailer, SeedVR2 upscale, Tiled upscale) as it starts
+  and when it finishes, with what it did, and the pipeline box shows the pass
+  running. Found targets, working sizes, LoRAs, tone lock, freed VRAM and
+  anything that failed or passed through are logged too, failures as warnings
+- A SeedVR2 upscale pass keeps every picture of a batch. SeedVR2 is a video
+  upscaler and read a batch as one clip, so a batch of two came back as one
+  picture; each picture now goes through on its own
 - Copy prompt works for a run the Workspace rendered itself. With no sampler
   node to trace, it used to answer that the prompt was no longer available;
   it now reads the Workspace's own prompt row
