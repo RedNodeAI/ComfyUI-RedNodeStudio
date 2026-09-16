@@ -11,7 +11,8 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { runTabBody, RUN_CSS, runLit, listenRun } from "./rednode_ws_run.js";
+import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
+import { mountDetailerPanel } from "./rednode_advanced.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
@@ -12878,6 +12879,52 @@ function identityTabs(node, body) {
   else converterSection(node, body, sub, { flat: true });
 }
 
+// ---- the Detailer tab -------------------------------------------------------------
+// The RedNode Studio Detailer's own panel, run by the Workspace after the render. The
+// settings live in the Workspace's config, so the workflow needs no Detailer node.
+function detailerTab(node, body) {
+  const cfg = node._rnCfg;
+  cfg.detailer = (cfg.detailer && typeof cfg.detailer === "object") ? cfg.detailer : {};
+  const D = cfg.detailer;
+  const passes = (D.stages || []).filter((s) => s.on && s.type !== "title").length;
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const on = document.createElement("button");
+  on.className = "rn-ws-sw" + (cfg.detailer_on ? " on" : "");
+  on.dataset.choice = "detailer_on";
+  on.title = cfg.detailer_on
+    ? "The Workspace runs these passes after the render. Click to switch them off."
+    : "Off: the render goes out as it is. Click to run these passes after it.";
+  on.onclick = () => { cfg.detailer_on = !cfg.detailer_on; writeCfg(node); render(node); };
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Detailer";
+  bar.append(on, nm);
+  for (const text of [
+    !cfg.detailer_on ? "Off" : `${passes} Pass${passes === 1 ? "" : "es"} on`,
+    cfg.draft ? "Draft skips it" : "Runs after the render, before Post FX",
+  ]) {
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  body.appendChild(bar);
+  if (!cfg.detailer_on) {
+    const note = document.createElement("div");
+    note.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-offnote";
+    note.textContent = "The Detailer is off, so the render goes out as it is. The passes "
+                     + "below keep their settings for when it is on. A RedNode Studio "
+                     + "Detailer node on the canvas still runs its own passes.";
+    body.appendChild(note);
+  }
+  const host = configHost(node, "detailer", "RedNodeStudioDetailer");
+  const el = document.createElement("div");
+  el.className = "rn-ws-card rn-ws-dethost";
+  body.appendChild(el);
+  mountDetailerPanel(host, el);
+}
+
 // ---- Moodboard as sub-tabs ------------------------------------------------------
 // The same strip and status bar as Krea 2 Identity: Gallery, Boosts, Auto prompt.
 // The Moodboard has no converter; it is the style authority.
@@ -14534,6 +14581,8 @@ const tabLit = (cfg, id) =>
                          && (cfg.prompts?.rows?.some?.((x) => x.frame && String(x.frame.camera || "").trim())
                              || String(cfg.tabs?.i2i?.reangle?.studio || "").trim()))
   : id === "run" ? runLit()
+  : id === "detailer" ? !!(cfg.detailer_on
+                           && (cfg.detailer?.stages || []).some((s) => s.on && s.type !== "title"))
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
   // IMG2IMG DOES NOT NEED A GALLERY IMAGE ( the dot stays
@@ -14736,11 +14785,12 @@ export function render(node) {
   else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
   else if (cur === "moodboard") moodboardTabs(node, body);
   else if (cur === "run") runTabBody(node, body);
+  else if (cur === "detailer") detailerTab(node, body);
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (!["i2i", "identity", "moodboard", "run"].includes(cur)) {
+  if (!["i2i", "identity", "moodboard", "run", "detailer"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

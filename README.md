@@ -84,7 +84,13 @@ pass, decode, Detailer, Post FX, Save) with its state, time and step count; the 
 a VRAM chart with model loads and unloads marked and the models on the card now; and a log of what
 is happening in plain words. When the run is done the live picture shows the finished one. The
 Review sub-tab keeps every finished picture from this Workspace like an Image Review node, and
-the Stages sub-tab shows the last run's Stage Taps like a Stage View node.
+the Stages sub-tab shows the last run's Stage Taps like a Stage View node. The Save sub-tab
+holds RedNode Save's settings: switched on, the Workspace files every finished picture itself.
+
+**Detailer.** The RedNode Studio Detailer's passes, run by the Workspace after the render and
+before Post FX when switched on, so a single Workspace renders, details, grades and files. A
+Detailer, Post Process or Save node already in an older workflow steps aside for any step the
+Workspace did.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain

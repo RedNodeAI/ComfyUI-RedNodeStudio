@@ -22,6 +22,8 @@ export const TAB_ORDER = [
   { id: "moodboard", label: "Moodboard", group: "mood" },
   // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
+  // the Detailer passes, run by the Workspace itself (refine_pipeline.py)
+  { id: "detailer", label: "Detailer", group: "edit" },
   { id: "post", label: "Post", group: "post" },
   // queue the workflow and watch it go (rednode_ws_run.js)
   { id: "run", label: "Run", group: "run" },

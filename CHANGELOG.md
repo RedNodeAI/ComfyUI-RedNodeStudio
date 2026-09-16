@@ -256,6 +256,15 @@ cheap to judge.
   the diffusion model is not reloaded for every pass
 - The Workspace's Post tab has an on and off switch. Off, RedNode Post Process
   passes the picture through and the cards keep their settings
+- The Workspace runs the Detailer, Post FX and the save itself. A Detailer tab
+  (between Krea 2 Identity and Post) holds the RedNode Studio Detailer's own
+  panel with an on and off switch; the Run tab's Save sub-tab holds RedNode
+  Save's panel with its own switch. After the render the Workspace runs the
+  passes, then the Post chain, then files the picture, and its image output is
+  the finished picture, so one node is a whole workflow. A Detailer, Post
+  Process or Save node already after the Workspace passes the picture through
+  when the Workspace did that step, so nothing runs twice. The Run tab plans and
+  times these steps either way
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

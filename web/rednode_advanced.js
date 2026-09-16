@@ -166,6 +166,12 @@ function wireProgress() {
       }
     };
     walk(app.graph);
+    // the Workspace's own Detailer tab: its passes run under the Workspace's id
+    for (const h of advHosts) {
+      if (String(h.id) !== want) continue;
+      h._rnAdvActive = d.state === "run" ? d.stage : null;
+      h._rnAdvRender?.();
+    }
   });
 }
 
@@ -431,8 +437,16 @@ function writeCfg(node, d) {
   node.graph?.setDirtyCanvas(true, false);
 }
 
-function buildPanel(node) {
-  if (node._rnAdvPanel) return;
+// THE SAME PANEL, HOSTED: the Workspace's Detailer tab. A host carries a config
+// widget of its own (backed by the Workspace's settings) and gets no DOM widget.
+const advHosts = new Set();
+export function mountDetailerPanel(host, el) {
+  advHosts.add(host);
+  buildPanel(host, el);
+}
+
+function buildPanel(node, hostEl = null) {
+  if (node._rnAdvPanel && !hostEl) return;
   const cw = node.widgets?.find((x) => x.name === "config");
   if (!cw) { requestAnimationFrame(() => buildPanel(node)); return; }
   cw.type = "hidden";
@@ -443,8 +457,8 @@ function buildPanel(node) {
   if (SAVED === null) fetchPresets().then(() => node._rnAdvRender?.());
   wireProgress();
 
-  const wrap = document.createElement("div");
-  wrap.className = "rn-adv";
+  const wrap = hostEl || document.createElement("div");
+  wrap.classList.add("rn-adv");
 
   const sel = (values, current, title, onpick, emptyLabel) => {
     const el = document.createElement("select");
@@ -1420,6 +1434,10 @@ function buildPanel(node) {
     wrap.appendChild(hint);
   };
   render();
+  if (hostEl) {
+    node._rnAdvRender = render;
+    return;
+  }
 
   const widget = node.addDOMWidget("advanced_ui", "advanced_ui", wrap, {
     getValue: () => "",

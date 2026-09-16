@@ -4,6 +4,7 @@ import { api } from "../../scripts/api.js";
 import { writeCfg, render, setupProblems } from "./rednode_workspace.js";
 import { mountReviewPanel, pushReviewEntry } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
+import { mountSavePanel } from "./rednode_save.js";
 import { allNodes } from "./rednode_graph.js";
 
 // the Detailer, under its name and the one older workflows still carry
@@ -250,6 +251,10 @@ function nodeById(id) {
 }
 
 function onExecuted(d) {
+  const filed = d?.output?.rn_run_images;
+  if (Array.isArray(filed) && filed.length && RUN.status === "running") {
+    RUN.outputs.push({ rank: 5, images: filed.map((f) => ({ ...f })) });
+  }
   const images = d?.output?.images;
   if (!Array.isArray(images) || !images.length || RUN.status !== "running") return;
   const n = nodeById(d.display_node ?? d.node);
@@ -389,9 +394,11 @@ export function plannedStages(node, cfg) {
     out.push(["decode", "Decode"]);
   }
   const types = new Set(liveNodes().map((n) => n.type));
-  if ([...DETAILER_TYPES].some((t) => types.has(t))) out.push(["detailer", "Detailer"]);
-  if (types.has("RedNodePostProcess")) out.push(["post", "Post FX"]);
-  if (types.has("RedNodeSave")) out.push(["save", "Save"]);
+  const detOn = !!(cfg.detailer_on && (cfg.detailer?.stages || []).some((s) => s.on && s.type !== "title"));
+  const postOn = cfg.post_on !== false && Object.values(cfg.post || {}).some((f) => f?.on);
+  if (detOn || [...DETAILER_TYPES].some((t) => types.has(t))) out.push(["detailer", "Detailer"]);
+  if (postOn || types.has("RedNodePostProcess")) out.push(["post", "Post FX"]);
+  if (cfg.save_on || types.has("RedNodeSave")) out.push(["save", "Save"]);
   return out;
 }
 
@@ -423,7 +430,32 @@ const RUN_SUBS = [
                        + "Right-click one to copy it, open its folder, or run it again."],
   ["stages", "STAGES", "What each Stage Tap and the Detailer's taps photographed in the "
                        + "last run, with a wipe to compare two."],
+  ["save", "SAVE", "Where and how the Workspace files each finished picture."],
 ];
+
+// A stand-in node for a panel hosted on the Workspace: its config widget reads and
+// writes one key of the Workspace's settings, so the panel's own code saves there.
+export function configHost(node, key, type) {
+  node._rnHosts ||= {};
+  const h = (node._rnHosts[key] ||= { id: node.id, type });
+  node.properties ||= {};
+  const pk = `rn_${key}_panel`;
+  node.properties[pk] ||= {};
+  h.properties = node.properties[pk];
+  h.graph = node.graph;
+  h.size ||= [640, 480];
+  h.computeSize ||= () => h.size;
+  h.setSize ||= () => {};
+  h.widgets = [{
+    name: "config",
+    get value() { return JSON.stringify(node._rnCfg?.[key] || {}); },
+    set value(v) {
+      try { node._rnCfg[key] = JSON.parse(v || "{}"); } catch (e) { return; }
+      writeCfg(node);
+    },
+  }];
+  return h;
+}
 
 export function runTabBody(node, body) {
   listenRun();
@@ -446,6 +478,23 @@ export function runTabBody(node, body) {
     const host = el("div");
     body.appendChild(host);
     mountReviewPanel(reviewHost(node), host);
+    return;
+  }
+  if (sub === "save") {
+    const cfg = node._rnCfg;
+    const bar = el("div", "rn-ws-status");
+    const on = el("button", "rn-ws-sw" + (cfg.save_on ? " on" : ""));
+    on.dataset.choice = "save_on";
+    on.title = cfg.save_on
+      ? "The Workspace files every finished picture with these settings. Click to stop."
+      : "Off: nothing is filed by the Workspace. A RedNode Save node on the canvas still files.";
+    on.onclick = () => { cfg.save_on = !cfg.save_on; writeCfg(node); render(node); };
+    bar.append(on, el("span", "nm", "Save"),
+               el("span", "rn-ws-chip", cfg.save_on ? "Files each finished picture" : "Off"));
+    body.appendChild(bar);
+    const host = el("div");
+    body.appendChild(host);
+    mountSavePanel(configHost(node, "save", "RedNodeSave"), host);
     return;
   }
   if (sub === "stages") {

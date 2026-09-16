@@ -312,7 +312,7 @@ async function actOnMany(node, entries, body, verb) {
   // back to the newest image
   const n = rowCount();
   if (n) cursor = Math.max(0, Math.min(n - 1, cursor));
-  for (const nd of findNodes(NODE_NAME)) render(nd);
+  for (const nd of savePanels()) render(nd);
 }
 
 function cardMenu(node, entry, ev) {
@@ -480,7 +480,7 @@ async function refresh() {
     const alive = new Set(saved.map((e) => e.path));
     for (const p of [...selected]) if (!alive.has(p)) selected.delete(p);
   } catch (e) { saved = []; }
-  for (const n of findNodes(NODE_NAME)) render(n);
+  for (const n of savePanels()) render(n);
 }
 
 async function loadFolders() {
@@ -600,7 +600,7 @@ async function clearList(node) {
     clearArmed = true;
     setTimeout(() => {
       clearArmed = false;
-      for (const n of findNodes(NODE_NAME)) render(n);
+      for (const n of savePanels()) render(n);
     }, 4000);
     render(node);
     return;
@@ -695,7 +695,7 @@ async function queueEmpty() {
 const chimed = [];          // prompt ids already sounded, so two panels sound once
 let queueCheck = 0;         // bumped by every finish and every start; stale checks stop
 function runFinished(promptId) {
-  const modes = new Set(findNodes(NODE_NAME).map(soundMode));
+  const modes = new Set(savePanels().map(soundMode));
   const pid = promptId == null ? "" : String(promptId);
   if (modes.has("run") && !chimed.includes(pid)) {
     chimed.push(pid);
@@ -1305,28 +1305,33 @@ Click to bring it up above, or to pick it once something is selected. `
   wrap.appendChild(recent);
 }
 
-function build(node) {
-  if (!node.addDOMWidget || node._rnSaveEl) return;
+// THE SAME PANEL, HOSTED: the Run tab's Save sub-tab. A host carries a config widget
+// of its own, backed by the Workspace's settings, and is redrawn with the nodes.
+const saveHosts = new Set();
+function savePanels() {
+  return [...findNodes(NODE_NAME), ...saveHosts];
+}
+
+export function mountSavePanel(host, el) {
   injectStyle();
-  const w = findWidget(node, "config");
-  if (w) {                       // the JSON is the storage, the panel is the interface
-    w.hidden = true;
-    w.type = "hidden";
-    w.computeSize = () => [0, -4];
-  }
-  node._rnSaveCfg = readCfg(node);
-  const wrap = document.createElement("div");
-  wrap.className = "rn-sv-wrap";
+  host.properties ||= {};
+  host._rnSaveCfg = readCfg(host);
+  el.classList.add("rn-sv-wrap", "rn-sv-hosted");
   for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick",
                    "keydown", "contextmenu"]) {
-    wrap.addEventListener(t, (e) => e.stopPropagation());
+    el.addEventListener(t, (e) => e.stopPropagation());
   }
-  bindSliderWheel(wrap);      // wheel over the quality slider adjusts it
-  node._rnSaveEl = wrap;
+  bindSliderWheel(el);
+  host._rnSaveEl = el;
+  wireKeys(host, el);
+  saveHosts.add(host);
+  render(host);
+  refresh();
+  loadFolders();
+  loadPresets().then(() => render(host));
+}
 
-  // The culling loop. Arrows walk, K keeps or unkeeps, Delete removes. This is the
-  // case the whole panel is for: three hundred images made, and the job is deciding
-  // which six matter. Doing that through a mouse is the slow way round.
+function wireKeys(node, wrap) {
   arrowKeys(wrap, (dir) => {
     const n = rowCount();
     if (!n) return;
@@ -1354,6 +1359,31 @@ function build(node) {
     }
   });
   wrap.tabIndex = 0;                  // so the panel can receive the key at all
+}
+
+function build(node) {
+  if (!node.addDOMWidget || node._rnSaveEl) return;
+  injectStyle();
+  const w = findWidget(node, "config");
+  if (w) {                       // the JSON is the storage, the panel is the interface
+    w.hidden = true;
+    w.type = "hidden";
+    w.computeSize = () => [0, -4];
+  }
+  node._rnSaveCfg = readCfg(node);
+  const wrap = document.createElement("div");
+  wrap.className = "rn-sv-wrap";
+  for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick",
+                   "keydown", "contextmenu"]) {
+    wrap.addEventListener(t, (e) => e.stopPropagation());
+  }
+  bindSliderWheel(wrap);      // wheel over the quality slider adjusts it
+  node._rnSaveEl = wrap;
+
+  // The culling loop. Arrows walk, K keeps or unkeeps, Delete removes. This is the
+  // case the whole panel is for: three hundred images made, and the job is deciding
+  // which six matter. Doing that through a mouse is the slow way round.
+  wireKeys(node, wrap);
   const dom = node.addDOMWidget("rednode_save_ui", "rednode_save_ui", wrap, {
     serialize: false, getValue: () => "", setValue: () => {},
     getMinHeight: () => MIN_PANEL_H,
@@ -1453,7 +1483,7 @@ app.registerExtension({
       if (!id) return;
       if (d.state === "start") {
         pendingSaves.set(id, { message: String(d.message || "") });
-        for (const n of findNodes(NODE_NAME)) render(n);
+        for (const n of savePanels()) render(n);
         return;
       }
       pendingSaves.delete(id);
@@ -1461,7 +1491,7 @@ app.registerExtension({
         refresh(); // the keeper route has completed; replace the placeholder now
       } else {
         listNote = d.message ? `Final save failed: ${d.message}` : "Final save failed.";
-        for (const n of findNodes(NODE_NAME)) render(n);
+        for (const n of savePanels()) render(n);
       }
     });
   },
