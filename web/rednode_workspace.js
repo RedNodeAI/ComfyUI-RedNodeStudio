@@ -12903,7 +12903,8 @@ function chosenStrip(node, body, t, tabName) {
     strip.appendChild(n);
   };
   const entry = t.images[t.sel];
-  if (t.canvas !== "gallery") {
+  // only Img2Img can take its canvas from a wire; other tabs have no canvas field
+  if (tabName === "i2i" && t.canvas && t.canvas !== "gallery") {
     text(`The canvas comes from the wired ${t.canvas} input, so the gallery is not used.`);
   } else if (t.random) {
     text("Random is on: a picture from this collection is picked on every run.");

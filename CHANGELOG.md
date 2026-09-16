@@ -156,6 +156,15 @@ cheap to judge.
   so a row with an empty box still gets its caption. The No prompt warning
   counts a row an auto prompt feeds, and turning the camera words off no
   longer rebuilds a frame row without its injected captions
+- The camera switch on a prompt's Frame keeps Off after the panel redraws, and
+  reads Off while the Camera tab has cameras switched off. Picking Simple or
+  Advanced there turns the cameras back on
+- The Camera tab's master switch sits on its own card, bigger, with CAMERAS ON
+  or CAMERAS OFF written beside it
+- Switching a Plain box to a Krea 2 box keeps the typed prompt: the words move
+  into Subject when the Frame's boxes are empty
+- The Scene and Subject galleries no longer say the canvas comes from a wired
+  input. Only Img2Img has that choice; the other tabs show the chosen picture
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
