@@ -1012,7 +1012,7 @@ const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard"]);
 const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard"];
 // tabs that carry a built-in Prompt Converter, matching workspace.py
 const CONVERTER_TABS = ["i2i", "subject", "scene"];
-const AUTO_MODES = new Set(["subject", "scene_view", "scene_style",
+const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_style",
                             "i2i", "style", "people"]);
 // what Ollama is asked when the Question box is empty, matching autoprompt.py
 const DEFAULT_QUESTION = "Describe this image.";
@@ -4635,6 +4635,31 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         row.append(im, pb);
         pc.appendChild(row);
       }
+      if (tabName === "scene") {
+        // WHAT THE SCENE GIVES: the place, what is going on, or only the look
+        const SCENE_READS = [
+          ["scene_view", "Background", "The place: location, layout, light and camera. "
+                                       + "People are left out, only 'a person'."],
+          ["scene_action", "Situation", "What is happening: the activity, where the people "
+                                        + "are and what they do. Nobody's looks are described."],
+          ["scene_style", "Style", "Only the look: palette, lighting, texture and rendering."],
+        ];
+        const srow = document.createElement("div");
+        srow.className = "rn-ws-row rn-ws-sceneread";
+        srow.style.flexWrap = "wrap";
+        const sl = document.createElement("span");
+        sl.className = "rn-ws-swlabel";
+        sl.textContent = "Take from the scene";
+        const seg = segSwitch(SCENE_READS.map(([v, l, tip]) => [v, l, tip]),
+          SCENE_READS.some(([v]) => v === a.mode) ? a.mode : "scene_view",
+          (v) => { a.mode = v; writeCfg(node); render(node); });
+        const sn = document.createElement("span");
+        sn.className = "rn-ws-note";
+        sn.style.flex = "1 1 200px";
+        sn.textContent = (SCENE_READS.find(([v]) => v === a.mode) || SCENE_READS[0])[2];
+        srow.append(sl, seg, sn);
+        pc.appendChild(srow);
+      }
       sect.appendChild(pc);
     }
 
@@ -4788,29 +4813,6 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       msel.title = "What the source image donates to the prompt. Subject only drops the "
                  + "location and lighting story; scene only keeps the place and turns "
                  + "people into 'a person'.";
-      msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
-      mrow.append(mlab, msel);
-      shared.appendChild(mrow);
-    }
-
-    if (tabName === "scene") {
-      const mrow = document.createElement("div");
-      mrow.className = "rn-ws-row";
-      const mlab = document.createElement("span");
-      mlab.className = "rn-ws-note";
-      mlab.textContent = "Describe the";
-      const msel = document.createElement("select");
-      msel.className = "rn-ws-res";
-      for (const [v, label] of [["scene_view", "View: location, layout, camera"],
-                                ["scene_style", "Style: palette, lighting, rendering"]]) {
-        const o = document.createElement("option");
-        o.value = v;
-        o.textContent = label;
-        o.selected = a.mode === v;
-        msel.appendChild(o);
-      }
-      msel.title = "View describes the place; people stay 'a person', never described. "
-                 + "Style describes only the look.";
       msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
       mrow.append(mlab, msel);
       shared.appendChild(mrow);

@@ -115,6 +115,10 @@ cheap to judge.
 - Scene, Img2Img and Moodboard auto prompts have a Picture card at the top:
   the picture being captioned, its name, a Generate button that captions it
   now, and its latest caption
+- The Scene's Picture card chooses what the scene gives: Background (the
+  place, people left out), Situation (what is happening: the activity and
+  where the people are, nobody's looks described, a new caption mode) or
+  Style (only the look). It replaces the View / Style dropdown
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,

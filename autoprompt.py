@@ -63,6 +63,14 @@ SYSTEM_PROMPTS["i2i"] = (
     "framing and the composition. State the image orientation. Mix plain sentences "
     "with comma-separated descriptors. Do not use names. Answer with the description "
     "only, no preamble.")
+# the Scene tab's third reading: what is going on, rather than where or how it looks
+SYSTEM_PROMPTS["scene_action"] = (
+    "Describe what is happening in the image for an image generation prompt: the "
+    "activity, how many people there are, where they are and how they are posed, what "
+    "they are doing and how they interact, and the kind of place it happens in, in a "
+    "few words. Refer to people only as 'a person', 'a man', 'a woman' or 'people', "
+    "never describing their faces, hair, clothing or identity. Mix plain sentences with "
+    "comma-separated descriptors. Answer with the description only, no preamble.")
 SYSTEM_PROMPTS["style"] = SYSTEM_PROMPTS["scene_style"]
 SYSTEM_PROMPTS["people"] = SYSTEM_PROMPTS["subject"]
 
@@ -220,9 +228,9 @@ def filter_tags(tags_line, mode):
         if not tag:
             continue
         key = tag.lower().replace(" ", "_")
-        if mode in ("scene_view", "scene_style", "style"):
+        if mode in ("scene_view", "scene_action", "scene_style", "style"):
             if key in COUNT_WORDS:
-                if mode == "scene_view" and COUNT_WORDS[key] not in out:
+                if mode in ("scene_view", "scene_action") and COUNT_WORDS[key] not in out:
                     out.append(COUNT_WORDS[key])
                 continue
             if _matches(tag, PERSON_TAG_PARTS):
