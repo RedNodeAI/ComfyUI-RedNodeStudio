@@ -249,10 +249,10 @@ function fillSelect(sel, values, current) {
 // is exactly the reset being complained about.
 const SIZES = "rn_pf_sizes";
 
-function keepSize(node, key, box) {
+export function keepSize(node, key, box) {
   const saved = node.properties?.[SIZES]?.[key];
   if (typeof saved === "number" && saved > 0) box.style.height = saved + "px";
-  if (!window.ResizeObserver) return;
+  if (typeof ResizeObserver !== "function") return;
 
   // A textarea in this panel is full width and wraps rather than growing, so the only
   // thing that changes its height is somebody dragging the corner. The first callback

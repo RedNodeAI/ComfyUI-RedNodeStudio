@@ -2,7 +2,7 @@ import * as _appmod from "../../scripts/app.js";
 import { makePicker } from "./rednode_picker.js";
 import { newSlot as LS_newSlot, writeSlots as LS_writeSlots } from "./rednode_lora_stack.js";
 import { makeHighlightEditor } from "./rednode_promptbox.js";
-import { buildFrameEditor } from "./rednode_prompt_frame.js";
+import { buildFrameEditor, keepSize } from "./rednode_prompt_frame.js";
 const { app } = _appmod;
 // ComfyApp is exported by every real frontend, but read it defensively: the mask-editor
 // round-trip degrades to the wired-mask fallback rather than breaking the whole panel
@@ -11633,14 +11633,20 @@ function promptsBody(node, body) {
         const ed = buildFrameEditor(host, F);
         ed.previewNow();
         box.appendChild(host);
+        // a box dragged taller stays that tall: the height rides node.properties
+        // with the workflow, per prompt, the same store the standalone node uses
+        for (const [key, ta] of Object.entries(ed.boxes || {})) {
+          keepSize(node, `p${i}:${key}`, ta);
+        }
 
 
       }
     } else {
       const text = document.createElement("textarea");
-      text.rows = 3;
+      text.rows = 8;                       // room to write, not a slot to peer through
       text.value = row.text;
       text.placeholder = "Prompt...";
+      keepSize(node, `p${i}:plain`, text);
       text.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
                          + "border:1px solid #2a2e34;border-radius:5px;color:#e2e5ea;"
                          + "font-size:13px;padding:6px 8px;resize:vertical";
@@ -11657,6 +11663,7 @@ function promptsBody(node, body) {
                       + "border:1px solid #2a2e34;border-radius:5px;color:#b08a8a;"
                       + "font-size:12px;padding:6px 8px;resize:vertical";
     neg.addEventListener("change", () => { row.negative = neg.value; writeCfg(node); });
+    keepSize(node, `p${i}:negative`, neg);
     // the negative as one strip: what it is, then the line to type it on
     const negRow = document.createElement("div");
     negRow.className = "rn-ws-negrow";
