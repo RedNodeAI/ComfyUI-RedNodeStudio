@@ -1511,7 +1511,14 @@ export function setupProblems(node, cfg) {
   }
   const rows = cfg.prompts?.rows || [];
   const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
-  const hasText = (row) => String(row.text || "").trim();
+  // a row an auto prompt feeds has words by queue time, even with its box empty
+  const fed = new Set();
+  for (const name of ["subject", "scene", "moodboard", "i2i"]) {
+    const t = cfg.tabs?.[name];
+    if (t?.on && t.auto?.on && t.auto.inject_row) fed.add(t.auto.inject_row);
+  }
+  const hasText = (row) => String(row.text || "").trim()
+    || fed.has(row.name || `Prompt ${rows.indexOf(row) + 1}`);
   const serves = rows.some((row) => hasText(row) && (rigsOf(row).includes(rig.name) || !rigsOf(row).length));
   if (!serves) {
     out.push(rows.some(hasText)

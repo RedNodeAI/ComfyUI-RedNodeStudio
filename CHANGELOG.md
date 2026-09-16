@@ -151,6 +151,11 @@ cheap to judge.
 - The footer keeps only the UI size, Draft, VRAM and the presets cog. Resize
   long edge, Studio preset and the workspace presets (with Save as and
   Delete) move to a Workspace card at the top of the Advanced tab
+- An auto prompt injected into an unnamed prompt row now lands: the server
+  names unnamed rows Prompt 1, Prompt 2 and on, as the Inject into list does,
+  so a row with an empty box still gets its caption. The No prompt warning
+  counts a row an auto prompt feeds, and turning the camera words off no
+  longer rebuilds a frame row without its injected captions
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

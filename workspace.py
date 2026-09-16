@@ -984,7 +984,9 @@ def parse_config(config_json):
         if not _rigs and str(p.get("rig") or "").strip():
             _rigs = [str(p.get("rig")).strip()]
         prompt_rows.append({
-            "name": str(p.get("name") or ""),
+            # an unnamed row is "Prompt N", the label the panel shows and an Inject
+            # into choice saves; left empty, an injected caption never found its row
+            "name": str(p.get("name") or "").strip() or "Prompt %d" % (len(prompt_rows) + 1),
             "rig": _rigs[0] if _rigs else "",
             "rigs": _rigs,
             "kind": "plain" if p.get("kind") == "plain" else "krea2",
@@ -2799,6 +2801,7 @@ class RedNodeStudioWorkspace:
                                   for k in ("subject", "surroundings", "style", "light_and_colour", "placement")))
             if not _hit and not _pre and not _has_frame:
                 continue
+            _row["_assembled"] = True        # camera state and captions are in its text now
             # a caption set to go BEFORE the typed words leads the slot it joins
             _lead = lambda key, typed: ", ".join(
                 [c for c in _pre.get(key, []) if c] + ([typed] if typed else []))
@@ -3166,6 +3169,7 @@ class RedNodeStudioWorkspace:
         # LoRAs and the path. The frame runs again with no camera.
         _pfr = (_prow or {}).get("frame") or {}
         if (_prow and _prow.get("kind") == "krea2" and _pfr
+                and not _prow.get("_assembled")
                 and (_pfr.get("camera_off")
                      or (_pfr.get("camera") and not camera_on(cfg)))):
             _prow = dict(_prow, text=self._shot_text(None, _prow, run_seed))
