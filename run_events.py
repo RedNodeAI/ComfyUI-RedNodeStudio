@@ -35,6 +35,7 @@ _state = {
     "skipped": set(),  # stages a tracked call skipped itself
     "news": 0.0,       # when a stage last started, moved or ended
     "announced": set(),  # models whose load was said, so their unload can be
+    "last_used": None,   # the card's used MB at the last sample, for real unloads
 }
 _lock = threading.Lock()
 _ticker = {"thread": None}
@@ -42,6 +43,7 @@ TICK = 1.0             # seconds between samples while a stage runs
 IDLE_STOP = 30.0       # the sampler stops after this long with nothing running
 STUCK_STOP = 1800.0    # and after this long with no stage news at all
 LOAD_NOTE_MB = 100     # a load is said once the model holds this much
+UNLOAD_SHARE = 0.4     # an unload is said once this share of the model left the card
 LIST_MIN_MB = 50       # the card list leaves out anything smaller
 
 # which rig a loaded model came from, by the id of its ModelPatcher (and of the
@@ -142,29 +144,43 @@ def loaded_models():
 
 def _sample(force_models=False):
     """A vram event, with the model list when it changed, plus load and unload notes."""
+    v = vram()
     payload = {"run": _state["run"], "t": round(_now(), 2), "kind": "vram",
-               "node": _state["node"], "vram": vram()}
+               "node": _state["node"], "vram": v}
     models = loaded_models()
     before = _state["models"]
+    used = v.get("used")
+    last_used = _state["last_used"]
     if force_models or models != before:
         payload["models"] = models
         if before is not None:
             new_names = {m["name"] for m in models}
             said = _state["announced"]
+            for m in before:
+                if m["name"] in new_names or m["name"] not in said:
+                    continue
+                # a name leaving the list is only an unload when the card gave the
+                # memory back. The sampler clones the model to patch it, and the
+                # loader swaps the original for the clone: same weights, nothing
+                # freed, and the chart stays flat. Say nothing about those.
+                freed = (last_used - used) if (used is not None and last_used is not None) else None
+                if freed is not None and freed < UNLOAD_SHARE * m["mb"]:
+                    continue
+                said.discard(m["name"])
+                note("%s unloaded (%.1f GB freed)" % (m["name"], m["mb"] / 1024), "unload")
             for m in models:
                 # a model is said once it holds a real share of the card; one caught
-                # at the start of its load would read 0.0 GB
+                # at the start of its load would read 0.0 GB. A name that never really
+                # left (the swap above) is not said again.
                 if m["name"] not in said and m["mb"] >= LOAD_NOTE_MB:
                     said.add(m["name"])
                     note("%s loaded (%.1f GB)" % (m["name"], m["mb"] / 1024), "load")
-            for m in before:
-                if m["name"] not in new_names and m["name"] in said:
-                    said.discard(m["name"])
-                    note("%s unloaded (%.1f GB freed)" % (m["name"], m["mb"] / 1024), "unload")
         else:
             _state["announced"] = {m["name"] for m in models}
         _state["models"] = models
     _state["last"] = time.time()
+    if used is not None:
+        _state["last_used"] = used
     _send(payload)
 
 
