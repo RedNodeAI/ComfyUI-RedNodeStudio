@@ -518,7 +518,13 @@ export function runTabBody(node, body) {
     const b = el("button", "rn-ws-subt" + (id === sub ? " cur" : ""));
     b.dataset.sub = id;
     b.title = tip;
-    const lt = el("span", "lt" + (id === "run" && RUN.status === "running" ? " on" : ""));
+    // each light says its page is doing something: a run going, taps on, filing on
+    const cfg0 = node._rnCfg || {};
+    const lit = id === "run" ? RUN.status === "running"
+      : id === "save" ? !!cfg0.save_on
+      : id === "stages" ? !!(cfg0.taps?.on && (cfg0.taps.points || []).length)
+      : false;
+    const lt = el("span", "lt" + (lit ? " on" : ""));
     b.append(lt, el("span", "", label));
     b.onclick = () => { node._rnRunSub = id; props.rn_run_sub = id; render(node); };
     strip.appendChild(b);
