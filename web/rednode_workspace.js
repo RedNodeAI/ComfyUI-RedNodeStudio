@@ -3971,6 +3971,13 @@ function openMaskPainterFullscreen(node, def) {
 // the slot its caption lands in, and the caption arrives there automatically at
 // queue time, joined after the typed text. Empty means what it always meant: the
 // caption only rides this tab's own output socket.
+// The Frame slots an auto prompt can join, and the Moodboard's default per read
+const INJECT_SLOT_OPTS = [["style", "As Style"], ["subject", "As Subject"],
+                          ["surroundings", "As Surroundings"],
+                          ["light_and_colour", "As Light and colour"],
+                          ["prompt", "At the end"]];
+const MOOD_SLOT_DEFAULTS = { style: "style", subject: "subject", scene_action: "surroundings" };
+
 function injectRowUI(node, sect, tabName) {
   const cfg = node._rnCfg;
   const a = cfg.tabs[tabName]?.auto;
@@ -3978,10 +3985,10 @@ function injectRowUI(node, sect, tabName) {
   if (typeof a.inject_row !== "string") a.inject_row = "";
   const defSlot = { subject: "subject", scene: "surroundings",
                     moodboard: "light_and_colour", i2i: "subject" };
-  if (!["subject", "surroundings", "light_and_colour", "prompt"]
-      .includes(a.inject_slot)) {
+  if (!INJECT_SLOT_OPTS.some(([v]) => v === a.inject_slot)) {
     a.inject_slot = defSlot[tabName] || "subject";
   }
+  const isMood = tabName === "moodboard";
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const lab = document.createElement("span");
@@ -4001,20 +4008,23 @@ function injectRowUI(node, sect, tabName) {
                + "the queue runs, joined after whatever is typed there. Leave it "
                + "empty and the caption only rides this tab's own output, as before.";
   rowSel.onchange = () => { a.inject_row = rowSel.value; writeCfg(node); };
-  const slotSel = document.createElement("select");
-  slotSel.className = "rn-ws-res";
-  for (const [v, l] of [["subject", "As Subject"], ["surroundings", "As Surroundings"],
-                        ["light_and_colour", "As Light and colour"],
-                        ["prompt", "At the end"]]) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = l;
-    o.selected = v === a.inject_slot;
-    slotSel.appendChild(o);
-  }
-  slotSel.title = "Which Frame slot the caption joins on a Krea 2 prompt. On a "
-                + "plain prompt every choice appends to the text.";
-  slotSel.onchange = () => { a.inject_slot = slotSel.value; writeCfg(node); };
+  const slotPick = (cur, onPick, title) => {
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    for (const [v, l] of INJECT_SLOT_OPTS) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = l;
+      o.selected = v === cur;
+      sel.appendChild(o);
+    }
+    sel.title = title;
+    sel.onchange = () => { onPick(sel.value); writeCfg(node); };
+    return sel;
+  };
+  const slotSel = isMood ? null : slotPick(a.inject_slot, (v) => { a.inject_slot = v; },
+    "Which Frame slot the caption joins on a Krea 2 prompt. On a plain prompt every "
+    + "choice appends to the text.");
   if (a.inject_pos !== "before") a.inject_pos = "after";
   const posSeg = segSwitch([
     ["before", "Before my words", "The caption goes ahead of what you typed in that slot."],
@@ -4023,8 +4033,25 @@ function injectRowUI(node, sect, tabName) {
   ], a.inject_pos, (v) => { a.inject_pos = v; writeCfg(node); render(node); });
   posSeg.classList.add("rn-ws-injpos");
   row.style.flexWrap = "wrap";
-  row.append(lab, rowSel, slotSel, posSeg);
+  row.append(...[lab, rowSel, slotSel, posSeg].filter(Boolean));
   sect.appendChild(row);
+  if (isMood) {
+    // the Moodboard's reads each join their own slot
+    const slots = (a.inject_slots && typeof a.inject_slots === "object") ? a.inject_slots : {};
+    a.inject_slots = slots;
+    const mrow = document.createElement("div");
+    mrow.className = "rn-ws-row rn-ws-moodslots";
+    mrow.style.flexWrap = "wrap";
+    for (const [m, label] of MOOD_READS) {
+      if (!INJECT_SLOT_OPTS.some(([v]) => v === slots[m])) slots[m] = MOOD_SLOT_DEFAULTS[m];
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.textContent = `${label} →`;
+      mrow.append(l, slotPick(slots[m], (v) => { slots[m] = v; },
+        `Which Frame slot the ${label} captions join on a Krea 2 prompt.`));
+    }
+    sect.appendChild(mrow);
+  }
 }
 
 // The engines an Auto prompt box can run, in list order.

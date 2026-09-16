@@ -187,6 +187,9 @@ cheap to judge.
   is set, a model file with "official" in its name counts as official. When
   Subject or Scene has pictures and the render's rig is not official, the Krea 2
   Identity tab and the console warn that faces rarely land on community mixes
+- The Moodboard injects each read into its own Frame slot: Style captions as
+  Style, Subject as Subject, Situation as Surroundings, each changeable under
+  Inject into. Every tab's Inject into can pick As Style too
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

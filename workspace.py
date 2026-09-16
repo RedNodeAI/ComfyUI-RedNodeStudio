@@ -516,6 +516,10 @@ def _announce_held(tier, held):
 # What a Moodboard picture gives its auto prompt, any mix of the three, captioned
 # one read at a time and joined in this order
 MOOD_READS = ("style", "subject", "scene_action")
+# the Frame slots an auto prompt can join, and where each Moodboard read goes unless
+# told otherwise
+INJECT_SLOTS = ("style", "subject", "surroundings", "light_and_colour", "prompt")
+MOOD_SLOT_DEFAULTS = {"style": "style", "subject": "subject", "scene_action": "surroundings"}
 
 
 def mood_reads(meta, default="style"):
@@ -556,9 +560,15 @@ def _normalise_auto(auto_in, default_mode):
         # before or after the words already typed in that slot
         "inject_pos": "before" if auto_in.get("inject_pos") == "before" else "after",
         "inject_slot": (str(auto_in.get("inject_slot"))
-                        if auto_in.get("inject_slot") in
-                        ("subject", "surroundings", "light_and_colour", "prompt")
+                        if auto_in.get("inject_slot") in INJECT_SLOTS
                         else "subject"),
+        # the Moodboard's: each read joins its own Frame slot
+        "inject_slots": {
+            m: (str((auto_in.get("inject_slots") or {}).get(m))
+                if isinstance(auto_in.get("inject_slots"), dict)
+                and (auto_in.get("inject_slots") or {}).get(m) in INJECT_SLOTS
+                else MOOD_SLOT_DEFAULTS[m])
+            for m in MOOD_READS},
     }
 
 
@@ -2593,6 +2603,7 @@ class RedNodeStudioWorkspace:
                       "i2i": i2i_img}
         prompts = {}
         subject_people = []          # [(name, caption)] for the Subject's picked people
+        mood_parts = {}              # Moodboard read -> its joined captions
         people_caps = {}             # picture -> its caption, for the panel
         # Ollama across several tabs: keep the model resident for the run instead of
         # letting keep_alive 0 unload and reload it per tab. Four reloads of a vision
@@ -2749,8 +2760,11 @@ class RedNodeStudioWorkspace:
             elif tab_name == "moodboard" and targets and targets[0][1]:
                 # the panel shows each read's caption under its picture
                 people_caps.update({"%s|%s" % (e, m): c for _, e, c, m in _caps})
-                prompts[tab_name] = "\n".join(c for m0 in MOOD_READS
-                                              for _, _, c, m in _caps if m == m0)
+                for m0 in MOOD_READS:
+                    _joined = "\n".join(c for _, _, c, m in _caps if m == m0)
+                    if _joined:
+                        mood_parts[m0] = _joined
+                prompts[tab_name] = "\n".join(mood_parts.values())
             else:
                 prompts[tab_name] = _caps[0][2] if _caps else ""
             if prompts[tab_name]:
@@ -2816,9 +2830,18 @@ class RedNodeStudioWorkspace:
                     and _a.get("rewrite") and subject_people):
                 rewrite_people[_a["inject_row"]] = (subject_people, bool(_a.get("fixed", True)))
                 continue
-            if _a.get("on") and _a.get("inject_row") and _cap:
-                (injections_before if _a.get("inject_pos") == "before" else injections) \
-                    .setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
+            if not (_a.get("on") and _a.get("inject_row") and _cap):
+                continue
+            _into = (injections_before if _a.get("inject_pos") == "before"
+                     else injections).setdefault(_a["inject_row"], {})
+            if _tn == "moodboard" and mood_parts:
+                # each read lands in its own slot: the look as Style, the person as
+                # Subject, what is happening as Surroundings
+                _slots = _a.get("inject_slots") or MOOD_SLOT_DEFAULTS
+                for _m, _text in mood_parts.items():
+                    _into.setdefault(_slots.get(_m, MOOD_SLOT_DEFAULTS[_m]), []).append(_text)
+            else:
+                _into.setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
         _wired_frame = {"style": style_in, "subject": subject_in,
                         "surroundings": surroundings_in,
                         "light_and_colour": light_and_colour_in}
