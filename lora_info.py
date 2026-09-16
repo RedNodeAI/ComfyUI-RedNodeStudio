@@ -171,12 +171,34 @@ def set_download_dir(path):
     return path
 
 
+# A PERSONAL SETTING, never in the repo: local/ is gitignored and documented as
+# personal-only. {"allow_pickle_downloads": true} in local/settings.json lets the
+# Civitai download take .ckpt and .pt files as well, the 1.3.0 behaviour. It is off
+# for everyone else because those formats are pickles and the route is reachable
+# over HTTP; the 1.3.1 fix made safetensors the only format the pack will fetch.
+LOCAL_SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local", "settings.json")
+PICKLE_EXTS = (".ckpt", ".pt")
+
+
+def local_setting(key, default=False):
+    try:
+        with open(LOCAL_SETTINGS, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get(key, default) if isinstance(data, dict) else default
+    except Exception:
+        return default
+
+
 def _safe_name(name):
     """A bare .safetensors file name, or "". The name comes from Civitai, so never
-    trust it with a folder part, a drive, or a pickle format."""
+    trust it with a folder part, a drive, or a pickle format (unless this install
+    says so in local/settings.json)."""
     name = re.split(r"[\\/]", str(name or ""))[-1]
     name = re.sub(r'[\x00-\x1f<>:"|?*]', "_", name).strip(" .")
-    if not name.lower().endswith(".safetensors") or len(name) <= len(".safetensors"):
+    low = name.lower()
+    stem, ext = os.path.splitext(low)
+    ok = ext == ".safetensors" or (ext in PICKLE_EXTS and local_setting("allow_pickle_downloads"))
+    if not ok or not stem:
         return ""
     return name
 
