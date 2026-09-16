@@ -507,6 +507,20 @@ def collect_meta(prompt, ctx):
                 extra = _from_workspace(wcfg)
                 meta["loras"].extend(extra.pop("loras", []))
                 meta.update(extra)
+                # the Workspace's own prompt row is the positive when nothing traced
+                # one: a run its built-in sampler rendered has no sampler node to
+                # read, so Copy prompt came back empty for every such run
+                if not meta.get("positive"):
+                    try:
+                        from .workspace import parse_config as _wparse, prompt_row_for as _wrow
+                        _pc = _wparse(raw if isinstance(raw, str) else "{}")
+                        _row = _wrow(_pc["models"], _pc["prompts"])
+                        if _row and str(_row.get("text") or "").strip():
+                            meta["positive"] = str(_row["text"]).strip()
+                            if not meta.get("negative") and str(_row.get("negative") or "").strip():
+                                meta["negative"] = str(_row["negative"]).strip()
+                    except Exception:
+                        pass
 
     # a node that says it holds the final prompt is believed over the trace
     flagged = flagged_prompt(prompt)

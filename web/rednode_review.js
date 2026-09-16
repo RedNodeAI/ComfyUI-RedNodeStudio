@@ -383,7 +383,7 @@ async function setKept(found, kept) {
   return d;
 }
 
-function openMenu(node, entry, index, ev, slot = 0) {
+export function openMenu(node, entry, index, ev, slot = 0) {
   document.querySelector(".rn-rv-menu")?.remove();
   const m = document.createElement("div");
   m.className = "rn-rv-menu";
@@ -538,7 +538,7 @@ function stepSlot(node, dir) {
   render(node);
 }
 
-function openFullscreen(node) {
+export function openFullscreen(node) {
   if (node._rnFsPrev) return;                       // already open
   const ov = document.createElement("div");
   ov.className = "rn-rv-fsov";

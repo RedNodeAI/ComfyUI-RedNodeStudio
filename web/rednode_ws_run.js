@@ -2,7 +2,8 @@ import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
 import { writeCfg, render, setupProblems } from "./rednode_workspace.js";
-import { mountReviewPanel, pushReviewEntry } from "./rednode_review.js";
+import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
+         openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
 import { mountSavePanel } from "./rednode_save.js";
 import { allNodes } from "./rednode_graph.js";
@@ -452,6 +453,81 @@ export function plannedStages(node, cfg) {
   return out;
 }
 
+// ---- jumping to where a thing is set ----------------------------------------------
+// A pipeline box or a log line opens the page of the workspace that decides it:
+// the encode is the Prompts tab, a pass is the Passes page, a caption is that
+// tab's Auto prompt, a rig is the Models tab.
+function goTo(node, t) {
+  if (!t) return;
+  const p = (node.properties ||= {});
+  node._rnTab = t.tab;
+  p.rn_tab = t.tab;
+  if (t.tab === "i2i") {
+    node._rnI2iSub = t.sub || "source"; p.rn_i2i_sub = node._rnI2iSub;
+    if (t.auto) { node._rnI2iAuto = t.auto; p.rn_i2i_auto = t.auto; }
+    if (t.side) { node._rnTextSide = t.side; p.rn_text_side = t.side; }
+  } else if (t.tab === "latent") {
+    node._rnLatSub = t.sub || "canvas"; p.rn_latent_sub = node._rnLatSub;
+  } else if (t.tab === "identity") {
+    node._rnIdSub = t.sub || "subject"; p.rn_identity_sub = node._rnIdSub;
+    if (t.inner) { (node._rnIdInner ||= {})[node._rnIdSub] = t.inner; p["rn_identity_" + node._rnIdSub] = t.inner; }
+  } else if (t.tab === "moodboard") {
+    node._rnMbSub = t.sub || "gallery"; p.rn_moodboard_sub = node._rnMbSub;
+  } else if (t.tab === "run") {
+    node._rnRunSub = t.sub || "run"; p.rn_run_sub = node._rnRunSub;
+  }
+  render(node);
+}
+
+const autoPageOf = (tabName) => (
+  tabName === "subject" || tabName === "scene" ? { tab: "identity", sub: tabName, inner: "auto" }
+  : tabName === "moodboard" ? { tab: "moodboard", sub: "auto" }
+  : tabName === "i2i" ? { tab: "i2i", sub: "auto", auto: "i2i" }
+  : tabName.startsWith("text_") ? { tab: "i2i", sub: "auto", auto: "text", side: tabName }
+  : null);
+
+function passesPage(cfg) {
+  const I = cfg.tabs?.i2i || {};
+  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
+  return i2iRun ? { tab: "i2i", sub: "passes" } : { tab: "latent", sub: "passes" };
+}
+
+export function jumpForStage(key, cfg) {
+  if (key === "captions") {
+    const first = ["subject", "scene", "moodboard", "i2i", "text_style", "text_subject", "text_scene"]
+      .find((n) => cfg.tabs?.[n]?.on && cfg.tabs[n].auto?.on && (cfg.tabs[n].images?.length || 0) > 0);
+    return autoPageOf(first || "i2i");
+  }
+  if (key === "encode") return { tab: "prompts" };
+  if (/^pass\d+$/.test(key)) return passesPage(cfg);
+  if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
+  if (key === "detailer") return { tab: "detailer" };
+  if (key === "post") return { tab: "post" };
+  if (key === "save") return { tab: "run", sub: "save" };
+  return null;
+}
+
+const CAPTION_TABS = [["Subject", "subject"], ["Scene", "scene"], ["Moodboard", "moodboard"],
+                      ["Img2Img", "i2i"], ["Image to text Style", "text_style"],
+                      ["Image to text Subject", "text_subject"], ["Image to text Scene", "text_scene"]];
+
+export function jumpForLine(text, cfg) {
+  const t = String(text || "");
+  const cap = CAPTION_TABS.find(([label]) => t.startsWith(label + " caption"));
+  if (cap) return autoPageOf(cap[1]);
+  if (/^Captions /.test(t)) return jumpForStage("captions", cfg);
+  if (/^Encode /.test(t)) return { tab: "prompts" };
+  if (/^Pass \d+/.test(t)) return passesPage(cfg);
+  if (/^Decode /.test(t)) return { tab: "models" };
+  if (/^Detailer/.test(t)) return { tab: "detailer" };
+  if (/^Post FX/.test(t)) return { tab: "post" };
+  if (/^Save /.test(t)) return { tab: "run", sub: "save" };
+  if (/^Load Rig|loaded from disk|already in RAM|dropped from RAM|^Rig /.test(t)) return { tab: "models" };
+  if (/Text encoder|^VAE|^Krea 2|loaded \(|unloaded \(/.test(t)) return { tab: "models" };
+  if (/^Draft is on/.test(t)) return { tab: "detailer" };
+  return null;
+}
+
 // ---- the tab ---------------------------------------------------------------------
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -655,9 +731,45 @@ function runPage(node, body) {
   // PICTURE and MEMORY side by side
   const cols = el("div", "rn-run-cols");
   const pic = el("div", "rn-ws-card rn-run-pic");
-  pic.appendChild(el("div", "ch", "LIVE PICTURE"));
+  const picHead = el("div", "rn-run-pichead");
+  picHead.appendChild(el("div", "ch", "LIVE PICTURE"));
+  const fsBtn = el("button", "rn-ws-btn rn-run-fs", "\u26F6 Full screen");
+  fsBtn.title = "See the picture full size. Clicking the picture does the same; "
+              + "right-click it for Copy, Copy prompt, Rerun and the rest.";
+  picHead.appendChild(fsBtn);
+  pic.appendChild(picHead);
   const img = el("img", "rn-run-img");
   img.alt = "";
+  const newest = () => (node.properties?.rn_run_review?.rn_review || [])[0] || null;
+  const showBig = () => {
+    if (RUN.final && newest()) {
+      const host = reviewHost(node);
+      host._rnView = 0;
+      reviewFullscreen(host);
+      return;
+    }
+    if (!RUN.frame?.src) return;
+    // a frame still forming: a plain full screen of it
+    const ov = el("div", "rn-run-fsov");
+    ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
+      + "display:flex;align-items:center;justify-content:center;cursor:zoom-out";
+    const big = el("img");
+    big.src = RUN.frame.src;
+    big.style.cssText = "max-width:96vw;max-height:96vh;object-fit:contain";
+    ov.appendChild(big);
+    ov.addEventListener("pointerdown", () => ov.remove());
+    document.body.appendChild(ov);
+  };
+  fsBtn.onclick = showBig;
+  img.style.cursor = "zoom-in";
+  img.addEventListener("click", showBig);
+  img.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const entry = newest();
+    if (!RUN.final || !entry) return;
+    reviewMenu(reviewHost(node), entry, 0, e, 0);
+  });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
   pic.append(img, picEmpty, picLabel);
@@ -747,6 +859,12 @@ function refresh(view) {
   for (const r of stageRows(node)) {
     const b = el("div", `rn-run-box ${r.state}`);
     b.dataset.stage = r.key;
+    const target = jumpForStage(r.key, node._rnCfg);
+    if (target) {
+      b.classList.add("link");
+      b.title = "Open where this is set.";
+      b.onclick = () => goTo(node, target);
+    }
     b.appendChild(el("div", "t", r.s?.label || r.label));
     const st = el("div", "st");
     let text = STATE_TEXT[r.state] || r.state;
@@ -822,6 +940,12 @@ function refresh(view) {
   for (const l of RUN.log) {
     const row = el("div", `rn-run-line ${l.level}`);
     row.append(el("span", "tm", clock(l.t)), el("i", "dot"), el("span", "tx", l.text));
+    const target = jumpForLine(l.text, node._rnCfg);
+    if (target) {
+      row.classList.add("link");
+      row.title = "Open where this is set.";
+      row.onclick = () => goTo(node, target);
+    }
     refs.log.appendChild(row);
   }
   if (atBottom) refs.log.scrollTop = refs.log.scrollHeight;
@@ -959,6 +1083,12 @@ export const RUN_CSS = `
 .rn-run-mem{flex:1 1 300px;min-width:0}
 .rn-run-img{width:100%;max-height:420px;object-fit:contain;border-radius:6px;background:#0f1114}
 .rn-run-picempty{padding:40px 0;text-align:center}
+.rn-run-pichead{display:flex;align-items:center;gap:8px}
+.rn-run-pichead .ch{flex:1}
+.rn-run-fs{width:auto;padding:0 10px;font-size:11.5px}
+.rn-run-box.link,.rn-run-line.link{cursor:pointer}
+.rn-run-box.link:hover{border-color:#8fa8c8}
+.rn-run-line.link:hover .tx{color:#fff;text-decoration:underline}
 .rn-run-piclabel{font-size:12px;color:#cfe0f5;text-align:center}
 .rn-run-chart{width:100%;height:260px;background:#0f1114;border-radius:6px;display:block}
 .rn-run-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#9aa0a8}

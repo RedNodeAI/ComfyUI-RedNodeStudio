@@ -306,6 +306,15 @@ cheap to judge.
   the prompt as written. A plain prompt switched to a Frame box lands here
   whole, ready to sort. The Prompt Frame node has the same box as its last
   input
+- On the Run tab, a pipeline box or a log line opens the page that decides
+  it: the encode opens Prompts, a pass its Passes page, a caption that tab's
+  Auto prompt, a rig load the Models tab, the Detailer, Post FX and Save their
+  own pages. The finished picture opens full screen on a click or the Full
+  screen button, and a right-click on it gives the Image Review menu (Copy
+  image, Copy prompt, Open in a new tab, Rerun)
+- Copy prompt works for a run the Workspace rendered itself. With no sampler
+  node to trace, it used to answer that the prompt was no longer available;
+  it now reads the Workspace's own prompt row
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
