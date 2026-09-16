@@ -168,6 +168,9 @@ css.textContent = `
 .rn-ws-filerow .rn-ws-seg{flex:1 1 auto}
 .rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
+.rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
+.rn-ws-pfield{display:flex;flex-direction:column;gap:3px}
+.rn-ws-negrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
 .rn-ws-pillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
   gap:8px}
 .rn-ws-pill{display:flex;align-items:center;gap:10px;min-height:40px;
@@ -11394,7 +11397,7 @@ function promptsBody(node, body) {
     h1.textContent = "Prompts";
     const sub = document.createElement("div");
     sub.className = "rn-ws-note";
-    sub.textContent = "Write prompts that live with the model they were written for.";
+    sub.textContent = "Manage your prompts and their linked rigs.";
     head.append(h1, sub);
     body.appendChild(head);
     // the PROMPT bar: switch and add prompts up here, one
@@ -11505,8 +11508,9 @@ function promptsBody(node, body) {
       rigPick.appendChild(e);
     }
     const kind = segSwitch([
-      ["krea2", "Krea 2 box", "The frame editor: Style, Subject, Surroundings, Light and "
-                              + "colour and the camera, with wildcards and @keywords."],
+      ["krea2", "Frame box", "The prompt frame: Style, Subject, Surroundings, Light and "
+                              + "colour and the camera, assembled into one paragraph, with "
+                              + "wildcards and @keywords."],
       ["plain", "Plain box", "One plain text box, for any other model or for a prompt "
                              + "you want typed as is."],
     ], row.kind === "krea2" ? "krea2" : "plain",
@@ -11537,7 +11541,20 @@ function promptsBody(node, body) {
     if (row.kind !== "plain") {
       row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
     }
-    head.append(name, rigPick, kind, del);
+    // each control under its own small label, the delete at the end
+    const field = (label, ctrl) => {
+      const f = document.createElement("div");
+      f.className = "rn-ws-pfield";
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.textContent = label;
+      f.append(l, ctrl);
+      return f;
+    };
+    head.classList.add("rn-ws-phead");
+    del.title = "Delete this prompt.";
+    head.append(field("Prompt name", name), field("Linked rigs", rigPick),
+                field("Output box", kind), del);
     box.appendChild(head);
 
     if (folded()) { body.appendChild(box); return; }
@@ -11633,15 +11650,28 @@ function promptsBody(node, body) {
     }
 
     const neg = document.createElement("textarea");
-    neg.rows = 2;
+    neg.rows = 1;
     neg.value = row.negative;
-    neg.placeholder = "Negative (optional)";
+    neg.placeholder = "Low quality, blurry, text, watermark";
     neg.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
                       + "border:1px solid #2a2e34;border-radius:5px;color:#b08a8a;"
                       + "font-size:12px;padding:6px 8px;resize:vertical";
     neg.addEventListener("change", () => { row.negative = neg.value; writeCfg(node); });
-    box.appendChild(expandable(neg, (row.name || "Prompt") + " \u00b7 negative",
-                               (v) => { row.negative = v; writeCfg(node); }));
+    // the negative as one strip: what it is, then the line to type it on
+    const negRow = document.createElement("div");
+    negRow.className = "rn-ws-negrow";
+    const negLab = document.createElement("span");
+    negLab.className = "rn-ws-swlabel";
+    negLab.style.fontWeight = "600";
+    negLab.textContent = "Negative";
+    const negNote = document.createElement("span");
+    negNote.className = "rn-ws-note";
+    negNote.textContent = "Optional: what to avoid in the image.";
+    const negBox = expandable(neg, (row.name || "Prompt") + " \u00b7 negative",
+                              (v) => { row.negative = v; writeCfg(node); });
+    negBox.style.flex = "1 1 320px";
+    negRow.append(negLab, negNote, negBox);
+    box.appendChild(negRow);
     body.appendChild(box);
   });
 

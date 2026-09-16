@@ -146,8 +146,10 @@ const STYLE = `
   padding: 9px 12px; cursor: pointer; user-select: none; }
 .rn-pf-box > .head .car { width: 12px; color: #4a5058; font-size: 11px; order: 9;
   margin-left: auto; }
-.rn-pf-box > .head .ico { font-size: 14px; color: #a855f7; flex: none; width: 18px;
+.rn-pf-box > .head .ico { font-size: 14px; color: #b8283c; flex: none; width: 18px;
   text-align: center; }
+.rn-pf-box > .head .rn-pf-presets { margin-left: auto; }
+.rn-pf-box > .head .rn-pf-presets + .car { margin-left: 6px; }
 .rn-pf-box > .head b { font-size: 13.5px; color: #e8ecf1; }
 .rn-pf-box > .head .hint2 { font-size: 12px; color: #7f8792; }
 .rn-pf-box > .head:hover .car { color: #fff; }
@@ -156,17 +158,32 @@ const STYLE = `
 .rn-pf-sublabel { font-size: 11px; font-weight: 700; letter-spacing: .05em;
   color: #8f97a3; text-transform: uppercase; margin-top: 4px; }
 .rn-pf-studio { grid-column: 1 / -1; width: 100%; }
-.rn-pf-btn.on { background: #a855f7; border-color: #a855f7; color: #fff; }
+.rn-pf-btn.on { background: #b8283c; border-color: #b8283c; color: #fff; }
 .rn-pf-seg { display: inline-flex; background: #15171b; border: 1px solid #33373d; border-radius: 6px; padding: 2px; gap: 2px; }
 .rn-pf-segb { background: none; border: 0; border-radius: 4px; color: #9aa0a8; cursor: pointer; font-size: 12px; padding: 4px 12px; }
-.rn-pf-segb.on { background: #a855f7; color: #fff; }
-.rn-pf-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+.rn-pf-segb.on { background: #b8283c; color: #fff; }
+.rn-pf { container-type: inline-size; }
+.rn-pf-cols { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr) minmax(0,.95fr);
   gap: 10px; align-items: start; }
+.rn-pf-colpv { position: sticky; top: 0; }
+@container (max-width: 980px) {
+  .rn-pf-cols { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .rn-pf-colpv { grid-column: 1 / -1; position: static; }
+}
+.rn-pf-live { margin-left: auto; font-size: 11.5px; color: #9fe0b4; display: inline-flex;
+  align-items: center; gap: 6px; }
+.rn-pf-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.rn-pf-pvbox .rn-pf-out { min-height: 220px; max-height: none; font-size: 13px;
+  line-height: 1.55; color: #d6d9de; }
+.rn-pf-pvbox .rn-pf-note.on { border: 1px solid #b8283c; border-left-width: 3px;
+  background: #26161a; border-radius: 6px; padding: 8px 10px; color: #f3b0ba;
+  font-weight: 600; }
 .rn-pf-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .rn-pf-expand { position: absolute; top: 4px; right: 6px; z-index: 2;
   background: #15171bcc; border: 1px solid #33373d; border-radius: 4px;
   color: #9aa0a8; cursor: pointer; font-size: 11px; padding: 1px 5px; }
-.rn-pf-expand:hover { border-color: #a855f7; color: #fff; }
+.rn-pf-expand:hover { border-color: #b8283c; color: #fff; }
 /* the character counter under a text field, right-aligned and dim */
 .rn-pf-count { text-align: right; font-size: 10.5px; color: #6b7280; margin-top: -4px; }
 /* the framing chips, the mock's Portrait / Landscape / Square row */
@@ -175,14 +192,14 @@ const STYLE = `
   gap: 1px; padding: 6px 8px; border-radius: 6px; cursor: pointer;
   background: #101216; border: 1px solid #2a2e34; color: #c8ccd2; font-size: 12px; }
 .rn-pf-chip small { font-size: 10.5px; color: #7f8792; }
-.rn-pf-chip.on { border-color: #a855f7; background: #a855f71a; color: #fff; }
+.rn-pf-chip.on { border-color: #b8283c; background: #b8283c; color: #fff; }
 /* the preview panel: the mock's right column */
 .rn-pf-out { min-height: 120px; }
 .rn-pf-outwrap { display: flex; flex-direction: column; gap: 6px; }
 .rn-pf-outbar { display: flex; gap: 6px; justify-content: flex-end; }
 .rn-pf-outbar button { background: #15171b; border: 1px solid #33373d; color: #c8ccd2;
   border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
-.rn-pf-outbar button:hover { border-color: #a855f7; color: #fff; }
+.rn-pf-outbar button:hover { border-color: #b8283c; color: #fff; }
 
 /* highlighting for the pipeline the Prompt Box also speaks */
 .rn-pf-wc { color: #8ab4ff; }
@@ -453,8 +470,9 @@ export function buildFrameEditor(wrap, F) {
   frameRange.value = String(Math.max(0, framings.indexOf(F.get("framing"))));
   const frameVal = el("div", "rn-pf-val", F.get("framing"));
   frameWrap.appendChild(frameRange); frameWrap.appendChild(frameVal);
-  // the mock's chip row: every framing as a button, the slider kept beneath
-  // for fine steps; both write the same field
+  // the chips are the control; the range stays underneath, unseen, because the
+  // chips write through it and the studio listens to it
+  frameWrap.style.display = "none";
   const frameChips = el("div", "rn-pf-chips");
   const drawChips = () => {
     frameChips.replaceChildren();
@@ -489,6 +507,7 @@ export function buildFrameEditor(wrap, F) {
   camRange.value = String(Math.max(0, heights.indexOf(F.get("camera_height") || "Eye level")));
   const camVal = el("div", "rn-pf-val", F.get("camera_height") || "Eye level");
   camWrap.appendChild(camRange); camWrap.appendChild(camVal);
+  camWrap.style.display = "none";
   const shotLabel = el("div", "rn-pf-sublabel", "Shot size");
   shotLabel.title = "How much of the subject fills the frame, tight to wide - the "
                   + "camera's distance and lens. Portrait is close, Roomscale is far.";
@@ -569,12 +588,13 @@ export function buildFrameEditor(wrap, F) {
   // TWO COLUMNS when the host is wide (the Workspace's Prompts tab): the
   // writing sections stack on the left, the dials and the preview on the
   // right - the arrangement you drew. A narrow host keeps one column.
-  let colL = null, colR = null;
+  let colL = null, colR = null, colP = null;
   if (F.twoColumn) {
     const cols = el("div", "rn-pf-cols");
     colL = el("div", "rn-pf-col");
     colR = el("div", "rn-pf-col");
-    cols.appendChild(colL); cols.appendChild(colR);
+    colP = el("div", "rn-pf-col rn-pf-colpv");
+    cols.appendChild(colL); cols.appendChild(colR); cols.appendChild(colP);
     wrap.appendChild(cols);
   }
   // writing on the left (style, subject, surroundings, light & colour); the
@@ -743,14 +763,29 @@ export function buildFrameEditor(wrap, F) {
     row.appendChild(sel); row.appendChild(load); row.appendChild(save); row.appendChild(del);
     return row;
   };
-  group("style", "Style", "the overall look and feel.",
-        [styleRow, counted(styleExtra, 200, "Style wording"),
-         snipRow("style", ["style", "style_extra"], "styles")]);
-  group("subject", "Subject", "who or what, and how it looks.",
-        [counted(subject, 600, "Subject"), snipRow("subject", ["subject"], "subjects")]);
-  group("surroundings", "Surroundings", "where it is.",
-        [counted(surroundings, 300, "Surroundings"),
-         snipRow("surroundings", ["surroundings"], "places")]);
+  // the saved versions of a box sit behind one button on its head, so a box is
+  // the writing and nothing else until they are asked for
+  const presetsBtn = (row) => {
+    row.style.display = "none";
+    const b = el("button", "rn-pf-btn rn-pf-presets", "\uD83D\uDCC1 Presets");
+    b.title = "Saved versions of this box: load one, save this one, delete one.";
+    b.addEventListener("click", () => {
+      const open = row.style.display === "none";
+      row.style.display = open ? "" : "none";
+      b.classList.toggle("on", open);
+    });
+    return b;
+  };
+  const styleSnip = snipRow("style", ["style", "style_extra"], "styles");
+  group("style", "Style", "The overall look and feel.",
+        [styleRow, counted(styleExtra, 200, "Style wording"), styleSnip],
+        presetsBtn(styleSnip));
+  const subjectSnip = snipRow("subject", ["subject"], "subjects");
+  group("subject", "Subject", "Who or what, and how it looks.",
+        [counted(subject, 600, "Subject"), subjectSnip], presetsBtn(subjectSnip));
+  const placeSnip = snipRow("surroundings", ["surroundings"], "places");
+  group("surroundings", "Surroundings", "Where it is.",
+        [counted(surroundings, 300, "Surroundings"), placeSnip], presetsBtn(placeSnip));
   // CAMERA: the simple chips (framing = distance and lens, height = height and
   // pitch) drive a Camera Studio state underneath; the studio, opened from the
   // disclosure, is the advanced view and mounts FULL WIDTH below the columns.
@@ -810,7 +845,8 @@ export function buildFrameEditor(wrap, F) {
   const placementBox = el("div", null);
   placementBox.appendChild(placementLabel);
   placementBox.appendChild(counted(placement, 200, "Placement"));
-  group("framing", "Camera", "framing, height, and the studio",
+  group("framing", "Camera and placement",
+        "Where the camera is and where the subject stands.",
         [camBody, studioBar, placementBox]);
   const studioHost = el("div", "rn-pf-studio");
   studioHost.style.display = "none";
@@ -936,9 +972,10 @@ export function buildFrameEditor(wrap, F) {
   // the chips regenerate the studio camera whenever the studio is live
   frameRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
   camRange.addEventListener("change", () => { if (studioGet()) seedStudioFromChips(); });
-  group("light", "Light & colour", "lighting mood and colours.",
-        [lightRow, brightRow, counted(lac, 200, "Light and colour"),
-         snipRow("light", ["lighting", "brightness", "light_and_colour"], "lights")]);
+  const lightSnip = snipRow("light", ["lighting", "brightness", "light_and_colour"], "lights");
+  group("light", "Light and colour", "Lighting mood and colours.",
+        [lightRow, brightRow, counted(lac, 200, "Light and colour"), lightSnip],
+        presetsBtn(lightSnip));
   refreshSnips();
 
   // ---- notice + preview ----------------------------------------------------------------
@@ -970,17 +1007,19 @@ export function buildFrameEditor(wrap, F) {
   outBar.appendChild(copyB); outBar.appendChild(bigB);
   outWrap.appendChild(note); outWrap.appendChild(out); outWrap.appendChild(outBar);
   if (F.previewHost) F.previewHost.appendChild(outWrap);
-  else if (colR) {
-    const pvBox = el("div", "rn-pf-box");
+  else if (colP) {
+    const pvBox = el("div", "rn-pf-box rn-pf-pvbox");
     const pvHead = el("div", "head");
     pvHead.style.cursor = "default";
     pvHead.appendChild(el("span", "ico", "✎"));
     pvHead.appendChild(el("b", null, "Prompt preview"));
+    const live = el("span", "rn-pf-live", "Live preview");
+    pvHead.appendChild(live);
     pvBox.appendChild(pvHead);
     const pvBody = el("div", "body");
     pvBody.appendChild(outWrap);
     pvBox.appendChild(pvBody);
-    colR.appendChild(pvBox);
+    colP.appendChild(pvBox);
   } else wrap.appendChild(outWrap);
 
   // ---- wiring ---------------------------------------------------------------------------

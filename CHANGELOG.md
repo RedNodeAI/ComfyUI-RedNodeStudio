@@ -291,6 +291,14 @@ cheap to judge.
   Built-in switch and the Sampler dials fold sit under them. The Loader is a
   button switch, file rows read label, file, picker, and every box has a
   one-line note under its header
+- The Prompts tab, laid out to be read top to bottom: the prompt's name, its
+  linked rigs and its box type each under a small label, with the box type now
+  called Frame box (the prompt frame) or Plain box. The four writing boxes keep
+  their saved versions behind one Presets button each instead of a row of
+  controls. Shot size and camera height are the chips alone, no sliders. The
+  Camera card is Camera and placement. The prompt preview has a column of its
+  own on a wide panel, with a live dot and the warning as a red callout, and
+  the Negative is one labelled strip under the frame
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
