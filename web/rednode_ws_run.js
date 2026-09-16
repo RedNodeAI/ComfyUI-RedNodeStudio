@@ -4,6 +4,12 @@ import { api } from "../../scripts/api.js";
 import { writeCfg, render, setupProblems } from "./rednode_workspace.js";
 import { mountReviewPanel, pushReviewEntry } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
+import { allNodes } from "./rednode_graph.js";
+
+// the Detailer, under its name and the one older workflows still carry
+const DETAILER_TYPES = new Set(["RedNodeStudioDetailer", "RedNodeStudioAdvanced"]);
+// every node, subgraphs included, that is not muted or bypassed
+const liveNodes = () => allNodes(app.graph).filter((n) => n.mode !== 2 && n.mode !== 4);
 
 // The Run tab: queue the workflow and watch it go.
 //
@@ -199,8 +205,7 @@ export function listenRun() {
   api.addEventListener("executed", (e) => onExecuted(e?.detail));
   api.addEventListener("execution_cached", (e) => {
     const ids = (e?.detail?.nodes || []).map(String);
-    const ws = (app.graph?._nodes || []).filter((n) => n.type === "RedNodeStudioWorkspace")
-      .map((n) => String(n.id));
+    const ws = workspaceNodes().map((n) => String(n.id));
     if (ws.some((id) => ids.includes(id))) {
       RUN.cached = true;
       logLine("The Workspace is unchanged, so its render is reused from the last run");
@@ -261,7 +266,7 @@ const viewUrl = (f) => api.apiURL(`/view?${new URLSearchParams({
   filename: f.filename || "", subfolder: f.subfolder || "", type: f.type || "output",
 })}`);
 
-const workspaceNodes = () => (app.graph?._nodes || [])
+const workspaceNodes = () => allNodes(app.graph)
   .filter((n) => n.type === "RedNodeStudioWorkspace");
 
 // The Review and Stages sub-tabs keep their panel state on a host of their own, so it
@@ -336,8 +341,7 @@ function tapsCard(node) {
   row.appendChild(chips);
   card.appendChild(row);
   // each Detailer's own switch, written into that node's settings
-  const dets = (node.graph?._nodes || app.graph?._nodes || [])
-    .filter((n) => n.type === "RedNodeStudioDetailer");
+  const dets = allNodes(app.graph).filter((n) => DETAILER_TYPES.has(n.type));
   for (const d of dets) {
     const w = d.widgets?.find((x) => x.name === "config");
     let dc = {};
@@ -358,8 +362,7 @@ function tapsCard(node) {
                 el("span", "rn-ws-note", "Its input, every pass and its output"));
     card.appendChild(drow);
   }
-  const nTaps = (node.graph?._nodes || app.graph?._nodes || [])
-    .filter((n) => n.type === "RedNodeStageTap").length;
+  const nTaps = liveNodes().filter((n) => n.type === "RedNodeStageTap").length;
   card.appendChild(el("div", "rn-ws-note",
     (nTaps ? `${nTaps} Stage Tap node${nTaps === 1 ? "" : "s"} in the workflow also record. ` : "")
     + "Taps show after the next run. A RedNode Stage Tap node can photograph any other "
@@ -385,9 +388,8 @@ export function plannedStages(node, cfg) {
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
     out.push(["decode", "Decode"]);
   }
-  const types = new Set((node.graph?._nodes || app.graph?._nodes || [])
-    .filter((n) => n.mode !== 2 && n.mode !== 4).map((n) => n.type));
-  if (types.has("RedNodeStudioDetailer")) out.push(["detailer", "Detailer"]);
+  const types = new Set(liveNodes().map((n) => n.type));
+  if ([...DETAILER_TYPES].some((t) => types.has(t))) out.push(["detailer", "Detailer"]);
   if (types.has("RedNodePostProcess")) out.push(["post", "Post FX"]);
   if (types.has("RedNodeSave")) out.push(["save", "Save"]);
   return out;
