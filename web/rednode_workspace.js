@@ -11379,6 +11379,23 @@ function latentBody(node, body) {
     c.textContent = text;
     bar.appendChild(c);
   }
+  // RESET: a square 1024 canvas, one latent, one pass, nothing varied per pass. The
+  // switch and the source are left as they are.
+  const reset = document.createElement("button");
+  reset.className = "rn-ws-btn rn-ws-compact rn-ws-latreset";
+  reset.style.cssText = "margin-left:auto;padding:0 12px";
+  reset.textContent = "↺ Reset";
+  reset.title = "Back to the start: a square 1024 × 1024 canvas, batch 1, random off, a "
+              + "single pass, and every per-pass setting cleared.";
+  reset.onclick = () => {
+    Object.assign(L, { aspect: "1:1", w: 1024, h: 1024, scale: 1, batch: 1, random: false,
+                       passes: 1, refine: 0.45, pass_custom: false, scale_custom: false,
+                       steps_custom: false, rig_custom: false, handoff_continue: false });
+    for (const k of ["mp", "pass_denoise", "pass_scale", "pass_steps", "pass_rig"]) delete L[k];
+    writeCfg(node);
+    render(node);
+  };
+  bar.appendChild(reset);
   body.appendChild(bar);
   if (sub === "passes") {
     passesTab(node, body, "latent");
