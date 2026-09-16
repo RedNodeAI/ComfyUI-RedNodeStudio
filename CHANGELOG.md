@@ -340,6 +340,12 @@ cheap to judge.
 - The edit model leaves the card once Swap and Re-angle are done, and stays
   in RAM for the next run. It used to sit on the card for the rest of the run
   and into the next one
+- A 32 GB+ card as a VRAM limit: a 31.5 GB line, no dial ceilings, and Hold's
+  Auto, On and Off like the other card sizes
+- Swap and Re-angle run the edit model on PyTorch attention by default, with
+  an Attention choice in their engine settings (PyTorch or ComfyUI's). Qwen
+  Image breaks under SageAttention, so a ComfyUI started with Sage gave broken
+  swaps and re-shots; the rest of the run keeps Sage
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a

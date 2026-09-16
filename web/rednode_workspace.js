@@ -1049,7 +1049,7 @@ function hiddenTabSet() {
 }
 
 // ---- config ----------------------------------------------------------------
-const VRAM_TIER_FOR_GB = { 8: "low", 12: "low", 16: "low", 24: "medium" };
+const VRAM_TIER_FOR_GB = { 8: "low", 12: "low", 16: "low", 24: "medium", 32: "high" };
 // what the VRAM limit is called where a ceiling is explained
 export const vramLimitName = (cfg) => (cfg?.vram_gb ? `${cfg.vram_gb} GB` : "free range");
 // IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only captioned, never
@@ -1179,6 +1179,7 @@ export function readCfg(node) {
       if (typeof R.scheduler !== "string") R.scheduler = "simple";
       if (typeof R.shift !== "number") R.shift = 3.1;
       if (typeof R.cfg_norm !== "boolean") R.cfg_norm = true;
+      if (!Object.hasOwn(EDIT_ATTN, R.attention)) R.attention = "pytorch";
       if (typeof R.seed !== "number") R.seed = 0;
       if (typeof R.seed_random !== "boolean") R.seed_random = true;
       // SWAP, the character stage after re-angle, before the i2i pass (server: swap.py)
@@ -1207,6 +1208,7 @@ export function readCfg(node) {
       if (typeof S.scheduler !== "string") S.scheduler = "beta";
       if (typeof S.shift !== "number") S.shift = 3;
       if (typeof S.cfg_norm !== "boolean") S.cfg_norm = false;
+      if (!Object.hasOwn(EDIT_ATTN, S.attention)) S.attention = "pytorch";
       if (typeof S.seed !== "number") S.seed = 0;
       if (typeof S.seed_random !== "boolean") S.seed_random = true;
       if (typeof t.scale !== "number") t.scale = 1;
@@ -1284,7 +1286,7 @@ export function readCfg(node) {
   d.vram_tier = ["low", "medium", "high"].includes(d.vram_tier) ? d.vram_tier : "high";
   // THE VRAM LIMIT IS A CARD SIZE; the tier the dial ceilings use follows from it,
   // and a workflow saved with Low or Medium reads as 16 or 24 GB (vram_hold.py)
-  if (![0, 8, 12, 16, 24].includes(d.vram_gb)) {
+  if (![0, 8, 12, 16, 24, 32].includes(d.vram_gb)) {
     d.vram_gb = { low: 16, medium: 24 }[d.vram_tier] || 0;
   }
   d.vram_tier = VRAM_TIER_FOR_GB[d.vram_gb] || "high";
@@ -13581,6 +13583,30 @@ const RA_EL = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle 
 const RA_DI = ["close-up", "medium shot", "wide shot"];
 const SW_MODES = ["face", "head", "person"];
 const SW_REFS = ["subject", "subject2", "subject3", "own"];
+// the edit engine's attention: PyTorch, or whatever ComfyUI was started with
+const EDIT_ATTN = {
+  pytorch: { label: "PyTorch", tip: "The edit model samples with PyTorch attention, whatever "
+    + "ComfyUI was started with. Qwen-Image gives black or broken pictures under "
+    + "SageAttention, so this is the default; the rest of the run keeps Sage." },
+  comfy: { label: "ComfyUI's", tip: "The attention ComfyUI was started with (SageAttention, "
+    + "Flash, xformers). Faster where it works; with Sage the edit model can break." },
+};
+function editAttnRow(node, grid, rec) {
+  const l = document.createElement("span");
+  l.className = "rn-ws-note";
+  l.textContent = "Attention";
+  const seg = document.createElement("div");
+  seg.className = "rn-ws-seg rn-ws-editattn";
+  for (const [v, m] of Object.entries(EDIT_ATTN)) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (rec.attention === v ? " on" : "");
+    b.textContent = m.label;
+    b.title = m.tip;
+    b.onclick = () => { rec.attention = v; writeCfg(node); render(node); };
+    seg.appendChild(b);
+  }
+  grid.append(l, seg);
+}
 // what Swap works on: the Img2Img source, or the finished render
 const SW_TARGETS = { source: true, render: true };
 const SW_MODE_TIP = {
@@ -13796,6 +13822,7 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
       cnsw.title = "CFGNorm as in fal's workflow. Cosmetic at cfg 1.";
       cnsw.onclick = () => { R.cfg_norm = !R.cfg_norm; writeCfg(node); render(node); };
       grid.append(cn, cnsw);
+      editAttnRow(node, grid, R);
       card.appendChild(grid);
     }
     const note = document.createElement("div");
@@ -14080,6 +14107,7 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
       cnsw.title = "CFGNorm on the edit model. Off by default here; try it if cfg 2+ over-saturates.";
       cnsw.onclick = () => { S.cfg_norm = !S.cfg_norm; writeCfg(node); render(node); };
       grid.append(cn, cnsw);
+      editAttnRow(node, grid, S);
       card.appendChild(grid);
     }
     const note = document.createElement("div");

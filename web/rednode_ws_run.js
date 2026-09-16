@@ -279,7 +279,7 @@ export function listenRun() {
 }
 
 // ---- what the run should need ---------------------------------------------------
-const VRAM_TIER_FOR = { 8: "low", 12: "low", 16: "low", 24: "medium" };
+const VRAM_TIER_FOR = { 8: "low", 12: "low", 16: "low", 24: "medium", 32: "high" };
 const HEADROOM_GB = 0.5;
 const _estCache = { key: "", data: null };
 
@@ -781,7 +781,8 @@ function runPage(node, body) {
   tierWrap.appendChild(el("span", "rn-ws-note", "VRAM limit"));
   const tier = el("select", "rn-ws-res");
   tier.dataset.choice = "vram_gb";
-  for (const [v, label] of [[0, "Free range"], [24, "24 GB card"], [16, "16 GB card"],
+  for (const [v, label] of [[0, "Free range"], [32, "32 GB+ card"], [24, "24 GB card"],
+                            [16, "16 GB card"],
                             [12, "12 GB card"], [8, "8 GB card"]]) {
     const o = el("option", "", label);
     o.value = String(v);

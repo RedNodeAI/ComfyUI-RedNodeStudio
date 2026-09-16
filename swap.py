@@ -101,6 +101,7 @@ def parse(raw):
         "scheduler": str(r.get("scheduler") or "beta"),
         "shift": num("shift", 3.0, 0.0, 10.0),
         "cfg_norm": bool(r.get("cfg_norm", False)),
+        "attention": pick("attention", _engine.ATTENTIONS, "pytorch"),
         "seed": num("seed", 0, 0, 2 ** 63 - 1, int),
         "seed_random": bool(r.get("seed_random", True)),
     }
@@ -195,7 +196,8 @@ def _render(sc, source, reference, seed):
                       "order": order, "seed": int(seed), "steps": sc["steps"], "cfg": sc["cfg"],
                       "sampler": sampler, "scheduler": scheduler, "unet": sc["unet"],
                       "loras": [lora, sc["lora_swap_strength"], sc["lora_light"], sc["lora_light_strength"]],
-                      "shift": sc["shift"], "cfg_norm": sc["cfg_norm"], "keep": sc["keep_size"]},
+                      "shift": sc["shift"], "cfg_norm": sc["cfg_norm"], "keep": sc["keep_size"],
+                      "attention": sc.get("attention", "pytorch")},
                      sort_keys=True)
     for k, imgs in _engine._RESULT_CACHE:
         if k == key:
@@ -204,7 +206,7 @@ def _render(sc, source, reference, seed):
     model, clip, vae = _engine.load_engine(
         sc["unet"], sc["clip"], sc["vae"],
         [(sc["lora_light"], sc["lora_light_strength"]), (lora, sc["lora_swap_strength"])],
-        sc["shift"], sc["cfg_norm"], tag="Swap")
+        sc["shift"], sc["cfg_norm"], tag="Swap", attention=sc.get("attention", "pytorch"))
     print("[RedNode Swap] %s swap, %s, %s: %s" % (
         sc["mode"], lora, "face first" if order == "face_first" else "body first", prompt), flush=True)
     outs = []

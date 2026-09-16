@@ -78,6 +78,8 @@ def parse(raw):
         "scheduler": str(r.get("scheduler") or "simple"),
         "shift": num("shift", 3.1, 0.0, 10.0),
         "cfg_norm": bool(r.get("cfg_norm", True)),
+        # PyTorch attention for the edit model unless ComfyUI's own is asked for
+        "attention": pick("attention", ATTENTIONS, "pytorch"),
         "seed": num("seed", 0, 0, 2 ** 53, int),
         "seed_random": bool(r.get("seed_random", True)),
         "trigger": str(r.get("trigger") if r.get("trigger") is not None else "<sks>")[:40],
@@ -161,12 +163,48 @@ def _call(name, **kw):
     return out[0] if isinstance(out, (tuple, list)) else out
 
 
-def load_engine(unet, clip_name, vae_name, loras, shift, cfg_norm, tag="Re-angle"):
+ATTENTIONS = ("pytorch", "comfy")
+
+
+def _pytorch_attention(func, *args, **kwargs):
+    # ComfyUI's per-model attention override: this model samples with PyTorch
+    # attention whatever ComfyUI was started with
+    from comfy.ldm.modules.attention import attention_pytorch
+    return attention_pytorch(*args, **kwargs)
+
+
+def with_attention(model, attention, tag):
+    """The model, on PyTorch attention unless `attention` is "comfy". Qwen-Image
+    with SageAttention gives black or broken pictures, so the edit engine opts
+    out while the rest of the run keeps whatever ComfyUI was started with."""
+    if attention == "comfy":
+        return model
+    try:
+        m = model.clone()
+        m.model_options.setdefault("transformer_options", {})[
+            "optimized_attention_override"] = _pytorch_attention
+        try:
+            import comfy.model_management as mm
+            if mm.sage_attention_enabled():
+                print("[RedNode %s] the edit model runs PyTorch attention; SageAttention "
+                      "stays on for everything else" % tag, flush=True)
+        except Exception:
+            pass
+        return m
+    except Exception as e:
+        print("[RedNode %s] could not set PyTorch attention (%s); ComfyUI's is used"
+              % (tag, e), flush=True)
+        return model
+
+
+def load_engine(unet, clip_name, vae_name, loras, shift, cfg_norm, tag="Re-angle",
+                attention="pytorch"):
     """model, clip, vae for a Qwen-Image-Edit stage. `loras` is a list of
-    (name, strength) applied in order; "None", "" and strength 0 are skipped."""
+    (name, strength) applied in order; "None", "" and strength 0 are skipped.
+    `attention` is "pytorch" (the default) or "comfy" (the launch setting)."""
     loras = tuple((str(n), float(s)) for n, s in loras
                   if n and n != "None" and float(s) > 0)
-    key = (unet, clip_name, vae_name, loras, float(shift), bool(cfg_norm))
+    key = (unet, clip_name, vae_name, loras, float(shift), bool(cfg_norm), attention)
     if _MODEL_CACHE["key"] == key and _MODEL_CACHE["model"] is not None:
         return _MODEL_CACHE["model"], _MODEL_CACHE["clip"], _MODEL_CACHE["vae"]
     bkey = (unet, clip_name, vae_name)
@@ -187,6 +225,7 @@ def load_engine(unet, clip_name, vae_name, loras, shift, cfg_norm, tag="Re-angle
             model = _call("CFGNorm", model=model, strength=1.0)
         except Exception as e:
             print("[RedNode %s] CFGNorm skipped: %s" % (tag, e), flush=True)
+    model = with_attention(model, attention, tag)
     _MODEL_CACHE.update({"key": key, "model": model, "clip": _BASE_CACHE["clip"],
                          "vae": _BASE_CACHE["vae"]})
     return model, _BASE_CACHE["clip"], _BASE_CACHE["vae"]
@@ -227,7 +266,7 @@ def _load_engine(rc):
     return load_engine(rc["unet"], rc["clip"], rc["vae"],
                        [(rc["lora_light"], rc["lora_light_strength"]),
                         (rc["lora_angles"], rc["lora_angles_strength"])],
-                       rc["shift"], rc["cfg_norm"])
+                       rc["shift"], rc["cfg_norm"], attention=rc.get("attention", "pytorch"))
 
 
 def _source_key(img):
@@ -250,7 +289,8 @@ def _render(rc, source, prompts, seed):
                       "steps": rc["steps"], "cfg": rc["cfg"], "sampler": rc["sampler"],
                       "scheduler": rc["scheduler"], "unet": rc["unet"], "loras":
                       [rc["lora_angles"], rc["lora_angles_strength"], rc["lora_light"], rc["lora_light_strength"]],
-                      "shift": rc["shift"], "cfg_norm": rc["cfg_norm"]}, sort_keys=True)
+                      "shift": rc["shift"], "cfg_norm": rc["cfg_norm"],
+                      "attention": rc.get("attention", "pytorch")}, sort_keys=True)
     for k, imgs in _RESULT_CACHE:
         if k == key:
             print("[RedNode Re-angle] %d view(s) from the cache" % imgs.shape[0], flush=True)

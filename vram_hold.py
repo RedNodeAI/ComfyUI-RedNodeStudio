@@ -22,10 +22,10 @@ that does not hold.
 """
 
 GB = 1024 ** 3
-CARD_GB = (8, 12, 16, 24)
+CARD_GB = (8, 12, 16, 24, 32)
 HEADROOM_GB = 0.5
 # the dial ceilings each card size takes (VRAM_CAPS in workspace.py)
-TIER_FOR_GB = {8: "low", 12: "low", 16: "low", 24: "medium"}
+TIER_FOR_GB = {8: "low", 12: "low", 16: "low", 24: "medium", 32: "high"}
 LEGACY_GB = {"low": 16, "medium": 24}
 HOLD_MODES = ("auto", "on", "off")
 _orig = {"reserve": None, "headroom": None}
