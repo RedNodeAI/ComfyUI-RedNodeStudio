@@ -46,6 +46,7 @@ const RUN = {
   finalFiles: [],      // the same as file records, for the thumbnail strip
   finalIdx: 0,
   batch: 1,            // the largest batch a pass sampled
+  paint: false,        // a Paint tab run: the paint pass, not the render plan
   promptId: null,
 };
 const LOG_MAX = 200;
@@ -73,7 +74,7 @@ function keepSheet() {
   HISTORY.unshift({
     past: true,
     count: RUN.count, status: RUN.status, t0: RUN.t0, t1: RUN.t1,
-    seed: RUN.seed, rig: RUN.rig, batch: RUN.batch, cached: RUN.cached,
+    seed: RUN.seed, rig: RUN.rig, batch: RUN.batch, cached: RUN.cached, paint: RUN.paint,
     stages: new Map([...RUN.stages].map(([k, s]) => [k, { ...s, info: { ...(s.info || {}) } }])),
     running: "", frame: null,
     log: RUN.log.map((l) => ({ ...l })),
@@ -117,6 +118,7 @@ function resetRun() {
   RUN.finalFiles = [];
   RUN.finalIdx = 0;
   RUN.batch = 1;
+  RUN.paint = false;
   for (const v of views) v.node._rnRunSheet = null;
   logLine("Run started");
 }
@@ -163,6 +165,7 @@ export function onRunEvent(d) {
   } else if (d.kind === "info") {
     if (d.info?.seed != null) RUN.seed = d.info.seed;
     if (d.info?.rig) RUN.rig = d.info.rig;
+    if (d.info?.paint) RUN.paint = true;
   } else if (d.kind === "stage") {
     const s = RUN.stages.get(d.key) || { label: d.label };
     if (d.label && d.label !== d.key) s.label = d.label;
@@ -619,6 +622,7 @@ export function jumpForStage(key, cfg) {
   if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
   if (key === "reangle") return { tab: "i2i", sub: "reangle" };
+  if (key === "paint") return { tab: "paint" };
   if (key === "detailer") return { tab: "detailer" };
   if (key === "post") return { tab: "post" };
   if (key === "save") return { tab: "run", sub: "save" };
@@ -639,6 +643,7 @@ export function jumpForLine(text, cfg) {
   if (/^Decode /.test(t)) return { tab: "models" };
   if (/^Swap /.test(t)) return { tab: "i2i", sub: "swap" };
   if (/^Re-angle /.test(t)) return { tab: "i2i", sub: "reangle" };
+  if (/^Paint[ :]/.test(t)) return { tab: "paint" };
   if (/^Detailer/.test(t)) return { tab: "detailer" };
   if (/^Post FX/.test(t)) return { tab: "post" };
   if (/^Save /.test(t)) return { tab: "run", sub: "save" };
@@ -979,8 +984,9 @@ const STATE_TEXT = { waiting: "Waiting", start: "Running", progress: "Running", 
 function stageRows(node) {
   const cfg = node._rnCfg;
   const S = shownSheet(node);
-  // a past run: what it reported, in order; today's settings are not its plan
-  if (S.past) {
+  // a past run: what it reported, in order; today's settings are not its plan.
+  // A paint run too: it is the paint pass, not the render the plan describes
+  if (S.past || S.paint) {
     return [...S.stages].map(([key, s]) => ({ key, label: s.label || key, s, state: s.state }));
   }
   const plan = plannedStages(node, cfg);
@@ -1023,6 +1029,7 @@ function refresh(view) {
   chip(S.count ? `Run ${S.count}` : "No run yet");
   if (S.seed != null) chip(`Seed ${S.seed}`);
   if (S.batch > 1) chip(`Batch of ${S.batch}`);
+  if (S.paint) chip("Paint run", "rn-run-paint");
   chip(S.status === "running" ? `Running ${clock(took)}`
        : S.status === "done" ? `Done in ${clock(took)}`
        : S.status === "error" ? "Failed" : S.status === "stopped" ? "Stopped" : "Idle",
@@ -1167,7 +1174,8 @@ function refresh(view) {
     for (const H of HISTORY) {
       const how = H.status === "done" ? `Done in ${clock(sheetSecs(H))}`
         : H.status === "stopped" ? "Stopped" : "Failed";
-      const bits = [timeOfDay(H.t0), how, H.batch > 1 ? `batch of ${H.batch}` : "",
+      const bits = [timeOfDay(H.t0), how, H.paint ? "paint" : "",
+                    H.batch > 1 ? `batch of ${H.batch}` : "",
                     H.seed != null ? `seed ${H.seed}` : ""].filter(Boolean);
       item(`Run ${H.count}`, bits.join(" · "), S === H,
            () => { node._rnRunSheet = H; refreshAll(); }, H.status);
@@ -1341,6 +1349,7 @@ export const RUN_CSS = `
 .rn-run-line{display:grid;grid-template-columns:44px 10px 1fr;gap:8px;align-items:center;
   font-size:12.5px;color:#c8ccd2}
 .rn-run-line .tm{color:#7b828c;font-variant-numeric:tabular-nums}
+.rn-ws-chip.rn-run-paint{border-color:#b8283c;color:#f3b0ba}
 .rn-run-past{flex-direction:row;align-items:center;gap:10px;border-color:#8fa8c8;
   background:#1a2230}
 .rn-run-past .tx{flex:1;color:#cdd9ea}

@@ -15799,6 +15799,7 @@ app.registerExtension({
       const node = byRun || allNodes().find((n) => n?.type === NODE_NAME
         && String(n.id) === String(d.node) && n._rnPaintProgress?.active);
       if (!node || !node._rnPaintProgress?.active) return;
+      if (!node._rnCfg?.paint?.on) return;      // the tab is off: nothing to draw for
       showPaintLiveFrame(node, d);
     });
     api.addEventListener?.("progress", (e) => {

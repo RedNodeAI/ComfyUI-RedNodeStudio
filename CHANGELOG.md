@@ -350,6 +350,13 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- A paint run reads as one on the Run tab: a Paint box of its own (with the
+  pass count and steps), a Paint run chip, and a line saying what it is
+  painting: the painted area, everything except it, or the whole frame, the
+  size and the working size, denoise, passes, steps, cfg, feather, blend and
+  the references. The Paint tab's console lines are in the log too, failures
+  as warnings, and each leads to the Paint tab. History marks paint runs
+- The Paint tab draws no live frame while its switch is off
 - The Paint tab's result has a full screen viewer of its own: the Full screen
   button on the result pane, or a double-click on the result at 1:1, opens
   the Image Review's room over the tab's result history. Wheel zooms, drag

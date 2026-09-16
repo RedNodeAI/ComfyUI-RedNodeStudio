@@ -21,6 +21,47 @@ import torch.nn.functional as F
 
 import comfy.sample
 import comfy.samplers
+
+from . import run_events as _run
+
+WARN_WORDS = ("failed", "could not", "unusable", "nothing to render", "nothing is painted",
+              "no clip", "caps it", "ignored", "without the references")
+
+
+def _say(line, level=None):
+    """A Paint line on the console and in the Run tab's log."""
+    print("[RedNode Paint] " + line, flush=True)
+    if level is None:
+        low = line.lower()
+        level = "warn" if any(w in low for w in WARN_WORDS) else "info"
+    _run.note("Paint: " + line, level)
+
+
+def paint_summary(pc, whole, crop, work, refs=()):
+    """One line saying what this paint pass is: where it paints, at what size, and
+    the dials that shape it (the Run tab's log)."""
+    where = ("the whole frame" if whole
+             else "everything except the painted area" if pc.get("invert")
+             else "the painted area")
+    bits = ["%s, %d x %d" % (where, crop[0], crop[1])]
+    if tuple(work) != tuple(crop):
+        bits[-1] += " rendered at %d x %d" % (work[0], work[1])
+    bits.append("denoise %.2f" % float(pc.get("denoise", 0.6)))
+    passes = int(pc.get("passes", 1) or 1)
+    if passes > 1:
+        bits.append("%d passes" % passes)
+    if pc.get("steps"):
+        bits.append("%d steps" % int(pc["steps"]))
+    if pc.get("cfg") is not None:
+        bits.append("cfg %g" % float(pc["cfg"]))
+    if not whole:
+        bits.append("feather %d" % int(pc.get("feather", 4)))
+    if float(pc.get("blend", 1.0)) < 1.0:
+        bits.append("blend %.2f" % float(pc["blend"]))
+    if refs:
+        bits.append("with the %s as reference" % " and ".join(refs))
+    return ", ".join(bits)
+
 import comfy.utils
 import folder_paths
 import nodes
@@ -403,8 +444,7 @@ class RedNodePaintRender:
                 auto_cond = _encode_text(clip, auto_words)
                 pos_over = nodes.ConditioningConcat().concat(
                     pos_over, auto_cond)[0]
-            print("[RedNode Paint] painting with the wired override conditioning",
-                  flush=True)
+            _say("painting with the wired override conditioning")
             return pos_over, neg_over if neg_over is not None else negative
         typed = str((pc or {}).get("prompt") or "").strip()
         if typed:
@@ -426,9 +466,9 @@ class RedNodePaintRender:
                 missing.append("a prompt typed on the Paint tab")
             if clip is None:
                 missing.append("a clip wired into this node")
-            print(f"[RedNode Paint] {', '.join(refs_on)} switched on as a reference, but "
+            _say(f"{', '.join(refs_on)} switched on as a reference, but "
                   f"reference painting also needs {' and '.join(missing)}. Painting "
-                  "without the references.", flush=True)
+                  "without the references.")
         if typed and clip is not None and refs_on:
             built = RedNodePaintRender._with_refs(clip, vae, combined, pc, prompt)
             if built is not None:
@@ -437,9 +477,8 @@ class RedNodePaintRender:
             neg_words = str((pc or {}).get("negative") or "").strip()
             pos = _encode_text(clip, combined)
             neg = _encode_text(clip, neg_words)
-            print(f"[RedNode Paint] painting with the tab's own prompt: "
-                  f"{combined[:60]}",
-                  flush=True)
+            _say(f"painting with the tab's own prompt: "
+                  f"{combined[:60]}")
             return pos, neg
         if auto_words and clip is not None:
             # An empty Paint box promises to keep the wired main conditioning. Encode
@@ -447,18 +486,17 @@ class RedNodePaintRender:
             # conditioning metadata and references instead of replacing them.
             auto_cond = _encode_text(clip, auto_words)
             pos = nodes.ConditioningConcat().concat(positive, auto_cond)[0]
-            print("[RedNode Paint] combined the automatic caption with the main "
-                  "conditioning", flush=True)
+            _say("combined the automatic caption with the main "
+                  "conditioning")
             return pos, negative
         if typed:
-            print("[RedNode Paint] the Paint tab has a prompt but no CLIP is wired to "
+            _say("the Paint tab has a prompt but no CLIP is wired to "
                   "this node, so it cannot be encoded. Wire clip, wire the override "
-                  "inputs, or clear the prompt to use the main conditioning.",
-                  flush=True)
+                  "inputs, or clear the prompt to use the main conditioning.")
         elif auto_words:
-            print("[RedNode Paint] Auto Prompt is on but no CLIP is wired, so its "
+            _say("Auto Prompt is on but no CLIP is wired, so its "
                   "caption cannot be combined with the main conditioning. Wire clip "
-                  "or use Paint Out's text prompt output.", flush=True)
+                  "or use Paint Out's text prompt output.")
         return positive, negative
 
     @staticmethod
@@ -480,8 +518,8 @@ class RedNodePaintRender:
                                or _wsg.rig_lora_set(cfg), "Paint")
         slots = lc.get("slots") or []
         if not lc.get("on", True) or not slots:
-            print("[RedNode Paint] use LoRAs is on but the Workspace's LoRAs tab is "
-                  "empty or off, so the model is used as it arrived", flush=True)
+            _say("use LoRAs is on but the Workspace's LoRAs tab is "
+                  "empty or off, so the model is used as it arrived")
             return model, clip
         try:
             from . import lora_stack as _lora
@@ -489,12 +527,12 @@ class RedNodePaintRender:
                 model, clip, _lora.CUSTOM_SENTINEL,
                 json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
                 int(lc.get("seed", 0) or 0), None, tag="Paint LoRAs (%s)" % lc["name"])
-            print(f"[RedNode Paint] LoRAs applied for this paint: {applied}. If the "
+            _say(f"LoRAs applied for this paint: {applied}. If the "
                   "model wired here already went through the LoRAs tab, they are on "
-                  "twice; switch this off.", flush=True)
+                  "twice; switch this off.")
         except Exception as e:
-            print(f"[RedNode Paint] could not apply the LoRAs ({e}); painting with the "
-                  "model as it arrived", flush=True)
+            _say(f"could not apply the LoRAs ({e}); painting with the "
+                  "model as it arrived")
         return model, clip
 
     @staticmethod
@@ -519,8 +557,8 @@ class RedNodePaintRender:
             refs["moodboard_style"] = _tab_image(wcfg, "moodboard")
         refs = {k: v for k, v in refs.items() if v is not None}
         if not refs:
-            print("[RedNode Paint] reference painting is on but those tabs have no "
-                  "image, so the patch uses the prompt alone", flush=True)
+            _say("reference painting is on but those tabs have no "
+                  "image, so the patch uses the prompt alone")
             return None
         dials = wcfg.get("dials") if isinstance(wcfg.get("dials"), dict) else {}
         preset = str(wcfg.get("studio_preset") or "").strip() or "Balanced"
@@ -531,13 +569,14 @@ class RedNodePaintRender:
                 style_strength=float(dials.get("style_strength", 0.5)),
                 negative_prompt=str(pc.get("negative") or ""), vae=vae, **refs)
         except Exception as e:
-            print(f"[RedNode Paint] could not build the reference conditioning ({e}); "
-                  "using the prompt alone instead", flush=True)
+            _say(f"could not build the reference conditioning ({e}); "
+                  "using the prompt alone instead")
             return None
-        print(f"[RedNode Paint] painting with {', '.join(sorted(refs))} as reference, "
-              f"preset {preset}", flush=True)
+        _say(f"painting with {', '.join(sorted(refs))} as reference, "
+              f"preset {preset}")
         return pos, neg
 
+    @_run.tracked("paint", "Paint")
     def render(self, model=None, positive=None, negative=None, vae=None,
                seed=0, steps=8, cfg=1.0,
                sampler_name="euler", scheduler="simple", run_token="", passes=1,
@@ -551,21 +590,22 @@ class RedNodePaintRender:
                     "result": (image if image is not None
                                else _ws.blank_frame(),)}
         pc = _paint_from_prompt(prompt) or {}
+        _run.info(paint=True)
         # a wired image is never thrown away: if the tab has nothing to say, the
         # picture still comes back out rather than being replaced by a black frame
         if not pc.get("on") or (image is None and not pc.get("source")):
-            print("[RedNode Paint] nothing to render: switch the Paint tab on and paint "
-                  "something", flush=True)
+            _run.skip("paint", "Paint", "the Paint tab is off or has no picture")
+            _say("nothing to render: switch the Paint tab on and paint "
+                  "something")
             return _out(image if image is not None else _ws.blank_frame())
 
         if image is not None:
             base = image
-            print(f"[RedNode Paint] painting the WIRED image "
-                  f"({image.shape[2]} x {image.shape[1]})", flush=True)
+            _say(f"painting the WIRED image "
+                  f"({image.shape[2]} x {image.shape[1]})")
         else:
             base = _ws.load_image_or_blank(pc["source"], 0, "RedNode Paint Render")
-            print(f"[RedNode Paint] painting {pc['source']} from the Paint tab",
-                  flush=True)
+            _say(f"painting {pc['source']} from the Paint tab")
         # colour mode's sheet becomes part of the picture being painted, wired or
         # not: the wired image in every real route IS the tab's source (the door,
         # the upscale round trip), and the mask already follows the same rule
@@ -576,22 +616,23 @@ class RedNodePaintRender:
             try:
                 mask = _ws.load_mask(pc["mask"], (full_h, full_w))
             except ValueError as e:
-                print(f"[RedNode Paint] the mask is unusable ({e})", flush=True)
+                _say(f"the mask is unusable ({e})")
 
         if mask is not None and pc.get("invert"):
             # painting what stays rather than what changes, which is quicker when the
             # thing you want kept is smaller than the thing you want redone
             mask = 1.0 - mask
-            print("[RedNode Paint] the painted area is inverted: everything you did "
-                  "NOT paint is what changes", flush=True)
+            _say("the painted area is inverted: everything you did "
+                  "NOT paint is what changes")
 
         if mask is None or not pc.get("mask_only", True):
             box = (0, full_h, 0, full_w)
         else:
             box = _bbox(mask)
             if box is None:
-                print("[RedNode Paint] nothing is painted yet, so there is nothing to "
-                      "render", flush=True)
+                _run.skip("paint", "Paint", "nothing is painted yet")
+                _say("nothing is painted yet, so there is nothing to "
+                      "render")
                 return _out(base)
             # the shape step: grow the box toward an aspect the model knows, adding
             # context rather than trimming paint. Defaults to auto, so a config saved
@@ -601,9 +642,9 @@ class RedNodePaintRender:
                                    region_aspect(box[3] - box[2], box[1] - box[0],
                                                  shape))
             if grown != box:
-                print(f"[RedNode Paint] region grown for shape ({shape}): "
+                _say(f"region grown for shape ({shape}): "
                       f"{box[3] - box[2]} x {box[1] - box[0]} to "
-                      f"{grown[3] - grown[2]} x {grown[1] - grown[0]}", flush=True)
+                      f"{grown[3] - grown[2]} x {grown[1] - grown[0]}")
             box = grown
         y0, y1, x0, x1 = box
 
@@ -638,21 +679,19 @@ class RedNodePaintRender:
             scaled = target != max(crop_h, crop_w)
             work = _fit(crop, target) if scaled else _round8(crop)
             if capped:
-                print(f"[RedNode Paint] whole frame wanted {want} px but the {tier} VRAM "
+                _say(f"whole frame wanted {want} px but the {tier} VRAM "
                       f"tier caps it at {cap}, so it renders at {work.shape[2]} x "
                       f"{work.shape[1]}. Raise the tier in the Workspace footer, or "
-                      "switch off Fit large frames.", flush=True)
+                      "switch off Fit large frames.")
             elif work.shape[2] != crop_w or work.shape[1] != crop_h:
-                print(f"[RedNode Paint] whole frame {crop_w} x {crop_h} scaled to "
+                _say(f"whole frame {crop_w} x {crop_h} scaled to "
                       f"{work.shape[2]} x {work.shape[1]} by the mask size, denoise "
                       f"{pc['denoise']}"
-                      + (" (mask limits what changes)" if mask is not None else ""),
-                      flush=True)
+                      + (" (mask limits what changes)" if mask is not None else ""))
             else:
-                print(f"[RedNode Paint] whole frame at its own {work.shape[2]} x "
+                _say(f"whole frame at its own {work.shape[2]} x "
                       f"{work.shape[1]}, denoise {pc['denoise']}"
-                      + (" (mask limits what changes)" if mask is not None else ""),
-                      flush=True)
+                      + (" (mask limits what changes)" if mask is not None else ""))
         else:
             # A painted region is small, so rendering it AT the mask size puts more
             # pixels on it than it had. That extra resolution is the detail, and it is
@@ -666,18 +705,16 @@ class RedNodePaintRender:
             want = int(pc.get("mask_size", 1024))
             budget = min(want, cap)
             if budget < want:
-                print(f"[RedNode Paint] region wanted a {want} px budget but the {tier} "
-                      f"VRAM tier caps it at {cap}", flush=True)
+                _say(f"region wanted a {want} px budget but the {tier} "
+                      f"VRAM tier caps it at {cap}")
             floor = bool(pc.get("region_floor"))
             work = _fit_region(crop, budget, cap=cap, floor=floor)
             if floor and work.shape[2] >= crop_w and work.shape[1] >= crop_h \
                     and crop_w * crop_h > budget * budget:
-                print(f"[RedNode Paint] Never shrink is on, so this region renders at "
-                      f"its own size rather than coming down to the {budget} px budget",
-                      flush=True)
-            print(f"[RedNode Paint] region {crop_w} x {crop_h} rendered at "
-                  f"{work.shape[2]} x {work.shape[1]}, denoise {pc['denoise']}",
-                  flush=True)
+                _say(f"Never shrink is on, so this region renders at "
+                      f"its own size rather than coming down to the {budget} px budget")
+            _say(f"region {crop_w} x {crop_h} rendered at "
+                  f"{work.shape[2]} x {work.shape[1]}, denoise {pc['denoise']}")
 
         # WHOLE FRAME AT ZERO DENOISE IS A PURE SCALE, so it does not sample. This is a
         # real step in the way this tab gets used: run the frame up to working resolution
@@ -687,9 +724,9 @@ class RedNodePaintRender:
         # minutes for nothing. Skipping the VAE round trip matters too: encode and decode
         # are not lossless, so the "unchanged" frame really is unchanged.
         if whole and float(pc.get("denoise", 0.6)) <= 0.0:
-            print(f"[RedNode Paint] whole frame at denoise 0: scaled to "
+            _say(f"whole frame at denoise 0: scaled to "
                   f"{work.shape[2]} x {work.shape[1]} and handed straight back, with no "
-                  "sampling and no VAE round trip", flush=True)
+                  "sampling and no VAE round trip")
             return _out(work)
 
         # THE RIG FILLS WHAT IS NOT WIRED, through the paint LoRA routing, the same
@@ -709,8 +746,7 @@ class RedNodePaintRender:
                 if vae is None and _rv is not None:
                     vae = _rv
             except Exception as exc:
-                print("[RedNode Paint] no Models-tab rig to fill from: %s" % exc,
-                      flush=True)
+                _say("no Models-tab rig to fill from: %s" % exc)
 
         model, clip = self._apply_loras(model, clip, pc, prompt)
         pos, neg = self._conditioning(clip, positive, negative, pc,
@@ -718,6 +754,9 @@ class RedNodePaintRender:
                                       prompt=prompt, vae=vae)
         rgb = work[:, :, :, :3]
         latent = {"samples": vae.encode(rgb)}
+        _refs = [k[4:].capitalize() for k in ("use_subject", "use_scene", "use_moodboard")
+                 if pc.get(k)]
+        _say(paint_summary(pc, whole, (crop_w, crop_h), (rgb.shape[2], rgb.shape[1]), _refs))
         # The Paint tab owns these when it has them, the same way it already owns
         # denoise, so the dials you are looking at while painting are the ones that run.
         # Absent means a workflow saved before the tab had them: the widgets on this
@@ -756,8 +795,9 @@ class RedNodePaintRender:
             work_mask = work_mask.squeeze(1).unsqueeze(-1).to(rgb.dtype)
         for i in range(passes):
             if passes > 1:
-                print(f"[RedNode Paint] pass {i + 1} of {passes}, denoise {denoise:.2f}",
-                      flush=True)
+                _run.progress("paint", "Paint", current=i + 1, of=passes,
+                              what="denoise %.2f" % denoise)
+                _say(f"pass {i + 1} of {passes}, denoise {denoise:.2f}")
             # every step streams a small frame to the Paint tab's result pane and
             # to any Live Preview node, tagged with this node (the workspace's id
             # on the built-in paint door) and the run (live_preview.py)
@@ -805,15 +845,14 @@ class RedNodePaintRender:
             up = F.interpolate(base.permute(0, 3, 1, 2), size=(big_h, big_w),
                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
             if mask is None:
-                print(f"[RedNode Paint] done; the frame comes back at {big_w} x {big_h}",
-                      flush=True)
+                _say(f"done; the frame comes back at {big_w} x {big_h}")
                 return _out(painted)
             m = F.interpolate(mask.unsqueeze(1), size=(big_h, big_w),
                               mode="bilinear", align_corners=False).squeeze(1)
             m = blend_mask(m.unsqueeze(-1).to(painted.dtype), pc)
             result = up * (1 - m) + painted[..., :up.shape[-1]] * m
-            print(f"[RedNode Paint] done; the frame comes back at {big_w} x {big_h}, "
-                  "with only the painted area re-rendered", flush=True)
+            _say(f"done; the frame comes back at {big_w} x {big_h}, "
+                  "with only the painted area re-rendered")
             return _out(result)
 
         # back to the crop's own size, then into the picture through the mask so only
@@ -832,8 +871,7 @@ class RedNodePaintRender:
             result[:, y0:y1, x0:x1, :] = crop * (1 - m) + back * m
         else:
             result[:, y0:y1, x0:x1, :] = back
-        print("[RedNode Paint] done; the rest of the picture was never re-rendered",
-              flush=True)
+        _say("done; the rest of the picture was never re-rendered")
         return _out(result)
 
 
@@ -869,7 +907,7 @@ def _out(image):
         return {"ui": {"images": [{"filename": name, "subfolder": "", "type": "temp"}]},
                 "result": (image,)}
     except Exception as e:
-        print(f"[RedNode Paint] could not write the preview ({e})", flush=True)
+        _say(f"could not write the preview ({e})")
         return (image,)
 
 
@@ -905,7 +943,7 @@ def _tab_image(cfg, name, target=1024):
     try:
         return _ws.load_image(images[int(sel) % len(images)], target)
     except Exception as e:
-        print(f"[RedNode Paint] could not load the {name} reference ({e})", flush=True)
+        _say(f"could not load the {name} reference ({e})")
         return None
 
 
