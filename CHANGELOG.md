@@ -66,6 +66,10 @@ cheap to judge.
   holding only the settings that vary, with Ramp Up and Down for each one.
   With Re-angle's Skip the pass on, the Source and Passes lights turn amber and
   the Passes tab says the passes are skipped
+- Subject, People, Scene and Masks are one Krea 2 Identity tab with a sub-tab
+  each, the same strip of lights and status bar as Img2Img, so the top bar is
+  three tabs shorter. A workflow saved on one of the old tabs opens on its
+  sub-tab
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,
   with a dashed 1024 square behind it for scale, and the Size card now carries

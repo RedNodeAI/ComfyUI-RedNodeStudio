@@ -11,7 +11,7 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { TAB_ORDER, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
+import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit } from "./rednode_ws_tables.js";
@@ -11584,6 +11584,77 @@ function i2iTabs(node, body) {
   } else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
 }
 
+// ---- Krea 2 Identity as sub-tabs ---------------------------------------------------
+// Subject, People, Scene and Masks under one tab: the same strip and status bar as
+// Img2Img. Subject and Scene get the toolbar gallery with its dials, auto prompt and
+// converter under it; People and Masks keep their own bodies.
+function identityTabs(node, body) {
+  const cfg = node._rnCfg;
+  const props = (node.properties ||= {});
+  let sub = node._rnIdSub || props.rn_identity_sub || "subject";
+  if (!IDENTITY_SUBS.some((s) => s.id === sub)) sub = "subject";
+  node._rnIdSub = sub;
+
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub";
+  for (const s of IDENTITY_SUBS) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (s.id === sub ? " cur" : "");
+    b.dataset.sub = s.id;
+    b.title = s.tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (tabLit(cfg, s.id) ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = s.label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnIdSub = s.id; props.rn_identity_sub = s.id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  if (sub === "subject" || sub === "scene") {
+    const t = cfg.tabs[sub];
+    const on = document.createElement("button");
+    on.className = "rn-ws-sw" + (t.on ? " on" : "");
+    on.title = t.on ? "This tab feeds the studio. Click to disable it."
+                    : "Disabled: this tab outputs nothing.";
+    on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
+    bar.appendChild(on);
+  }
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Krea 2 Identity";
+  bar.appendChild(nm);
+  const pics = (n) => `${n} Image${n === 1 ? "" : "s"}`;
+  const tabState = (t) => (t.on ? pics(t.images.length) : "Off");
+  const s2 = cfg.tabs.subject2, s3 = cfg.tabs.subject3;
+  const bm = cfg.tabs.boost_mask, em = cfg.tabs.edit_mask;
+  for (const text of [
+    `Subject: ${tabState(cfg.tabs.subject)}`,
+    `People: ${s2.on || s3.on
+      ? pics((s2.on ? s2.images.length : 0) + (s3.on ? s3.images.length : 0)) : "Off"}`,
+    `Scene: ${tabState(cfg.tabs.scene)}`,
+    `Masks: ${bm.on && em.on ? "Boost + Edit" : bm.on ? "Boost" : em.on ? "Edit" : "Off"}`,
+  ]) {
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  body.appendChild(bar);
+
+  if (sub === "people") peopleBody(node, body);
+  else if (sub === "masks") masksBody(node, body);
+  else {
+    galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
+    dialSection(node, body, sub);                  // the tab's own dials
+    autoSection(node, body, sub);                  // captions for its image
+    converterSection(node, body, sub);             // then the Prompt Converter
+  }
+}
+
 // THE PASSES TAB: setup on the left (kind, count, which settings vary per pass, the
 // values every pass shares), one card per pass on the right holding only the
 // settings that vary. Same config keys and rules as the stacked pass box.
@@ -12917,7 +12988,8 @@ function applyTuck(node) {
 // the studio settings. The group field colours the strip so the purposes read.
 
 const tabLit = (cfg, id) =>
-  id === "people" ? (cfg.tabs.subject2.on && cfg.tabs.subject2.images.length) ||
+  id === "identity" ? IDENTITY_SUBS.some((s) => tabLit(cfg, s.id))
+  : id === "people" ? (cfg.tabs.subject2.on && cfg.tabs.subject2.images.length) ||
                     (cfg.tabs.subject3.on && cfg.tabs.subject3.images.length)
   // ON is enough to light the tab: a wired boost_mask_in/edit_mask_in counts even
   // before anything is painted, and the ON click deserves visible feedback either way
@@ -13009,11 +13081,17 @@ export function render(node) {
   if (node._rnTab === undefined && node.properties?.rn_tab) {
     node._rnTab = String(node.properties.rn_tab);
   }
+  if (IDENTITY_SUBS.some((s) => s.id === node._rnTab)) {
+    node._rnIdSub = node._rnTab;
+    (node.properties ||= {}).rn_identity_sub = node._rnTab;
+    node._rnTab = "identity";
+    node.properties.rn_tab = "identity";
+  }
   restoreFolds(node);
   const hidden = hiddenTabSet();
   const tabsShown = TAB_ORDER.filter((t) => t.id === "advanced"
     || t.id === node._rnTab || !hidden.has(t.id));
-  const fallbackTab = !hidden.has("subject") ? "subject"
+  const fallbackTab = !hidden.has("identity") ? "identity"
     : (TAB_ORDER.find((t) => !hidden.has(t.id))?.id || "advanced");
   const cur = TAB_ORDER.some((t) => t.id === node._rnTab) ? node._rnTab : fallbackTab;
   // Most controls still rebuild this body today. Keep the outgoing tab's position in
@@ -13085,12 +13163,11 @@ export function render(node) {
   const body = document.createElement("div");
   body.className = "rn-ws-body"
     + (["paint", "prompts", "latent"].includes(cur) ? " full" : "");
-  if (cur === "people") peopleBody(node, body);
+  if (cur === "identity") identityTabs(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
   else if (cur === "camera") cameraBody(node, body);
   else if (cur === "latent") latentBody(node, body);
-  else if (cur === "masks") masksBody(node, body);
   else if (cur === "post") postBody(node, body);
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "loras") lorasBody(node, body);
@@ -13100,7 +13177,7 @@ export function render(node) {
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (cur !== "i2i") {
+  if (cur !== "i2i" && cur !== "identity") {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

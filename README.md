@@ -129,13 +129,15 @@ post chain and into the save tree.
 
 ![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
 
-**Moodboard, Subject, People, Scene.** Galleries per role, with the fidelity and identity dials
-under them and captioning built in. Subject is the face to keep; People are the extra subjects;
-Scene is a place rebuilt as in-context latents; Moodboard batches several pictures into one style
-signal. Right-click a picture for the gallery menu.
+**Krea 2 Identity: Subject, People, Scene, Masks.** One tab with a sub-tab for each, and a
+light on each showing what is in use. Subject is the face to keep; People are the extra
+subjects; Scene is a place rebuilt as in-context latents. Each gallery has the fidelity and
+identity dials under it and captioning built in. Masks holds the subject boost mask, which rides
+into the identity edit and is sized against the Subject picture, and the edit mask that confines
+the pass.
 
-**Masks.** The subject boost mask, which rides into the identity edit and is sized against the
-Subject picture, and the edit mask that confines the pass.
+**Moodboard.** Batches several pictures into one style signal. Right-click a picture in any
+gallery for the gallery menu.
 
 ![The Post tab: saved effects, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
 

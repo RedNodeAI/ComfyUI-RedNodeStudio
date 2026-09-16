@@ -20,12 +20,19 @@ export const TAB_ORDER = [
   { id: "i2i", label: "Img2Img", group: "canvas" },
   { id: "paint", label: "Paint", group: "canvas" },
   { id: "moodboard", label: "Moodboard", group: "mood" },
-  { id: "subject", label: "Subject", group: "edit" },
-  { id: "people", label: "People", group: "edit" },
-  { id: "scene", label: "Scene", group: "edit" },
-  { id: "masks", label: "Masks", group: "edit" },
+  // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
+  { id: "identity", label: "Krea 2 Identity", group: "edit" },
   { id: "post", label: "Post", group: "post" },
   { id: "advanced", label: "Advanced", group: "cfg" },
+];
+
+// The Krea 2 Identity tab's sub-tabs: the tabs that feed the identity system. Their
+// ids are the old top-level tab ids, so a saved rn_tab of "people" still lands there.
+export const IDENTITY_SUBS = [
+  { id: "subject", label: "SUBJECT", tip: "The person to preserve: the face you want kept." },
+  { id: "people", label: "PEOPLE", tip: "A second and third person, each with their own reference." },
+  { id: "scene", label: "SCENE", tip: "The place: the setting the people are put into." },
+  { id: "masks", label: "MASKS", tip: "The subject boost and edit masks, painted in place." },
 ];
 
 // The gallery tabs and their headings.
