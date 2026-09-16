@@ -13,6 +13,7 @@ import { postBody, looksSection, openPostCog, refreshPostPresets,
 import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
+import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
@@ -477,6 +478,7 @@ css.textContent = `
 .rn-ws-pstatus{position:absolute;top:34px;right:6px;z-index:5;max-width:70%;
   border-radius:4px;background:#000c;color:#e5e7eb;padding:3px 6px;font-size:9.5px;
   pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rn-ws-pfs{position:absolute;top:6px;right:6px;z-index:3;width:auto;padding:0 10px}
 .rn-ws-rstrip{position:absolute;left:6px;bottom:6px;right:6px;display:flex;gap:4px;
   z-index:3;justify-content:center;pointer-events:none}
 .rn-ws-rstrip .t{position:static;width:auto;height:38px;max-width:64px;object-fit:cover;
@@ -2042,7 +2044,7 @@ function showResult(r, autoNode = null) {
   // the strip keeps the last five, newest first, without repeats of the same file
   if (resultHistory[0]?.filename !== r.filename
       || resultHistory[0]?.subfolder !== r.subfolder) {
-    resultHistory.unshift({ ...r });
+    resultHistory.unshift({ ...r, ts: Date.now() });
     resultHistory = resultHistory.slice(0, 5);
   }
   // allNodes walks subgraphs, so a Workspace tidied into one still hears it
@@ -2051,6 +2053,32 @@ function showResult(r, autoNode = null) {
     if (n.type === NODE_NAME && n._rnTab === "paint") render(n);
   }
   if (autoNode) schedulePaintAutoPrompt(autoNode, r);
+}
+
+// THE PAINT VIEWER: the Image Review's full screen room (zoom, pan, arrows through
+// the history, the right-click menu) opened on this tab's own results. The room
+// reads a host node's history, so one is built from the result strip each time it
+// opens: newest first, the picked picture in view.
+export function paintViewerHost(node, shown) {
+  const host = (node._rnPaintViewer ||= { id: `${node.id}:paint`, type: "RedNodeImageReview" });
+  host.graph = node.graph;
+  host.size ||= [0, 0];
+  host.setSize ||= () => {};
+  host._rnSized = true;
+  host.properties = { rn_review: resultHistory.map((r) => ({
+    files: [{ filename: r.filename, subfolder: r.subfolder || "", type: r.type || "output" }],
+    prompt: r.prompt_id || null, ts: r.ts || null,
+  })) };
+  const at = resultHistory.findIndex((r) => r.filename === shown?.filename
+    && (r.subfolder || "") === (shown?.subfolder || ""));
+  host._rnView = Math.max(0, at);
+  host._rnSlot = 0;
+  host._rnSlotFor = host._rnView;
+  return host;
+}
+export function openPaintViewer(node, shown) {
+  if (!shown && !resultHistory.length) return;
+  reviewFullscreen(paintViewerHost(node, shown || resultHistory[0]));
 }
 
 function adoptResult(node, r, why = "unknown") {
@@ -8642,6 +8670,15 @@ function paintBody(node, body) {
   tagR.className = "rn-ws-plabel";
   tagR.textContent = "Result";
   right.appendChild(tagR);
+  if (shownResult) {
+    const pfs = document.createElement("button");
+    pfs.className = "rn-ws-btn rn-ws-compact rn-ws-pfs";
+    pfs.textContent = "\u26F6 Full screen";
+    pfs.title = "See the result full size: wheel zooms, drag moves it, left and right walk "
+              + "the results, Esc closes. Right-click there for Copy, Copy prompt and Rerun.";
+    pfs.onclick = (e) => { e.stopPropagation(); openPaintViewer(node, node._rnResultView || shownResult); };
+    right.appendChild(pfs);
+  }
   const resultResolution = document.createElement("span");
   resultResolution.className = "rn-ws-presolution";
   resultResolution.style.display = "none";
@@ -8719,6 +8756,8 @@ function paintBody(node, body) {
     });
     rimg.addEventListener("dblclick", (e) => {
       e.stopPropagation();
+      // zoomed in, a double-click fits it again; at 1:1 it opens the viewer
+      if (RV.z === 1 && !RV.x && !RV.y) { openPaintViewer(node, shown); return; }
       RV.z = 1; RV.x = 0; RV.y = 0;
       applyRV();
     });

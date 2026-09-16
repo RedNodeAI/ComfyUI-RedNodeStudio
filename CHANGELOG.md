@@ -350,6 +350,11 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- The Paint tab's result has a full screen viewer of its own: the Full screen
+  button on the result pane, or a double-click on the result at 1:1, opens
+  the Image Review's room over the tab's result history. Wheel zooms, drag
+  moves, left and right walk the results, Esc closes, and the right-click
+  menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
 - The Paint tab's Subject, Scene and Moodboard reference toggles follow the
   Model choice: a built-in rig picked there decides whether references are
   offered, instead of the Models tab's active rig. Generate on a built-in
