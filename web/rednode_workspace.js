@@ -5692,7 +5692,145 @@ function paintLorasBody(node, body) {
 }
 
 // A row at the top of Advanced for things that ACT rather than configure.
+// THE WORKSPACE CARD on Advanced: the settings for the whole node that used to crowd
+// the footer. Resize and the studio preset change renders; the workspace presets save
+// and load the whole panel.
+function workspaceCard(node, body) {
+  const cfg = node._rnCfg;
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-wscard";
+  const ch = document.createElement("div");
+  ch.className = "ch";
+  ch.textContent = "WORKSPACE";
+  card.appendChild(ch);
+  const line = (label, ctrls, help) => {
+    const r = document.createElement("div");
+    r.className = "rn-ws-row";
+    r.style.flexWrap = "wrap";
+    const l = document.createElement("span");
+    l.className = "rn-ws-swlabel";
+    l.style.cssText = "min-width:150px;font-weight:600;color:#c8ccd2";
+    l.textContent = label;
+    r.append(l, ...ctrls);
+    const h = document.createElement("div");
+    h.className = "rn-ws-note";
+    h.textContent = help;
+    card.append(r, h);
+  };
+  const resLab = document.createElement("span");
+  resLab.className = "rn-ws-note";
+  resLab.textContent = "Resize long edge";
+  const res = document.createElement("select");
+  res.className = "rn-ws-res";
+  for (const [v, label] of [[1024, "1024 px"], [1536, "1536 px"], [0, "off (original size)"]]) {
+    const o = document.createElement("option");
+    o.value = String(v);
+    o.textContent = label;
+    o.selected = cfg.resize === v;
+    res.appendChild(o);
+  }
+  res.title = "Small images scale up, huge ones scale down, aspect kept. Keeps the studio fast "
+            + "whatever gets dropped in. VRAM note: 1536 costs about 2.25x the tokens of 1024, "
+            + "and the fidelity dials' bias matrix grows with that squared. 8 to 12 GB cards "
+            + "should stay at 1024.";
+  res.onchange = () => { cfg.resize = parseInt(res.value, 10); writeCfg(node); };
+  // the studio preset, drivable from here so the whole setup lives in one panel.
+  // The list is mirrored from a Krea2RedNode in the graph (it knows the saved user
+  // presets too); the fallback list covers a workspace placed before the studio.
+  const presetLab = document.createElement("span");
+  presetLab.className = "rn-ws-note";
+  presetLab.textContent = "Studio preset";
+  const psel = document.createElement("select");
+  psel.className = "rn-ws-res";
+  const studioNode = findNode("Krea2RedNode");
+  const presetValues = studioNode?.widgets?.find((w) => w.name === "preset")?.options?.values
+    || ["custom (use settings)", "Balanced", "Max identity", "Style only",
+        "Outfit transfer", "Pose transfer", "Anime to real", "Real to anime"];
+  for (const [v, label] of [["", "node's own"], ...presetValues.map((x) => [x, x])]) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = label;
+    o.selected = cfg.studio_preset === v;
+    psel.appendChild(o);
+  }
+  psel.title = "Overrides the studio node's preset through the bundle, announced in the "
+             + "console. Pick 'custom (use settings)' to hand control to the dials. "
+             + "'node's own' leaves the studio widget in charge.";
+  psel.onchange = () => {
+    cfg.studio_preset = psel.value;
+    writeCfg(node);
+    pushStudioPreset(node);                          // the studio dropdown follows visibly
+  };
+
+  line("Resize long edge", [res],
+       "Every gallery picture is scaled so its long side matches, aspect kept. 1024 suits "
+       + "most cards; 1536 costs about twice the VRAM.");
+  line("Studio preset", [psel],
+       "Hands the studio node a preset through the bundle. Node's own leaves its widget in "
+       + "charge; custom (use settings) hands control to the dials.");
+  // the workspace presets: the node's own preset widget, with save and delete beside it
+  const pw = findWidget(node, "preset");
+  const wsel = document.createElement("select");
+  wsel.className = "rn-ws-res rn-ws-wspreset";
+  for (const v of (pw?.options?.values || [CUSTOM_SENTINEL])) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = v === CUSTOM_SENTINEL ? "Custom (live)" : v;
+    o.selected = (pw?.value ?? CUSTOM_SENTINEL) === v;
+    wsel.appendChild(o);
+  }
+  wsel.title = "Load a saved workspace: galleries, selections, masks and dials. Loading "
+             + "replaces the whole panel.";
+  wsel.onchange = () => {
+    if (!pw) return;
+    pw.value = wsel.value;
+    pw.callback?.(wsel.value);
+  };
+  const saveAs = document.createElement("button");
+  saveAs.className = "rn-ws-btn rn-ws-bigbtn";
+  saveAs.textContent = "Save as";
+  saveAs.title = "Save this whole workspace under a name, for this machine.";
+  saveAs.onclick = async () => {
+    const name = (window.prompt("Name this workspace preset") || "").trim();
+    if (!name) return;
+    try {
+      const r = await api.fetchApi("/rednode/workspace_presets", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", name, config: node._rnCfg }),
+      });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error);
+      refreshPresetList(node, d.presets || []);
+      render(node);
+    } catch (e) { alert(`Could not save: ${e.message}`); }
+  };
+  const del = document.createElement("button");
+  del.className = "rn-ws-btn rn-ws-bigbtn";
+  del.textContent = "Delete";
+  del.disabled = !pw || !pw.value || pw.value === CUSTOM_SENTINEL;
+  del.title = del.disabled ? "Pick a saved preset first." : `Delete "${pw.value}".`;
+  del.onclick = async () => {
+    const name = pw?.value;
+    if (!name || name === CUSTOM_SENTINEL) return;
+    try {
+      const r = await api.fetchApi("/rednode/workspace_presets", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", name }),
+      });
+      const d = await r.json();
+      refreshPresetList(node, d.presets || []);
+      pw.value = CUSTOM_SENTINEL;
+      render(node);
+    } catch (e) { alert(`Could not delete: ${e.message}`); }
+  };
+  line("Workspace presets", [wsel, saveAs, del],
+       "Save and load the whole panel. Presets store file names, so they belong to this "
+       + "machine.");
+  body.appendChild(card);
+}
+
 function advancedTools(node, body) {
+  workspaceCard(node, body);
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   const btn = document.createElement("button");
@@ -12097,15 +12235,24 @@ function i2iSkipped(t) {
 }
 
 // true (lit), false (dark), or "skip" (amber: stood aside for Re-angle's skip)
+// A switched-off tab uses nothing on its pages; say so where it would look live
+function tabOffNote(name) {
+  const n = document.createElement("div");
+  n.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-offnote";
+  n.textContent = `${name} is off, so nothing on this page is used: no auto prompt, no `
+                + "boosts, no converter. Turn it on with the switch on the bar above.";
+  return n;
+}
+
 function i2iSubLit(cfg, id) {
   const t = cfg.tabs.i2i;
   if ((id === "source" || id === "passes") && t.on && i2iSkipped(t)) return "skip";
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
-  if (id === "auto") return !!t.auto?.on;
-  if (id === "reangle") return !!(t.reangle?.on && !t.prompt_only);
-  if (id === "swap") return !!(t.swap?.on && !t.prompt_only);
-  if (id === "converter") return convActive(t.conv);
+  if (id === "auto") return !!(t.on && t.auto?.on);
+  if (id === "reangle") return !!(t.on && t.reangle?.on && !t.prompt_only);
+  if (id === "swap") return !!(t.on && t.swap?.on && !t.prompt_only);
+  if (id === "converter") return !!t.on && convActive(t.conv);
   return false;
 }
 
@@ -12176,6 +12323,7 @@ function i2iTabs(node, body) {
                   + "Prompt only, so the source only donates its prompt.";
     body.appendChild(n);
   };
+  if (!t.on && sub !== "source") body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
   else if (sub === "passes") passesTab(node, body);
   else if (sub === "auto") autoSection(node, body, "i2i", { flat: true });
@@ -12254,10 +12402,10 @@ function identityTabs(node, body) {
   const t = cfg.tabs[sub];
   const innerSubs = [
     ["gallery", "GALLERY", tabLit(cfg, sub)],
-    ["boosts", "BOOSTS", !!(cfg.use_dials && DIALS.some((dd) => dd.tab === sub
+    ["boosts", "BOOSTS", !!(t.on && cfg.use_dials && DIALS.some((dd) => dd.tab === sub
                                                      && cfg.dials[dd.key] !== undefined))],
-    ["auto", "AUTO PROMPT", !!t.auto?.on],
-    ["converter", "CONVERTER", convActive(t.conv)],
+    ["auto", "AUTO PROMPT", !!(t.on && t.auto?.on)],
+    ["converter", "CONVERTER", !!t.on && convActive(t.conv)],
   ];
   const ikey = "rn_identity_" + sub;
   let inner = (node._rnIdInner ||= {})[sub] || props[ikey] || "gallery";
@@ -12277,6 +12425,7 @@ function identityTabs(node, body) {
     istrip.appendChild(b);
   }
   body.appendChild(istrip);
+  if (!t.on && inner !== "gallery") body.appendChild(tabOffNote(sub === "subject" ? "Subject" : "Scene"));
   if (inner === "gallery") galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
   else if (inner === "boosts") dialSection(node, body, sub, { flat: true });
   else if (inner === "auto") autoSection(node, body, sub, { flat: true });
@@ -13986,51 +14135,6 @@ export function render(node) {
   });
   uiWrap.append(uiLab, uiRng, uiVal);
   foot.appendChild(uiWrap);
-  const resLab = document.createElement("span");
-  resLab.className = "rn-ws-note";
-  resLab.textContent = "Resize long edge to";
-  const res = document.createElement("select");
-  res.className = "rn-ws-res";
-  for (const [v, label] of [[1024, "1024 px"], [1536, "1536 px"], [0, "off (original size)"]]) {
-    const o = document.createElement("option");
-    o.value = String(v);
-    o.textContent = label;
-    o.selected = cfg.resize === v;
-    res.appendChild(o);
-  }
-  res.title = "Small images scale up, huge ones scale down, aspect kept. Keeps the studio fast "
-            + "whatever gets dropped in. VRAM note: 1536 costs about 2.25x the tokens of 1024, "
-            + "and the fidelity dials' bias matrix grows with that squared. 8 to 12 GB cards "
-            + "should stay at 1024.";
-  res.onchange = () => { cfg.resize = parseInt(res.value, 10); writeCfg(node); };
-  // the studio preset, drivable from here so the whole setup lives in one panel.
-  // The list is mirrored from a Krea2RedNode in the graph (it knows the saved user
-  // presets too); the fallback list covers a workspace placed before the studio.
-  const presetLab = document.createElement("span");
-  presetLab.className = "rn-ws-note";
-  presetLab.textContent = "Studio preset";
-  const psel = document.createElement("select");
-  psel.className = "rn-ws-res";
-  const studioNode = findNode("Krea2RedNode");
-  const presetValues = studioNode?.widgets?.find((w) => w.name === "preset")?.options?.values
-    || ["custom (use settings)", "Balanced", "Max identity", "Style only",
-        "Outfit transfer", "Pose transfer", "Anime to real", "Real to anime"];
-  for (const [v, label] of [["", "node's own"], ...presetValues.map((x) => [x, x])]) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = label;
-    o.selected = cfg.studio_preset === v;
-    psel.appendChild(o);
-  }
-  psel.title = "Overrides the studio node's preset through the bundle, announced in the "
-             + "console. Pick 'custom (use settings)' to hand control to the dials. "
-             + "'node's own' leaves the studio widget in charge.";
-  psel.onchange = () => {
-    cfg.studio_preset = psel.value;
-    writeCfg(node);
-    pushStudioPreset(node);                          // the studio dropdown follows visibly
-  };
-
   const TIERS = ["high", "medium", "low"];
   const tierBtn = document.createElement("button");
   tierBtn.className = "rn-ws-btn rn-ws-tier " + (cfg.vram_tier || "high");
@@ -14072,7 +14176,7 @@ export function render(node) {
   cog.textContent = "⚙";
   cog.title = "Save or delete workspace presets.";
   cog.onclick = () => openCog(node, cog);
-  foot.append(resLab, res, presetLab, psel, draftBtn, tierBtn, cog);
+  foot.append(draftBtn, tierBtn, cog);
   // INSIDE the host, not on the wrap. The host carries the UI zoom, and a sibling
   // placed after a zoomed flex item is laid out against the UNZOOMED height, so at any
   // scale above 1 the foot rendered part-way up the panel, floating over the effect

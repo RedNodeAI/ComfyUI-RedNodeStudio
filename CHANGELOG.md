@@ -142,6 +142,12 @@ cheap to judge.
 - The Prompt Converter has its own on switch in its header, so it reads as on
   or off at a glance. Off passes the prompt through untouched and keeps the
   settings; workflows saved before it load with the converter on
+- A switched-off tab lights nothing underneath it: its Auto prompt, Boosts,
+  Converter, Re-angle and Swap lights go dark and those pages say the tab is
+  off and nothing on them is used
+- The footer keeps only the UI size, Draft, VRAM and the presets cog. Resize
+  long edge, Studio preset and the workspace presets (with Save as and
+  Delete) move to a Workspace card at the top of the Advanced tab
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
