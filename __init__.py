@@ -465,7 +465,9 @@ class Krea2MoodboardIdentityFusion:
                ref_boost=1.0, ref_boost_a=1.0, target_latent=None, fit_mode="fit", ref_boost_mask=None,
                ref_start=0.0, ref_end=1.0, edit_mask=None, edit_mask_feather=2, isolate_refs=False,
                boost_blocks="all", grounding_px_subject=0, picture_labels=False, ref_t0_modulation=False,
-               system_prompt="", attention="auto"):
+               system_prompt="", attention="auto", source_boost=None):
+        # source_boost: the boost for the chained extra people. None keeps the old rule,
+        # where they share ref_boost_a with the scene.
         import comfy.utils
         import node_helpers
 
@@ -575,7 +577,20 @@ class Krea2MoodboardIdentityFusion:
         if ref_latents:
             extra = {"reference_latents": ref_latents,
                      "reference_fit": [target_latent is not None] * len(ref_latents)}
-            boosts = [ref_boost_a] * (len(ref_latents) - 1) + [ref_boost]
+            # one boost per reference, in encode order: the last is the subject, the
+            # chained extras take source_boost when given, the rest take ref_boost_a
+            if edit_source2 is not None:
+                kinds = [("scene", edit_source)] + [("chain", c) for c in chain] + [("last", edit_source2)]
+            else:
+                kinds = [("first", edit_source)] + [("chain", c) for c in chain]
+            kinds = [k for k, img in kinds if img is not None]
+            if len(kinds) == len(ref_latents):
+                boosts = [ref_boost if i == len(kinds) - 1
+                          else (source_boost if k == "chain" and source_boost is not None
+                                else ref_boost_a)
+                          for i, k in enumerate(kinds)]
+            else:
+                boosts = [ref_boost_a] * (len(ref_latents) - 1) + [ref_boost]
             if any(b != 1.0 for b in boosts):
                 extra["reference_boosts"] = boosts
             conditioning = node_helpers.conditioning_set_values(conditioning, extra, append=True)

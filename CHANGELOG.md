@@ -33,7 +33,7 @@ cheap to judge.
   with the Workspace's LoRAs and camera LoRAs for that rig applied. RedNode Rig
   Inputs hands your sampler the positive, negative, latent, seed, steps, CFG,
   sampler, scheduler, denoise, start step and end step, with the cameras and,
-  on a Krea 2 rig, the Subject, People and Scene references. RedNode Rig Result
+  on a Krea 2 rig, the Subject and Scene references. RedNode Rig Result
   takes the finished latent or picture
 - On the Models tab a rig of kind Your own nodes names those nodes, and has no
   built-in sampler settings of its own. The main render, every Latent and
@@ -68,10 +68,21 @@ cheap to judge.
   the Passes tab says the passes are skipped. A Reset button puts every pass's
   denoise, scale and steps back to the defaults, and a pass's steps start at
   the main rig's step count
-- Subject, People, Scene and Masks are one Krea 2 Identity tab with a sub-tab
-  each, the same strip of lights and status bar as Img2Img, so the top bar is
-  three tabs shorter. A workflow saved on one of the old tabs opens on its
-  sub-tab
+- Subject, Scene and Masks are one Krea 2 Identity tab with a sub-tab each,
+  the same strip of lights and status bar as Img2Img, so the top bar is four
+  tabs shorter. A workflow saved on one of the old tabs opens on its sub-tab
+- People merged into Subject: one gallery where a click adds the next person
+  and takes one out again, numbered in order with the first as the main
+  subject, a Make this the main subject menu choice, and a warning past three
+  people. A workflow with Person 2 or 3 on its own gallery has that picture
+  added to the Subject gallery on load. Swap's reference reads Main subject,
+  Person 2 and Person 3 from the same list
+- Subject and Scene each have Gallery, Boosts, Auto prompt and Converter tabs.
+  The Subject boosts now apply to every person: extra people used to take the
+  Scene fidelity. With extra people and no Scene picture, the main subject
+  is now the last reference, where the boost and the boost mask aim; before,
+  those landed on the last extra person
+- The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,
   with a dashed 1024 square behind it for scale, and the Size card now carries

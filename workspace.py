@@ -617,6 +617,17 @@ def parse_config(config_json):
             "random": bool(t.get("random")),
             "auto": _normalise_auto(t.get("auto"), default_mode),
         }
+        if name == "subject":
+            # THE OTHER PEOPLE, picked in order in the same gallery: person 2, 3 and on.
+            # sel stays the main subject, so everything that reads it is unchanged.
+            ex = t.get("extra_sel") if isinstance(t.get("extra_sel"), list) else []
+            seen, extra_sel = {sel}, []
+            for i in ex:
+                if isinstance(i, (int, float)) and 0 <= int(i) < len(images) \
+                        and int(i) not in seen:
+                    seen.add(int(i))
+                    extra_sel.append(int(i))
+            tabs[name]["extra_sel"] = extra_sel
         if name == "i2i":
             tabs[name]["prompt_only"] = bool(t.get("prompt_only"))
             # the i2i canvas source: the gallery as always, or a wired image or
@@ -2177,7 +2188,22 @@ class RedNodeStudioWorkspace:
             elif mt["sel"]:
                 mood = batch_images([load_image(mt["images"][i], target) for i in mt["sel"]])
 
-        extra = [img for img in (tab_image("subject2"), tab_image("subject3")) if img is not None]
+        # the other people: picked in order in the Subject gallery, then any left on the
+        # old Person 2 and Person 3 galleries of a workflow saved before they merged
+        extra = []
+        _st = tabs["subject"]
+        if _st["on"] and _st["images"]:
+            _main = chosen_index("subject")
+            for _k, _i in enumerate(_st.get("extra_sel") or []):
+                if _i == _main:
+                    continue              # the dice rolled a person already picked
+                print(f"[RedNode Workspace] subject: person {_k + 2} is image {_i + 1} "
+                      f"of {len(_st['images'])} — {_st['images'][_i]}", flush=True)
+                extra.append(load_image(_st["images"][_i], target))
+        extra += [img for img in (tab_image("subject2"), tab_image("subject3")) if img is not None]
+        if len(extra) >= 3:
+            print(f"[RedNode Workspace] {len(extra) + 1} people: the identity edit LoRA "
+                  "trained on up to three references, so identities may blend", flush=True)
         extra = extra or None
 
         boost = boost_mask_in
@@ -2308,7 +2334,12 @@ class RedNodeStudioWorkspace:
         # viewpoint. The result IS the i2i source from here on, like Re-angle's.
         _sw = it.get("swap") or {}
         if it["on"] and not it["prompt_only"] and _sw.get("on") and i2i_img is not None:
-            _ref = subject if _sw["reference"] == "subject" else tab_image(_sw["reference"])
+            # Person 2 and 3 are the Subject gallery's picks in order, or the old
+            # galleries of the same name on a workflow saved before they merged
+            _people = [subject] + list(extra or [])
+            _pk = {"subject": 0, "subject2": 1, "subject3": 2}.get(_sw["reference"], 0)
+            _ref = (_people[_pk] if _pk < len(_people) and _people[_pk] is not None
+                    else tab_image(_sw["reference"]))
             if _ref is None:
                 print("[RedNode Workspace] swap: the %s tab is off or empty, so there is "
                       "no reference; the source is used as it is"

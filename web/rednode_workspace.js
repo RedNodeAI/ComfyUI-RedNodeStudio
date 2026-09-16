@@ -11,7 +11,7 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, PEOPLE_TABS, DIALS, LATENT_PRESETS, POST_FX,
+import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit } from "./rednode_ws_tables.js";
@@ -747,6 +747,9 @@ css.textContent = `
 .rn-ws-subt .lt{width:9px;height:9px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-subt .lt.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
 .rn-ws-subt .lt.skip{background:#e0a84a;box-shadow:0 0 6px #e0a84a}
+.rn-ws-sub.inner .rn-ws-subt{padding:5px 10px;font-size:11px;background:#1b1e23}
+.rn-ws-sub.inner .rn-ws-subt.cur{background:#233247;border-color:#4a8fe0;color:#fff}
+.rn-ws-peoplewarn{color:#f0c58a}
 .rn-ws-skipnote{border-color:#e0a84a88;color:#f0c58a}
 .rn-ws-badge{align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.06em;
   padding:2px 8px;border-radius:5px;background:#2a2e35;color:#c8ccd2}
@@ -1006,11 +1009,23 @@ function activeGroup(t, name) {
   const g = t.groups[t.group];
   return g || t.groups[Object.keys(t.groups)[0]];
 }
+// The Subject gallery's other people, in pick order: valid, unique, never the main one
+function normExtra(list, main, imagesLen) {
+  const out = [];
+  for (const i of Array.isArray(list) ? list : []) {
+    if (Number.isInteger(i) && i >= 0 && i < imagesLen && i !== main && !out.includes(i)) out.push(i);
+  }
+  return out;
+}
 function mirrorActive(t, name) {
   const g = activeGroup(t, name);
   t.images = g.images;
   t.sel = normSel(name, g.sel, g.images.length);
   g.sel = t.sel;
+  if (name === "subject") {
+    g.extra_sel = normExtra(g.extra_sel, g.sel, g.images.length);
+    t.extra_sel = g.extra_sel;
+  }
 }
 
 export function readCfg(node) {
@@ -1127,6 +1142,7 @@ export function readCfg(node) {
       // migrate a flat gallery into its first collection
       if (!t.groups || typeof t.groups !== "object" || !Object.keys(t.groups).length) {
         t.groups = { all: { images: t.images, sel: t.sel } };
+        if (name === "subject") t.groups.all.extra_sel = t.extra_sel;
         t.group = "all";
       }
       for (const g of Object.values(t.groups)) {
@@ -1136,6 +1152,22 @@ export function readCfg(node) {
       if (!t.groups[t.group]) t.group = Object.keys(t.groups)[0];
       mirrorActive(t, name);
     }
+  }
+  // PEOPLE MERGED INTO SUBJECT: a workflow saved with Person 2 or 3 on their own
+  // galleries gets each one's chosen picture added to the Subject gallery as the next
+  // person, and the old gallery switched off (its pictures stay where they were)
+  for (const nm of "subject2 subject3".split(" ")) {
+    const o = d.tabs[nm];
+    if (!o?.on || !o.images?.length) continue;
+    const entry = o.images[typeof o.sel === "number" ? o.sel : 0];
+    const S = d.tabs.subject;
+    const g = activeGroup(S, "subject");
+    if (!g || !entry) continue;
+    let i = g.images.indexOf(entry);
+    if (i < 0) { g.images.push(entry); i = g.images.length - 1; }
+    g.extra_sel = normExtra([...(g.extra_sel || []), i], g.sel, g.images.length);
+    o.on = false;
+    mirrorActive(S, "subject");
   }
   d.dials = d.dials && typeof d.dials === "object" ? d.dials : {};
   if (![0, 1024, 1536].includes(d.resize)) d.resize = 1024;
@@ -1569,9 +1601,8 @@ async function uploadFiles(node, tabName, files) {
 const SEND_TARGETS = [
   ["i2i", "Img2Img"],
   ["moodboard", "Moodboard"],
-  ["subject", "Subject"],
-  ["subject2", "People: second"],
-  ["subject3", "People: third"],
+  ["subject", "Subject (main)"],
+  ["subject_person", "Subject (add a person)"],
   ["scene", "Scene"],
 ];
 
@@ -1592,6 +1623,18 @@ async function copyGalleryImage(entry) {
 }
 
 function sendToTab(node, target, entry) {
+  if (target === "subject_person") {
+    const S = node._rnCfg.tabs.subject;
+    let i = S.images.indexOf(entry);
+    if (i < 0) { S.images.push(entry); i = S.images.length - 1; }
+    if (!S.images.length || (S.images.length === 1 && i === 0)) S.sel = 0;
+    else if (i !== S.sel && !(S.extra_sel || []).includes(i)) S.extra_sel = [...(S.extra_sel || []), i];
+    const g = activeGroup(S, "subject");
+    g.sel = S.sel;
+    g.extra_sel = S.extra_sel;
+    writeCfg(node); render(node);
+    return;
+  }
   const t = node._rnCfg.tabs[target];
   const multi = target === "moodboard";
   let idx = t.images.indexOf(entry);
@@ -2245,9 +2288,29 @@ function openGalleryMenu(node, tabName, entry, ev) {
     mk("Open full size", () => { window.open(viewUrl(entry), "_blank"); }),
     sep,
   );
+  if (tabName === "subject") {
+    const S = node._rnCfg.tabs.subject;
+    const idx = S.images.indexOf(entry);
+    if (idx >= 0 && idx !== S.sel) {
+      m.append(mk("Make this the main subject", () => {
+        const order = [S.sel, ...(S.extra_sel || [])];
+        const at = order.indexOf(idx);
+        const next = at >= 0 ? order.slice() : [...order, idx];
+        const pos = next.indexOf(idx);
+        [next[0], next[pos]] = [next[pos], next[0]];
+        S.sel = next[0];
+        S.extra_sel = next.slice(1);
+        const g = activeGroup(S, "subject");
+        g.sel = S.sel;
+        g.extra_sel = S.extra_sel;
+        writeCfg(node); render(node);
+      }));
+    }
+  }
   for (const [target, label] of SEND_TARGETS) {
     if (target === tabName) continue;
-    const dup = node._rnCfg.tabs[target]?.images.includes(entry);
+    const dup = node._rnCfg.tabs[target === "subject_person" ? "subject" : target]
+      ?.images.includes(entry);
     m.append(mk(`Send to ${label}` + (dup ? " (already there)" : ""),
                 () => sendToTab(node, target, entry)));
   }
@@ -2326,7 +2389,7 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
       cfg.thumbs[tabName] = parseInt(tr.value, 10);
       if (tabName === "i2i") cfg.thumb = cfg.thumbs.i2i;    // the legacy mirror
       writeCfg(node);
-      // THIS gallery's cells, not every cell in the panel. The People tab draws three
+      // THIS gallery's cells, not every cell in the panel. The People page used to draw three
       // galleries at once, so a panel-wide sweep would drag Subject 3's thumbnails
       // along with Subject 2's slider.
       const scope = grid || node._rnRootEl;
@@ -2446,9 +2509,12 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
   grid = document.createElement("div");        // the slider above closes over this
   grid.className = "rn-ws-grid";
   const cellPx = thumbOf(cfg, tabName);
+  // PEOPLE: the Subject gallery picks several people in order, the first the main one
+  const peopleMode = tabName === "subject";
+  const order = peopleMode && t.images.length ? [t.sel, ...(t.extra_sel || [])] : [];
   t.images.forEach((entry, i) => {
     const cell = document.createElement("div");
-    const selected = multi ? t.sel.includes(i) : t.sel === i;
+    const selected = peopleMode ? order.includes(i) : multi ? t.sel.includes(i) : t.sel === i;
     const rolled = t.random && node._rnPicks?.[tabName] === entry;
     cell.className = "rn-ws-cell" + (selected && !t.random ? " sel" : "") + (rolled ? " rolled" : "");
     cell.style.width = cell.style.height = cellPx + "px";
@@ -2477,6 +2543,14 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
       n.title = "Position in the moodboard batch.";
       cell.appendChild(n);
     }
+    if (peopleMode && selected && !t.random) {
+      const k = order.indexOf(i);
+      const n = document.createElement("span");
+      n.className = "rn-ws-n";
+      n.textContent = k ? `#${k + 1}` : "#1 Main";
+      n.title = k ? `Person ${k + 1}.` : "The main subject: the Subject dials and the boost mask aim at this one.";
+      cell.appendChild(n);
+    }
     const x = document.createElement("button");
     x.className = "rn-ws-x";
     x.textContent = "✕";
@@ -2485,7 +2559,12 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
       e.stopPropagation();
       t.images.splice(i, 1);                          // t.images IS the group's array
       if (multi) t.sel = t.sel.filter((k) => k !== i).map((k) => (k > i ? k - 1 : k));
-      else if (t.sel >= t.images.length) t.sel = Math.max(0, t.images.length - 1);
+      else if (peopleMode) {
+        const left = order.filter((k) => k !== i).map((k) => (k > i ? k - 1 : k));
+        t.sel = left.length ? left[0] : 0;
+        t.extra_sel = left.slice(1);
+        activeGroup(t, tabName).extra_sel = t.extra_sel;
+      } else if (t.sel >= t.images.length) t.sel = Math.max(0, t.images.length - 1);
       activeGroup(t, tabName).sel = t.sel;
       writeCfg(node); render(node);
     };
@@ -2498,6 +2577,16 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
     cell.onclick = () => {
       if (multi) {
         t.sel = t.sel.includes(i) ? t.sel.filter((k) => k !== i) : [...t.sel, i];
+      } else if (peopleMode) {
+        // click adds the next person or takes one out; the main one can only go when
+        // someone else is picked, and the next in line becomes the main one
+        if (!order.includes(i)) t.extra_sel = [...(t.extra_sel || []), i];
+        else if (order.length > 1) {
+          const left = order.filter((k) => k !== i);
+          t.sel = left[0];
+          t.extra_sel = left.slice(1);
+        }
+        activeGroup(t, tabName).extra_sel = t.extra_sel;
       } else {
         t.sel = i;
       }
@@ -2593,8 +2682,18 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
         + (node._rnPicks?.[tabName] ? `. Last run rolled the amber one` : "")
       : multi
         ? `${t.sel.length} of ${t.images.length} in the batch. Click to add or remove; numbers show batch order.`
-        : `${t.images.length} remembered. The highlighted one is used.`;
+        : peopleMode
+          ? `${order.length} ${order.length === 1 ? "person" : "people"} picked from ${t.images.length}. `
+            + "Click a picture to add the next person or take one out; #1 is the main subject."
+          : `${t.images.length} remembered. The highlighted one is used.`;
   gcard.appendChild(note);
+  if (peopleMode && order.length > 3 && !t.random) {
+    const warn = document.createElement("div");
+    warn.className = "rn-ws-note rn-ws-peoplewarn";
+    warn.textContent = `${order.length} people: the identity edit was trained on up to three `
+                     + "references, so faces may blend. It still runs.";
+    gcard.appendChild(warn);
+  }
   if (tabsLayout && !multi) chosenStrip(node, body, t, tabName);
 }
 
@@ -2740,22 +2839,6 @@ function cameraBody(node, body) {
     onChange: afterChange,
     preview: CAMERA_PREVIEW,
   });
-}
-
-function peopleBody(node, body) {
-  const cfg = node._rnCfg;
-  const note = document.createElement("div");
-  note.className = "rn-ws-note";
-  note.textContent = "Extra people become the Krea2 source chain; the subject stays the last ref. "
-                   + "3+ refs is beyond the edit LoRA's training, so identities may blend.";
-  body.appendChild(note);
-  for (const [name, meta] of Object.entries(PEOPLE_TABS)) {
-    const h = document.createElement("div");
-    h.style.cssText = "font-size:11px;font-weight:700;opacity:.65;letter-spacing:.3px;margin-top:2px";
-    h.textContent = meta.label;
-    body.appendChild(h);
-    galleryBody(node, body, name, meta);
-  }
 }
 
 function masksBody(node, body) {
@@ -11668,6 +11751,7 @@ function identityTabs(node, body) {
   const cfg = node._rnCfg;
   const props = (node.properties ||= {});
   let sub = node._rnIdSub || props.rn_identity_sub || "subject";
+  if (sub === "people") sub = "subject";
   if (!IDENTITY_SUBS.some((s) => s.id === sub)) sub = "subject";
   node._rnIdSub = sub;
 
@@ -11705,12 +11789,11 @@ function identityTabs(node, body) {
   bar.appendChild(nm);
   const pics = (n) => `${n} Image${n === 1 ? "" : "s"}`;
   const tabState = (t) => (t.on ? pics(t.images.length) : "Off");
-  const s2 = cfg.tabs.subject2, s3 = cfg.tabs.subject3;
   const bm = cfg.tabs.boost_mask, em = cfg.tabs.edit_mask;
+  const St = cfg.tabs.subject;
+  const nPeople = St.images.length ? 1 + (St.extra_sel || []).length : 0;
   for (const text of [
-    `Subject: ${tabState(cfg.tabs.subject)}`,
-    `People: ${s2.on || s3.on
-      ? pics((s2.on ? s2.images.length : 0) + (s3.on ? s3.images.length : 0)) : "Off"}`,
+    `Subject: ${!St.on ? "Off" : nPeople === 1 ? "1 Person" : `${nPeople} People`}`,
     `Scene: ${tabState(cfg.tabs.scene)}`,
     `Masks: ${bm.on && em.on ? "Boost + Edit" : bm.on ? "Boost" : em.on ? "Edit" : "Off"}`,
   ]) {
@@ -11721,14 +11804,38 @@ function identityTabs(node, body) {
   }
   body.appendChild(bar);
 
-  if (sub === "people") peopleBody(node, body);
-  else if (sub === "masks") masksBody(node, body);
-  else {
-    galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
-    dialSection(node, body, sub);                  // the tab's own dials
-    autoSection(node, body, sub);                  // captions for its image
-    converterSection(node, body, sub);             // then the Prompt Converter
+  if (sub === "masks") { masksBody(node, body); return; }
+  // Subject and Scene: the same inner tabs, Gallery, Boosts, Auto prompt, Converter
+  const t = cfg.tabs[sub];
+  const innerSubs = [
+    ["gallery", "GALLERY", tabLit(cfg, sub)],
+    ["boosts", "BOOSTS", !!(cfg.use_dials && DIALS.some((dd) => dd.tab === sub
+                                                     && cfg.dials[dd.key] !== undefined))],
+    ["auto", "AUTO PROMPT", !!t.auto?.on],
+    ["converter", "CONVERTER", convActive(t.conv)],
+  ];
+  const ikey = "rn_identity_" + sub;
+  let inner = (node._rnIdInner ||= {})[sub] || props[ikey] || "gallery";
+  if (!innerSubs.some(([id]) => id === inner)) inner = "gallery";
+  const istrip = document.createElement("div");
+  istrip.className = "rn-ws-sub inner";
+  for (const [id, label, lit] of innerSubs) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === inner ? " cur" : "");
+    b.dataset.inner = id;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnIdInner[sub] = id; props[ikey] = id; render(node); };
+    istrip.appendChild(b);
   }
+  body.appendChild(istrip);
+  if (inner === "gallery") galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
+  else if (inner === "boosts") dialSection(node, body, sub, { flat: true });
+  else if (inner === "auto") autoSection(node, body, sub, { flat: true });
+  else converterSection(node, body, sub, { flat: true });
 }
 
 // THE PASSES TAB: setup on the left (kind, count, which settings vary per pass, the
@@ -12198,6 +12305,13 @@ function chosenStrip(node, body, t, tabName) {
         .catch(() => {});
     }
     meta.append(fn, dim);
+    if (tabName === "subject" && (t.extra_sel || []).length) {
+      const more = document.createElement("span");
+      more.className = "dim";
+      const n = t.extra_sel.length;
+      more.textContent = `Main subject, with ${n} more ${n === 1 ? "person" : "people"}`;
+      meta.appendChild(more);
+    }
     const openB = document.createElement("button");
     openB.className = "rn-ws-btn";
     openB.textContent = "Open";
@@ -12465,9 +12579,9 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
   const open = (node._rnSwapOpen ||= { engine: false });
-  const refName = (r) => r === "subject" ? "Subject" : "Subject " + r.replace("subject", "");
+  const refName = (r) => r === "subject" ? "Main subject" : "Person " + r.replace("subject", "");
   const card = sectionCard("SWAP", "#e08fb0",
-    !S.on ? "off" : S.mode + " from the " + refName(S.reference) + " tab",
+    !S.on ? "off" : S.mode + " from " + refName(S.reference),
     flat ? null : { node, key: "i2i_swap", open: !!S.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
@@ -12481,7 +12595,7 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   lab.textContent = S.on
-    ? "The " + refName(S.reference) + " goes onto the person first, then the i2i pass runs on it at the denoise above."
+    ? refName(S.reference) + " goes onto the person first, then the i2i pass runs on it at the denoise above."
     : "Put the Subject onto the person in the picture, then paint over it.";
   row0.append(sw, lab);
   card.appendChild(row0);
@@ -12509,7 +12623,8 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (S.reference === r ? " on" : "");
       b.textContent = refName(r);
-      b.title = "The reference person: that tab's selected image. The tab must be on.";
+      b.title = "The reference person, as picked in order in the Subject gallery: the "
+              + "main subject, then Person 2 and 3. The Subject tab must be on.";
       b.onclick = () => { S.reference = r; writeCfg(node); render(node); };
       rseg.appendChild(b);
     }
@@ -12715,7 +12830,7 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
       for (const v of options || ["off"]) {
         const o = document.createElement("option");
         o.value = v;
-        o.textContent = v;
+        o.textContent = capFirst(v);
         o.selected = c[key] === v;
         el.appendChild(o);
       }
@@ -12738,16 +12853,16 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
       return w;
     };
     sect.append(
-      sel("gender swap", "gender", lists.gender, "Whole-word, case-preserving gender swap."),
-      sel("style convert", "style", lists.style,
+      sel("Gender swap", "gender", lists.gender, "Whole-word, case-preserving gender swap."),
+      sel("Style convert", "style", lists.style,
           "Medium vocabulary between photography and anime terms."),
-      sel("nsfw act", "act", lists.act, "Rewrite act terms to the chosen one."),
-      boolB("remove cum terms", "remove_cum", "Strip cum, ejaculation, semen, sperm."),
-      boolB("shave pubic", "shave", "Rewrite pubic hair mentions to shaved."),
-      boolB("mood owns the style", "lock",
+      sel("NSFW act", "act", lists.act, "Rewrite act terms to the chosen one."),
+      boolB("Remove cum terms", "remove_cum", "Strip cum, ejaculation, semen, sperm."),
+      boolB("Shave pubic", "shave", "Rewrite pubic hair mentions to shaved."),
+      boolB("Mood owns the style", "lock",
             "Strip style words the moodboard prompt does not itself use, so this tab's "
             + "image cannot smuggle its own style past the mood."),
-      boolB("mood owns the lighting", "lock_lighting",
+      boolB("Mood owns the lighting", "lock_lighting",
             "Stronger: also strip lighting and atmosphere words (golden hour, bokeh, "
             + "backlighting, long shadows) the mood does not use. Lighting the mood "
             + "mentions survives."),
@@ -12767,12 +12882,12 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
 }
 
 // A collapsible "Dials" box at the bottom of the tab those dials belong to.
-function dialSection(node, body, tabId) {
+function dialSection(node, body, tabId, { flat = false } = {}) {
   const cfg = node._rnCfg;
   const dials = DIALS.filter((d) => d.tab === tabId);
   if (!dials.length) return;
   const opened = (node._rnDialsOpen ||= {})[tabId];
-  const open = opened !== undefined ? !!opened : tabId === "advanced";
+  const open = flat || (opened !== undefined ? !!opened : tabId === "advanced");
 
   const sect = document.createElement("div");
   sect.className = "rn-ws-sect rn-ws-dials";
@@ -12793,11 +12908,19 @@ function dialSection(node, body, tabId) {
     : "Off: the settings output is empty and the studio's preset stays in charge.";
   on.onclick = (e) => { e.stopPropagation(); cfg.use_dials = !cfg.use_dials; writeCfg(node); render(node); };
   head.append(arr, on, ttl);        // toggle in front of the title, see the masks head
-  head.onclick = (e) => {
-    if (e.target === on) return;
-    node._rnDialsOpen[tabId] = !open;
-    render(node);
-  };
+  if (flat) {
+    arr.style.display = "none";
+    head.style.cursor = "default";
+    sect.classList.add("flat");
+    ttl.textContent = (tabId === "subject" ? "BOOSTS, for every person" : "BOOSTS")
+                    + (touched ? ` · ${touched} set` : "");
+  } else {
+    head.onclick = (e) => {
+      if (e.target === on) return;
+      node._rnDialsOpen[tabId] = !open;
+      render(node);
+    };
+  }
   if (tabId === "advanced") ttl.textContent = "STUDIO SETTINGS" +
     (touched ? `: ${touched} set` : ": all at defaults");
   sect.appendChild(head);
@@ -13181,6 +13304,7 @@ export function render(node) {
   if (node._rnTab === undefined && node.properties?.rn_tab) {
     node._rnTab = String(node.properties.rn_tab);
   }
+  if (node._rnTab === "people") node._rnTab = "subject";     // People is part of Subject now
   if (IDENTITY_SUBS.some((s) => s.id === node._rnTab)) {
     node._rnIdSub = node._rnTab;
     (node.properties ||= {}).rn_identity_sub = node._rnTab;

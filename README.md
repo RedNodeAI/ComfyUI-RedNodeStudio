@@ -129,12 +129,13 @@ post chain and into the save tree.
 
 ![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
 
-**Krea 2 Identity: Subject, People, Scene, Masks.** One tab with a sub-tab for each, and a
-light on each showing what is in use. Subject is the face to keep; People are the extra
-subjects; Scene is a place rebuilt as in-context latents. Each gallery has the fidelity and
-identity dials under it and captioning built in. Masks holds the subject boost mask, which rides
-into the identity edit and is sized against the Subject picture, and the edit mask that confines
-the pass.
+**Krea 2 Identity: Subject, Scene, Masks.** One tab with a sub-tab for each, and a light on
+each showing what is in use. Subject is one gallery where you pick the people in order: the
+first is the main subject, and the others follow as Person 2, 3 and on (more than three still
+runs, with a warning that faces may blend). Scene is a place rebuilt as in-context latents.
+Subject and Scene each have Gallery, Boosts, Auto prompt and Converter tabs; the Subject boosts
+apply to every person. Masks holds the subject boost mask, which rides into the identity edit
+and is sized against the main subject's picture, and the edit mask that confines the pass.
 
 **Moodboard.** Batches several pictures into one style signal. Right-click a picture in any
 gallery for the gallery menu.
@@ -437,7 +438,7 @@ what they did. Treat them as legacy.
 | RedNode Live Preview | Shows the picture forming step by step while the node wired into it renders, then the finished frame. The workspace and the Detailer decode every step with the small VAE (lighttaew2_1 in models/vae_approx for Krea 2) and stream it here, whatever ComfyUI's own preview setting is. |
 | RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
 | RedNode Rig Model | Your own loaders as a Workspace rig. Wire in a model, CLIP and VAE; out come the same with the Workspace's LoRAs for that rig applied, ready for your sampler. Give it the rig's name, and pick Your own nodes for that rig on the Models tab. Nothing is wired to the Workspace. |
-| RedNode Rig Inputs | What the Workspace hands your sampler for the rig named on it: positive, negative, latent, seed, steps, CFG, sampler, scheduler, denoise, start step and end step. The prompts carry the cameras, and on a Krea 2 rig the Subject, People and Scene references. |
+| RedNode Rig Inputs | What the Workspace hands your sampler for the rig named on it: positive, negative, latent, seed, steps, CFG, sampler, scheduler, denoise, start step and end step. The prompts carry the cameras, and on a Krea 2 rig the Subject (every person picked) and Scene references. |
 | RedNode Rig Result | The end of your rig: wire in the finished latent or picture. The main render, every Latent and Img2Img pass, the paint pass and every Detailer pass on that rig sample through your nodes, each with its own values, and the result carries on to the Detailer, Post FX and Save. |
 | RedNode Stage Tap / Stage View | Photograph any point in the graph at a chosen size, then compare stages with a wipe, on the node or full screen. |
 

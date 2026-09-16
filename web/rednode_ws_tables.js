@@ -27,10 +27,10 @@ export const TAB_ORDER = [
 ];
 
 // The Krea 2 Identity tab's sub-tabs: the tabs that feed the identity system. Their
-// ids are the old top-level tab ids, so a saved rn_tab of "people" still lands there.
+// ids are the old top-level tab ids, so a saved rn_tab still lands on them; the old
+// People tab is part of Subject now.
 export const IDENTITY_SUBS = [
-  { id: "subject", label: "SUBJECT", tip: "The person to preserve: the face you want kept." },
-  { id: "people", label: "PEOPLE", tip: "A second and third person, each with their own reference." },
+  { id: "subject", label: "SUBJECT", tip: "The people to preserve, picked in order in one gallery: the first is the main subject." },
   { id: "scene", label: "SCENE", tip: "The place: the setting the people are put into." },
   { id: "masks", label: "MASKS", tip: "The subject boost and edit masks, painted in place." },
 ];

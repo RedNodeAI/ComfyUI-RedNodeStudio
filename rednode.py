@@ -464,6 +464,10 @@ class Krea2RedNode:
         # so users never have to know it.
         if scene_image is not None:
             ref1, ref2 = scene_image, subject_image
+        elif extra_subjects:
+            # extra people and no scene: the subject still goes LAST, where the boost
+            # and the boost mask aim; first would hand them to the last extra person
+            ref1, ref2 = None, subject_image
         else:
             ref1, ref2 = subject_image, None
 
@@ -472,7 +476,9 @@ class Krea2RedNode:
             edit_source=ref1, edit_source2=ref2,
             moodboard_images=moodboard_style, vae=vae,
             sources=extra_subjects, target_latent=output_latent,
-            ref_boost_mask=subject_boost_mask, edit_mask=edit_mask, **args)
+            ref_boost_mask=subject_boost_mask, edit_mask=edit_mask,
+            # every person takes the subject's fidelity, not the scene's
+            source_boost=args["ref_boost"], **args)
 
         # the negative shares everything geometry/locality-related (edit_mask on BOTH passes
         # keeps CFG consistent inside the keep region) but no boost dials — boosts are
