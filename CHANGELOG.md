@@ -66,6 +66,12 @@ cheap to judge.
   holding only the settings that vary, with Ramp Up and Down for each one.
   With Re-angle's Skip the pass on, the Source and Passes lights turn amber and
   the Passes tab says the passes are skipped
+- The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
+  status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,
+  with a dashed 1024 square behind it for scale, and the Size card now carries
+  the latent grid, megapixels and VRAM estimate. Passes is the Img2Img pass
+  layout: pass 1 is marked Generate and the rest Refine, and the Refine dial
+  is the shared denoise for passes 2 and on
 - Every Auto prompt box lists its engines on the left and shows the picked
   engine's own settings beside them, then the settings every engine shares and
   the result. The settings cog is gone; picking an engine is how its settings

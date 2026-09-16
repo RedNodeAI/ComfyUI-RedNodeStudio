@@ -748,6 +748,14 @@ css.textContent = `
 .rn-ws-subt .lt.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
 .rn-ws-subt .lt.skip{background:#e0a84a;box-shadow:0 0 6px #e0a84a}
 .rn-ws-skipnote{border-color:#e0a84a88;color:#f0c58a}
+.rn-ws-badge{align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  padding:2px 8px;border-radius:5px;background:#2a2e35;color:#c8ccd2}
+.rn-ws-badge.gen{background:#1e5233;color:#d4ffe4}
+.rn-ws-latsq{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  border:1px dashed #5b6470;pointer-events:none;box-sizing:border-box}
+.rn-ws-latsq span{position:absolute;left:0;right:0;top:-18px;text-align:center;
+  font-size:10.5px;color:#7f8792}
+.rn-ws-latrect{position:relative;z-index:1}
 .rn-ws-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#1b1e23;
   border:1px solid #2e333a;border-radius:7px;padding:7px 10px}
 .rn-ws-status .nm{font-size:13px;color:#e8ecf1;margin-right:4px}
@@ -10739,32 +10747,75 @@ function latentBody(node, body) {
   const L = cfg.latent;
   const eff = (v) => Math.floor(v * (L.scale || 1) / 8) * 8;   // what actually ships
 
-  const row = document.createElement("div");
-  row.className = "rn-ws-row";
+  // CANVAS and PASSES as sub-tabs, the Img2Img layout: a light each, a status bar
+  const nP = Math.max(1, Math.min(PASS_MAX, Math.round(Number(L.passes) || 1)));
+  const props = (node.properties ||= {});
+  let sub = node._rnLatSub || props.rn_latent_sub || "canvas";
+  if (sub !== "canvas" && sub !== "passes") sub = "canvas";
+  node._rnLatSub = sub;
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub";
+  for (const [id, label, lit, tip] of [
+    ["canvas", "CANVAS", !!L.on, "The empty latent: its shape, size and batch."],
+    ["passes", "PASSES", !!(L.on && nP > 1),
+     "The built-in sampler's passes on this canvas: pass 1 generates, the rest refine."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
+    b.dataset.sub = id;
+    b.title = tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnLatSub = id; props.rn_latent_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
   const on = document.createElement("button");
   on.className = "rn-ws-sw" + (L.on ? " on" : "");
   on.title = L.on ? "The empty latent goes out on output_latent."
                   : "Off: output_latent stays empty unless the edit mask provides one.";
   on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Latent";
   const srcBtn = segSwitch([
-    ["tab", "This tab", "The canvas is built here, from the size below."],
+    ["tab", "This tab", "The canvas is built here, from the size on the Canvas tab. The "
+                        + "workspace's own Empty Latent Image: wire output_latent to the "
+                        + "sampler and to the studio, one source for both."],
     ["input", "Wired input", "output_latent is whatever you wired into the node's latent "
-                             + "socket. The size controls below are ignored."],
+                             + "socket. The size controls are ignored; the passes still run."],
   ], L.source === "input" ? "input" : "tab",
   (v) => { L.source = v; writeCfg(node); render(node); });
-  const hint = document.createElement("span");
-  hint.className = "hint";
-  hint.textContent = L.source === "input"
-    ? "Your own latent passes straight through to output_latent."
-    : "The workspace's own Empty Latent Image. Wire output_latent to the sampler and "
-      + "to the studio, one source for both.";
-  row.append(on, srcBtn, hint);
-  body.appendChild(row);
+  bar.append(on, nm, srcBtn);
+  for (const text of [
+    L.source === "input" ? "wired latent" : L.random ? "random size"
+      : `${eff(L.w)} × ${eff(L.h)}`,
+    L.source === "input" || L.random ? "" : (L.aspect || "custom"),
+    `batch ${L.batch}`,
+    nP > 1 ? `${nP} passes` : "single pass",
+  ]) {
+    if (!text) continue;
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  body.appendChild(bar);
+  if (sub === "passes") {
+    passesTab(node, body, "latent");
+    return;
+  }
   if (L.source === "input") {
     const note = document.createElement("div");
     note.className = "rn-ws-note";
     note.textContent = "Wire your latent into the node's latent input. Nothing wired "
-                     + "there falls back to the canvas below.";
+                     + "there falls back to this canvas.";
     body.appendChild(note);
   }
 
@@ -10894,6 +10945,18 @@ function latentBody(node, body) {
       rect.addEventListener("pointercancel", up);
     });
   }
+  {
+    const sqPx = Math.round(1024 * fit);
+    if (!L.random && sqPx <= 400) {
+      const sq = document.createElement("div");
+      sq.className = "rn-ws-latsq";
+      sq.style.width = sq.style.height = sqPx + "px";
+      const sl = document.createElement("span");
+      sl.textContent = "1024 × 1024";
+      sq.appendChild(sl);
+      stage.appendChild(sq);
+    }
+  }
   stage.appendChild(rect);
 
   // ASPECT presets, the Sick Ollie canvas system you preferred: a ratio
@@ -10958,16 +11021,17 @@ function latentBody(node, body) {
   cols.style.cssText = "display:grid;grid-template-columns:minmax(0,1.5fr) "
     + "minmax(320px,1fr);gap:12px;align-items:start";
   const previewCard = sectionCard("CANVAS PREVIEW", "#4a8fe0");
-  const canvasCard = sectionCard("DIMENSIONS", "#4a8fe0",
+  const canvasCard = sectionCard("SIZE", "#4a8fe0",
     (L.random ? "random preset" : L.w + " × " + L.h)
     + " · batch " + L.batch);
   vrow.style.flexDirection = "column";
   vrow.style.alignItems = "stretch";
   vrow.append(chips, stage);
   previewCard.appendChild(vrow);
+  let statStrip = null;
   {
     const strip = document.createElement("div");
-    strip.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:8px";
+    strip.style.cssText = "display:grid;grid-template-columns:1fr;gap:8px";
     const cell = (icon, k, v) => {
       const c = document.createElement("div");
       c.style.cssText = "display:flex;align-items:center;gap:10px;background:#101216;"
@@ -10996,11 +11060,11 @@ function latentBody(node, body) {
     const tokens = (w0 / 8) * (h0 / 8) / 4;
     const gb = 0.35 + (tokens * (L.batch || 1) * 0.55) / 1024;
     strip.append(
-      cell("▦", "Canvas", L.random ? "random" : w0 + " × " + h0),
       cell("⬚", "Latent grid", L.random ? "—" : (w0 / 8) + " × " + (h0 / 8)),
+      cell("▥", "Megapixels", L.random ? "—" : ((w0 * h0) / 1e6).toFixed(2)),
       cell("∿", "VRAM (est., activations)", L.random ? "—"
            : "~" + gb.toFixed(1) + " GB + model"));
-    previewCard.appendChild(strip);
+    statStrip = strip;
   }
   cols.appendChild(previewCard);
   // the same presets as a NAMED dropdown, the Sick Ollie box you asked
@@ -11126,6 +11190,7 @@ function latentBody(node, body) {
               num("Height", "h", 256, 4096, 64, "px"),
               num("Batch", "batch", 1, 64, 1, ""));
   canvasCard.appendChild(drow);
+  if (statStrip) canvasCard.appendChild(statStrip);
   cols.appendChild(canvasCard);
   if (L.source === "input") {
     // a wired latent IS the canvas: nothing in these two boxes reaches the run,
@@ -11136,124 +11201,11 @@ function latentBody(node, body) {
     cols.style.maxHeight = "150px";
     cols.style.overflow = "hidden";
     cols.title = "A wired latent is the canvas, so the size and preview here are not "
-               + "used. Switch the source to This tab to use them. The refine passes "
-               + "below still run on the wired latent.";
+               + "used. Switch the source to This tab to use them. The passes on the "
+               + "Passes tab still run on the wired latent.";
   }
   body.appendChild(cols);
 
-  // REFINE PASSES: the Img2Img tab's per-pass denoise and scale, on the tab that has
-  // no source image. Pass 1 generates the picture at the full denoise and every pass
-  // after it treats what pass 1 made as its own source, so a blank canvas gets the
-  // same draft-small-then-climb run without a second node or a wire.
-  const nP = Math.max(1, Math.min(PASS_MAX, Math.round(Number(L.passes) || 1)));
-  const passCard = sectionCard("REFINE PASSES", "#b8283c",
-    nP > 1 ? `${nP} passes` : "single pass");
-
-  const prow = document.createElement("div");
-  prow.className = "rn-ws-row";
-  const plab = document.createElement("span");
-  plab.className = "rn-ws-note";
-  plab.style.minWidth = "54px";
-  plab.textContent = "Passes";
-  const pInp = document.createElement("input");
-  pInp.type = "number";
-  pInp.min = 1; pInp.max = PASS_MAX; pInp.step = 1;
-  pInp.value = String(nP);
-  pInp.style.cssText = "width:86px;background:#101216;border:1px solid #2f333a;"
-    + "border-radius:7px;color:#e8ecf1;font-size:15px;font-weight:600;padding:8px 10px";
-  pInp.title = "How many times the built-in sampler runs on this canvas. 1 is a plain "
-             + "generation, as always. More than that and pass 1 makes the picture "
-             + "while the passes after it repaint it at the refine denoise, each with "
-             + "a fresh seed, and only the last one comes back. Drives the built-in "
-             + "sampler; an external sampler wired to output_latent still runs once.";
-  pInp.addEventListener("change", () => {
-    L.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
-    writeCfg(node); render(node);
-  });
-  const phint = document.createElement("span");
-  phint.className = "hint";
-  phint.textContent = nP > 1
-    ? "Pass 1 generates. The rest refine what it made."
-    : "One pass, the plain generation. Raise it to refine the result in place.";
-  prow.append(plab, pInp, phint);
-  passCard.appendChild(prow);
-
-  // the single dial the later passes run at. Pass 1 is deliberately not on it: a
-  // canvas of noise sampled at 0.45 is mush, not a soft start
-  const rrow = document.createElement("div");
-  rrow.className = "rn-ws-row";
-  const rlab = document.createElement("span");
-  rlab.className = "rn-ws-note";
-  rlab.style.minWidth = "54px";
-  rlab.textContent = "Refine";
-  const rr = document.createElement("input");
-  rr.type = "range";
-  rr.min = 0; rr.max = 1; rr.step = 0.01;
-  rr.value = L.refine ?? 0.45;
-  rr.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
-  const rv = document.createElement("span");
-  rv.className = "rn-ws-note";
-  rv.textContent = Number(L.refine ?? 0.45).toFixed(2);
-  rr.title = "How much each pass AFTER the first repaints the picture pass 1 made. "
-           + "0.45 rebuilds detail while the shape holds; past about 0.6 the later "
-           + "passes start rewriting the shot rather than finishing it.";
-  rr.addEventListener("input", () => {
-    L.refine = snapStep(rr.value, 0, 1, 0.01);
-    rv.textContent = Number(L.refine).toFixed(2);
-    writeCfg(node);
-  });
-  rrow.append(rlab, rr, rv);
-  passCard.appendChild(rrow);
-
-  const lden = perPassSection(node, L, {
-    key: "pass_denoise", flag: "pass_custom", base: "refine", first: 1.0,
-    min: 0, max: 1, step: 0.01, accent: "#b8283c",
-    label: "Denoise per pass",
-    fmt: (v) => Number(v).toFixed(2),
-    barTitle: "What this pass repaints. Pass 1 starts from an empty canvas, so it "
-            + "wants the full 1.00 unless you are after a hazier draft; the passes "
-            + "after it work on the picture the one before them made.",
-    onTitle: "On: every pass runs its own denoise, in the order above. Switch off to "
-           + "generate at the full denoise and refine at the single bar.",
-    offTitle: "Off: pass 1 generates and every pass after it runs the refine bar "
-            + "above. Switch on to set a denoise per pass, which is what a run that "
-            + "settles down pass by pass needs.",
-    rampTitle: "Space the passes evenly between the first bar and the last, so a run "
-             + "can fall away from 1.0 to 0.2 without setting each one by hand.",
-  });
-  passCard.append(lden.row, lden.box);
-
-  const lscl = perPassSection(node, L, {
-    key: "pass_scale", flag: "scale_custom", base: "scale", first: 1.0,
-    min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0",
-    label: "Scale per pass",
-    fmt: (v) => Number(v).toFixed(2) + "x",
-    barTitle: "The size this pass runs at. Pass 1's is the size the canvas is BUILT "
-            + "at, so 0.5 there drafts at half the size above and the passes after "
-            + "it climb from that. Going up costs the square of it in pixels.",
-    onTitle: "On: each pass runs at its own size, the first one setting the size the "
-           + "canvas is built at. Switch off to run every pass at the size above.",
-    offTitle: "Off: every pass runs at the size set above. Switch on to climb, which "
-            + "is a small fast draft followed by larger passes that add the detail.",
-    rampTitle: "Space the passes evenly between the first bar and the last, which is "
-             + "the usual climb: 0.5x to 1x over four passes without setting each.",
-  });
-  passCard.append(lscl.row, lscl.box);
-  const lrig = perPassRigs(node, L);
-  const lstp = perPassSteps(node, L);
-  const lcont = continueRow(node, L);
-  passCard.append(lrig.row, lrig.box, lstp.row, lstp.box, lcont.row);
-
-  const lsync = () => {
-    const dOn = lden.sync();
-    lscl.sync();
-    lrig.sync();
-    lstp.sync();
-    lcont.sync();
-    rrow.style.display = (nP > 1 && !dOn) ? "" : "none";
-  };
-  lsync();
-  body.appendChild(passCard);
 
   const note = document.createElement("div");
   note.className = "rn-ws-note";
@@ -11267,8 +11219,8 @@ function latentBody(node, body) {
         + "A real Img2Img pass takes over instead; this is the canvas for prompt "
         + "only, and for a plain generation. An edit mask outranks both.";
   if (L.on && nP > 1) {
-    note.textContent += ` The built-in sampler runs ${nP} passes on it: pass 1 `
-      + "generates, the rest refine. An Img2Img pass owns the canvas when one is "
+    note.textContent += ` The built-in sampler runs ${nP} passes on it (the Passes tab): `
+      + "pass 1 generates, the rest refine. An Img2Img pass owns the canvas when one is "
       + "running, and its own passes are used then, not these.";
   }
   body.appendChild(note);
@@ -11304,180 +11256,6 @@ function passValueList(t, key, base, min, max, first) {
     out.push(Number.isFinite(v) ? fit(v) : (i ? out[i - 1] : head()));
   }
   return out;
-}
-
-// The advanced half of a pass dial: one bar per pass in the order they run,
-// with the switch that turns it on and a Ramp that spaces them evenly. Both
-// halves stay in the DOM and swap by display, so changing the pass count never
-// destroys the control the pointer is on.
-function perPassSection(node, t, o) {
-  const box = document.createElement("div");
-  box.style.cssText = "display:flex;flex-direction:column;gap:6px";
-  const build = () => {
-    box.replaceChildren();
-    const list = passValueList(t, o.key, o.base, o.min, o.max, o.first);
-    // Only a section that is ON owns the stored list. Writing it while off meant the
-    // very first render banked a list, and the defaults for a section switched on
-    // later were then read back off that instead of off the dial beside it.
-    if (t[o.flag]) t[o.key] = list.slice();
-    list.forEach((v, i) => {
-      const r = document.createElement("div");
-      r.className = "rn-ws-row";
-      const l = document.createElement("span");
-      l.className = "rn-ws-note";
-      l.style.minWidth = "54px";
-      l.textContent = "Pass " + (i + 1);
-      const rg = document.createElement("input");
-      rg.type = "range";
-      rg.min = o.min; rg.max = o.max; rg.step = o.step;
-      rg.value = v;
-      rg.style.cssText = "flex:1;min-width:0;height:20px;accent-color:" + o.accent;
-      const rv = document.createElement("span");
-      rv.className = "rn-ws-note";
-      rv.textContent = o.fmt(v);
-      rg.title = o.barTitle;
-      rg.addEventListener("input", () => {
-        const n = snapStep(rg.value, o.min, o.max, o.step);
-        t[o.key][i] = n;
-        rv.textContent = o.fmt(n);
-        writeCfg(node);
-      });
-      r.append(l, rg, rv);
-      box.appendChild(r);
-    });
-  };
-  build();
-
-  const row = document.createElement("div");
-  row.className = "rn-ws-row";
-  const sw = document.createElement("button");
-  sw.className = "rn-ws-sw" + (t[o.flag] ? " on" : "");
-  sw.title = t[o.flag] ? o.onTitle : o.offTitle;
-  sw.onclick = () => {
-    t[o.flag] = !t[o.flag];
-    if (t[o.flag]) t[o.key] = passValueList(t, o.key, o.base, o.min, o.max, o.first);
-    writeCfg(node);
-    render(node);
-  };
-  const lab = document.createElement("span");
-  lab.className = "rn-ws-note";
-  lab.textContent = o.label;
-  const ramp = document.createElement("button");
-  ramp.className = "rn-ws-btn";
-  ramp.textContent = "Ramp";
-  ramp.title = o.rampTitle;
-  ramp.onclick = () => {
-    const list = passValueList(t, o.key, o.base, o.min, o.max, o.first);
-    const a = list[0], z = list[list.length - 1];
-    t[o.key] = list.map((_, i) =>
-      snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), o.min, o.max, o.step));
-    build();
-    writeCfg(node);
-  };
-  row.append(sw, lab, ramp);
-
-  // on only counts above one pass: a single pass has nothing to vary
-  const sync = () => {
-    const many = Math.max(1, Math.round(Number(t.passes) || 1)) > 1;
-    const on = !!t[o.flag] && many;
-    box.style.display = on ? "" : "none";
-    ramp.style.display = on ? "" : "none";
-    row.style.display = many ? "" : "none";
-    return on;
-  };
-  return { box, row, build, sync };
-}
-
-// The rig a pass runs on: "(this rig)" is the run's own, any other name from the
-// Models tab hands that pass to that rig, its own LoRA set and sampler numbers with
-// it. The relay a HighNoise / LowNoise pair wants is pass 1 on one and pass 2 on
-// the other at a denoise just under 1; Hold two rigs keeps both models resident.
-function perPassRigs(node, t) {
-  const box = document.createElement("div");
-  box.style.cssText = "display:flex;flex-direction:column;gap:6px";
-  const names = () => (((node._rnCfg || {}).models || {}).rigs || [])
-    .map((r) => String(r.name || "")).filter(Boolean);
-  const list = () => {
-    const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
-    const src = Array.isArray(t.pass_rig) ? t.pass_rig : [];
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      out.push(String((i < src.length ? src[i] : (src.length ? src[src.length - 1] : "")) || ""));
-    }
-    return out;
-  };
-  const build = () => {
-    box.replaceChildren();
-    const l = list();
-    if (t.rig_custom) t.pass_rig = l.slice();
-    l.forEach((v, i) => {
-      const r = document.createElement("div");
-      r.className = "rn-ws-row";
-      const lab = document.createElement("span");
-      lab.className = "rn-ws-note";
-      lab.style.minWidth = "54px";
-      lab.textContent = "Pass " + (i + 1);
-      const sel = document.createElement("select");
-      sel.style.flex = "1";
-      for (const [val, txt] of [["", "(this rig)"], ...names().map((nm) => [nm, nm])]) {
-        const o = document.createElement("option");
-        o.value = val; o.textContent = txt; o.selected = val === v;
-        sel.appendChild(o);
-      }
-      sel.title = "Which Models-tab rig samples this pass. Its own LoRA set and sampler "
-                + "numbers come with it; the conditioning stays the run's, so keep the "
-                + "same text encoder on both.";
-      sel.onchange = () => { t.pass_rig[i] = sel.value; writeCfg(node); };
-      r.append(lab, sel);
-      box.appendChild(r);
-    });
-  };
-  build();
-  const row = document.createElement("div");
-  row.className = "rn-ws-row";
-  const sw = document.createElement("button");
-  sw.className = "rn-ws-sw" + (t.rig_custom ? " on" : "");
-  sw.title = t.rig_custom
-    ? "On: each pass names its rig. A HighNoise / LowNoise pair is pass 1 on one at a "
-      + "step or two, pass 2 on the other at a denoise just under 1. Turn on Hold two "
-      + "rigs so both stay loaded."
-    : "Off: every pass runs on the run's rig. Switch on to hand a pass to another rig "
-      + "from the Models tab.";
-  sw.onclick = () => {
-    t.rig_custom = !t.rig_custom;
-    if (t.rig_custom) t.pass_rig = list();
-    writeCfg(node);
-    render(node);
-  };
-  const lab = document.createElement("span");
-  lab.className = "rn-ws-note";
-  lab.textContent = "Rig per pass";
-  row.append(sw, lab);
-  const sync = () => {
-    const many = Math.max(1, Math.round(Number(t.passes) || 1)) > 1;
-    const on = !!t.rig_custom && many;
-    box.style.display = on ? "" : "none";
-    row.style.display = many ? "" : "none";
-    return on;
-  };
-  return { box, row, build, sync };
-}
-
-// The step count per pass rides perPassSection: 0 is the rig's own count.
-function perPassSteps(node, t) {
-  return perPassSection(node, t, {
-    key: "pass_steps", flag: "steps_custom", base: "pass_steps_dial",
-    min: 0, max: 60, step: 1, accent: "#e0a84a",
-    label: "Steps per pass",
-    fmt: (v) => (Number(v) > 0 ? Math.round(Number(v)) + " steps" : "rig's steps"),
-    barTitle: "How many steps this pass samples. 0 is the rig's own count. A relay "
-            + "drafts in one or two steps and finishes at the full count.",
-    onTitle: "On: each pass runs its own step count, 0 meaning the rig's. Switch off "
-           + "to run every pass at the rig's steps.",
-    offTitle: "Off: every pass runs the rig's step count. Switch on to give a pass its "
-            + "own, which a one-step draft ahead of a finishing pass needs.",
-    rampTitle: "Space the passes evenly between the first bar and the last.",
-  });
 }
 
 // SAMPLER DIALS per rig (sampler_dials.py), every one off by default and folded
@@ -11801,14 +11579,17 @@ function i2iTabs(node, body) {
 // THE PASSES TAB: setup on the left (kind, count, which settings vary per pass, the
 // values every pass shares), one card per pass on the right holding only the
 // settings that vary. Same config keys and rules as the stacked pass box.
-function passesTab(node, body) {
+function passesTab(node, body, kind = "i2i") {
   const cfg = node._rnCfg;
-  const t = cfg.tabs.i2i;
+  // the Latent tab runs the same passes, with pass 1 generating the picture and the
+  // rest refining it: its denoise list opens at 1.00 and its shared dial is Refine
+  const isLat = kind === "latent";
+  const t = isLat ? cfg.latent : cfg.tabs.i2i;
   const clampN = (v) => Math.max(1, Math.min(PASS_MAX, Math.round(Number(v) || 1)));
   const npass = clampN(t.passes);
   const many = npass > 1;
   const cols = document.createElement("div");
-  cols.className = "rn-ws-cols rn-ws-passtab";
+  cols.className = "rn-ws-cols rn-ws-passtab" + (isLat ? " lat" : "");
 
   const setup = document.createElement("div");
   setup.className = "rn-ws-card l";
@@ -11816,7 +11597,7 @@ function passesTab(node, body) {
   sh.className = "ch";
   sh.textContent = "SETUP";
   setup.appendChild(sh);
-  const kind = segSwitch([
+  const kindSeg = isLat ? null : segSwitch([
     ["i2i", "Image to image", "output_latent is the source image ENCODED (wire the vae "
                               + "input), and the denoise socket carries the strength. "
                               + "This BEATS the Latent tab: an image to image pass paints onto "
@@ -11825,7 +11606,7 @@ function passesTab(node, body) {
                               + "from the Latent tab."],
   ], t.prompt_only ? "prompt" : "i2i",
   (v) => { t.prompt_only = v === "prompt"; writeCfg(node); render(node); });
-  setup.appendChild(kind);
+  if (kindSeg) setup.appendChild(kindSeg);
 
   const heading = (text) => {
     const h = document.createElement("div");
@@ -11847,14 +11628,24 @@ function passesTab(node, body) {
 
   // the per-pass lists this render works with; only a switched-on list is stored
   const VARY = [
-    { flag: "pass_custom", label: "Denoise", key: "pass_denoise", base: "denoise",
+    { flag: "pass_custom", label: "Denoise", key: "pass_denoise",
+      base: isLat ? "refine" : "denoise", first: isLat ? 1.0 : undefined,
       min: 0, max: 1, step: 0.01, accent: "#b8283c", fmt: fmtD,
-      tip: "Each pass runs its own denoise. Each pass starts from the picture the one "
-         + "before it made, so a strong first pass changes the shot and weaker ones settle it." },
+      tip: isLat
+        ? "Each pass runs its own denoise. Pass 1 starts from an empty canvas, so it wants "
+          + "the full 1.00 unless you are after a hazier draft; the passes after it work "
+          + "on the picture the one before them made."
+        : "Each pass runs its own denoise. Each pass starts from the picture the one "
+          + "before it made, so a strong first pass changes the shot and weaker ones settle it." },
     { flag: "scale_custom", label: "Scale", key: "pass_scale", base: "scale",
+      first: isLat ? 1.0 : undefined,
       min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0", fmt: fmtS,
-      tip: "Each pass runs at its own size, the first setting the size the source is "
-         + "encoded at. Going up between passes costs the square of it in pixels." },
+      tip: isLat
+        ? "Each pass runs at its own size, as a multiple of the canvas. Pass 1's is the "
+          + "size the canvas is built at, so 0.5 there drafts at half size and the passes "
+          + "after it climb. Going up costs the square of it in pixels."
+        : "Each pass runs at its own size, the first setting the size the source is "
+          + "encoded at. Going up between passes costs the square of it in pixels." },
     { flag: "steps_custom", label: "Steps", key: "pass_steps", base: "pass_steps_dial",
       min: 0, max: 60, step: 1, accent: "#e0a84a", fmt: fmtT,
       tip: "Each pass runs its own step count, 0 meaning the rig's. A relay drafts in one "
@@ -11876,10 +11667,10 @@ function passesTab(node, body) {
   for (const v of VARY) {
     if (!(many && t[v.flag])) continue;
     if (v.flag === "rig_custom") lists.rig = t.pass_rig = rigList();
-    else lists[v.flag] = t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+    else lists[v.flag] = t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
   }
 
-  if (!t.prompt_only) {
+  if (!(t.prompt_only && !isLat)) {
     const prow = document.createElement("div");
     prow.className = "rn-ws-row";
     const plab = document.createElement("span");
@@ -11892,7 +11683,7 @@ function passesTab(node, body) {
       for (const v of VARY) {
         if (!t[v.flag]) continue;
         if (v.flag === "rig_custom") t.pass_rig = rigList();
-        else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+        else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
       }
       writeCfg(node);
       render(node);
@@ -11934,7 +11725,7 @@ function passesTab(node, body) {
         t[v.flag] = !t[v.flag];
         if (t[v.flag]) {
           if (v.flag === "rig_custom") t.pass_rig = rigList();
-          else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+          else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
         }
         writeCfg(node);
         render(node);
@@ -11969,7 +11760,7 @@ function passesTab(node, body) {
           b.textContent = (dir === "up" ? "↗ " : "↘ ") + word;
           b.title = `Space the ${v.label.toLowerCase()} evenly across the passes, ${tip}.`;
           b.onclick = () => {
-            const list = passValueList(t, v.key, v.base, v.min, v.max);
+            const list = passValueList(t, v.key, v.base, v.min, v.max, v.first);
             const lo = Math.min(...list), hi = Math.max(...list);
             const [a, z] = dir === "up" ? [lo, hi] : [hi, lo];
             t[v.key] = list.map((_, i) =>
@@ -12009,13 +11800,26 @@ function passesTab(node, body) {
       return w;
     };
     let sharedCount = 0;
-    if (!lists.pass_custom) {
+    if (!lists.pass_custom && isLat) {
+      if (t.refine === undefined) t.refine = 0.45;
+      setup.appendChild(shDial("Refine", "refine", 0, 1, 0.01, "#b8283c", fmtD,
+        "How much each pass AFTER the first repaints the picture pass 1 made. 0.45 "
+        + "rebuilds detail while the shape holds; past about 0.6 the later passes start "
+        + "rewriting the shot rather than finishing it."));
+      setup.appendChild(dimLine(many ? "Pass 1 generates at 1.00; Refine is the denoise "
+                                       + "for passes 2 and on."
+                                     : "Refine is used from pass 2 on."));
+      sharedCount++;
+    } else if (!lists.pass_custom) {
       setup.appendChild(shDial("Denoise", "denoise", 0, 1, 0.01, "#b8283c", fmtD,
         "How much the sampler repaints the source. 0.5 keeps composition, 0.75 reworks "
         + "it. Rides the denoise output socket."));
       sharedCount++;
     }
-    if (!lists.scale_custom) {
+    if (!lists.scale_custom && isLat) {
+      setup.appendChild(dimLine("Scale: the canvas size"));
+      sharedCount++;
+    } else if (!lists.scale_custom) {
       setup.appendChild(shDial("Scale", "scale", 0.25, 3, 0.05, "#4a8fe0", fmtS,
         "Scales the source before it is encoded, so the pass can come out bigger or "
         + "smaller than the resize at the bottom. 2 doubles both edges and costs four "
@@ -12035,7 +11839,7 @@ function passesTab(node, body) {
   const right = document.createElement("div");
   right.className = "r";
   right.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:0";
-  if (i2iSkipped(t)) {
+  if (!isLat && i2iSkipped(t)) {
     const n = document.createElement("div");
     n.className = "rn-ws-card rn-ws-note rn-ws-skipnote";
     n.textContent = "Skipped: Re-angle's Skip the pass is on, so the re-shot picture "
@@ -12043,7 +11847,7 @@ function passesTab(node, body) {
                   + "The settings are kept for when it is switched off.";
     right.appendChild(n);
   }
-  if (t.prompt_only) {
+  if (!isLat && t.prompt_only) {
     const n = document.createElement("div");
     n.className = "rn-ws-card rn-ws-note";
     n.textContent = "Prompt only: the source donates its prompt, and the canvas comes "
@@ -12052,8 +11856,17 @@ function passesTab(node, body) {
     right.appendChild(n);
   } else {
     const resize = Number(cfg.resize) || 0;
-    const sizeOf = (sc) => resize > 0 ? `${Math.round(resize * sc)} px`
-                                      : `${Number(sc).toFixed(2)}x the original`;
+    const r8 = (v) => Math.max(8, Math.floor(v / 8) * 8);
+    const latW = r8(Number(t.w || 1024) * (Number(t.scale) || 1));
+    const latH = r8(Number(t.h || 1024) * (Number(t.scale) || 1));
+    const sizeOf = (sc) => isLat
+      ? (t.source === "input" ? `${Number(sc).toFixed(2)}x the wired latent`
+         : t.random ? `${Number(sc).toFixed(2)}x a rolled size`
+         : `${r8(latW * sc)} × ${r8(latH * sc)}`)
+      : resize > 0 ? `${Math.round(resize * sc)} px`
+                   : `${Number(sc).toFixed(2)}x the original`;
+    // what a pass runs at when the setting does not vary
+    const baseScale = isLat ? 1 : t.scale;
     const rigNames = (cfg.models?.rigs || []).map((r) => String(r.name || "")).filter(Boolean);
     const pdial = (label, value, v, i, cls) => {
       const w = document.createElement("div");
@@ -12093,6 +11906,14 @@ function passesTab(node, body) {
       pn.textContent = String(i + 1);
       const pb = document.createElement("div");
       pb.className = "pb";
+      if (isLat && many) {
+        const badge = document.createElement("span");
+        badge.className = "rn-ws-badge" + (i ? "" : " gen");
+        badge.textContent = i ? "REFINE" : "GENERATE";
+        badge.title = i ? "This pass repaints the picture the pass before it made."
+                        : "This pass makes the picture from the empty canvas.";
+        pb.appendChild(badge);
+      }
       const line1 = document.createElement("div");
       line1.className = "rn-ws-pline";
       for (const v of VARY) {
@@ -12100,15 +11921,17 @@ function passesTab(node, body) {
         line1.appendChild(pdial(v.label, lists[v.flag][i], v, i, v.flag));
       }
       if (!line1.children.length) {
-        line1.appendChild(dimLine(
-          `Denoise ${fmtD(t.denoise)} · Scale ${fmtS(t.scale)} · the rig's steps`
-          + (many ? ", as set on the left" : "")));
+        line1.appendChild(dimLine(isLat
+          ? `Denoise ${i ? fmtD(t.refine ?? 0.45) : "1.00"} · the canvas size · the rig's steps`
+            + (many ? ", as set on the left" : "")
+          : `Denoise ${fmtD(t.denoise)} · Scale ${fmtS(t.scale)} · the rig's steps`
+            + (many ? ", as set on the left" : "")));
       }
       const line2 = document.createElement("div");
       line2.className = "rn-ws-pline2";
       const sz = document.createElement("span");
       sz.className = "dim";
-      sz.textContent = "Output: " + sizeOf(lists.scale_custom ? lists.scale_custom[i] : t.scale);
+      sz.textContent = "Output: " + sizeOf(lists.scale_custom ? lists.scale_custom[i] : baseScale);
       sizeEls[i] = sz;
       line2.appendChild(sz);
       if (lists.rig) {
@@ -12130,7 +11953,7 @@ function passesTab(node, body) {
       card.append(pn, pb);
       right.appendChild(card);
     }
-    const last = lists.scale_custom ? lists.scale_custom[npass - 1] : t.scale;
+    const last = lists.scale_custom ? lists.scale_custom[npass - 1] : baseScale;
     right.appendChild(dimLine(
       `finishes at ${sizeOf(last)}`
       + (many && t.handoff_continue
