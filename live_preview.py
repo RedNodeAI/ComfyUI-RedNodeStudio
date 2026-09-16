@@ -162,14 +162,41 @@ def our_previewer(model):
     return prev, how
 
 
+TILE_MAX = 4             # frames of a batch tiled into one live picture
+
+
+def _tiled(previewer, x0):
+    """A batch's frames, up to TILE_MAX, side by side in one picture. Core's tiny
+    decoder only ever decodes the first latent, so a batch of four showed frame
+    one forming and nothing of the other three."""
+    n = min(int(x0.shape[0]), TILE_MAX)
+    frames = [previewer.decode_latent_to_preview(x0[i:i + 1]) for i in range(n)]
+    from PIL import Image
+    w, h = frames[0].width, frames[0].height
+    cols = 2 if n > 1 else 1
+    rows = (n + cols - 1) // cols
+    sheet = Image.new("RGB", (w * cols, h * rows), (16, 17, 20))
+    for i, f in enumerate(frames):
+        sheet.paste(f.convert("RGB"), ((i % cols) * w, (i // cols) * h))
+    return sheet
+
+
 def frame_data(previewer, x0, size=None):
     """One step's estimate as a JPEG data URI. `size` is the long edge: None or 0
     is FRAME_MAX, a positive number is that, -1 is the decoder's own output
-    untouched (the Paint tab's "full size", the sharpest and the most bytes)."""
+    untouched (the Paint tab's "full size", the sharpest and the most bytes).
+    A batch is tiled, up to four frames."""
     if getattr(x0, "is_nested", False):
         x0 = x0.tensors[0]
-    _fmt, img, _max = previewer.decode_latent_to_preview_image("JPEG", x0)
-    img = img.copy()
+    img = None
+    if int(getattr(x0, "shape", [1])[0] or 1) > 1:
+        try:
+            img = _tiled(previewer, x0)
+        except Exception:
+            img = None                     # a decoder that cannot: frame one, as before
+    if img is None:
+        _fmt, img, _max = previewer.decode_latent_to_preview_image("JPEG", x0)
+        img = img.copy()
     edge = int(size) if size else FRAME_MAX
     if edge > 0:
         img.thumbnail((edge, edge))

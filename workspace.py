@@ -667,8 +667,9 @@ def estimate_vram(cfg):
                     and not (n == "scene" and tabs[n].get("words_only")))
         nrefs += len(tabs["subject"].get("extra_sel") or [])
     work = WORK_GB_PER_MP * (px / 1e6) * batch * (1 + 0.5 * nrefs)
-    parts.append(["Working memory (%.1f MP%s)" % (px / 1e6, ", %d refs" % nrefs if nrefs else ""),
-                  round(work, 1)])
+    parts.append(["Working memory (%.1f MP%s%s)"
+                  % (px / 1e6, ", batch of %d" % batch if batch > 1 else "",
+                     ", %d refs" % nrefs if nrefs else ""), round(work, 1)])
     d = cfg["dials"]
     boosted = krea2 and nrefs and cfg.get("use_dials") and any(
         abs(float(d.get(k, 1.0)) - 1.0) > 1e-6 for k in ("reference_fidelity", "scene_fidelity"))
@@ -3930,10 +3931,11 @@ class RedNodeStudioWorkspace:
                         try:
                             _psz = [int(_out["samples"].shape[-1]) * 8,
                                     int(_out["samples"].shape[-2]) * 8]
+                            _pbatch = int(_out["samples"].shape[0])
                         except Exception:
-                            _psz = None
+                            _psz, _pbatch = None, 1
                         _run.begin(_pkey, _plabel, steps=int(_steps_p),
-                                   denoise=round(float(_dnp), 2),
+                                   denoise=round(float(_dnp), 2), batch=_pbatch,
                                    rig=_rig_p or rig_name or "", size=_psz,
                                    shot=(_si + 1 if _si is not None
                                          and len(_shot_list) > 1 else None))

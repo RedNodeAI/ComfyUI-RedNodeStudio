@@ -41,7 +41,11 @@ const RUN = {
   frame: null,         // {src, label, step, total}
   cached: false,       // the Workspace node was not run: its stages are last run's
   outputs: [],         // {rank, images} the run's picture outputs, as they arrive
-  final: null,         // the finished picture's /view URL
+  final: null,         // the finished picture's /view URL (the frame in view)
+  finals: [],          // every frame of the finished picture, a batch's worth
+  finalFiles: [],      // the same as file records, for the thumbnail strip
+  finalIdx: 0,
+  batch: 1,            // the largest batch a pass sampled
   promptId: null,
 };
 const LOG_MAX = 200;
@@ -77,6 +81,10 @@ function resetRun() {
   RUN.cached = false;
   RUN.outputs = [];
   RUN.final = null;
+  RUN.finals = [];
+  RUN.finalFiles = [];
+  RUN.finalIdx = 0;
+  RUN.batch = 1;
   logLine("Run started");
 }
 
@@ -135,8 +143,10 @@ export function onRunEvent(d) {
         s.total = Number(d.info?.steps) || 0;
         RUN.running = d.key;
         const i = d.info || {};
+        if (Number(i.batch) > RUN.batch) RUN.batch = Number(i.batch);
         const bits = [
           i.size ? `${i.size[0]} x ${i.size[1]}` : "",
+          Number(i.batch) > 1 ? `batch of ${i.batch}` : "",
           i.steps ? `${i.steps} steps` : "",
           i.denoise != null && d.key.startsWith("pass") ? `denoise ${Number(i.denoise).toFixed(2)}` : "",
           i.rig ? `on ${i.rig}` : "",
@@ -217,7 +227,10 @@ export function listenRun() {
   api.addEventListener("execution_success", () => {
     const best = bestOutput();
     if (best) {
-      RUN.final = viewUrl(best[0]);
+      RUN.finals = best.map(viewUrl);
+      RUN.finalFiles = best.map((f) => ({ ...f }));
+      RUN.finalIdx = 0;
+      RUN.final = RUN.finals[0];
       for (const ws of workspaceNodes()) pushReviewEntry(reviewHost(ws), best, RUN.promptId);
     }
     finishRun("done");
@@ -318,9 +331,13 @@ function bestOutput() {
   return best ? best.images : null;
 }
 
-const viewUrl = (f) => api.apiURL(`/view?${new URLSearchParams({
+const fileQuery = (f) => new URLSearchParams({
   filename: f.filename || "", subfolder: f.subfolder || "", type: f.type || "output",
-})}`);
+});
+const viewUrl = (f) => api.apiURL(`/view?${fileQuery(f)}`);
+// the strip's copies come resized from the server, so a batch of eight does not
+// decode eight full pictures for eight small squares
+const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileQuery(f)}&px=160`);
 
 const workspaceNodes = () => allNodes(app.graph)
   .filter((n) => n.type === "RedNodeStudioWorkspace");
@@ -745,6 +762,8 @@ function runPage(node, body) {
     if (RUN.final && newest()) {
       const host = reviewHost(node);
       host._rnView = 0;
+      host._rnSlot = RUN.finalIdx;           // the frame in view here is the one shown big
+      host._rnSlotFor = 0;
       reviewFullscreen(host);
       return;
     }
@@ -768,11 +787,15 @@ function runPage(node, body) {
     e.stopPropagation();
     const entry = newest();
     if (!RUN.final || !entry) return;
-    reviewMenu(reviewHost(node), entry, 0, e, 0);
+    reviewMenu(reviewHost(node), entry, 0, e, RUN.finalIdx);
   });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
-  pic.append(img, picEmpty, picLabel);
+  // a batch: every finished frame as a thumbnail under the picture; click one to
+  // put it up, the Review's strip in miniature
+  const strip = el("div", "rn-run-strip");
+  pic.append(img, picEmpty, picLabel, strip);
+  view.refs.strip = strip;
   view.refs.img = img;
   view.refs.picEmpty = picEmpty;
   view.refs.picLabel = picLabel;
@@ -849,6 +872,7 @@ function refresh(view) {
   const chip = (text, cls = "") => f.appendChild(el("span", "rn-ws-chip " + cls, text));
   chip(RUN.count ? `Run ${RUN.count}` : "No run yet");
   if (RUN.seed != null) chip(`Seed ${RUN.seed}`);
+  if (RUN.batch > 1) chip(`Batch of ${RUN.batch}`);
   chip(RUN.status === "running" ? `Running ${clock(secs())}`
        : RUN.status === "done" ? `Done in ${clock(secs())}`
        : RUN.status === "error" ? "Failed" : RUN.status === "stopped" ? "Stopped" : "Idle",
@@ -894,8 +918,22 @@ function refresh(view) {
     if (refs.img.src !== RUN.final) refs.img.src = RUN.final;
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
-    refs.picLabel.textContent = "Finished picture";
+    const n = RUN.finals.length;
+    refs.picLabel.textContent = n > 1 ? `Finished picture ${RUN.finalIdx + 1} of ${n}` : "Finished picture";
+    refs.strip.replaceChildren();
+    refs.strip.style.display = n > 1 ? "" : "none";
+    if (n > 1) {
+      RUN.finalFiles.forEach((f, i) => {
+        const t = el("img", "rn-run-thumb" + (i === RUN.finalIdx ? " cur" : ""));
+        t.src = thumbUrl(f);
+        t.alt = "";
+        t.title = `Frame ${i + 1} of ${n}`;
+        t.onclick = () => { RUN.finalIdx = i; RUN.final = RUN.finals[i]; refreshAll(); };
+        refs.strip.appendChild(t);
+      });
+    }
   } else if (fr?.src) {
+    refs.strip.style.display = "none";
     if (refs.img.src !== fr.src) refs.img.src = fr.src;
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
@@ -906,6 +944,7 @@ function refresh(view) {
     refs.img.style.display = "none";
     refs.picEmpty.style.display = "";
     refs.picLabel.textContent = "";
+    refs.strip.style.display = "none";
   }
 
   // memory
@@ -1086,6 +1125,11 @@ export const RUN_CSS = `
 .rn-run-pichead{display:flex;align-items:center;gap:8px}
 .rn-run-pichead .ch{flex:1}
 .rn-run-fs{width:auto;padding:0 10px;font-size:11.5px}
+.rn-run-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.rn-run-thumb{width:72px;height:72px;object-fit:cover;border-radius:5px;cursor:pointer;
+  border:2px solid #2a2e35;background:#0f1114}
+.rn-run-thumb:hover{border-color:#8fa8c8}
+.rn-run-thumb.cur{border-color:#b8283c}
 .rn-run-box.link,.rn-run-line.link{cursor:pointer}
 .rn-run-box.link:hover{border-color:#8fa8c8}
 .rn-run-line.link:hover .tx{color:#fff;text-decoration:underline}
