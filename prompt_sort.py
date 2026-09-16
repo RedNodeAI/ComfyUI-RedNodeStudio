@@ -64,6 +64,7 @@ _STYLE_NOTES = {
 REWRITE_SYSTEM = """You rewrite an image prompt so it reads well for a text to image model, box by box. You are a writer, not an inventor.
 
 Boxes: subject, surroundings, style_extra, light_and_colour, placement (the same boxes in, the same boxes out).
+An "extra" line in the input is unsorted text: fold every fact of it into the right box, so nothing is left out.
 
 Rules:
 1. Every fact in the input stays: who, what, where, what they wear, the light, the colours. Add nothing that changes the picture.
@@ -81,7 +82,7 @@ def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=No
     returns the reply text. Returns None on any failure, having printed why."""
     style = style if style in REWRITE_STYLES else "keep"
     lump = "\n".join("%s: %s" % (k, str(fields.get(k) or "").strip())
-                     for k in FIELDS if str(fields.get(k) or "").strip())
+                     for k in IN_FIELDS if str(fields.get(k) or "").strip())
     if not lump.strip():
         print("[RedNode Prompt Rewrite] nothing to rewrite", flush=True)
         return None

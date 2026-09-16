@@ -397,7 +397,7 @@ export function buildFrameEditor(wrap, F) {
       const fields = {
         subject: subject.value, surroundings: surroundings.value,
         style_extra: styleExtra.value, light_and_colour: lac.value,
-        placement: placement.value,
+        placement: placement.value, extra: extra.value,
       };
       const r = await fetch("/rednode/prompt_rewrite", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -412,6 +412,8 @@ export function buildFrameEditor(wrap, F) {
       styleExtra.value = f.style_extra ?? styleExtra.value;
       lac.value = f.light_and_colour ?? lac.value;
       placement.value = f.placement ?? placement.value;
+      extra.value = "";                      // its facts were folded into the boxes
+      extra._rnCount?.();
       changed();
       pullFromWidgets();
       rwBtn.textContent = "rewritten";
