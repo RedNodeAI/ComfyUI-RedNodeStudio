@@ -350,6 +350,11 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- The Paint tab's Subject, Scene and Moodboard reference toggles follow the
+  Model choice: a built-in rig picked there decides whether references are
+  offered, instead of the Models tab's active rig. Generate on a built-in
+  choice now renders on the rig it names; it used to render on the active rig
+  whatever the choice said
 - The Paint tab has the Detailer's Blend, beside Feather: how much of the
   repaint goes back under the mask. 1.00 is the repaint as before; 0.50
   keeps half of what was painted over, so a high denoise with a blend under 1

@@ -7208,6 +7208,10 @@ async function paintGenerate(node) {
       const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
       c.paint = c.paint || {};
       c.paint.run_token = `paint-${Date.now()}`;
+      // THE PICKED RIG IS THE RUN'S RIG, in the queued copy only: the pass used to
+      // render on the Models tab's active rig whatever the choice said
+      const rigAt = (c.models?.rigs || []).findIndex((r, i) => (r.name || `Rig ${i + 1}`) === picked.rigName);
+      if (rigAt >= 0 && c.models) c.models.active = rigAt;
       pruned[wsKey].inputs.config = JSON.stringify(c);
     } catch (e) { alert("Could not stamp the paint run: " + e.message); return; }
     advanceSeeds(pruned, Object.keys(pruned));
@@ -9877,9 +9881,15 @@ function paintBody(node, body) {
     .find((x) => String(x.node.id) === String(P.renderer ?? ""));
   const refName = String(refT ? rendererName(refT) : P.renderer_name || "")
     .trim().toLowerCase();
+  // THE MODEL CHOICE DECIDES, not the Models tab's active rig: a built-in choice
+  // names its rig, and Generate renders on that rig, so its CLIP type is the one
+  // that matters. A node choice with no model wired fills from the active rig.
   const activeRig = (cfg.models?.rigs || [])[cfg.models?.active || 0];
-  const refsLive = activeRig
-    ? activeRig.clip_type === "krea2"
+  const refRig = refT?.kind === "rig"
+    ? (cfg.models?.rigs || []).find((r, i) => (r.name || `Rig ${i + 1}`) === refT.rigName) || activeRig
+    : activeRig;
+  const refsLive = refRig
+    ? refRig.clip_type === "krea2"
     : ((refT ? refT.kind === "render" : true) || refName === "krea2 workspace");
   for (const [key, label, tip] of [
     ["use_subject", "Subject",
@@ -9901,10 +9911,14 @@ function paintBody(node, body) {
       b.onclick = () => { P[key] = !P[key]; writeCfg(node); render(node); };
     } else {
       b.disabled = true;
-      b.title = activeRig
-        ? "References are Krea 2 conditioning, and the active rig is not a Krea 2 "
-          + "model (its CLIP type is not krea2). Switch the active rig on the "
-          + "Models tab and they come back."
+      b.title = refRig
+        ? "References are Krea 2 conditioning, and " + (refT?.kind === "rig"
+            ? `the model choice (${refRig.name || "this rig"}) is not a Krea 2 model `
+              + "(its CLIP type is not krea2). Pick a Krea 2 rig in Model choice and "
+              + "they come back."
+            : "the active rig, which fills this node's model, is not a Krea 2 model "
+              + "(its CLIP type is not krea2). Switch the active rig on the Models "
+              + "tab and they come back.")
         : "References cannot ride this chain: its sampler takes plain text "
           + "conditioning, so these toggles would change nothing. Pick the "
           + "Krea2 Workspace chain, or the internal Paint Render, and they "
