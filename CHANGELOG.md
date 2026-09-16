@@ -317,6 +317,11 @@ cheap to judge.
   under the big one; a click puts it up, and full screen and the right-click
   menu open on that picture. The live picture shows up to four pictures of a
   batch forming, two to a row, instead of only the first
+- History under the Run tab's log: this session's finished runs, up to 20,
+  each with its time, how it ended, batch and seed. Picking one shows its
+  whole sheet again (pipeline, finished pictures, VRAM chart, log) under a
+  banner with Back to live, and a new run returns the page to live by itself.
+  Runs are kept in the page only, so a reload starts the list again
 - The Run tab's log no longer says a model unloaded and loaded again when the
   sampler dials swap it for their patched copy. Nothing left the card; a model
   is said to unload only when its memory comes back

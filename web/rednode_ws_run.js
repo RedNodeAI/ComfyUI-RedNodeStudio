@@ -52,7 +52,39 @@ const LOG_MAX = 200;
 const VRAM_MAX = 900;
 const views = new Set();
 
-const secs = () => (RUN.t0 ? (((RUN.t1 || Date.now()) - RUN.t0) / 1000) : 0);
+// THIS SESSION'S RUNS: a copy of each finished run's sheet, newest first, kept in
+// the page only (a reload empties it). A sheet is text, numbers and picture links,
+// a few KB, and it is only drawn when opened.
+const HISTORY = [];
+const HISTORY_MAX = 20;
+
+const sheetSecs = (S) => (S.t0 ? (((S.t1 || Date.now()) - S.t0) / 1000) : 0);
+const secs = () => sheetSecs(RUN);
+// the sheet a node's Run page shows: a past run picked from History, or the live one
+const shownSheet = (node) => node._rnRunSheet || RUN;
+const timeOfDay = (ms) => {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+function keepSheet() {
+  const ws = workspaceNodes();
+  const wsn = ws.find((n) => String(n.id) === String(RUN.node)) || ws[0];
+  HISTORY.unshift({
+    past: true,
+    count: RUN.count, status: RUN.status, t0: RUN.t0, t1: RUN.t1,
+    seed: RUN.seed, rig: RUN.rig, batch: RUN.batch, cached: RUN.cached,
+    stages: new Map([...RUN.stages].map(([k, s]) => [k, { ...s, info: { ...(s.info || {}) } }])),
+    running: "", frame: null,
+    log: RUN.log.map((l) => ({ ...l })),
+    vram: RUN.vram.slice(), marks: RUN.marks.slice(),
+    models: RUN.models.map((m) => ({ ...m })), total: RUN.total,
+    final: RUN.final, finals: RUN.finals.slice(),
+    finalFiles: RUN.finalFiles.map((f) => ({ ...f })), finalIdx: RUN.finalIdx,
+    promptId: RUN.promptId, limitGb: wsn?._rnCfg?.vram_gb || 0,
+  });
+  if (HISTORY.length > HISTORY_MAX) HISTORY.length = HISTORY_MAX;
+}
 const clock = (s) => {
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
@@ -85,6 +117,7 @@ function resetRun() {
   RUN.finalFiles = [];
   RUN.finalIdx = 0;
   RUN.batch = 1;
+  for (const v of views) v.node._rnRunSheet = null;
   logLine("Run started");
 }
 
@@ -101,6 +134,7 @@ function finishRun(status, why = "") {
   logLine(status === "done" ? `Finished in ${clock(secs())}`
           : status === "stopped" ? "Stopped" : `Failed${why ? `: ${why}` : ""}`,
           status === "done" ? "done" : "warn");
+  keepSheet();
 }
 
 // ---- the feed ----------------------------------------------------------------
@@ -735,6 +769,15 @@ function runPage(node, body) {
   top.appendChild(estLine);
   view.refs.est = estLine;
   fetchEstimate(node, estLine);
+  const banner = el("div", "rn-ws-card rn-run-past");
+  const bannerText = el("span", "tx");
+  const liveBtn = el("button", "rn-ws-btn rn-run-live", "Back to live");
+  liveBtn.title = "Show the run happening now.";
+  liveBtn.onclick = () => { node._rnRunSheet = null; refreshAll(); };
+  banner.append(bannerText, liveBtn);
+  root.appendChild(banner);
+  view.refs.banner = banner;
+  view.refs.bannerText = bannerText;
   const probs = setupProblems(node, cfg) || [];
   if (probs.length) {
     const pc = el("div", "rn-ws-card rn-ws-note rn-ws-peoplewarn rn-run-probs");
@@ -762,23 +805,33 @@ function runPage(node, body) {
   pic.appendChild(picHead);
   const img = el("img", "rn-run-img");
   img.alt = "";
-  const newest = () => (node.properties?.rn_run_review?.rn_review || [])[0] || null;
+  // the Review entry of the run on show: the newest for the live run, the one
+  // with its prompt id for a past one (gone once the Review has dropped it)
+  const entryAt = () => {
+    const hist = node.properties?.rn_run_review?.rn_review || [];
+    const S = shownSheet(node);
+    if (!S.past) return hist.length ? 0 : -1;
+    return S.promptId ? hist.findIndex((e) => e.prompt === S.promptId) : -1;
+  };
   const showBig = () => {
-    if (RUN.final && newest()) {
+    const S = shownSheet(node);
+    const at = entryAt();
+    if (S.final && at >= 0) {
       const host = reviewHost(node);
-      host._rnView = 0;
-      host._rnSlot = RUN.finalIdx;           // the frame in view here is the one shown big
-      host._rnSlotFor = 0;
+      host._rnView = at;
+      host._rnSlot = S.finalIdx;             // the frame in view here is the one shown big
+      host._rnSlotFor = at;
       reviewFullscreen(host);
       return;
     }
-    if (!RUN.frame?.src) return;
+    const src = S.final || S.frame?.src;
+    if (!src) return;
     // a frame still forming: a plain full screen of it
     const ov = el("div", "rn-run-fsov");
     ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
       + "display:flex;align-items:center;justify-content:center;cursor:zoom-out";
     const big = el("img");
-    big.src = RUN.frame.src;
+    big.src = src;
     big.style.cssText = "max-width:96vw;max-height:96vh;object-fit:contain";
     ov.appendChild(big);
     ov.addEventListener("pointerdown", () => ov.remove());
@@ -790,9 +843,11 @@ function runPage(node, body) {
   img.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const entry = newest();
-    if (!RUN.final || !entry) return;
-    reviewMenu(reviewHost(node), entry, 0, e, RUN.finalIdx);
+    const S = shownSheet(node);
+    const at = entryAt();
+    const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
+    if (!S.final || !entry) return;
+    reviewMenu(reviewHost(node), entry, at, e, S.finalIdx);
   });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
@@ -819,7 +874,9 @@ function runPage(node, body) {
     legend.appendChild(k);
   }
   const onCard = el("div", "rn-run-oncard");
-  mem.append(chart, memLine, legend, el("div", "rn-run-sub", "ON THE CARD NOW"), onCard);
+  const onCardHead = el("div", "rn-run-sub", "ON THE CARD NOW");
+  mem.append(chart, memLine, legend, onCardHead, onCard);
+  view.refs.onCardHead = onCardHead;
   view.refs.chart = chart;
   view.refs.memLine = memLine;
   view.refs.onCard = onCard;
@@ -832,6 +889,16 @@ function runPage(node, body) {
   const log = el("div", "rn-run-log");
   logCard.appendChild(log);
   view.refs.log = log;
+  // HISTORY: this session's finished runs, opened on the same page
+  const histRow = el("div", "rn-run-histrow");
+  const histBtn = el("button", "rn-ws-btn rn-run-histbtn");
+  histBtn.title = "This session's finished runs. Pick one to see its sheet again.";
+  histBtn.onclick = () => { node._rnRunHistOpen = !node._rnRunHistOpen; refreshAll(); };
+  histRow.appendChild(histBtn);
+  const histList = el("div", "rn-run-hist");
+  logCard.append(histRow, histList);
+  view.refs.histBtn = histBtn;
+  view.refs.histList = histList;
   root.appendChild(logCard);
 
   body.appendChild(root);
@@ -846,6 +913,11 @@ const STATE_TEXT = { waiting: "Waiting", start: "Running", progress: "Running", 
 
 function stageRows(node) {
   const cfg = node._rnCfg;
+  const S = shownSheet(node);
+  // a past run: what it reported, in order; today's settings are not its plan
+  if (S.past) {
+    return [...S.stages].map(([key, s]) => ({ key, label: s.label || key, s, state: s.state }));
+  }
   const plan = plannedStages(node, cfg);
   const rows = plan.map(([key, label]) => ({ key, label }));
   // stages the server reported that the plan did not foresee
@@ -871,17 +943,25 @@ function stageRows(node) {
 
 function refresh(view) {
   const { node, refs } = view;
+  const S = shownSheet(node);
+  const took = sheetSecs(S);
+  // which run this is
+  refs.banner.style.display = S.past ? "" : "none";
+  if (S.past) {
+    refs.bannerText.textContent = `Showing Run ${S.count} from ${timeOfDay(S.t0)}, `
+      + `a past run. ${RUN.status === "running" ? "A run is going now." : ""}`.trim();
+  }
   // facts
   const f = refs.facts;
   f.replaceChildren();
   const chip = (text, cls = "") => f.appendChild(el("span", "rn-ws-chip " + cls, text));
-  chip(RUN.count ? `Run ${RUN.count}` : "No run yet");
-  if (RUN.seed != null) chip(`Seed ${RUN.seed}`);
-  if (RUN.batch > 1) chip(`Batch of ${RUN.batch}`);
-  chip(RUN.status === "running" ? `Running ${clock(secs())}`
-       : RUN.status === "done" ? `Done in ${clock(secs())}`
-       : RUN.status === "error" ? "Failed" : RUN.status === "stopped" ? "Stopped" : "Idle",
-       "rn-run-status " + RUN.status);
+  chip(S.count ? `Run ${S.count}` : "No run yet");
+  if (S.seed != null) chip(`Seed ${S.seed}`);
+  if (S.batch > 1) chip(`Batch of ${S.batch}`);
+  chip(S.status === "running" ? `Running ${clock(took)}`
+       : S.status === "done" ? `Done in ${clock(took)}`
+       : S.status === "error" ? "Failed" : S.status === "stopped" ? "Stopped" : "Idle",
+       "rn-run-status " + S.status);
 
   // pipeline
   refs.boxes.replaceChildren();
@@ -918,25 +998,31 @@ function refresh(view) {
   }
 
   // picture
-  const fr = RUN.frame;
-  if (RUN.final && RUN.status === "done") {
-    if (refs.img.src !== RUN.final) refs.img.src = RUN.final;
+  const fr = S.frame;
+  if (S.final && S.status === "done") {
+    if (refs.img.src !== S.final) refs.img.src = S.final;
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
-    const n = RUN.finals.length;
-    refs.picLabel.textContent = n > 1 ? `Finished picture ${RUN.finalIdx + 1} of ${n}` : "Finished picture";
+    const n = S.finals.length;
+    refs.picLabel.textContent = n > 1 ? `Finished picture ${S.finalIdx + 1} of ${n}` : "Finished picture";
     refs.strip.replaceChildren();
     refs.strip.style.display = n > 1 ? "" : "none";
     if (n > 1) {
-      RUN.finalFiles.forEach((f, i) => {
-        const t = el("img", "rn-run-thumb" + (i === RUN.finalIdx ? " cur" : ""));
+      S.finalFiles.forEach((f, i) => {
+        const t = el("img", "rn-run-thumb" + (i === S.finalIdx ? " cur" : ""));
         t.src = thumbUrl(f);
         t.alt = "";
         t.title = `Frame ${i + 1} of ${n}`;
-        t.onclick = () => { RUN.finalIdx = i; RUN.final = RUN.finals[i]; refreshAll(); };
+        t.onclick = () => { S.finalIdx = i; S.final = S.finals[i]; refreshAll(); };
         refs.strip.appendChild(t);
       });
     }
+  } else if (S.past) {
+    refs.img.style.display = "none";
+    refs.picEmpty.style.display = "";
+    refs.picEmpty.textContent = "This run left no finished picture.";
+    refs.picLabel.textContent = "";
+    refs.strip.style.display = "none";
   } else if (fr?.src) {
     refs.strip.style.display = "none";
     if (refs.img.src !== fr.src) refs.img.src = fr.src;
@@ -948,30 +1034,33 @@ function refresh(view) {
   } else {
     refs.img.style.display = "none";
     refs.picEmpty.style.display = "";
+    refs.picEmpty.textContent = "The picture appears here while it renders.";
     refs.picLabel.textContent = "";
     refs.strip.style.display = "none";
   }
 
   // memory
-  drawChart(refs.chart, node._rnCfg.vram_gb || 0);
-  const last = RUN.vram[RUN.vram.length - 1];
+  const limitGb = S.past ? S.limitGb : (node._rnCfg.vram_gb || 0);
+  drawChart(refs.chart, limitGb, S);
+  const last = S.vram[S.vram.length - 1];
   const gb = (mb) => `${(mb / 1024).toFixed(1)} GB`;
-  const peak = RUN.vram.reduce((m, v) => Math.max(m, v.used), 0);
-  const tgt = node._rnCfg.vram_gb ? node._rnCfg.vram_gb - HEADROOM_GB : 0;
-  refs.memLine.textContent = RUN.total
-    ? `${last ? gb(last.used) : "-"} of ${gb(RUN.total)} in use${peak ? ` · peak ${gb(peak)}` : ""}`
+  const peak = S.vram.reduce((m, v) => Math.max(m, v.used), 0);
+  const tgt = limitGb ? limitGb - HEADROOM_GB : 0;
+  refs.onCardHead.textContent = S.past ? "ON THE CARD AT THE END" : "ON THE CARD NOW";
+  refs.memLine.textContent = S.total
+    ? `${last ? gb(last.used) : "-"} of ${gb(S.total)} in use${peak ? ` · peak ${gb(peak)}` : ""}`
       + (tgt ? ` · limit ${tgt} GB${peak > tgt * 1024 ? `, went over by ${gb(peak - tgt * 1024)}` : ""}` : "")
     : "Memory figures arrive with the first run.";
   refs.onCard.replaceChildren();
-  if (!RUN.models.length) {
+  if (!S.models.length) {
     refs.onCard.appendChild(el("div", "rn-ws-note", "Nothing ComfyUI tracks is loaded."));
   }
-  for (const m of RUN.models) {
+  for (const m of S.models) {
     const row = el("div", "rn-run-model");
     row.appendChild(el("span", "n", m.name));
     const bar = el("span", "bar");
     const fill = el("i");
-    fill.style.width = `${RUN.total ? Math.round(Math.min(1, m.mb / RUN.total) * 100) : 0}%`;
+    fill.style.width = `${S.total ? Math.round(Math.min(1, m.mb / S.total) * 100) : 0}%`;
     bar.appendChild(fill);
     row.append(bar, el("span", "mb", gb(m.mb)));
     refs.onCard.appendChild(row);
@@ -980,8 +1069,8 @@ function refresh(view) {
   // log
   const atBottom = refs.log.scrollHeight - refs.log.scrollTop - refs.log.clientHeight < 30;
   refs.log.replaceChildren();
-  if (!RUN.log.length) refs.log.appendChild(el("div", "rn-ws-note", "Press Generate to start a run."));
-  for (const l of RUN.log) {
+  if (!S.log.length) refs.log.appendChild(el("div", "rn-ws-note", "Press Generate to start a run."));
+  for (const l of S.log) {
     const row = el("div", `rn-run-line ${l.level}`);
     row.append(el("span", "tm", clock(l.t)), el("i", "dot"), el("span", "tx", l.text));
     const target = jumpForLine(l.text, node._rnCfg);
@@ -993,6 +1082,32 @@ function refresh(view) {
     refs.log.appendChild(row);
   }
   if (atBottom) refs.log.scrollTop = refs.log.scrollHeight;
+
+  // history
+  const open = !!node._rnRunHistOpen && HISTORY.length > 0;
+  refs.histBtn.textContent = HISTORY.length
+    ? `${open ? "\u25BE" : "\u25B8"} History (${HISTORY.length})` : "History: no finished runs yet";
+  refs.histBtn.disabled = !HISTORY.length;
+  refs.histList.replaceChildren();
+  refs.histList.style.display = open ? "" : "none";
+  if (open) {
+    const item = (label, meta, cur, onPick, cls = "") => {
+      const b = el("button", "rn-run-histitem" + (cur ? " cur" : "") + (cls ? " " + cls : ""));
+      b.append(el("span", "n", label), el("span", "m", meta));
+      b.onclick = onPick;
+      refs.histList.appendChild(b);
+    };
+    item("Live", RUN.status === "running" ? `Running ${clock(secs())}` : "The run now",
+         !S.past, () => { node._rnRunSheet = null; refreshAll(); });
+    for (const H of HISTORY) {
+      const how = H.status === "done" ? `Done in ${clock(sheetSecs(H))}`
+        : H.status === "stopped" ? "Stopped" : "Failed";
+      const bits = [timeOfDay(H.t0), how, H.batch > 1 ? `batch of ${H.batch}` : "",
+                    H.seed != null ? `seed ${H.seed}` : ""].filter(Boolean);
+      item(`Run ${H.count}`, bits.join(" · "), S === H,
+           () => { node._rnRunSheet = H; refreshAll(); }, H.status);
+    }
+  }
 }
 
 // What each VRAM limit is sized for. The limit itself only holds the expensive dials
@@ -1004,16 +1119,16 @@ function niceStep(maxGb) {
   return 64;
 }
 
-function drawChart(cv, cardGb) {
+function drawChart(cv, cardGb, S = RUN) {
   const ctx = cv.getContext?.("2d");
   if (!ctx) return;
   const w = Math.max(240, Math.round(cv.clientWidth || cv.parentNode?.clientWidth || 360));
   const h = cv.height;
   if (cv.width !== w) cv.width = w;
   ctx.clearRect(0, 0, w, h);
-  const total = RUN.total || 1;
-  const pts = RUN.vram;
-  const tMax = Math.max(10, secs(), pts.length ? pts[pts.length - 1].t : 0);
+  const total = S.total || 1;
+  const pts = S.vram;
+  const tMax = Math.max(10, sheetSecs(S), pts.length ? pts[pts.length - 1].t : 0);
   const L = 38, Rm = 8, T = 10, B = 20;             // room for the axis labels
   const x = (t) => L + (t / tMax) * (w - L - Rm);
   const y = (mb) => h - B - (mb / total) * (h - B - T);
@@ -1061,7 +1176,7 @@ function drawChart(cv, cardGb) {
   }
   ctx.setLineDash?.([]);
   // loads and unloads
-  for (const m of RUN.marks) {
+  for (const m of S.marks) {
     ctx.strokeStyle = m.level === "load" ? "#22c55e" : "#e0a84a";
     ctx.beginPath();
     ctx.moveTo(x(m.t), T);
@@ -1161,6 +1276,21 @@ export const RUN_CSS = `
 .rn-run-line{display:grid;grid-template-columns:44px 10px 1fr;gap:8px;align-items:center;
   font-size:12.5px;color:#c8ccd2}
 .rn-run-line .tm{color:#7b828c;font-variant-numeric:tabular-nums}
+.rn-run-past{flex-direction:row;align-items:center;gap:10px;border-color:#8fa8c8;
+  background:#1a2230}
+.rn-run-past .tx{flex:1;color:#cdd9ea}
+.rn-run-live{width:auto;padding:0 12px}
+.rn-run-histrow{display:flex;margin-top:8px}
+.rn-run-histbtn{width:auto;padding:0 12px}
+.rn-run-hist{display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:220px;
+  overflow-y:auto}
+.rn-run-histitem{display:flex;gap:12px;align-items:center;text-align:left;cursor:pointer;
+  background:#15171b;border:1px solid #2a2e35;border-radius:6px;padding:5px 10px;color:#d6d9de}
+.rn-run-histitem:hover{border-color:#8fa8c8}
+.rn-run-histitem.cur{border-color:#b8283c;background:#221519}
+.rn-run-histitem .n{font-weight:600;min-width:64px}
+.rn-run-histitem .m{color:#8a919b;font-variant-numeric:tabular-nums}
+.rn-run-histitem.error .m,.rn-run-histitem.stopped .m{color:#e0a84a}
 .rn-run-line .dot{width:8px;height:8px;border-radius:50%;background:#4a8fe0}
 .rn-run-line.done .dot{background:#22c55e}
 .rn-run-line.load .dot{background:#a855f7}
