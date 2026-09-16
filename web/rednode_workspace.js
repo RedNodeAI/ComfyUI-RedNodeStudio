@@ -11479,7 +11479,7 @@ function promptsBody(node, body) {
     name.placeholder = "Prompt " + (i + 1);
     // a set width, so the rig chips and the box kind sit right after the name
     // instead of at the far end of a box nobody needs that wide
-    name.style.cssText = "flex:0 0 200px;min-width:0;background:#15171b;border:1px solid "
+    name.style.cssText = "width:220px;flex:none;box-sizing:border-box;background:#15171b;border:1px solid "
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
     name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
