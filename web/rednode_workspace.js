@@ -478,8 +478,10 @@ css.textContent = `
 .rn-ws-pstatus{position:absolute;top:34px;right:6px;z-index:5;max-width:70%;
   border-radius:4px;background:#000c;color:#e5e7eb;padding:3px 6px;font-size:9.5px;
   pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rn-ws-pfs{position:absolute;top:6px;right:6px;z-index:3;width:auto;padding:0 10px}
-.rn-ws-rstrip{position:absolute;left:6px;bottom:6px;right:6px;display:flex;gap:4px;
+/* bottom right, clear of Save and Post + Save in the top corner; the strip stops short of it */
+.rn-ws-pfs{position:absolute;bottom:6px;right:6px;z-index:5;width:auto;padding:0 10px;
+  background:#15171bd9}
+.rn-ws-rstrip{position:absolute;left:6px;bottom:6px;right:116px;display:flex;gap:4px;
   z-index:3;justify-content:center;pointer-events:none}
 .rn-ws-rstrip .t{position:static;width:auto;height:38px;max-width:64px;object-fit:cover;
   border-radius:3px;border:1px solid #2a2e35;opacity:.75;cursor:pointer;
