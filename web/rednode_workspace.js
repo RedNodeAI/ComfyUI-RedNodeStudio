@@ -737,6 +737,77 @@ css.textContent = `
 .rn-ws-advgrid .advh{width:100%;font-size:10px;font-weight:700;letter-spacing:.5px;opacity:.55}
 .rn-ws-advgrid .cellc{display:flex;align-items:center;gap:5px;font-size:11px;color:#9aa0a8}
 .rn-ws-advgrid .cellc.wide{width:100%}
+/* IMG2IMG AS SUB-TABS: a strip with a light per section, a status bar, cards */
+.rn-ws-sub{display:flex;gap:6px;flex-wrap:wrap}
+.rn-ws-subt{flex:1 1 110px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:#15171b;border:1px solid #2a2e35;border-radius:7px;color:#9aa0a8;cursor:pointer;
+  font-size:12px;font-weight:700;letter-spacing:.06em;padding:8px 10px;white-space:nowrap}
+.rn-ws-subt:hover{border-color:#3d434c;color:#c8ccd2}
+.rn-ws-subt.cur{background:#b8283c;border-color:#b8283c;color:#fff}
+.rn-ws-subt .lt{width:9px;height:9px;border-radius:50%;background:#4a5058;flex:none}
+.rn-ws-subt .lt.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
+.rn-ws-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#1b1e23;
+  border:1px solid #2e333a;border-radius:7px;padding:7px 10px}
+.rn-ws-status .nm{font-size:13px;color:#e8ecf1;margin-right:4px}
+.rn-ws-chip{font-size:11.5px;color:#aab0b8;background:#15171b;border:1px solid #2e333a;
+  border-radius:5px;padding:3px 8px;white-space:nowrap}
+.rn-ws-card{display:flex;flex-direction:column;gap:8px;background:#1b1e23;
+  border:1px solid #2e333a;border-radius:7px;padding:10px;min-width:0;box-sizing:border-box}
+.rn-ws-card > .ch{font-size:11px;font-weight:700;letter-spacing:.08em;color:#8a919b}
+.rn-ws-card hr{border:0;border-top:1px solid #2e333a;margin:2px 0;width:100%}
+.rn-ws-cols{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.rn-ws-cols > .l{flex:1 1 260px;box-sizing:border-box}
+.rn-ws-cols > .r{flex:3 1 380px}
+.rn-ws-card .rn-ws-advgrid{background:none;border:0;padding:0}
+.rn-ws-sect.flat{border-left-width:1px}
+.rn-ws-chosen{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.rn-ws-chosen img{width:56px;height:56px;object-fit:cover;border-radius:5px;
+  border:1px solid #2e333a;flex:none}
+.rn-ws-chosen .meta{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.rn-ws-chosen .fn{font-size:13px;color:#e8ecf1;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.rn-ws-chosen .dim{font-size:11.5px;color:#8a919b}
+.rn-ws-chosen button{height:30px;padding:0 14px}
+.rn-ws-passcard{display:flex;gap:10px;align-items:stretch;background:#1b1e23;
+  border:1px solid #2e333a;border-radius:7px;padding:9px 12px}
+.rn-ws-passcard .pn{flex:none;width:22px;font-size:17px;color:#6b7280;align-self:center;
+  text-align:center}
+.rn-ws-passcard .pb{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rn-ws-pline{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+.rn-ws-pdial{flex:1 1 170px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.rn-ws-pdial .k{font-size:11.5px;color:#9aa0a8}
+.rn-ws-pdial .bar{display:flex;align-items:center;gap:8px}
+.rn-ws-pdial input[type=range]{flex:1;min-width:0;height:22px}
+.rn-ws-pdial .v{font-size:12px;color:#e8ecf1;min-width:70px;text-align:right}
+.rn-ws-pline2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rn-ws-pline2 .dim{font-size:11.5px;color:#7f8792;margin-right:auto}
+.rn-ws-pline2 select{min-width:150px}
+.rn-ws-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.rn-ws-tile{display:flex;align-items:center;gap:8px;background:#15171b;
+  border:1px solid #2e333a;border-radius:6px;padding:6px 8px;font-size:12px;color:#c8ccd2;
+  cursor:pointer}
+.rn-ws-tile.dis{opacity:.5}
+.rn-ws-stepper{display:flex;align-items:center}
+.rn-ws-stepper button{width:30px;height:28px;background:#15171b;border:1px solid #33373d;
+  color:#ddd;cursor:pointer;font-size:15px}
+.rn-ws-stepper input{width:48px;height:28px;box-sizing:border-box;text-align:center;
+  background:#0f1114;border:1px solid #33373d;border-left:0;border-right:0;color:#fff}
+.rn-ws-stepper.on input,.rn-ws-stepper.on button{border-color:#b8283c}
+.rn-ws-shdial{display:flex;align-items:center;gap:8px}
+.rn-ws-shdial .k{font-size:12px;color:#9aa0a8;min-width:52px}
+.rn-ws-shdial input[type=range]{flex:1;min-width:0;height:20px}
+.rn-ws-shdial .v{font-size:12px;color:#e8ecf1;min-width:44px;text-align:right}
+.rn-ws-elist{display:flex;flex-direction:column;border:1px solid #2e333a;border-radius:7px;
+  overflow:hidden;background:#1b1e23}
+.rn-ws-erow{display:flex;align-items:center;gap:10px;padding:7px 10px;
+  border-bottom:1px solid #262a30;cursor:pointer;font-size:13px;color:#c8ccd2}
+.rn-ws-erow:last-child{border-bottom:0}
+.rn-ws-erow:hover{background:#20242a}
+.rn-ws-erow.cur{background:#3a1c22;box-shadow:inset 3px 0 0 #b8283c;color:#fff}
+.rn-ws-erow .st{margin-left:auto;font-size:11px;color:#6b7280}
+.rn-ws-erow.dis{color:#6b7280}
+.rn-ws-result{white-space:pre-wrap;line-height:1.45;color:#c8ccd2;background:#15171b;
+  border:1px solid #2e333a;border-radius:6px;padding:8px 10px}
 .rn-ws-advgrid .cellc input[type=number]{width:74px;background:#15171b;border:1px solid #33373d;
   border-radius:4px;color:#e8ecf1;font-size:11.5px;padding:4px 5px}
 .rn-ws-advgrid .cellc input[type=text]{flex:1;background:#15171b;border:1px solid #33373d;
@@ -2192,9 +2263,14 @@ function thumbOf(cfg, tabName) {
   return Math.max(THUMB_MIN, Math.min(THUMB_MAX, v || THUMB));
 }
 
-function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
+function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } = {}) {
   const cfg = node._rnCfg;
   const t = cfg.tabs[tabName];
+  // "tabs": the Img2Img Source sub-tab. The on switch lives on the status bar, and
+  // the canvas, collection and thumb size share one toolbar over the grid.
+  const tabsLayout = layout === "tabs";
+  const thumbHolder = document.createElement("span");
+  thumbHolder.style.marginLeft = "auto";
 
   const row = document.createElement("div");
   row.className = "rn-ws-row";
@@ -2207,7 +2283,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
   hint.className = "hint";
   hint.textContent = meta.hint || "";
   row.append(on, hint);
-  body.appendChild(row);
+  if (!tabsLayout) body.appendChild(row);
 
   // EVERY gallery gets one, and each remembers its own size. It used to appear on
   // Img2Img, Subject and Subject 2 only, so Scene, Moodboard and Subject 3 had no
@@ -2241,7 +2317,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       }
     });
     th.append(tl, tr);
-    row.appendChild(th);
+    (tabsLayout ? thumbHolder : row).appendChild(th);
   }
 
   // collections: subfolders for the gallery, one active at a time
@@ -2334,12 +2410,20 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
   const gAccents = { i2i: "#4a8fe0", subject: "#3f9e63", scene: "#b8493c",
                      moodboard: "#c98a2d", subject2: "#3f9e63",
                      subject3: "#3f9e63" };
-  const gcard = sectionCard(tabName === "i2i" ? "SOURCE" : "IMAGES",
+  const gcard = sectionCard(tabsLayout ? "GALLERY" : tabName === "i2i" ? "SOURCE" : "IMAGES",
     gAccents[tabName] || "#8fa8c8",
     (t.images?.length || 0) + " image(s)",
-    tabName === "i2i" ? { node, key: "i2i_source", open: true } : null);
+    tabName === "i2i" && !tabsLayout ? { node, key: "i2i_source", open: true } : null);
   body.appendChild(gcard);
-  gcard.appendChild(coll);
+  const tbar = document.createElement("div");
+  tbar.className = "rn-ws-row rn-ws-gtools";
+  tbar.style.flexWrap = "wrap";
+  if (tabsLayout) {
+    tbar.appendChild(coll);
+    gcard.appendChild(tbar);
+  } else {
+    gcard.appendChild(coll);
+  }
 
   grid = document.createElement("div");        // the slider above closes over this
   grid.className = "rn-ws-grid";
@@ -2432,9 +2516,14 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
       b.onclick = () => { t.canvas = value; writeCfg(node); render(node); };
       cseg.appendChild(b);
     }
-    crow.append(clab, cseg);
-    gcard.appendChild(crow);
+    if (tabsLayout) {
+      tbar.insertBefore(cseg, tbar.firstChild);
+    } else {
+      crow.append(clab, cseg);
+      gcard.appendChild(crow);
+    }
   }
+  if (tabsLayout) tbar.appendChild(thumbHolder);
   const add = document.createElement("button");
   add.className = "rn-ws-add";
   add.style.width = add.style.height = cellPx + "px";
@@ -2488,6 +2577,7 @@ function galleryBody(node, body, tabName, meta, { multi = false } = {}) {
         ? `${t.sel.length} of ${t.images.length} in the batch. Click to add or remove; numbers show batch order.`
         : `${t.images.length} remembered. The highlighted one is used.`;
   gcard.appendChild(note);
+  if (tabsLayout && !multi) chosenStrip(node, body, t, tabName);
 }
 
 // ---------------------------------------------------------------- Camera tab
@@ -3768,15 +3858,24 @@ function injectRowUI(node, sect, tabName) {
   sect.appendChild(row);
 }
 
-function autoSection(node, body, tabName) {
+// The engines an Auto prompt box can run, in list order.
+const AUTO_ENGINES = [["ollama", "Ollama"], ["wd14", "WD14 tags"], ["joy", "JoyCaption"],
+                      ["qwen", "QwenVL"], ["florence", "Florence"], ["clipgen", "CLIP gen"]];
+
+// THE AUTO PROMPT BOX: the engines as a list on the left, the picked engine's own
+// settings beside it, the settings every engine shares under those, and the result
+// at the bottom. It used to show every engine's settings at once, most of them for
+// engines that were not even on. `flat` is the Img2Img sub-tab, where the tab itself
+// is the fold.
+function autoSection(node, body, tabName, { flat = false } = {}) {
   if (!["subject", "scene", "moodboard", "i2i", "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
   const isPaint = tabName === "paint";
   const a = isPaint ? cfg.paint.auto : cfg.tabs[tabName].auto;
-  const open = !!(node._rnAutoOpen ||= {})[tabName];
+  const open = flat || !!(node._rnAutoOpen ||= {})[tabName];
 
   const sect = document.createElement("div");
-  sect.className = "rn-ws-sect rn-ws-auto";
+  sect.className = "rn-ws-sect rn-ws-auto" + (flat ? " flat" : "");
   const head = document.createElement("div");
   head.className = "head";
   const arr = document.createElement("span");
@@ -3815,321 +3914,123 @@ function autoSection(node, body, tabName) {
       if (visible) schedulePaintAutoPrompt(node, visible);
     }
   };
-  head.append(arr, on, ttl);        // toggle in front of the title, see the masks head
-  head.onclick = (e) => {
-    if (e.target === on) return;
-    node._rnAutoOpen[tabName] = !open;
-    render(node);
-  };
-  sect.appendChild(head);
-
-  if (open) {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const eng = (key, label, ok, why) => {
-      const b = document.createElement("button");
-      b.className = "rn-ws-on" + (a[key] && ok ? " on" : "");
-      b.textContent = label;
-      b.style.width = "auto";
-      b.style.padding = "0 9px";
-      b.disabled = !ok;
-      b.title = ok ? `Use ${label} for this tab.` : why;
-      b.onclick = () => { a[key] = !a[key]; writeCfg(node); render(node); };
-      return b;
-    };
-    const fixedBtn = segSwitch([
-      ["reuse", "REUSE", "The same image keeps its prompt; the LLM does not re-run."],
-      ["fresh", "FRESH", "The LLM re-runs on EVERY queue for fresh wording, and the whole "
-                         + "graph downstream recomputes."],
-    ], a.fixed ? "reuse" : "fresh",
-    (v) => { a.fixed = v === "reuse"; writeCfg(node); render(node); });
-
-    const adv = document.createElement("button");
-    adv.className = "rn-ws-cog" + (node._rnAutoAdv ? " on" : "");
-    adv.style.marginLeft = "0";
-    adv.style.width = "28px";
-    adv.style.height = "26px";
-    adv.textContent = "⚙";
-    adv.title = node._rnAutoAdv
-      ? "Advanced engine settings are open. Click to close them."
-      : "Advanced engine settings, shared by every tab.";
-    adv.onclick = () => {
-      node._rnAutoAdv = !node._rnAutoAdv;
+  if (flat) {
+    arr.style.display = "none";
+    head.style.cursor = "default";
+    head.append(arr, on, ttl);
+  } else {
+    head.append(arr, on, ttl);        // toggle in front of the title, see the masks head
+    head.onclick = (e) => {
+      if (e.target === on) return;
+      node._rnAutoOpen[tabName] = !open;
       render(node);
     };
+  }
+  sect.appendChild(head);
 
-    row.append(
-      eng("ollama", "Ollama", autoStatus.ollama,
-          "Ollama is not reachable. Start it and reopen the workflow."),
-      eng("wd14", "WD14 tags", autoStatus.wd14,
-          "comfyui-wd14-tagger is not installed."),
-      eng("joy", "JoyCaption", autoStatus.joy,
-          "ComfyUI-JoyCaption is not installed."),
-      eng("qwen", "QwenVL", autoStatus.qwen,
-          "ComfyUI-QwenVL is not installed."),
-      eng("florence", "Florence", autoStatus.florence,
-          "comfyui-florence2 is not installed."),
-      eng("clipgen", "CLIP gen", true, ""),
-      fixedBtn, adv,
-    );
-    // the button is always offered: whether it works depends on the clip INPUT being
-    // wired, which only the queue can know; the tooltip says so
-    for (const b of row.children) {
-      if (b.textContent === "CLIP gen") {
-        b.title = "Captions with the workflow's ALREADY-LOADED text encoder (zero extra "
-                + "models). Wire the studio's CLIP into the workspace clip input.";
-      }
-    }
-    const hint = document.createElement("span");
-    hint.className = "hint";
-    hint.textContent = "JoyCaption and QwenVL run their own models (heavy; unloaded per "
-                     + "the RAM setting). Anything else wires into the caption sockets.";
-    row.appendChild(hint);
-    sect.appendChild(row);
+  // the Ollama model is the one every tab's captions use; a fresh config takes the first
+  if (!cfg.auto.model && autoStatus.models?.length) cfg.auto.model = autoStatus.models[0];
 
-    if (tabName === "i2i" || isPaint) {
-      const mrow = document.createElement("div");
-      mrow.className = "rn-ws-row";
-      const mlab = document.createElement("span");
-      mlab.className = "rn-ws-note";
-      mlab.textContent = "Transfer";
-      const msel = document.createElement("select");
-      msel.className = "rn-ws-res";
-      for (const [v, label] of [["i2i", "Everything: people, place, framing"],
-                                ["subject", "Subject only: the people, no scenery"],
-                                ["scene_view", "Scene only: the place, people anonymous"]]) {
+  if (open) {
+    const num = (label, key, min, max, step, hint) => {
+      const w = document.createElement("label");
+      w.className = "cellc";
+      const t = document.createElement("span");
+      t.textContent = label;
+      t.title = hint;
+      const i = document.createElement("input");
+      i.type = "number";
+      i.min = min; i.max = max; i.step = step;
+      i.value = cfg.auto[key];
+      i.title = hint;
+      i.addEventListener("change", () => {
+        const v = parseFloat(i.value);
+        if (Number.isFinite(v)) { cfg.auto[key] = Math.max(min, Math.min(max, v)); writeCfg(node); }
+      });
+      w.append(t, i);
+      return w;
+    };
+    const boolBtn = (label, key, hint) => {
+      const w = document.createElement("label");
+      w.className = "cellc";
+      const t = document.createElement("span");
+      t.textContent = label;
+      t.title = hint;
+      const b = document.createElement("button");
+      b.className = "rn-ws-sw" + (cfg.auto[key] ? " on" : "");
+      b.title = hint;
+      b.onclick = () => { cfg.auto[key] = !cfg.auto[key]; writeCfg(node); render(node); };
+      w.append(t, b);
+      return w;
+    };
+    const pickSel = (label, key, options, hint, wide = false) => {
+      const w = document.createElement("label");
+      w.className = "cellc" + (wide ? " wide" : "");
+      const t = document.createElement("span");
+      t.textContent = label;
+      t.title = hint;
+      const sel = document.createElement("select");
+      sel.className = "rn-ws-res";
+      for (const [v, lab2] of options) {
         const o = document.createElement("option");
         o.value = v;
-        o.textContent = label;
-        o.selected = a.mode === v;
-        msel.appendChild(o);
+        o.textContent = lab2;
+        o.selected = (cfg.auto[key] ?? "") === v;
+        sel.appendChild(o);
       }
-      msel.title = "What the source image donates to the prompt. Subject only drops the "
-                 + "location and lighting story; scene only keeps the place and turns "
-                 + "people into 'a person'.";
-      msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
-      mrow.append(mlab, msel);
-      sect.appendChild(mrow);
+      sel.title = hint;
+      sel.onchange = () => { cfg.auto[key] = sel.value; writeCfg(node); };
+      w.append(t, sel);
+      return w;
+    };
+    const noteLine = (text) => {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note";
+      n.textContent = text;
+      return n;
+    };
+
+    const avail = {
+      ollama: [autoStatus.ollama, "Ollama is not reachable. Start it and reopen the workflow."],
+      wd14: [autoStatus.wd14, "comfyui-wd14-tagger is not installed."],
+      joy: [autoStatus.joy, "ComfyUI-JoyCaption is not installed."],
+      qwen: [autoStatus.qwen, "ComfyUI-QwenVL is not installed."],
+      florence: [autoStatus.florence, "comfyui-florence2 is not installed."],
+      clipgen: [true, ""],
+    };
+    const props = (node.properties ||= {});
+    let pick = node._rnAutoEngine || props.rn_auto_engine;
+    if (!AUTO_ENGINES.some(([k]) => k === pick)) {
+      pick = (AUTO_ENGINES.find(([k]) => a[k] && avail[k][0]) || AUTO_ENGINES[0])[0];
     }
 
-    if (tabName === "scene") {
-      const mrow = document.createElement("div");
-      mrow.className = "rn-ws-row";
-      const mlab = document.createElement("span");
-      mlab.className = "rn-ws-note";
-      mlab.textContent = "Describe the";
-      const msel = document.createElement("select");
-      msel.className = "rn-ws-res";
-      for (const [v, label] of [["scene_view", "View: location, layout, camera"],
-                                ["scene_style", "Style: palette, lighting, rendering"]]) {
-        const o = document.createElement("option");
-        o.value = v;
-        o.textContent = label;
-        o.selected = a.mode === v;
-        msel.appendChild(o);
+    // each engine's own settings; the values are shared by every tab (cfg.auto)
+    const engineSettings = (key) => {
+      const g = document.createElement("div");
+      g.className = "rn-ws-advgrid";
+      if (!avail[key][0]) {
+        g.appendChild(noteLine(avail[key][1]));
+        return g;
       }
-      msel.title = "View describes the place; people stay 'a person', never described. "
-                 + "Style describes only the look.";
-      msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
-      mrow.append(mlab, msel);
-      sect.appendChild(mrow);
-    }
-
-    if (node._rnAutoAdv) {
-      const advBox = document.createElement("div");
-      advBox.className = "rn-ws-advgrid";
-      const num = (label, key, min, max, step, hint) => {
-        const w = document.createElement("label");
-        w.className = "cellc";
-        const t = document.createElement("span");
-        t.textContent = label;
-        t.title = hint;
-        const i = document.createElement("input");
-        i.type = "number";
-        i.min = min; i.max = max; i.step = step;
-        i.value = cfg.auto[key];
-        i.title = hint;
-        i.addEventListener("change", () => {
-          const v = parseFloat(i.value);
-          if (Number.isFinite(v)) { cfg.auto[key] = Math.max(min, Math.min(max, v)); writeCfg(node); }
-        });
-        w.append(t, i);
-        return w;
-      };
-      const boolBtn = (label, key, hint) => {
-        const w = document.createElement("label");
-        w.className = "cellc";
-        const t = document.createElement("span");
-        t.textContent = label;
-        t.title = hint;
-        const b = document.createElement("button");
-        b.className = "rn-ws-sw" + (cfg.auto[key] ? " on" : "");
-        b.title = hint;
-        b.onclick = () => { cfg.auto[key] = !cfg.auto[key]; writeCfg(node); render(node); };
-        w.append(t, b);
-        return w;
-      };
-
-      const h1 = document.createElement("div");
-      h1.className = "advh";
-      h1.textContent = "WD14";
-      advBox.appendChild(h1);
-      if (autoStatus.wd14_models?.length) {
-        const w = document.createElement("label");
-        w.className = "cellc wide";
-        const t = document.createElement("span");
-        t.textContent = "Model";
-        const sel = document.createElement("select");
-        sel.className = "rn-ws-res";
-        for (const m of autoStatus.wd14_models) {
-          const o = document.createElement("option");
-          o.value = m;
-          o.textContent = m;
-          o.selected = (cfg.auto.wd14_model || autoStatus.wd14_model) === m;
-          sel.appendChild(o);
-        }
-        sel.onchange = () => { cfg.auto.wd14_model = sel.value; writeCfg(node); };
-        w.append(t, sel);
-        advBox.appendChild(w);
-      }
-      advBox.append(
-        num("Threshold", "threshold", 0, 1, 0.01, "General tag confidence floor."),
-        num("Character thr", "character_threshold", 0, 1, 0.01, "Character tag confidence floor."),
-        boolBtn("underscores→spaces", "replace_underscore", "Replace underscores with spaces in tags."),
-        boolBtn("unload after run", "wd14_unload",
-                "Drop the tagger's model from RAM after each run. Off keeps it loaded for speed."),
-      );
-      const ex = document.createElement("label");
-      ex.className = "cellc wide";
-      const ext = document.createElement("span");
-      ext.textContent = "Exclude tags";
-      const exi = document.createElement("input");
-      exi.type = "text";
-      exi.value = cfg.auto.exclude_tags;
-      exi.placeholder = "Comma separated";
-      exi.title = "Tags the tagger must never emit, on top of the mode filters.";
-      exi.addEventListener("change", () => { cfg.auto.exclude_tags = exi.value; writeCfg(node); });
-      ex.append(ext, exi);
-      advBox.appendChild(ex);
-
-      if (autoStatus.joy) {
-        const hj = document.createElement("div");
-        hj.className = "advh";
-        hj.textContent = "JoyCaption";
-        advBox.appendChild(hj);
-        const jsel = (label, key, options, hint) => {
-          const w = document.createElement("label");
-          w.className = "cellc";
-          const t = document.createElement("span");
-          t.textContent = label;
-          t.title = hint;
-          const sel = document.createElement("select");
-          sel.className = "rn-ws-res";
-          for (const [v, lab2] of options) {
-            const o = document.createElement("option");
-            o.value = v;
-            o.textContent = lab2;
-            o.selected = cfg.auto[key] === v;
-            sel.appendChild(o);
-          }
-          sel.title = hint;
-          sel.onchange = () => { cfg.auto[key] = sel.value; writeCfg(node); };
-          w.append(t, sel);
-          return w;
-        };
-        const packOpts = autoStatus.joy_options || {};
-        const withDefault = (list) => [["", "pack default"], ...(list || []).map((x) => [x, x])];
-        advBox.append(
-          jsel("Quantization", "joy_quant", withDefault(packOpts.quantization),
-               "Speed against quality; 8-bit suits most cards."),
-          jsel("Caption length", "joy_length", withDefault(packOpts.caption_length),
-               "How long JoyCaption's paragraph runs."),
-          jsel("Memory", "joy_memory",
-               [["auto", "Auto (RAM setting)"], ["Keep in Memory", "Keep in Memory"],
-                ["Clear After Run", "Clear After Run"], ["Global Cache", "Global Cache"]],
-               "Auto follows the unload-after-run setting. Global Cache is fastest and "
-               + "hungriest."),
-          jsel("Prompt style", "joy_style", withDefault(packOpts.prompt_style),
-               "Only used when mode prompts are OFF below."),
-          boolBtn("mode prompts", "joy_mode_prompts",
-                  "On: this panel's per-tab prompts steer JoyCaption (scene stays "
-                  + "anonymous, style stays subject-free). Off: the pack's own prompt "
-                  + "style above takes over."),
+      if (key === "ollama") {
+        const models = autoStatus.models || [];
+        g.appendChild(pickSel("Model", "model", models.map((m) => [m, m]),
+                              "The Ollama model used for every tab's captions.", true));
+        g.append(
+          num("Temperature", "temperature", 0, 2, 0.05, "Higher = looser wording. 0.2 is factual."),
+          num("Seed", "seed", 0, 2147483647, 1, "0 = unseeded. A fixed seed pins the wording."),
+          num("num_ctx", "num_ctx", 0, 131072, 256, "Context window. 0 = the model's default."),
+          num("num_predict", "num_predict", 0, 8192, 16, "Response length cap. 0 = default."),
+          num("top_k", "top_k", 0, 200, 1, "0 = default."),
+          num("top_p", "top_p", 0, 1, 0.01, "0 = default."),
+          boolBtn("think", "think", "Reasoning models think before answering: better reads, slower."),
+          num("Keep alive s", "keep_alive", 0, 3600, 5,
+              "How long Ollama keeps the model in RAM after a response. 0 unloads immediately (saves RAM, reloads next call); 300 keeps it warm."),
         );
-      }
-
-      if (autoStatus.florence) {
-        // FLORENCE-2: one model folder and one task, shared by every tab that
-        // switches the engine on; the list is what the pack's loader lists
-        const hf = document.createElement("div");
-        hf.className = "advh";
-        hf.textContent = "Florence-2";
-        advBox.appendChild(hf);
-        const fsel = (label, key, options, hint) => {
-          const w = document.createElement("label");
-          w.className = "cellc";
-          const t = document.createElement("span");
-          t.textContent = label;
-          t.title = hint;
-          const sel = document.createElement("select");
-          sel.className = "rn-ws-res";
-          for (const [v, lab2] of options) {
-            const o = document.createElement("option");
-            o.value = v;
-            o.textContent = lab2;
-            o.selected = cfg.auto[key] === v;
-            sel.appendChild(o);
-          }
-          sel.title = hint;
-          sel.onchange = () => { cfg.auto[key] = sel.value; writeCfg(node); };
-          w.append(t, sel);
-          return w;
-        };
-        advBox.append(
-          fsel("Model", "florence_model",
-               [["", "First folder found"], ...(autoStatus.florence_models || []).map((x) => [x, x])],
-               "Which Florence-2 folder in models/LLM captions. The PromptGen builds "
-               + "write prompt-shaped captions; base and large write plain descriptions."),
-          fsel("Task", "florence_task",
-               (autoStatus.florence_tasks || ["more_detailed_caption"]).map((x) => [x, x]),
-               "The pack's caption task. more_detailed_caption for a paragraph; the "
-               + "prompt_gen tasks want a PromptGen model."),
-        );
-      }
-
-      const hx = document.createElement("div");
-      hx.className = "advh";
-      hx.textContent = "Extras (every engine)";
-      advBox.appendChild(hx);
-      advBox.append(
-        boolBtn("frank wording", "frank",
-                "Appends a clause telling every engine to describe nudity and sexual "
-                + "content plainly, without euphemism. Off ships the neutral prompts."),
-      );
-
-      const h2 = document.createElement("div");
-      h2.className = "advh";
-      h2.textContent = "Ollama";
-      advBox.appendChild(h2);
-      advBox.append(
-        num("Temperature", "temperature", 0, 2, 0.05, "Higher = looser wording. 0.2 is factual."),
-        num("Seed", "seed", 0, 2147483647, 1, "0 = unseeded. A fixed seed pins the wording."),
-        num("num_ctx", "num_ctx", 0, 131072, 256, "Context window. 0 = the model's default."),
-        num("num_predict", "num_predict", 0, 8192, 16, "Response length cap. 0 = default."),
-        num("top_k", "top_k", 0, 200, 1, "0 = default."),
-        num("top_p", "top_p", 0, 1, 0.01, "0 = default."),
-        boolBtn("think", "think", "Reasoning models think before answering: better reads, slower."),
-        num("Keep alive s", "keep_alive", 0, 3600, 5,
-            "How long Ollama keeps the model in RAM after a response. 0 unloads immediately (saves RAM, reloads next call); 300 keeps it warm."),
-      );
-
-      // THE INSTRUCTION: what Ollama is actually TOLD to write. Until now this was
-      // reachable only by editing autoprompt.py's SYSTEM_PROMPTS, which is not a
-      // setting. Ollama alone reads it, which is why it sits under Ollama: the local
-      // captioners answer worse when handed wording they were not trained on, so they
-      // keep the mode's own. Wrapped because a panel that cannot draw one settings row
-      // must still hand the prompt over. An exception in this exact spot once took
-      // every gallery prompt down with it.
+        // THE INSTRUCTION: what Ollama is actually TOLD to write. Ollama alone reads
+        // it; the local captioners answer worse when handed wording they were not
+        // trained on, so they keep the mode's own. Wrapped because a panel that cannot
+        // draw one settings row must still hand the prompt over.
       try {
         const cur = String(cfg.auto.instruction || "");
         const curQ = String(cfg.auto.question || "");
@@ -4267,12 +4168,203 @@ function autoSection(node, body, tabName) {
 
         bwrap.append(save, del);
         brow.append(blab, bwrap);
-        advBox.append(pick, wrap, qwrap, brow);
+        g.append(pick, wrap, qwrap, brow);
       } catch (e) {
         console.error("[RedNode] the instruction row could not be drawn", e);
       }
 
-      sect.appendChild(advBox);
+      } else if (key === "wd14") {
+        if (autoStatus.wd14_models?.length) {
+          g.appendChild(pickSel("Model", "wd14_model",
+                                autoStatus.wd14_models.map((m) => [m, m]),
+                                "Which WD14 tagger model runs.", true));
+          const sel = g.lastChild.querySelector("select");
+          if (sel && !cfg.auto.wd14_model) sel.value = autoStatus.wd14_model || sel.value;
+        }
+        g.append(
+          num("Threshold", "threshold", 0, 1, 0.01, "General tag confidence floor."),
+          num("Character thr", "character_threshold", 0, 1, 0.01, "Character tag confidence floor."),
+          boolBtn("underscores→spaces", "replace_underscore", "Replace underscores with spaces in tags."),
+          boolBtn("unload after run", "wd14_unload",
+                  "Drop the tagger's model from RAM after each run. Off keeps it loaded for speed."),
+        );
+        const ex = document.createElement("label");
+        ex.className = "cellc wide";
+        const ext = document.createElement("span");
+        ext.textContent = "Exclude tags";
+        const exi = document.createElement("input");
+        exi.type = "text";
+        exi.value = cfg.auto.exclude_tags;
+        exi.placeholder = "Comma separated";
+        exi.title = "Tags the tagger must never emit, on top of the mode filters.";
+        exi.addEventListener("change", () => { cfg.auto.exclude_tags = exi.value; writeCfg(node); });
+        ex.append(ext, exi);
+        g.appendChild(ex);
+      } else if (key === "joy") {
+        const packOpts = autoStatus.joy_options || {};
+        const withDefault = (list) => [["", "pack default"], ...(list || []).map((x) => [x, x])];
+        g.append(
+          pickSel("Quantization", "joy_quant", withDefault(packOpts.quantization),
+                  "Speed against quality; 8-bit suits most cards."),
+          pickSel("Caption length", "joy_length", withDefault(packOpts.caption_length),
+                  "How long JoyCaption's paragraph runs."),
+          pickSel("Memory", "joy_memory",
+                  [["auto", "Auto (RAM setting)"], ["Keep in Memory", "Keep in Memory"],
+                   ["Clear After Run", "Clear After Run"], ["Global Cache", "Global Cache"]],
+                  "Auto follows the unload-after-run setting. Global Cache is fastest and "
+                  + "hungriest."),
+          pickSel("Prompt style", "joy_style", withDefault(packOpts.prompt_style),
+                  "Only used when mode prompts are OFF."),
+          boolBtn("mode prompts", "joy_mode_prompts",
+                  "On: this panel's per-tab prompts steer JoyCaption (scene stays "
+                  + "anonymous, style stays subject-free). Off: the pack's own prompt "
+                  + "style takes over."),
+        );
+      } else if (key === "florence") {
+        // one model folder and one task, shared by every tab that switches it on
+        g.append(
+          pickSel("Model", "florence_model",
+                  [["", "First folder found"], ...(autoStatus.florence_models || []).map((x) => [x, x])],
+                  "Which Florence-2 folder in models/LLM captions. The PromptGen builds "
+                  + "write prompt-shaped captions; base and large write plain descriptions."),
+          pickSel("Task", "florence_task",
+                  (autoStatus.florence_tasks || ["more_detailed_caption"]).map((x) => [x, x]),
+                  "The pack's caption task. more_detailed_caption for a paragraph; the "
+                  + "prompt_gen tasks want a PromptGen model."),
+        );
+      } else if (key === "qwen") {
+        g.appendChild(noteLine("QwenVL runs its own model with the pack's settings; there "
+                               + "is nothing to set here. It is heavy, and unloads per the "
+                               + "RAM setting."));
+      } else if (key === "clipgen") {
+        g.appendChild(noteLine("Captions with the workflow's already-loaded text encoder, "
+                               + "no extra model. Wire the studio's CLIP into the "
+                               + "Workspace's clip input."));
+      }
+      return g;
+    };
+
+    const cols = document.createElement("div");
+    cols.className = "rn-ws-cols";
+    const list = document.createElement("div");
+    list.className = "rn-ws-elist l";
+    for (const [key, label] of AUTO_ENGINES) {
+      const ok = !!avail[key][0];
+      const erow = document.createElement("div");
+      erow.className = "rn-ws-erow" + (pick === key ? " cur" : "") + (ok ? "" : " dis");
+      erow.dataset.engine = key;
+      erow.title = `Show ${label}'s settings.`;
+      const sw = document.createElement("button");
+      sw.className = "rn-ws-sw" + (a[key] && ok ? " on" : "");
+      sw.disabled = !ok;
+      sw.title = !ok ? avail[key][1]
+        : key === "clipgen"
+          ? "Captions with the workflow's ALREADY-LOADED text encoder (zero extra "
+            + "models). Wire the studio's CLIP into the workspace clip input."
+          : `Use ${label} for this tab.`;
+      sw.onclick = (e) => {
+        e.stopPropagation();
+        a[key] = !a[key];
+        writeCfg(node);
+        render(node);
+      };
+      const nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = label;
+      const st = document.createElement("span");
+      st.className = "st";
+      st.textContent = !ok ? (key === "ollama" ? "not reachable" : "not installed") : "";
+      erow.append(sw, nm, st);
+      erow.onclick = () => {
+        node._rnAutoEngine = key;
+        props.rn_auto_engine = key;
+        render(node);
+      };
+      list.appendChild(erow);
+    }
+
+    const right = document.createElement("div");
+    right.className = "r";
+    right.style.cssText = "display:flex;flex-direction:column;gap:8px;min-width:0";
+    const ecard = document.createElement("div");
+    ecard.className = "rn-ws-card rn-ws-engine";
+    const eh = document.createElement("div");
+    eh.className = "ch";
+    const pickLabel = AUTO_ENGINES.find(([k]) => k === pick)[1];
+    eh.textContent = (pick === "florence" ? "Florence-2" : pickLabel).toUpperCase();
+    ecard.append(eh, engineSettings(pick));
+    right.appendChild(ecard);
+
+    // what every engine shares on this tab
+    const shared = document.createElement("div");
+    shared.className = "rn-ws-card rn-ws-shared";
+    const sh = document.createElement("div");
+    sh.className = "ch";
+    sh.textContent = "EVERY ENGINE";
+    shared.appendChild(sh);
+    const srow = document.createElement("div");
+    srow.className = "rn-ws-row";
+    srow.style.flexWrap = "wrap";
+    const fixedBtn = segSwitch([
+      ["reuse", "REUSE", "The same image keeps its prompt; the LLM does not re-run."],
+      ["fresh", "FRESH", "The LLM re-runs on EVERY queue for fresh wording, and the whole "
+                         + "graph downstream recomputes."],
+    ], a.fixed ? "reuse" : "fresh",
+    (v) => { a.fixed = v === "reuse"; writeCfg(node); render(node); });
+    const frank = boolBtn("frank wording", "frank",
+                          "Appends a clause telling every engine to describe nudity and sexual "
+                          + "content plainly, without euphemism. Off ships the neutral prompts.");
+    frank.className = "rn-ws-note";
+    frank.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:auto";
+    srow.append(fixedBtn, frank);
+    shared.appendChild(srow);
+
+    if (tabName === "i2i" || isPaint) {
+      const mrow = document.createElement("div");
+      mrow.className = "rn-ws-row";
+      const mlab = document.createElement("span");
+      mlab.className = "rn-ws-note";
+      mlab.textContent = "Transfer";
+      const msel = document.createElement("select");
+      msel.className = "rn-ws-res";
+      for (const [v, label] of [["i2i", "Everything: people, place, framing"],
+                                ["subject", "Subject only: the people, no scenery"],
+                                ["scene_view", "Scene only: the place, people anonymous"]]) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = label;
+        o.selected = a.mode === v;
+        msel.appendChild(o);
+      }
+      msel.title = "What the source image donates to the prompt. Subject only drops the "
+                 + "location and lighting story; scene only keeps the place and turns "
+                 + "people into 'a person'.";
+      msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
+      mrow.append(mlab, msel);
+      shared.appendChild(mrow);
+    }
+
+    if (tabName === "scene") {
+      const mrow = document.createElement("div");
+      mrow.className = "rn-ws-row";
+      const mlab = document.createElement("span");
+      mlab.className = "rn-ws-note";
+      mlab.textContent = "Describe the";
+      const msel = document.createElement("select");
+      msel.className = "rn-ws-res";
+      for (const [v, label] of [["scene_view", "View: location, layout, camera"],
+                                ["scene_style", "Style: palette, lighting, rendering"]]) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = label;
+        o.selected = a.mode === v;
+        msel.appendChild(o);
+      }
+      msel.title = "View describes the place; people stay 'a person', never described. "
+                 + "Style describes only the look.";
+      msel.onchange = () => { a.mode = msel.value; writeCfg(node); render(node); };
+      mrow.append(mlab, msel);
+      shared.appendChild(mrow);
     }
 
     if (tabName === "moodboard") {
@@ -4300,11 +4392,12 @@ function autoSection(node, body, tabName) {
                  + "an anime moodboard.";
       lsel.onchange = () => { cfg.auto.style_lock = lsel.value; writeCfg(node); };
       lrow.append(llab, lsel);
-      sect.appendChild(lrow);
+      shared.appendChild(lrow);
     }
 
     const crow = document.createElement("div");
     crow.className = "rn-ws-row";
+    crow.style.flexWrap = "wrap";
     const clab = document.createElement("span");
     clab.className = "rn-ws-note";
     clab.textContent = "Combine";
@@ -4340,29 +4433,35 @@ function autoSection(node, body, tabName) {
                + "prompts overpower the mood, so tight keeps the mood in charge.";
     lsel.onchange = () => { a.length = parseInt(lsel.value, 10) || 0; writeCfg(node); };
     crow.append(clab, csel, llab, lsel);
+    shared.appendChild(crow);
+    right.appendChild(shared);
 
-    if (autoStatus.models?.length) {
-      const mlab2 = document.createElement("span");
-      mlab2.className = "rn-ws-note";
-      mlab2.textContent = "Model";
-      const osel = document.createElement("select");
-      osel.className = "rn-ws-res";
-      for (const m of autoStatus.models) {
-        const o = document.createElement("option");
-        o.value = m;
-        o.textContent = m;
-        o.selected = cfg.auto.model === m;
-        osel.appendChild(o);
-      }
-      if (!cfg.auto.model && autoStatus.models.length) {
-        cfg.auto.model = autoStatus.models[0];
-      }
-      osel.title = "The Ollama model used for every tab's captions.";
-      osel.onchange = () => { cfg.auto.model = osel.value; writeCfg(node); };
-      crow.append(mlab2, osel);
+    cols.append(list, right);
+    sect.appendChild(cols);
+
+    // THE RESULT: what came back, what was saved before, and where it lands
+    const res = document.createElement("div");
+    res.className = "rn-ws-card rn-ws-resultcard";
+    const rh = document.createElement("div");
+    rh.className = "ch";
+    rh.textContent = "RESULT";
+    res.appendChild(rh);
+    const last = node._rnPrompts?.[tabName];
+    const autoError = node._rnAutoErrors?.[tabName];
+    const prev = document.createElement("div");
+    prev.className = "rn-ws-note rn-ws-result";
+    prev.textContent = node._rnAutoBusy === tabName
+      ? "generating the auto prompt..."
+      : autoError ? `automatic prompt failed: ${autoError}`
+      : last ? last : isPaint
+        ? "no prompt generated yet; right-click a result"
+        : "no prompt generated yet; queue a run, or right-click a thumbnail";
+    prev.title = last ? "The prompt the last run produced. Click to copy." : "";
+    if (last) {
+      prev.style.cursor = "pointer";
+      prev.onclick = () => navigator.clipboard?.writeText?.(last);
     }
-    sect.appendChild(crow);
-
+    res.appendChild(prev);
     // What this picture has been called before. A session that has just opened
      // knows nothing, but the captions were written beside the image at the time,
      // so they can simply be read back. Nothing is regenerated and nothing is
@@ -4422,7 +4521,7 @@ function autoSection(node, body, tabName) {
       clr.onclick = () => { node._rnSaved = null; render(node); };
       rrow.appendChild(clr);
     }
-    sect.appendChild(rrow);
+    res.appendChild(rrow);
     if (!isPaint && node._rnSaved) {
       const box = document.createElement("div");
       box.className = "rn-ws-note";
@@ -4431,29 +4530,12 @@ function autoSection(node, body, tabName) {
       box.title = "Click to copy.";
       box.style.cursor = "pointer";
       box.onclick = () => navigator.clipboard?.writeText?.(node._rnSaved);
-      sect.appendChild(box);
+      res.appendChild(box);
     }
 
-    const last = node._rnPrompts?.[tabName];
-    const autoError = node._rnAutoErrors?.[tabName];
-    const prev = document.createElement("div");
-    prev.className = "rn-ws-note";
-    prev.style.whiteSpace = "pre-wrap";
-    prev.textContent = node._rnAutoBusy === tabName
-      ? "generating the auto prompt..."
-      : autoError ? `automatic prompt failed: ${autoError}`
-      : last ? `last run:
-${last}` : isPaint
-        ? "no prompt generated yet; right-click a result"
-        : "no prompt generated yet; queue a run, or right-click a thumbnail";
-    prev.title = last ? "The prompt the last run produced. Click to copy." : "";
-    if (last) {
-      prev.style.cursor = "pointer";
-      prev.onclick = () => navigator.clipboard?.writeText?.(last);
-    }
-    sect.appendChild(prev);
+    if (!isPaint) injectRowUI(node, res, tabName);
+    sect.appendChild(res);
   }
-  if (!isPaint && open) injectRowUI(node, sect, tabName);
   body.appendChild(sect);
 }
 
@@ -11603,188 +11685,468 @@ function continueRow(node, t) {
   return { row, sync };
 }
 
-function i2iPassRow(node, body, tabName) {
-  if (tabName !== "i2i") return;
-  const t = node._rnCfg.tabs.i2i;
-  const row = document.createElement("div");
-  row.className = "rn-ws-row";
-  const lab = document.createElement("span");
-  lab.className = "rn-ws-note";
-  lab.textContent = "Pass";
-  const b = segSwitch([
+// ---- Img2Img as sub-tabs ---------------------------------------------------------
+// One section at a time under a strip of tabs, each with a light saying whether that
+// section is doing anything, and a status bar that stays put. The sections are the
+// same builders the stacked layout used; `flat` drops their own fold.
+const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PROMPT"],
+                  ["reangle", "RE-ANGLE"], ["swap", "SWAP"], ["converter", "CONVERTER"]];
+
+function convActive(c) {
+  return !!(c && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
+    || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
+}
+
+function i2iSubLit(cfg, id) {
+  const t = cfg.tabs.i2i;
+  if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
+  if (id === "passes") return !!(t.on && !t.prompt_only);
+  if (id === "auto") return !!t.auto?.on;
+  if (id === "reangle") return !!(t.reangle?.on && !t.prompt_only);
+  if (id === "swap") return !!(t.swap?.on && !t.prompt_only);
+  if (id === "converter") return convActive(t.conv);
+  return false;
+}
+
+function i2iTabs(node, body) {
+  const cfg = node._rnCfg;
+  const t = cfg.tabs.i2i;
+  const props = (node.properties ||= {});
+  let sub = node._rnI2iSub || props.rn_i2i_sub || "source";
+  if (!I2I_SUBS.some(([id]) => id === sub)) sub = "source";
+  node._rnI2iSub = sub;
+
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub";
+  for (const [id, label] of I2I_SUBS) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
+    b.dataset.sub = id;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (i2iSubLit(cfg, id) ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnI2iSub = id; props.rn_i2i_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const on = document.createElement("button");
+  on.className = "rn-ws-sw" + (t.on ? " on" : "");
+  on.title = t.on ? "This tab feeds the studio. Click to disable it."
+                  : "Disabled: this tab outputs nothing.";
+  on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Img2Img";
+  bar.append(on, nm);
+  const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+  const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
+  for (const text of [
+    t.canvas === "image" ? "wired image" : t.canvas === "latent" ? "wired latent"
+      : `${t.images.length} image${t.images.length === 1 ? "" : "s"}`,
+    t.prompt_only ? "prompt only"
+      : npass > 1 ? `${npass} passes` : `denoise ${Number(t.denoise).toFixed(2)}`,
+    !t.auto?.on ? "auto prompt off" : engines.length ? engines.join(", ") : "no engine on",
+  ]) {
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  body.appendChild(bar);
+
+  const onlyNote = (what) => {
+    const n = document.createElement("div");
+    n.className = "rn-ws-card rn-ws-note";
+    n.textContent = `${what} works on an image to image pass. The Passes tab is set to `
+                  + "Prompt only, so the source only donates its prompt.";
+    body.appendChild(n);
+  };
+  if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
+  else if (sub === "passes") passesTab(node, body);
+  else if (sub === "auto") autoSection(node, body, "i2i", { flat: true });
+  else if (sub === "reangle") {
+    if (t.prompt_only) onlyNote("Re-angle");
+    else reangleSection(node, body, "i2i", { flat: true });
+  } else if (sub === "swap") {
+    if (t.prompt_only) onlyNote("Swap");
+    else swapSection(node, body, "i2i", { flat: true });
+  } else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
+}
+
+// THE PASSES TAB: setup on the left (kind, count, which settings vary per pass, the
+// values every pass shares), one card per pass on the right holding only the
+// settings that vary. Same config keys and rules as the stacked pass box.
+function passesTab(node, body) {
+  const cfg = node._rnCfg;
+  const t = cfg.tabs.i2i;
+  const clampN = (v) => Math.max(1, Math.min(PASS_MAX, Math.round(Number(v) || 1)));
+  const npass = clampN(t.passes);
+  const many = npass > 1;
+  const cols = document.createElement("div");
+  cols.className = "rn-ws-cols rn-ws-passtab";
+
+  const setup = document.createElement("div");
+  setup.className = "rn-ws-card l";
+  const sh = document.createElement("div");
+  sh.className = "ch";
+  sh.textContent = "SETUP";
+  setup.appendChild(sh);
+  const kind = segSwitch([
     ["i2i", "Image to image", "output_latent is the source image ENCODED (wire the vae "
-                              + "input), and the denoise socket carries the strength below. "
+                              + "input), and the denoise socket carries the strength. "
                               + "This BEATS the Latent tab: an image to image pass paints onto "
                               + "your picture, not a blank canvas."],
     ["prompt", "Prompt only", "The source only donates its prompt, and the canvas comes "
                               + "from the Latent tab."],
   ], t.prompt_only ? "prompt" : "i2i",
   (v) => { t.prompt_only = v === "prompt"; writeCfg(node); render(node); });
-  row.append(lab, b);
-  const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
-  const dSteps = passValueList(t, "pass_denoise", "denoise", 0, 1);
-  const sSteps = passValueList(t, "pass_scale", "scale", 0.25, 3);
-  const perDen = !!t.pass_custom && npass > 1;
-  const perScl = !!t.scale_custom && npass > 1;
-  const span = (list, fmt) => fmt(list[0]) + " to " + fmt(list[npass - 1]);
-  const pcard = sectionCard("PASS", "#4a8fe0",
-    t.prompt_only ? "prompt only"
-      : "denoise "
-        + (perDen ? span(dSteps, (v) => v.toFixed(2)) : Number(t.denoise).toFixed(2))
-        + (perScl ? " · scale " + span(sSteps, (v) => v.toFixed(2) + "x") : "")
-        + (npass > 1 ? " · ×" + npass : ""),
-    { node, key: "i2i_pass", open: true });
+  setup.appendChild(kind);
+
+  const heading = (text) => {
+    const h = document.createElement("div");
+    h.className = "ch";
+    h.style.cssText = "font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#8a919b";
+    h.textContent = text;
+    return h;
+  };
+  const dimLine = (text) => {
+    const d = document.createElement("div");
+    d.className = "rn-ws-note";
+    d.style.fontStyle = "italic";
+    d.textContent = text;
+    return d;
+  };
+  const fmtD = (v) => Number(v).toFixed(2);
+  const fmtS = (v) => Number(v).toFixed(2) + "x";
+  const fmtT = (v) => (Number(v) > 0 ? Math.round(Number(v)) + " steps" : "rig's steps");
+
+  // the per-pass lists this render works with; only a switched-on list is stored
+  const VARY = [
+    { flag: "pass_custom", label: "Denoise", key: "pass_denoise", base: "denoise",
+      min: 0, max: 1, step: 0.01, accent: "#b8283c", fmt: fmtD,
+      tip: "Each pass runs its own denoise. Each pass starts from the picture the one "
+         + "before it made, so a strong first pass changes the shot and weaker ones settle it." },
+    { flag: "scale_custom", label: "Scale", key: "pass_scale", base: "scale",
+      min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0", fmt: fmtS,
+      tip: "Each pass runs at its own size, the first setting the size the source is "
+         + "encoded at. Going up between passes costs the square of it in pixels." },
+    { flag: "steps_custom", label: "Steps", key: "pass_steps", base: "pass_steps_dial",
+      min: 0, max: 60, step: 1, accent: "#e0a84a", fmt: fmtT,
+      tip: "Each pass runs its own step count, 0 meaning the rig's. A relay drafts in one "
+         + "or two steps and finishes at the full count." },
+    { flag: "rig_custom", label: "Rig",
+      tip: "Each pass names its Models-tab rig, with its own LoRA set and sampler numbers. "
+         + "A rig of another model family encodes the prompt again and moves the latent "
+         + "to its own VAE. Turn on Hold two rigs to keep both loaded." },
+  ];
+  const rigList = () => {
+    const src = Array.isArray(t.pass_rig) ? t.pass_rig : [];
+    const out = [];
+    for (let i = 0; i < clampN(t.passes); i++) {
+      out.push(String((i < src.length ? src[i] : (src.length ? src[src.length - 1] : "")) || ""));
+    }
+    return out;
+  };
+  const lists = {};
+  for (const v of VARY) {
+    if (!(many && t[v.flag])) continue;
+    if (v.flag === "rig_custom") lists.rig = t.pass_rig = rigList();
+    else lists[v.flag] = t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+  }
 
   if (!t.prompt_only) {
-    // DENOISE, on its own row at the full width of the card. At 160px a 0.01
-    // step was a pixel wide, which is why the bar used to move in 0.05 jumps
-    // while the value underneath it was already finer than that.
-    const drow = document.createElement("div");
-    drow.className = "rn-ws-row";
-    const dlab = document.createElement("span");
-    dlab.className = "rn-ws-note";
-    dlab.style.minWidth = "54px";
-    dlab.textContent = "Denoise";
-    const dr = document.createElement("input");
-    dr.type = "range";
-    dr.min = 0; dr.max = 1; dr.step = 0.01;
-    dr.value = t.denoise;
-    dr.style.cssText = "flex:1;min-width:0;height:20px;accent-color:#b8283c";
-    const dv = document.createElement("span");
-    dv.className = "rn-ws-note";
-    dv.textContent = Number(t.denoise).toFixed(2);
-    dr.title = "How much the sampler repaints the source. 0.5 keeps composition, 0.75 "
-             + "reworks it. Rides the denoise output socket.";
-    dr.addEventListener("input", () => {
-      t.denoise = snapStep(dr.value, 0, 1, 0.01);
-      dv.textContent = Number(t.denoise).toFixed(2);
+    const prow = document.createElement("div");
+    prow.className = "rn-ws-row";
+    const plab = document.createElement("span");
+    plab.className = "rn-ws-note";
+    plab.textContent = "Passes";
+    const stepper = document.createElement("div");
+    stepper.className = "rn-ws-stepper" + (many ? " on" : "");
+    const setPasses = (n) => {
+      t.passes = clampN(n);
+      for (const v of VARY) {
+        if (!t[v.flag]) continue;
+        if (v.flag === "rig_custom") t.pass_rig = rigList();
+        else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+      }
       writeCfg(node);
-    });
-    drow.append(dlab, dr, dv);
-
-    const den = perPassSection(node, t, {
-      key: "pass_denoise", flag: "pass_custom", base: "denoise",
-      min: 0, max: 1, step: 0.01, accent: "#b8283c",
-      label: "Denoise per pass",
-      fmt: (v) => Number(v).toFixed(2),
-      barTitle: "What this pass repaints. Each pass starts from the picture the one "
-              + "before it made, so a strong first pass changes the shot and weaker "
-              + "ones settle it.",
-      onTitle: "On: every pass runs its own denoise, in the order above. Switch off to "
-             + "put them all back on the single bar.",
-      offTitle: "Off: every pass runs the one denoise above. Switch on to set a denoise "
-              + "per pass, which is what a strong first pass followed by weaker ones "
-              + "needs.",
-      rampTitle: "Space the passes evenly between the first bar and the last, so a run "
-               + "can fall away from 0.6 to 0.2 without setting each one by hand.",
-    });
-
-    // the i2i pass gets its own size, separate from the global resize
-    const srow = document.createElement("div");
-    srow.className = "rn-ws-row";
-    const slab = document.createElement("span");
-    slab.className = "rn-ws-note";
-    slab.style.minWidth = "54px";
-    slab.textContent = "Scale";
-    const sr = document.createElement("input");
-    sr.type = "range";
-    sr.min = 0.25; sr.max = 3; sr.step = 0.05;
-    sr.value = t.scale;
-    sr.style.cssText = "flex:1;min-width:0;height:18px;accent-color:#4a8fe0";
-    const sv = document.createElement("span");
-    sv.className = "rn-ws-note";
-    const svText = () => `${Number(t.scale).toFixed(2)}x`;
-    sv.textContent = svText();
-    sr.title = "Scales the source before it is encoded, so an image to image pass can "
-             + "come out bigger or smaller than the resize dropdown at the bottom "
-             + "without moving that for every other tab. 1 keeps the resized size; 2 "
-             + "doubles both edges and costs four times the pixels.";
-    sr.addEventListener("input", () => {
-      t.scale = snapStep(sr.value, 0.25, 3, 0.05);
-      sv.textContent = svText();
-      writeCfg(node);
-    });
-    srow.append(slab, sr, sv);
-
-    // A SCALE PER PASS: the same shape as the denoise, and what makes a run
-    // climb. Pass 1's scale is the size the source is encoded at, and every
-    // pass after it resizes the latent before it samples, so 1.0 then 1.5
-    // drafts the shot small and rebuilds it larger with the detail that comes
-    // with the pixels.
-    const scl = perPassSection(node, t, {
-      key: "pass_scale", flag: "scale_custom", base: "scale",
-      min: 0.25, max: 3, step: 0.05, accent: "#4a8fe0",
-      label: "Scale per pass",
-      fmt: (v) => Number(v).toFixed(2) + "x",
-      barTitle: "The size this pass runs at, as a multiple of the source. Going up "
-              + "between passes costs the square of it in pixels, so 2x is four times "
-              + "the work of 1x.",
-      onTitle: "On: each pass runs at its own size, the first one setting the size the "
-             + "source is encoded at. Switch off to run every pass at the single scale.",
-      offTitle: "Off: every pass runs at the one scale above. Switch on to climb, which "
-              + "is a small fast draft followed by larger passes that add the detail.",
-      rampTitle: "Space the passes evenly between the first bar and the last, which is "
-               + "the usual climb: 1x to 2x over four passes without setting each one.",
-    });
-
-    const rig = perPassRigs(node, t);
-    const stp = perPassSteps(node, t);
-    const cont = continueRow(node, t);
-
-    const syncHalves = () => {
-      drow.style.display = den.sync() ? "none" : "";
-      srow.style.display = scl.sync() ? "none" : "";
-      rig.sync();
-      stp.sync();
-      cont.sync();
+      render(node);
     };
-    syncHalves();
-
-    // PASSES, the Paint tab's iteration brought over: the same box, the same
-    // red glow when it is more than one, because a queue that quietly runs five
-    // samples should look like it will. It rides the head row so the bars below
-    // it can have the card's whole width.
-    const pWrap = document.createElement("div");
-    pWrap.style.marginLeft = "auto";
-    const pLab = document.createElement("span");
-    pLab.className = "k";
-    pLab.textContent = "Passes";
+    const minus = document.createElement("button");
+    minus.textContent = "−";
+    minus.title = "One pass fewer.";
+    minus.onclick = () => setPasses(npass - 1);
     const pInp = document.createElement("input");
     pInp.type = "number";
     pInp.min = 1; pInp.max = PASS_MAX; pInp.step = 1;
-    pInp.value = String(t.passes ?? 1);
-    pInp.title = "How many times the built-in sampler runs this denoise over its "
-               + "own result. 1 is a single pass, as always. 4 at a denoise of "
-               + "0.25 adds detail while the low denoise holds the shape, a fresh "
-               + "seed each pass, and only the last picture comes back. Drives "
-               + "the built-in sampler; an external sampler wired to the sockets "
-               + "still runs once.";
-    const syncPass = () => {
-      const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
-      pWrap.className = "rn-ws-passes" + (n > 1 ? " on" : "");
-    };
-    pInp.addEventListener("change", () => {
-      t.passes = Math.max(1, Math.min(PASS_MAX, Math.round(Number(pInp.value) || 1)));
-      pInp.value = String(t.passes);
-      syncPass();
-      // the per-pass bars follow the count in place. A full re-render here would
-      // take the number box out from under the pointer mid-click.
-      den.build();
-      scl.build();
-      syncHalves();
-      writeCfg(node);
-    });
-    // the wheel is for sliders; a focused number box must not catch it
+    pInp.value = String(npass);
+    pInp.title = "How many times the built-in sampler runs over its own result. 1 is a "
+               + "single pass. 4 at a low denoise adds detail while the shape holds, a fresh "
+               + "seed each pass, and only the last picture comes back. An external sampler "
+               + "wired to the sockets still runs once.";
+    pInp.addEventListener("change", () => setPasses(pInp.value));
     pInp.addEventListener("wheel", () => pInp.blur(), { passive: true });
-    pWrap.append(pLab, pInp);
-    syncPass();
-    row.append(pWrap);
-    pcard.append(row, drow, den.box, den.row, srow, scl.box, scl.row,
-                 rig.row, rig.box, stp.row, stp.box, cont.row);
-  } else {
-    pcard.appendChild(row);
+    const plus = document.createElement("button");
+    plus.textContent = "+";
+    plus.title = "One pass more.";
+    plus.onclick = () => setPasses(npass + 1);
+    stepper.append(minus, pInp, plus);
+    prow.append(plab, stepper);
+    setup.append(prow, document.createElement("hr"), heading("VARY PER PASS"));
+
+    const tiles = document.createElement("div");
+    tiles.className = "rn-ws-tiles";
+    for (const v of VARY) {
+      const tile = document.createElement("div");
+      tile.className = "rn-ws-tile" + (many ? "" : " dis");
+      tile.dataset.vary = v.flag;
+      const sw = document.createElement("button");
+      sw.className = "rn-ws-sw" + (t[v.flag] ? " on" : "");
+      const nm = document.createElement("span");
+      nm.textContent = v.label;
+      tile.title = many ? v.tip : "One pass has nothing to vary. Add a pass first.";
+      tile.onclick = () => {
+        t[v.flag] = !t[v.flag];
+        if (t[v.flag]) {
+          if (v.flag === "rig_custom") t.pass_rig = rigList();
+          else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max);
+        }
+        writeCfg(node);
+        render(node);
+      };
+      tile.append(sw, nm);
+      tiles.appendChild(tile);
+    }
+    setup.appendChild(tiles);
+    if (!many) setup.appendChild(dimLine("One pass: add a pass to vary settings per pass."));
+
+    setup.append(document.createElement("hr"), heading("SAME FOR EVERY PASS"));
+    const shDial = (label, key, min, max, step, accent, fmt, tip) => {
+      const w = document.createElement("div");
+      w.className = "rn-ws-shdial";
+      w.dataset.shared = key;
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = label;
+      const rg = document.createElement("input");
+      rg.type = "range";
+      rg.min = min; rg.max = max; rg.step = step;
+      rg.value = t[key];
+      rg.style.accentColor = accent;
+      rg.title = tip;
+      const val = document.createElement("span");
+      val.className = "v";
+      val.textContent = fmt(t[key]);
+      rg.addEventListener("input", () => {
+        t[key] = snapStep(rg.value, min, max, step);
+        val.textContent = fmt(t[key]);
+        writeCfg(node);
+      });
+      w.append(k, rg, val);
+      return w;
+    };
+    let sharedCount = 0;
+    if (!lists.pass_custom) {
+      setup.appendChild(shDial("Denoise", "denoise", 0, 1, 0.01, "#b8283c", fmtD,
+        "How much the sampler repaints the source. 0.5 keeps composition, 0.75 reworks "
+        + "it. Rides the denoise output socket."));
+      sharedCount++;
+    }
+    if (!lists.scale_custom) {
+      setup.appendChild(shDial("Scale", "scale", 0.25, 3, 0.05, "#4a8fe0", fmtS,
+        "Scales the source before it is encoded, so the pass can come out bigger or "
+        + "smaller than the resize at the bottom. 2 doubles both edges and costs four "
+        + "times the pixels."));
+      sharedCount++;
+    }
+    if (!lists.steps_custom) { setup.appendChild(dimLine("Steps: the rig's own count")); sharedCount++; }
+    if (!lists.rig) { setup.appendChild(dimLine("Rig: this workspace's rig")); sharedCount++; }
+    if (!sharedCount) setup.appendChild(dimLine("Nothing, every setting varies per pass."));
+
+    if (many) {
+      setup.appendChild(document.createElement("hr"));
+      setup.appendChild(continueRow(node, t).row);
+    }
   }
-  body.appendChild(pcard);
+
+  const right = document.createElement("div");
+  right.className = "r";
+  right.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:0";
+  if (t.prompt_only) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-card rn-ws-note";
+    n.textContent = "Prompt only: the source donates its prompt, and the canvas comes "
+                  + "from the Latent tab. Switch to Image to image to run passes over the "
+                  + "picture.";
+    right.appendChild(n);
+  } else {
+    const resize = Number(cfg.resize) || 0;
+    const sizeOf = (sc) => resize > 0 ? `${Math.round(resize * sc)} px`
+                                      : `${Number(sc).toFixed(2)}x the original`;
+    const rigNames = (cfg.models?.rigs || []).map((r) => String(r.name || "")).filter(Boolean);
+    const pdial = (label, value, v, i, cls) => {
+      const w = document.createElement("div");
+      w.className = "rn-ws-pdial " + cls;
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = label;
+      const barEl = document.createElement("div");
+      barEl.className = "bar";
+      const rg = document.createElement("input");
+      rg.type = "range";
+      rg.min = v.min; rg.max = v.max; rg.step = v.step;
+      rg.value = value;
+      rg.style.accentColor = v.accent;
+      rg.title = v.tip;
+      const val = document.createElement("span");
+      val.className = "v";
+      val.textContent = v.fmt(value);
+      rg.addEventListener("input", () => {
+        const n = snapStep(rg.value, v.min, v.max, v.step);
+        t[v.key][i] = n;
+        val.textContent = v.fmt(n);
+        writeCfg(node);
+        if (v.flag === "scale_custom" && sizeEls[i]) sizeEls[i].textContent = "Output: " + sizeOf(n);
+      });
+      barEl.append(rg, val);
+      w.append(k, barEl);
+      return w;
+    };
+    const sizeEls = [];
+    for (let i = 0; i < npass; i++) {
+      const card = document.createElement("div");
+      card.className = "rn-ws-passcard";
+      card.dataset.pass = String(i + 1);
+      const pn = document.createElement("div");
+      pn.className = "pn";
+      pn.textContent = String(i + 1);
+      const pb = document.createElement("div");
+      pb.className = "pb";
+      const line1 = document.createElement("div");
+      line1.className = "rn-ws-pline";
+      for (const v of VARY) {
+        if (v.flag === "rig_custom" || !lists[v.flag]) continue;
+        line1.appendChild(pdial(v.label, lists[v.flag][i], v, i, v.flag));
+      }
+      if (!line1.children.length) {
+        line1.appendChild(dimLine(
+          `Denoise ${fmtD(t.denoise)} · Scale ${fmtS(t.scale)} · the rig's steps`
+          + (many ? ", as set on the left" : "")));
+      }
+      const line2 = document.createElement("div");
+      line2.className = "rn-ws-pline2";
+      const sz = document.createElement("span");
+      sz.className = "dim";
+      sz.textContent = "Output: " + sizeOf(lists.scale_custom ? lists.scale_custom[i] : t.scale);
+      sizeEls[i] = sz;
+      line2.appendChild(sz);
+      if (lists.rig) {
+        const rl = document.createElement("span");
+        rl.className = "rn-ws-note";
+        rl.textContent = "Rig";
+        const sel = document.createElement("select");
+        sel.className = "rn-ws-res";
+        for (const [val, txt] of [["", "(this rig)"], ...rigNames.map((nm) => [nm, nm])]) {
+          const o = document.createElement("option");
+          o.value = val; o.textContent = txt; o.selected = val === lists.rig[i];
+          sel.appendChild(o);
+        }
+        sel.title = VARY[3].tip;
+        sel.onchange = () => { t.pass_rig[i] = sel.value; writeCfg(node); };
+        line2.append(rl, sel);
+      }
+      pb.append(line1, line2);
+      card.append(pn, pb);
+      right.appendChild(card);
+    }
+    const last = lists.scale_custom ? lists.scale_custom[npass - 1] : t.scale;
+    right.appendChild(dimLine(
+      `finishes at ${sizeOf(last)}`
+      + (many && t.handoff_continue
+        ? ". Continue the noise is on: the passes share one schedule, so the denoise "
+          + "per pass is ignored."
+        : "")));
+  }
+  cols.append(setup, right);
+  body.appendChild(cols);
+}
+
+// The chosen picture under the Source gallery: what it is, and the two things to do
+// with it. The size is the original's, asked of the server, since the grid shows
+// resized thumbnails.
+const _chosenSize = new Map();
+function chosenStrip(node, body, t, tabName) {
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-chosencard";
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-chosen";
+  card.appendChild(strip);
+  const text = (s) => {
+    const n = document.createElement("span");
+    n.className = "rn-ws-note";
+    n.textContent = s;
+    strip.appendChild(n);
+  };
+  const entry = t.images[t.sel];
+  if (t.canvas !== "gallery") {
+    text(`The canvas comes from the wired ${t.canvas} input, so the gallery is not used.`);
+  } else if (t.random) {
+    text("Random is on: a picture from this collection is picked on every run.");
+  } else if (!entry) {
+    text("No picture chosen yet.");
+  } else {
+    const img = document.createElement("img");
+    img.src = thumbUrl(entry, 160);
+    img.alt = "";
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const p = parseName(entry);
+    const fn = document.createElement("span");
+    fn.className = "fn";
+    fn.textContent = p.filename;
+    fn.title = entry;
+    const dim = document.createElement("span");
+    dim.className = "dim";
+    const key = entry + "|" + node_rand(entry);
+    const show = (d) => {
+      if (!d) return;
+      const mb = d.bytes ? ` · ${(d.bytes / 1048576).toFixed(1)} MB` : "";
+      dim.textContent = `${d.w} × ${d.h}${mb}`;
+    };
+    if (_chosenSize.has(key)) show(_chosenSize.get(key));
+    else {
+      api.fetchApi(`/rednode/image_size?filename=${encodeURIComponent(p.filename)}`
+                   + `&type=${p.type}&subfolder=${encodeURIComponent(p.subfolder)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (d && !d.error) { _chosenSize.set(key, d); show(d); } })
+        .catch(() => {});
+    }
+    meta.append(fn, dim);
+    const openB = document.createElement("button");
+    openB.className = "rn-ws-btn";
+    openB.textContent = "Open";
+    openB.title = "Open the full picture in a new browser tab.";
+    openB.onclick = () => window.open(viewUrl(entry), "_blank");
+    const rm = document.createElement("button");
+    rm.className = "rn-ws-btn";
+    rm.textContent = "Remove";
+    rm.title = "Remove it from this gallery. The file itself stays in ComfyUI/input.";
+    rm.onclick = () => {
+      const i = t.sel;
+      t.images.splice(i, 1);
+      if (t.sel >= t.images.length) t.sel = Math.max(0, t.images.length - 1);
+      activeGroup(t, tabName).sel = t.sel;
+      writeCfg(node);
+      render(node);
+    };
+    strip.append(img, meta, openB, rm);
+  }
+  body.appendChild(card);
 }
 
 // RE-ANGLE: image to image from a different viewpoint. Runs BEFORE the i2i
@@ -11813,7 +12175,7 @@ const SW_PROMPT_HINT = {
 const RA_DEFAULT = { unet: "qwen_image_edit_2511_fp8mixed.safetensors", clip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
                      vae: "qwen_image_vae.safetensors", lora_angles: "qwen-image-edit-2511-multiple-angles-lora.safetensors",
                      lora_light: "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors" };
-function reangleSection(node, body, tabName) {
+function reangleSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
   if (t.prompt_only) return;
@@ -11824,7 +12186,7 @@ function reangleSection(node, body, tabName) {
   const card = sectionCard("RE-ANGLE", "#f0c58a",
     !R.on ? "off"
           : (R.camera === "studio" ? "camera from the Camera tab" : R.azimuth + " · " + R.elevation + " · " + R.distance),
-    { node, key: "i2i_reangle", open: !!R.on });
+    flat ? null : { node, key: "i2i_reangle", open: !!R.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
@@ -12024,7 +12386,7 @@ function reangleSection(node, body, tabName) {
   body.appendChild(card);
 }
 
-function swapSection(node, body, tabName) {
+function swapSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
   if (t.prompt_only) return;
@@ -12035,7 +12397,7 @@ function swapSection(node, body, tabName) {
   const refName = (r) => r === "subject" ? "Subject" : "Subject " + r.replace("subject", "");
   const card = sectionCard("SWAP", "#e08fb0",
     !S.on ? "off" : S.mode + " from the " + refName(S.reference) + " tab",
-    { node, key: "i2i_swap", open: !!S.on });
+    flat ? null : { node, key: "i2i_swap", open: !!S.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
@@ -12228,16 +12590,15 @@ function swapSection(node, body, tabName) {
   body.appendChild(card);
 }
 
-function converterSection(node, body, tabName) {
+function converterSection(node, body, tabName, { flat = false } = {}) {
   if (!CONVERTER_TABS.includes(tabName)) return;
   const cfg = node._rnCfg;
   const c = cfg.tabs[tabName].conv;
-  const open = !!(node._rnConvOpen ||= {})[tabName];
-  const active = c.gender !== "off" || c.style !== "off" || c.act !== "off"
-    || c.remove_cum || c.shave || c.rules.trim() || c.lock;
+  const open = flat || !!(node._rnConvOpen ||= {})[tabName];
+  const active = convActive(c);
 
   const sect = document.createElement("div");
-  sect.className = "rn-ws-sect rn-ws-conv";
+  sect.className = "rn-ws-sect rn-ws-conv" + (flat ? " flat" : "");
   const head = document.createElement("div");
   head.className = "head";
   const arr = document.createElement("span");
@@ -12247,7 +12608,12 @@ function converterSection(node, body, tabName) {
   ttl.className = "ttl";
   ttl.textContent = "PROMPT CONVERTER" + (active ? "" : ": all off");
   head.append(arr, ttl);
-  head.onclick = () => { node._rnConvOpen[tabName] = !open; render(node); };
+  if (flat) {
+    arr.style.display = "none";
+    head.style.cursor = "default";
+  } else {
+    head.onclick = () => { node._rnConvOpen[tabName] = !open; render(node); };
+  }
   sect.appendChild(head);
 
   if (open) {
@@ -12814,18 +13180,18 @@ export function render(node) {
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
+  else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  i2iPassRow(node, body, cur);                     // i2i: real pass or prompt only
-  reangleSection(node, body, cur);                 // i2i: re-shoot the source first
-  swapSection(node, body, cur);                    // i2i: then the Subject onto the person
-  dialSection(node, body, cur);                    // each tab carries its own dials
-  if (cur !== "paint") {
-    autoSection(node, body, cur);                  // captions for this tab's image
+  if (cur !== "i2i") {
+    dialSection(node, body, cur);                  // each tab carries its own dials
+    if (cur !== "paint") {
+      autoSection(node, body, cur);                // captions for this tab's image
+    }
+    converterSection(node, body, cur);             // the built-in Prompt Converter
   }
-  converterSection(node, body, cur);               // the built-in Prompt Converter
   node._rnAfterMount = null;
   host.appendChild(body);
   // a tab that needs its own scroll back (the Post list) sets this while building;

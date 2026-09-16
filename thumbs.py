@@ -125,7 +125,11 @@ try:
             w, h = image_size(path)
         except Exception:
             return web.json_response({"error": "unreadable"}, status=500)
-        return web.json_response({"w": w, "h": h})
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            size = 0
+        return web.json_response({"w": w, "h": h, "bytes": size})
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)
     print(f"[RedNode Krea2] thumbnail route not registered: {e}", flush=True)

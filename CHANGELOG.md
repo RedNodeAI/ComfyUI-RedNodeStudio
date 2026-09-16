@@ -56,6 +56,18 @@ cheap to judge.
 
 ### Workspace
 
+- The Img2Img tab is six sub-tabs: Source, Passes, Auto prompt, Re-angle, Swap
+  and Converter, each with a light showing whether that section is on, over a
+  status bar with the tab's switch, the picture count, the passes and the
+  engines in use. Source is one gallery with its canvas, collection and thumb
+  size on a toolbar, and a strip under it naming the chosen picture with its
+  size. Passes has a setup column (the pass kind, the count, which settings
+  vary per pass, and the values every pass shares) beside one card per pass
+  holding only the settings that vary
+- Every Auto prompt box lists its engines on the left and shows the picked
+  engine's own settings beside them, then the settings every engine shares and
+  the result. The settings cog is gone; picking an engine is how its settings
+  open
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
