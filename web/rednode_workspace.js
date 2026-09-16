@@ -533,6 +533,12 @@ css.textContent = `
   cursor:pointer;font-size:12.5px;font-weight:600;padding:7px 12px}
 .rn-ws-bpreset:hover{border-color:#b8283c;color:#fff}
 .rn-ws-bpreset.cur{background:#b8283c;border-color:#b8283c;color:#fff}
+.rn-ws-cammaster{border-width:2px;border-color:#4a5058}
+.rn-ws-cammaster.on{border-color:#2e7d4f;background:#17231c}
+.rn-ws-cammaster .rn-ws-note{opacity:.85;font-size:12.5px}
+.rn-ws-camword{font-size:14px;font-weight:800;letter-spacing:.08em;color:#9aa0a8}
+.rn-ws-cammaster.on .rn-ws-camword{color:#9fe0b4}
+.rn-ws-bigsw{transform:scale(1.35);transform-origin:left center;margin-right:14px}
 .rn-ws-swlabel{font-size:12px;color:#8a919b;display:flex;align-items:center;gap:6px}
 .rn-ws-bigbtn{height:30px!important;padding:0 14px!important;font-size:13px!important;
   width:auto!important}
@@ -2771,9 +2777,13 @@ function cameraBody(node, body) {
   {
     if (!cfg.camera || typeof cfg.camera !== "object") cfg.camera = { on: true };
     const row = document.createElement("div");
-    row.className = "rn-ws-row";
+    row.className = "rn-ws-card rn-ws-cammaster" + (cfg.camera.on ? " on" : "");
+    row.style.cssText = "flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap";
+    const big = document.createElement("span");
+    big.className = "rn-ws-camword";
+    big.textContent = cfg.camera.on ? "CAMERAS ON" : "CAMERAS OFF";
     const sw = document.createElement("button");
-    sw.className = "rn-ws-sw" + (cfg.camera.on ? " on" : "");
+    sw.className = "rn-ws-sw rn-ws-bigsw" + (cfg.camera.on ? " on" : "");
     sw.title = cfg.camera.on
       ? "On: the studio below writes the camera paragraph, drives the camera LoRAs "
         + "and renders a camera path. Switch off to take the cameras out of every "
@@ -2788,7 +2798,8 @@ function cameraBody(node, body) {
       ? "Cameras on: the studio drives the prompt, the camera LoRAs and the path."
       : "Cameras OFF: prompts use their simple chips, no camera LoRAs, no path. "
         + "Everything below is kept for when you switch it back on.";
-    row.append(sw, lab);
+    lab.style.flex = "1 1 240px";
+    row.append(sw, big, lab);
     body.appendChild(row);
   }
   const bar = document.createElement("div");
@@ -11207,7 +11218,19 @@ function promptsBody(node, body) {
       ["plain", "Plain box", "One plain text box, for any other model or for a prompt "
                              + "you want typed as is."],
     ], row.kind === "krea2" ? "krea2" : "plain",
-    (v) => { row.kind = v; writeCfg(node); render(node); });
+    (v) => {
+      // a Krea 2 box writes its text from the Frame's boxes, so a plain prompt
+      // moving over would be replaced by an empty one: its words go into Subject
+      if (v === "krea2" && row.kind !== "krea2") {
+        row.frame = row.frame && typeof row.frame === "object" ? row.frame : {};
+        const boxes = ["subject", "surroundings", "light_and_colour", "placement", "style_extra"];
+        const empty = !boxes.some((k) => String(row.frame[k] || "").trim());
+        if (empty && String(row.text || "").trim()) row.frame.subject = String(row.text).trim();
+      }
+      row.kind = v;
+      writeCfg(node);
+      render(node);
+    });
     const del = document.createElement("button");
     del.className = "rn-ws-btn";
     del.style.width = "auto";
@@ -11246,6 +11269,12 @@ function promptsBody(node, body) {
         const camOff = () => !!row.frame.camera_off;
         const tabOff = () => !!(cfg.camera && cfg.camera.on === false);
         const F = {
+          camerasOff: tabOff,
+          camerasOn: () => {
+            (cfg.camera ||= {}).on = true;
+            writeCfg(node);
+            render(node);
+          },
           opts: FRAME_DEF.opts,
           get: typedOf,
           // the preview writes row.text, which is what the queue encodes, so it

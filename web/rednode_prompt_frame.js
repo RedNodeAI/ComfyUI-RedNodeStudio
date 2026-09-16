@@ -788,8 +788,10 @@ export function buildFrameEditor(wrap, F) {
   for (const e of [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap]) {
     camBody.appendChild(e);
   }
+  // Off is the row's own switch, or the host's cameras switched off altogether
+  const camsOff = () => !!F.get("camera_off") || !!F.camerasOff?.();
   const applyCamSw = () => {
-    const off = !!F.get("camera_off");
+    const off = camsOff();
     offBtn.classList.toggle("on", off);
     if (off) { simpleBtn.classList.remove("on"); studioBtn.classList.remove("on"); }
     camBody.classList.toggle("rn-pf-off", off);
@@ -894,8 +896,14 @@ export function buildFrameEditor(wrap, F) {
     showStudio(false);
     changed();
   };
-  studioBtn.addEventListener("click", () => { if (F.get("camera_off")) setCameraOff(false); openStudio(); });
-  simpleBtn.addEventListener("click", () => { if (F.get("camera_off")) setCameraOff(false); goSimple(); });
+  // picking Simple or Advanced turns the camera words back on, here and, when the
+  // host has them off altogether, there too
+  const camsBackOn = () => {
+    if (F.get("camera_off")) setCameraOff(false);
+    if (F.camerasOff?.()) F.camerasOn?.();
+  };
+  studioBtn.addEventListener("click", () => { camsBackOn(); openStudio(); });
+  simpleBtn.addEventListener("click", () => { camsBackOn(); goSimple(); });
   // on (re)build: restore the remembered state, or follow the rule
   {
     const remembered = foldGet("studio_open");
@@ -910,13 +918,18 @@ export function buildFrameEditor(wrap, F) {
   const simpleRows = [shotLabel, frameChips, frameWrap, camLabel, camChips, camWrap];
   const syncSimple = () => {
     const live = !!studioGet();
-    for (const elx of simpleRows) elx.style.opacity = live ? ".45" : "";
-    studioState.textContent = live
-      ? (F.openCameraTab ? "the Camera tab drives the camera; the chips are presets that reset it"
-                         : "the studio drives the camera; the chips are presets that reset it")
-      : "";
-    studioBtn.classList.toggle("on", live);
-    simpleBtn.classList.toggle("on", !live);
+    const off = camsOff();
+    for (const elx of simpleRows) elx.style.opacity = live && !off ? ".45" : "";
+    studioState.textContent = F.camerasOff?.()
+      ? "cameras are off on the Camera tab; pick Simple or Advanced to turn them back on"
+      : F.get("camera_off") ? "no camera words for this prompt"
+      : live
+        ? (F.openCameraTab ? "the Camera tab drives the camera; the chips are presets that reset it"
+                           : "the studio drives the camera; the chips are presets that reset it")
+        : "";
+    studioBtn.classList.toggle("on", live && !off);
+    simpleBtn.classList.toggle("on", !live && !off);
+    applyCamSw();
   };
   syncSimpleRef = syncSimple;
   syncSimple();
