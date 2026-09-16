@@ -4734,7 +4734,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     const csel = document.createElement("select");
     csel.className = "rn-ws-res";
     for (const [v, label] of [["append", "Append: paragraph, then tag line"],
-                              ["blend", "Blend: one LLM pass rewrites it all"]]) {
+                              ["blend", "Blend: Ollama rewrites them into one"]]) {
       const o = document.createElement("option");
       o.value = v;
       o.textContent = label;
@@ -4742,7 +4742,8 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       csel.appendChild(o);
     }
     csel.title = "Append keeps every engine's words as they came. Blend costs one more "
-               + "Ollama pass and rewords everything into one prompt.";
+               + "Ollama pass and rewords everything into one prompt; only Ollama can do "
+               + "that, so its engine has to be on for this tab.";
     csel.onchange = () => { a.combine = csel.value; writeCfg(node); render(node); };
     const llab = document.createElement("span");
     llab.className = "rn-ws-note";
@@ -4764,10 +4765,18 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     lsel.onchange = () => { a.length = parseInt(lsel.value, 10) || 0; writeCfg(node); };
     crow.append(clab, csel, llab, lsel);
     shared.appendChild(crow);
-    right.appendChild(shared);
+    if (a.combine === "blend" && !(a.ollama && autoStatus.ollama)) {
+      const bw = document.createElement("div");
+      bw.className = "rn-ws-note rn-ws-peoplewarn";
+      bw.textContent = "Blend is a rewrite by Ollama: switch the Ollama engine on for this "
+                     + "tab, or the captions are appended as they are.";
+      shared.appendChild(bw);
+    }
 
     cols.append(list, right);
     sect.appendChild(cols);
+    // its own box under the list, so picking an engine never moves it
+    sect.appendChild(shared);
 
     // THE RESULT: what came back, what was saved before, and where it lands
     const res = document.createElement("div");
