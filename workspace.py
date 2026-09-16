@@ -159,10 +159,14 @@ def vram_report(cfg, tabs, post_cfg):
     if any(n in postprocess.DEPTH_EFFECTS for n in post_on):
         heavy.append("depth of field / haze load a depth estimator")
     if d.get("boosts_off"):
-        # the master off switch forces both fidelity dials to 1.0 downstream, so the
-        # matrix warnings above are describing something that will not happen
-        heavy = [x for x in heavy if "bias matrix" not in x]
-        heavy.insert(0, "boosts off: no attention bias matrix is built")
+        # the master off switch holds both fidelity dials at 1.0 or below downstream;
+        # a pull above 1 never happens, a loosened one still builds the matrix
+        if all(d.get(k, 1.0) >= 1.0 for k in ("reference_fidelity", "scene_fidelity")):
+            heavy = [x for x in heavy if "bias matrix" not in x]
+            heavy.insert(0, "boosts off: no attention bias matrix is built")
+        else:
+            heavy.insert(0, "boosts off: no extra pull, but a fidelity below 1.0 still "
+                            "builds the bias matrix to loosen it")
     tier = cfg.get("vram_tier", "high")
     if heavy:
         print(f"[RedNode Workspace] VRAM ({tier} tier): " + "; ".join(heavy), flush=True)
@@ -199,6 +203,7 @@ SETTINGS_DEFAULTS = dict(
     hide_style_refs=True, style_detail_px=384, likeness_vs_obedience=768,
     reference_fidelity=2.5, scene_fidelity=1.0, fit_mode="fit",
     identity_start=0.0, identity_end=1.0, isolate_refs=False, boost_blocks="all",
+    scene_start=0.0, scene_end=1.0,
     subject_likeness_px=0, edit_mask_feather=2, picture_labels=False,
     ref_t0_modulation=False, vision_system_prompt="", attention="auto",
 )
@@ -216,6 +221,8 @@ DIALS = {
     "edit_mask_feather": (0, 32),
     "identity_start": (0.0, 1.0),
     "identity_end": (0.0, 1.0),
+    "scene_start": (0.0, 1.0),
+    "scene_end": (0.0, 1.0),
 }
 
 # boolean dials, surfaced as ON/OFF switches in the dial sections
@@ -662,6 +669,9 @@ def parse_config(config_json):
                          "auto": (bool(v.get("auto")) if isinstance(v, dict) and "auto" in v
                                   else None)}
                 for k, v in pm_in.items() if isinstance(v, dict)}
+        if name == "scene":
+            # words only: the Scene picture is captioned but not sent as a reference
+            tabs[name]["words_only"] = bool(t.get("words_only"))
         if name == "moodboard":
             # per picture: which reads its auto prompt takes
             pm_in = t.get("pic_meta") if isinstance(t.get("pic_meta"), dict) else {}
@@ -2232,6 +2242,11 @@ class RedNodeStudioWorkspace:
 
         subject = tab_image("subject")
         scene = tab_image("scene")
+        scene_words_only = bool(tabs["scene"].get("words_only") and scene is not None)
+        if scene_words_only:
+            print("[RedNode Workspace] Scene is words only: its picture is captioned, not "
+                  "sent as a reference", flush=True)
+            scene = None
         i2i_img = tab_image("i2i")
 
         mood = None
@@ -2588,8 +2603,9 @@ class RedNodeStudioWorkspace:
         # the one-click OFF for the attention-bias machinery: no boosts, no isolation,
         # no L x L matrix, regardless of where the sliders sit. The low-VRAM switch.
         if settings is not None and cfg["dials"].get("boosts_off"):
-            settings["reference_fidelity"] = 1.0
-            settings["scene_fidelity"] = 1.0
+            # no pull above 1.0; a fidelity below it only loosens, so it stays
+            settings["reference_fidelity"] = min(1.0, float(settings.get("reference_fidelity", 1.0)))
+            settings["scene_fidelity"] = min(1.0, float(settings.get("scene_fidelity", 1.0)))
             settings["isolate_refs"] = False
 
         # NOT a settings key: the studio owns this widget, so it rides the bundle only
@@ -2656,7 +2672,8 @@ class RedNodeStudioWorkspace:
                 entry = t["images"][idx]
             # WHO IS CAPTIONED: the one picture on most tabs; on Subject, every picked
             # person whose auto prompt is on (the main one by default), each by name
-            targets = [(0, entry, False, a["mode"])]
+            # a words-only Scene loads its own picture: none went out as a reference
+            targets = [(0, entry, tab_name == "scene" and scene_words_only, a["mode"])]
             if tab_name == "subject" and entry:
                 _meta = t.get("people_meta") or {}
                 _people = [idx] + [i for i in (t.get("extra_sel") or []) if i != idx]

@@ -58,9 +58,10 @@ export const PEOPLE_TABS = {
 
 export const DIALS = [
   { tab: "subject", key: "boosts_off", bool: true, def: false, label: "Boosts off (low VRAM)",
-    hint: "One switch for smaller cards: forces subject and scene fidelity to 1.0 and "
-        + "isolation off, so the large attention bias matrix is never built. The sliders "
-        + "below keep their values for when this goes back off." },
+    hint: "One switch for smaller cards: no pull above 1.0 on subject or scene fidelity, "
+        + "and isolation off, so no bias matrix is built for them. A fidelity below 1.0 "
+        + "still applies, since it loosens rather than pulls. The sliders keep their "
+        + "values for when this goes back off." },
   { tab: "subject", key: "boost_blocks", choice: ["all", "early", "mid", "late"], def: "all",
     label: "Boost blocks",
     says: { all: "The boosts act through the whole network.",
@@ -86,6 +87,17 @@ export const DIALS = [
   { tab: "scene", key: "scene_fidelity", label: "Scene fidelity", min: 0, max: 10, step: 0.05, def: 1.0, vram: "high",
     hint: "Pull toward the scene reference's appearance. Any value other than 1.0 builds "
         + "a large attention bias matrix; its size grows with resolution squared." },
+  { tab: "scene", key: "scene_start", label: "Scene from", min: 0, max: 1, step: 0.05, def: 0,
+    hint: "When the Scene picture starts guiding the render, as a share of the steps. "
+        + "Only the scene: the subject keeps its own timing.",
+    says: (v) => (v <= 0 ? "From the first step." : `From ${Math.round(v * 100)}% of the steps.`) },
+  { tab: "scene", key: "scene_end", label: "Scene until", min: 0, max: 1, step: 0.05, def: 1,
+    hint: "When the Scene picture stops guiding the render. Around 0.3 to 0.5 keeps its "
+        + "layout and lets the subject and prompt finish the picture. Only the scene: the "
+        + "subject keeps its own timing.",
+    says: (v) => (v >= 1 ? "Every step: the scene holds the whole picture."
+                : v <= 0.35 ? "Only the first steps: the scene sets the layout and leaves."
+                : "Sets the layout and look, then the subject and prompt finish it.") },
   { tab: "moodboard", key: "style_strength", label: "Style strength", min: 0, max: 1, step: 0.05, def: 0.5,
     says: (v) => (v <= 0 ? "Off: the pictures add no look."
                 : v < 0.35 ? "A faint hint of the pictures' look."

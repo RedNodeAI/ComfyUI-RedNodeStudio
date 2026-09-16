@@ -12655,7 +12655,7 @@ function identityTabs(node, body) {
   const nPeople = St.images.length ? 1 + (St.extra_sel || []).length : 0;
   for (const text of [
     `Subject: ${!St.on ? "Off" : nPeople === 1 ? "1 Person" : `${nPeople} People`}`,
-    `Scene: ${tabState(cfg.tabs.scene)}`,
+    `Scene: ${tabState(cfg.tabs.scene)}${cfg.tabs.scene.on && cfg.tabs.scene.words_only ? ", Words only" : ""}`,
     `Masks: ${bm.on ? "Boost" : "Off"}`,
   ]) {
     const c = document.createElement("span");
@@ -13846,23 +13846,64 @@ const SUBJECT_BOOST_PRESETS = [
 // The Scene's one dial, the same way. Below 1 weakens the scene's pull (the pack's
 // anime and real recipes use 0.47 on the subject for that); at or below 0 it is
 // clamped to almost nothing, so the slider stops at 0.
+const SCENE_WHOLE = { scene_start: 0, scene_end: 1 };
 const SCENE_BOOST_PRESETS = [
+  { id: "layout", label: "Layout only",
+    tip: "The scene sets the layout in the first steps and then leaves, so the subject and "
+       + "prompt finish the picture. The easiest way to put a person into a place.",
+    v: { scene_fidelity: 1, scene_start: 0, scene_end: 0.35 } },
   { id: "loose", label: "Loose",
     tip: "The place is only a hint: the prompt is free to redraw it. Below 1 weakens the "
-       + "scene's pull.",
-    v: { scene_fidelity: 0.5 } },
+       + "scene's pull, and applies with Boosts off too.",
+    v: { scene_fidelity: 0.5, scene_start: 0, scene_end: 0.6 } },
   { id: "normal", label: "Normal",
-    tip: "The default: the scene guides the place with no extra pull, and no boost matrix "
+    tip: "The default: the scene guides every step with no extra pull, and no boost matrix "
        + "is built, so it is the lightest on VRAM.",
-    v: { scene_fidelity: 1 } },
+    v: { scene_fidelity: 1, ...SCENE_WHOLE } },
   { id: "close", label: "Close",
     tip: "Stays near the scene picture's layout and look. Costs more VRAM.",
-    v: { scene_fidelity: 2 } },
+    v: { scene_fidelity: 2, ...SCENE_WHOLE } },
   { id: "copy", label: "Copy the scene",
     tip: "Rebuilds the scene picture closely, the pack's anime and real conversion value. "
        + "Costs more VRAM and follows the prompt less.",
-    v: { scene_fidelity: 3.2 } },
+    v: { scene_fidelity: 3.2, ...SCENE_WHOLE } },
 ];
+
+// How the Scene reaches the render: its picture and words, or its words alone
+function sceneSendRow(node, cfg) {
+  const S = cfg.tabs.scene;
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-scenesend";
+  const r = document.createElement("div");
+  r.className = "rn-ws-row";
+  r.style.flexWrap = "wrap";
+  const l = document.createElement("span");
+  l.className = "rn-ws-swlabel rn-ws-choicelab";
+  l.textContent = "Scene reaches the render as";
+  const seg = segSwitch([
+    ["picture", "Picture and words", "The Scene picture goes in as a reference, and its auto "
+                                     + "prompt as words if that is on."],
+    ["words", "Words only", "The picture is only captioned: its auto prompt describes the "
+                            + "place and nothing else of it reaches the render."],
+  ], S.words_only ? "words" : "picture",
+  (v) => { S.words_only = v === "words"; writeCfg(node); render(node); });
+  seg.dataset.choice = "scene_send";
+  r.append(l, seg);
+  card.appendChild(r);
+  const n = document.createElement("div");
+  n.className = "rn-ws-note";
+  const fed = S.auto?.on && S.auto?.inject_row;
+  n.textContent = !S.words_only
+    ? "The strongest way in: the model treats the Scene picture as the picture it edits. "
+      + "Use the dials below, or Words only, to loosen it."
+    : fed ? "The gentlest way in: the place comes only from the Scene's caption, so the "
+            + "subject and prompt stay in charge. The dials below do nothing now."
+    : "Words only needs the Scene's Auto prompt on and injected into a prompt, or the "
+      + "Scene adds nothing at all.";
+  if (S.words_only && !fed) n.classList.add("rn-ws-peoplewarn");
+  card.appendChild(n);
+  return card;
+}
 
 // The Moodboard's dials, the same way. Each sets all six, so a preset reads as
 // picked only while every one still matches.
@@ -13972,7 +14013,10 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
     (touched ? `: ${touched} set` : ": all at defaults");
   sect.appendChild(head);
   if (flat && tabId === "subject") sect.appendChild(boostPresetRow(node, cfg));
-  if (flat && tabId === "scene") sect.appendChild(boostPresetRow(node, cfg, SCENE_BOOST_PRESETS));
+  if (flat && tabId === "scene") {
+    sect.appendChild(sceneSendRow(node, cfg));
+    sect.appendChild(boostPresetRow(node, cfg, SCENE_BOOST_PRESETS));
+  }
   if (flat && tabId === "moodboard") sect.appendChild(boostPresetRow(node, cfg, MOODBOARD_BOOST_PRESETS));
   // on the flat pages each dial carries a plain line saying what its value does
   const sayLine = (d, v) => {

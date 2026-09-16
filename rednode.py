@@ -150,6 +150,8 @@ def _fusion_args(cfg):
     return dict(
         ref_start=float(cfg.get("identity_start", 0.0)),
         ref_end=float(cfg.get("identity_end", 1.0)),
+        scene_start=float(cfg.get("scene_start", 0.0)),
+        scene_end=float(cfg.get("scene_end", 1.0)),
         strength=None,  # filled from the basic node's style_strength
         extract="subject / concept" if cfg["transfer"] == "subject" else "style / vibe",
         reference_processing=cfg["reference_processing"],
@@ -500,6 +502,7 @@ class Krea2RedNode:
             grounding_px_subject=args["grounding_px_subject"],
             target_latent=output_latent, fit_mode=args["fit_mode"],
             ref_start=args["ref_start"], ref_end=args["ref_end"],
+            scene_start=args["scene_start"], scene_end=args["scene_end"],
             edit_mask=edit_mask, edit_mask_feather=args["edit_mask_feather"],
             isolate_refs=args["isolate_refs"],
             picture_labels=args["picture_labels"],

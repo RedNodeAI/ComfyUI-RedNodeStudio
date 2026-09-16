@@ -465,7 +465,8 @@ class Krea2MoodboardIdentityFusion:
                ref_boost=1.0, ref_boost_a=1.0, target_latent=None, fit_mode="fit", ref_boost_mask=None,
                ref_start=0.0, ref_end=1.0, edit_mask=None, edit_mask_feather=2, isolate_refs=False,
                boost_blocks="all", grounding_px_subject=0, picture_labels=False, ref_t0_modulation=False,
-               system_prompt="", attention="auto", source_boost=None):
+               system_prompt="", attention="auto", source_boost=None,
+               scene_start=0.0, scene_end=1.0):
         # source_boost: the boost for the chained extra people. None keeps the old rule,
         # where they share ref_boost_a with the scene.
         import comfy.utils
@@ -605,6 +606,10 @@ class Krea2MoodboardIdentityFusion:
                       "the refs would NEVER be active. Ignoring the window (refs stay on every step).")
             elif ref_start > 0.0 or ref_end < 1.0:
                 conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_timing": [float(ref_start), float(ref_end)]})
+            from .identity import scene_window
+            conditioning = scene_window(conditioning, edit_source2 is not None
+                                        and edit_source is not None and len(ref_latents) > 1,
+                                        scene_start, scene_end, "Krea2 Fusion")
             if isolate_refs:
                 if len(ref_latents) > 1:
                     conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_isolate": True})

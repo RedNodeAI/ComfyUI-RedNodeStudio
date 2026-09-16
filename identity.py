@@ -290,6 +290,20 @@ def _ref_attn_bias(boosts, txtlen, slens, tgtlen, device, dtype, boost_mask=None
 # DiT (same contract as QwenImage/Flux edit models use).
 # --------------------------------------------------------------------------
 
+def scene_window(conditioning, has_scene, start, end, who):
+    """Attach the scene's own sampling window when a scene leads the refs."""
+    start, end = float(start), float(end)
+    if not has_scene or (start <= 0.0 and end >= 1.0):
+        return conditioning
+    if start >= end:
+        print(f"[{who}] WARNING: scene start ({start}) >= scene end ({end}) - the scene would "
+              "never be active. Ignoring the scene window.")
+        return conditioning
+    print(f"[{who}] the scene guides steps {start:.2f} to {end:.2f} of the render", flush=True)
+    return node_helpers.conditioning_set_values(
+        conditioning, {"reference_scene_timing": [start, end]})
+
+
 def _krea2_extra_conds(self, **kwargs):
     out = comfy.model_base.Krea2._rednode_orig_extra_conds(self, **kwargs)
     ref_latents = kwargs.get("reference_latents", None)
@@ -309,6 +323,9 @@ def _krea2_extra_conds(self, **kwargs):
         ref_timing = kwargs.get("reference_timing", None)
         if ref_timing is not None:
             out["ref_timing"] = comfy.conds.CONDConstant(list(ref_timing))
+        scene_timing = kwargs.get("reference_scene_timing", None)
+        if scene_timing is not None:
+            out["ref_scene_timing"] = comfy.conds.CONDConstant(list(scene_timing))
         if kwargs.get("reference_isolate", None):
             out["ref_isolate"] = comfy.conds.CONDConstant(True)
         ref_bblocks = kwargs.get("reference_boost_blocks", None)
@@ -449,18 +466,27 @@ def _krea2_forward(self, x, timesteps, context, attention_mask=None, *_drift, tr
     # (0 = first step, 1 = last). Outside the window the refs are dropped from the
     # sequence entirely — identity influence without composition lock (and faster steps).
     timing = kwargs.get("ref_timing", None)
-    if timing and ref_latents:
+    scene_timing = kwargs.get("ref_scene_timing", None)
+
+    def _progress():
         sig0 = timesteps.flatten()[0]
         ss = transformer_options.get("sample_sigmas", None) if isinstance(transformer_options, dict) else None
         if ss is not None and ss.numel() > 1:
             # true step progress from the run's actual schedule — shift-proof, so the
             # start/end labels mean what they say under any ModelSamplingAuraFlow shift.
             idx = int(torch.argmin((ss.to(sig0.device, sig0.dtype) - sig0).abs()).item())
-            progress = idx / (ss.numel() - 1)
-        else:
-            progress = 1.0 - float(sig0)  # fallback: raw flow time (shift-skewed)
-        if not (float(timing[0]) <= progress <= float(timing[1])):
+            return idx / (ss.numel() - 1)
+        return 1.0 - float(sig0)  # fallback: raw flow time (shift-skewed)
+
+    if timing and ref_latents:
+        if not (float(timing[0]) <= _progress() <= float(timing[1])):
             ref_latents = []
+    # the SCENE's own window: the scene is the first reference whenever one is sent, and
+    # outside its window only it leaves the sequence. The boosts and fit lists align to
+    # the LAST refs below, so the subject keeps its own.
+    if scene_timing and len(ref_latents) > 1:
+        if not (float(scene_timing[0]) <= _progress() <= float(scene_timing[1])):
+            ref_latents = list(ref_latents)[1:]
     ref_boosts = list(kwargs.get("ref_boosts", None) or [])
     ref_fit = list(kwargs.get("ref_fit", None) or [])
     # Defensive alignment: pad from the LEFT so attached values always map to the LAST refs
@@ -707,7 +733,7 @@ class Krea2IdentityEdit:
                ref_boost=1.0, ref_boost_a=1.0, target_latent=None, fit_mode="fit", ref_boost_mask=None,
                ref_start=0.0, ref_end=1.0, edit_mask=None, edit_mask_feather=2, isolate_refs=False,
                boost_blocks="all", grounding_px_subject=0, picture_labels=False, ref_t0_modulation=False,
-               system_prompt="", attention="auto"):
+               system_prompt="", attention="auto", scene_start=0.0, scene_end=1.0):
         # Ref order: scene first, chained extras in the middle, the designated SUBJECT LAST.
         # The boost/mask dials always target the last ref, so chained extras can never steal
         # the subject's boost or face mask.
@@ -822,6 +848,9 @@ class Krea2IdentityEdit:
                       "the refs would NEVER be active. Ignoring the window (refs stay on every step).")
             elif ref_start > 0.0 or ref_end < 1.0:
                 conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_timing": [float(ref_start), float(ref_end)]})
+            conditioning = scene_window(conditioning, image is not None and image2 is not None
+                                        and len(ref_latents) > 1, scene_start, scene_end,
+                                        "Krea2 Identity Edit")
             if isolate_refs:
                 if len(ref_latents) > 1:
                     conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_isolate": True})

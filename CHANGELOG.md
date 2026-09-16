@@ -190,6 +190,17 @@ cheap to judge.
 - The Moodboard injects each read into its own Frame slot: Style captions as
   Style, Subject as Subject, Situation as Surroundings, each changeable under
   Inject into. Every tab's Inject into can pick As Style too
+- Scene has its own window, Scene from and Scene until on its Boosts page:
+  outside it only the Scene picture leaves the render, and the subject keeps its
+  own timing. A Layout only preset (the scene leaves after the first 35% of the
+  steps) leads the Scene presets, and Loose now also ends the scene at 60%
+- Scene reaches the render as Picture and words, or Words only: the picture is
+  captioned but not sent as a reference, the gentlest way to put a person into
+  a place. The status bar says so, and the page warns when Words only has no
+  auto prompt injected to carry it
+- Boosts off stops a Subject or Scene fidelity above 1.0 but keeps one below it,
+  so Loose works with Boosts off. A fidelity below 1.0 still builds the bias
+  matrix, and the console says so
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
