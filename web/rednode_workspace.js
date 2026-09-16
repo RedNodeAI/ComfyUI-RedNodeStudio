@@ -333,6 +333,13 @@ css.textContent = `
 .rn-ws-segb:hover{color:#fff}
 .rn-ws-segb.on{background:#b8283c;color:#fff;font-weight:600}
 .rn-ws-switch .rn-ws-segb{padding:4px 10px;font-size:12px}
+/* Swap's quick phrases: each in its own box, the segment look one at a time */
+.rn-ws-swapquick{gap:6px}
+.rn-ws-swapquick .rn-ws-segb{flex:0 0 auto;background:#15171b;border:1px solid #33373d;
+  border-radius:6px;padding:6px 12px}
+.rn-ws-swapquick .rn-ws-segb:hover{border-color:#8fa8c8}
+.rn-ws-swapquick .rn-ws-segb.on{border-color:#b8283c}
+.rn-ws-swapquick .rn-ws-swapqclear{margin-left:auto;color:#cdd9ea}
 .rn-ws-gen{flex:1 1 auto;min-width:120px;min-height:38px;padding:0 18px;border-radius:6px;
   border:1px solid #2f7a4d;background:#1f9d55;color:#fff;font-weight:700;
   font-size:14.5px;cursor:pointer;letter-spacing:.01em}
