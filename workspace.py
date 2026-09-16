@@ -1871,8 +1871,8 @@ class RedNodeStudioWorkspace:
                 # escape hatches: a wired mask always beats the painted one
                 "boost_mask_in": ("MASK", {"tooltip": "optional wired subject-boost mask — "
                                            "overrides the one painted on the Masks tab"}),
-                "edit_mask_in": ("MASK", {"tooltip": "optional wired edit mask — overrides the "
-                                          "one painted on the Masks tab"}),
+                "edit_mask_in": ("MASK", {"tooltip": "optional wired edit mask, sent out on "
+                                          "edit_mask with a latent sized to the scene picture"}),
                 # APPENDED: the Frame-vocabulary inputs, the same four the Prompt
                 # Frame node takes, for the helper nodes that build prompt pieces.
                 # Each joins the ACTIVE rig's prompt row: on a Krea 2 row it lands in
@@ -2240,12 +2240,11 @@ class RedNodeStudioWorkspace:
                     return nh, nw
             return None
 
+        # The painted edit mask is retired: the Paint tab does in-place edits, with a
+        # denoise. A wired edit_mask_in still goes out, with its latent.
         edit = edit_mask_in
         latent = None
-        et = tabs["edit_mask"]
-        base_hw = edit_base_dims() if (et["on"] and (et["mask"] or edit_mask_in is not None)) else None
-        if edit is None and et["on"] and et["mask"]:
-            edit = load_mask(et["mask"], base_hw)
+        base_hw = edit_base_dims() if edit_mask_in is not None else None
         if base_hw is not None:
             # 4 channels on purpose: comfy's fix_empty_latent_channels() re-shapes it to
             # whatever the sampled model wants, exactly as EmptyLatentImage relies on

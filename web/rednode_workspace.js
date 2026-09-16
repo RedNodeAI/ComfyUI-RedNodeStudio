@@ -2913,13 +2913,8 @@ function masksBody(node, body) {
       hint: "Confines the identity boost to a region, usually the face: likeness "
           + "without dragging the reference's clothes and background along with it. "
           + "Paint the part that must look like the person." },
-    { tab: "edit_mask", label: "Edit mask", base: "scene",
-      goes: "Rides the edit_mask output, and emits a matching output_latent sized to "
-          + "the SCENE tab's picture. Feed that latent to your sampler as well, or the "
-          + "painted region lands offset.",
-      hint: "Painted means the model may change it; everything else is held "
-          + "pixel-faithful to the source. This is the in-place edit mask, nothing to "
-          + "do with the identity boost above." },
+    // the painted Edit mask is retired: the Paint tab does in-place edits, with a
+    // denoise. A MASK wired into edit_mask_in still goes out.
   ];
   const open = node._rnMaskBoxes ||= {};
   for (const d of defs) {
@@ -2928,7 +2923,7 @@ function masksBody(node, body) {
     // two canvases stacked open would own the whole tab. The open state lives on the
     // node, never in the config, so folding a box cannot dirty the workflow.
     const isOpen = Object.prototype.hasOwnProperty.call(open, d.tab)
-      ? !!open[d.tab] : false;
+      ? !!open[d.tab] : defs.length === 1;
     const box = document.createElement("div");
     box.className = "rn-ws-sbox rn-ws-sect";
     const head = document.createElement("div");
@@ -2989,7 +2984,8 @@ function masksBody(node, body) {
   }
   const warn = document.createElement("div");
   warn.className = "rn-ws-note";
-  warn.textContent = "A MASK wired into boost_mask_in or edit_mask_in always wins over the painted one.";
+  warn.textContent = "A MASK wired into boost_mask_in always wins over the painted one. "
+                   + "To change part of a picture in place, use the Paint tab.";
   body.appendChild(warn);
 }
 
@@ -12420,13 +12416,13 @@ function identityTabs(node, body) {
   bar.appendChild(nm);
   const pics = (n) => `${n} Image${n === 1 ? "" : "s"}`;
   const tabState = (t) => (t.on ? pics(t.images.length) : "Off");
-  const bm = cfg.tabs.boost_mask, em = cfg.tabs.edit_mask;
+  const bm = cfg.tabs.boost_mask;
   const St = cfg.tabs.subject;
   const nPeople = St.images.length ? 1 + (St.extra_sel || []).length : 0;
   for (const text of [
     `Subject: ${!St.on ? "Off" : nPeople === 1 ? "1 Person" : `${nPeople} People`}`,
     `Scene: ${tabState(cfg.tabs.scene)}`,
-    `Masks: ${bm.on && em.on ? "Boost + Edit" : bm.on ? "Boost" : em.on ? "Edit" : "Off"}`,
+    `Masks: ${bm.on ? "Boost" : "Off"}`,
   ]) {
     const c = document.createElement("span");
     c.className = "rn-ws-chip";
@@ -14065,9 +14061,9 @@ const tabLit = (cfg, id) =>
   id === "identity" ? IDENTITY_SUBS.some((s) => tabLit(cfg, s.id))
   : id === "people" ? (cfg.tabs.subject2.on && cfg.tabs.subject2.images.length) ||
                     (cfg.tabs.subject3.on && cfg.tabs.subject3.images.length)
-  // ON is enough to light the tab: a wired boost_mask_in/edit_mask_in counts even
-  // before anything is painted, and the ON click deserves visible feedback either way
-  : id === "masks" ? cfg.tabs.boost_mask.on || cfg.tabs.edit_mask.on
+  // ON is enough to light the tab: a wired boost_mask_in counts even before anything
+  // is painted, and the ON click deserves visible feedback either way
+  : id === "masks" ? cfg.tabs.boost_mask.on
   // the moodboard only outputs what is IN the batch, so an empty batch must not light up
   : id === "moodboard" ? cfg.tabs.moodboard.on && cfg.tabs.moodboard.sel.length
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)

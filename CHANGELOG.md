@@ -171,6 +171,10 @@ cheap to judge.
   transfer, Copy the layout). Transfer and Reference processing are button
   switches in plain words, and each dial says what its current value does.
   Boost blocks on Subject is a button switch too
+- The painted Edit mask is gone from the Masks page. The Paint tab does
+  in-place edits, with a denoise. A painted edit mask in an older workflow is
+  ignored; a MASK wired into edit_mask_in still goes out with its latent. The
+  Subject boost mask card opens by itself
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

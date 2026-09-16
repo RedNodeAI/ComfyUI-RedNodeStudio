@@ -135,9 +135,11 @@ first is the main subject, and the others follow as Person 2, 3 and on (more tha
 runs, with a warning that faces may blend). Scene is a place rebuilt as in-context latents.
 Subject and Scene each have Gallery, Boosts, Auto prompt and Converter tabs; the Subject boosts
 apply to every person. Masks holds the subject boost mask, which rides into the identity edit
-and is sized against the main subject's picture, and the edit mask that confines the pass.
+and is sized against the main subject's picture. To change part of a picture in place, use
+the Paint tab.
 
-**Moodboard.** Batches several pictures into one style signal. Right-click a picture in any
+**Moodboard.** Batches several pictures into one style signal. Gallery, Boosts and Auto prompt
+tabs sit under a status bar, and Boosts has one-click presets from A hint to Outfit transfer. Right-click a picture in any
 gallery for the gallery menu.
 
 ![The Post tab: saved effects, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
