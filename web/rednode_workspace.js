@@ -529,6 +529,7 @@ css.textContent = `
 .rn-ws-note{font-size:11.5px;opacity:.5;line-height:1.45}
 /* a switch's label row: note-coloured words, but the switch stays at full strength */
 .rn-ws-bpresets{display:flex;gap:6px;flex-wrap:wrap}
+.rn-ws-says{margin:-2px 0 4px 2px;opacity:.75;font-size:11.5px}
 .rn-ws-bpreset{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#c8ccd2;
   cursor:pointer;font-size:12.5px;font-weight:600;padding:7px 12px}
 .rn-ws-bpreset:hover{border-color:#b8283c;color:#fff}
@@ -12241,6 +12242,7 @@ function viewKeyOf(node, cur) {
   const p = node.properties || {};
   if (cur === "i2i") return "i2i/" + (node._rnI2iSub || p.rn_i2i_sub || "source");
   if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
+  if (cur === "moodboard") return "moodboard/" + (node._rnMbSub || p.rn_moodboard_sub || "gallery");
   if (cur === "identity") {
     let sub = node._rnIdSub || p.rn_identity_sub || "subject";
     if (sub === "people") sub = "subject";
@@ -12466,6 +12468,70 @@ function identityTabs(node, body) {
   else if (inner === "boosts") dialSection(node, body, sub, { flat: true });
   else if (inner === "auto") autoSection(node, body, sub, { flat: true });
   else converterSection(node, body, sub, { flat: true });
+}
+
+// ---- Moodboard as sub-tabs ------------------------------------------------------
+// The same strip and status bar as Krea 2 Identity: Gallery, Boosts, Auto prompt.
+// The Moodboard has no converter; it is the style authority.
+function moodboardTabs(node, body) {
+  const cfg = node._rnCfg;
+  const props = (node.properties ||= {});
+  const t = cfg.tabs.moodboard;
+  const dialsSet = !!(cfg.use_dials && DIALS.some((dd) => dd.tab === "moodboard"
+                                                  && cfg.dials[dd.key] !== undefined));
+  const subs = [
+    ["gallery", "GALLERY", tabLit(cfg, "moodboard")],
+    ["boosts", "BOOSTS", !!(t.on && dialsSet)],
+    ["auto", "AUTO PROMPT", !!(t.on && t.auto?.on)],
+  ];
+  let sub = node._rnMbSub || props.rn_moodboard_sub || "gallery";
+  if (!subs.some(([id]) => id === sub)) sub = "gallery";
+  node._rnMbSub = sub;
+
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const on = document.createElement("button");
+  on.className = "rn-ws-sw" + (t.on ? " on" : "");
+  on.title = t.on ? "This tab feeds the studio. Click to disable it."
+                  : "Disabled: this tab outputs nothing.";
+  on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Moodboard";
+  bar.append(on, nm);
+  const dv = (k) => cfg.dials[k] ?? DIALS.find((d) => d.key === k)?.def;
+  const n = t.sel.length;
+  for (const text of [
+    `Batch: ${!t.on ? "Off" : t.random ? "Random" : `${n} of ${t.images.length} Image${t.images.length === 1 ? "" : "s"}`}`,
+    `Takes: ${dv("transfer") === "subject" ? "The content" : "The look"}`,
+    `Strength: ${Number(dv("style_strength")).toFixed(2)}`,
+  ]) {
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  body.appendChild(bar);
+
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub inner";
+  for (const [id, label, lit] of subs) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
+    b.dataset.inner = id;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnMbSub = id; props.rn_moodboard_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+  if (!t.on && sub !== "gallery") body.appendChild(tabOffNote("Moodboard"));
+  if (sub === "gallery") galleryBody(node, body, "moodboard", IMAGE_TABS.moodboard, { multi: true, layout: "tabs" });
+  else if (sub === "boosts") dialSection(node, body, "moodboard", { flat: true });
+  else autoSection(node, body, "moodboard", { flat: true });
 }
 
 // THE PASSES TAB: setup on the left (kind, count, which settings vary per pass, the
@@ -13566,6 +13632,35 @@ const SCENE_BOOST_PRESETS = [
     v: { scene_fidelity: 3.2 } },
 ];
 
+// The Moodboard's dials, the same way. Each sets all six, so a preset reads as
+// picked only while every one still matches.
+const MOOD_BASE = { style_strength: 0.5, transfer: "style", reference_processing: "full image",
+                    style_detail_px: 384, hide_style_refs: true, style_directive: true };
+const MOODBOARD_BOOST_PRESETS = [
+  { id: "hint", label: "A hint",
+    tip: "A light touch of the pictures' look. The prompt stays firmly in charge.",
+    v: { ...MOOD_BASE, style_strength: 0.3 } },
+  { id: "balanced", label: "Balanced",
+    tip: "The default: a clear share of the look, with the prompt deciding the content.",
+    v: { ...MOOD_BASE } },
+  { id: "strong", label: "Strong look",
+    tip: "The pictures stay in view of the model and read in finer detail, so their look "
+       + "comes through much harder. Costs more VRAM.",
+    v: { ...MOOD_BASE, style_strength: 0.8, style_detail_px: 768, hide_style_refs: false } },
+  { id: "noleak", label: "Look, no layout",
+    tip: "Cuts each picture in 4 before reading it, for when a picture keeps pushing its own "
+       + "people or layout into the render.",
+    v: { ...MOOD_BASE, style_strength: 0.6, reference_processing: "quadrant crops (2x2)" } },
+  { id: "outfit", label: "Outfit transfer",
+    tip: "Put clothes from the pictures onto the subject: full strength, fine detail, "
+       + "pictures in view. For a strict garment, also put it on Scene. Heavy on VRAM.",
+    v: { ...MOOD_BASE, style_strength: 1, style_detail_px: 1280, hide_style_refs: false } },
+  { id: "layout", label: "Copy the layout",
+    tip: "Takes the arrangement and objects instead of the look, and lets the prompt "
+       + "decide the style.",
+    v: { ...MOOD_BASE, transfer: "subject" } },
+];
+
 function boostPresetRow(node, cfg, presets = SUBJECT_BOOST_PRESETS) {
   const val = (k) => {
     if (cfg.dials[k] !== undefined) return cfg.dials[k];
@@ -13631,7 +13726,8 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
     arr.style.display = "none";
     head.style.cursor = "default";
     sect.classList.add("flat");
-    ttl.textContent = (tabId === "subject" ? "BOOSTS, for every person" : "BOOSTS")
+    ttl.textContent = (tabId === "subject" ? "BOOSTS, for every person"
+                       : tabId === "moodboard" ? "BOOSTS, for every picture in the batch" : "BOOSTS")
                     + (touched ? ` · ${touched} set` : "");
   } else {
     head.onclick = (e) => {
@@ -13645,6 +13741,16 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
   sect.appendChild(head);
   if (flat && tabId === "subject") sect.appendChild(boostPresetRow(node, cfg));
   if (flat && tabId === "scene") sect.appendChild(boostPresetRow(node, cfg, SCENE_BOOST_PRESETS));
+  if (flat && tabId === "moodboard") sect.appendChild(boostPresetRow(node, cfg, MOODBOARD_BOOST_PRESETS));
+  // on the flat pages each dial carries a plain line saying what its value does
+  const sayLine = (d, v) => {
+    const s = typeof d.says === "function" ? d.says(Number(v)) : d.says?.[String(v)];
+    if (!flat || !s) return null;
+    const n = document.createElement("div");
+    n.className = "rn-ws-note rn-ws-says";
+    n.textContent = s;
+    return n;
+  };
 
   if (open) {
     for (const d of dials) {
@@ -13684,6 +13790,22 @@ Held to ${ceiling} by the ${cfg.vram_tier} VRAM tier. Change the tier `
         };
         wrap.append(lab, sw);
         sect.appendChild(wrap);
+        const said = sayLine(d, !!cur);
+        if (said) sect.appendChild(said);
+        continue;
+      }
+      // a short choice is the red button switch, each button with its own tip
+      if (flat && d.choice && d.choice.length <= 4) {
+        const cur = cfg.dials[d.key] ?? d.def;
+        const seg = segSwitch(d.choice.map((c) => [c, d.labels?.[c] || capFirst(c),
+                                                   d.says?.[c] || d.hint]),
+                              cur, (v) => { cfg.dials[d.key] = v; writeCfg(node); render(node); },
+                              d.hint);
+        seg.dataset.dial = d.key;
+        wrap.append(lab, seg);
+        sect.appendChild(wrap);
+        const said = sayLine(d, cur);
+        if (said) sect.appendChild(said);
         continue;
       }
       if (d.choice) {
@@ -13828,10 +13950,18 @@ Held to ${ceiling} by the ${cfg.vram_tier} VRAM tier. Change the tier `
         setChip?.(num);                              // the VRAM chip follows the value live
         writeCfg(node);
       };
-      range.addEventListener("input", () => apply(range.value));
-      val.addEventListener("change", () => apply(val.value));
+      const said = sayLine(d, cfg.dials[d.key] ?? d.def);
+      range.addEventListener("input", () => {
+        apply(range.value);
+        if (said) said.textContent = d.says(Number(range.value));
+      });
+      val.addEventListener("change", () => {
+        apply(val.value);
+        if (said) said.textContent = d.says(Number(cfg.dials[d.key] ?? d.def));
+      });
       wrap.append(lab, range, val);
       sect.appendChild(wrap);
+      if (said) sect.appendChild(said);
     }
     const reset = document.createElement("button");
     reset.className = "rn-ws-btn";
@@ -14122,11 +14252,12 @@ export function render(node) {
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
   else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
+  else if (cur === "moodboard") moodboardTabs(node, body);
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (cur !== "i2i" && cur !== "identity") {
+  if (!["i2i", "identity", "moodboard"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

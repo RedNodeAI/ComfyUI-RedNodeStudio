@@ -165,6 +165,12 @@ cheap to judge.
   into Subject when the Frame's boxes are empty
 - The Scene and Subject galleries no longer say the canvas comes from a wired
   input. Only Img2Img has that choice; the other tabs show the chosen picture
+- The Moodboard tab uses sub-tabs like Krea 2 Identity: Gallery, Boosts and
+  Auto prompt, with a status bar for the batch, what it takes and the strength.
+  Boosts has six presets (A hint, Balanced, Strong look, Look no layout, Outfit
+  transfer, Copy the layout). Transfer and Reference processing are button
+  switches in plain words, and each dial says what its current value does.
+  Boost blocks on Subject is a button switch too
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

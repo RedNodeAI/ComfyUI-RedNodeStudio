@@ -63,6 +63,10 @@ export const DIALS = [
         + "below keep their values for when this goes back off." },
   { tab: "subject", key: "boost_blocks", choice: ["all", "early", "mid", "late"], def: "all",
     label: "Boost blocks",
+    says: { all: "The boosts act through the whole network.",
+            early: "Leans on composition and pose.",
+            mid: "Between the two: shapes and parts.",
+            late: "Leans on texture and fine detail." },
     hint: "Where in the network the fidelity dials act, both Subject fidelity here and "
         + "Scene fidelity on the Scene tab. Early leans composition and pose, late leans "
         + "texture and detail. Experimental: A/B it." },
@@ -83,10 +87,17 @@ export const DIALS = [
     hint: "Pull toward the scene reference's appearance. Any value other than 1.0 builds "
         + "a large attention bias matrix; its size grows with resolution squared." },
   { tab: "moodboard", key: "style_strength", label: "Style strength", min: 0, max: 1, step: 0.05, def: 0.5,
+    says: (v) => (v <= 0 ? "Off: the pictures add no look."
+                : v < 0.35 ? "A faint hint of the pictures' look."
+                : v < 0.7 ? "A clear share of the look, and the prompt still leads."
+                : "The look dominates the render."),
     hint: "How much of the style refs survives. This drives the studio's own style_strength "
         + "widget through the bundle and works with ANY preset, named ones included." },
   { tab: "moodboard", key: "transfer", choice: ["style", "subject"], def: "style",
     label: "Transfer",
+    labels: { style: "The look", subject: "The content" },
+    says: { style: "Takes palette, light, texture and mood. The prompt decides what is in the picture.",
+            subject: "Takes the arrangement and objects. The prompt decides how it looks." },
     hint: "What the engine pulls OUT of the images on this tab. It reads the moodboard "
         + "references only; Subject, People, Scene and Masks are untouched. Style takes "
         + "the look (palette, lighting, texture, mood) and leaves the content behind, so "
@@ -96,18 +107,30 @@ export const DIALS = [
         + "garment out of a reference photo." },
   { tab: "moodboard", key: "reference_processing", label: "Reference processing",
     def: "full image", choice: ["full image", "quadrant crops (2x2)", "fine tiles (4x4)"],
+    labels: { "full image": "Whole picture", "quadrant crops (2x2)": "Cut in 4",
+              "fine tiles (4x4)": "Cut in 16" },
+    says: { "full image": "Each picture is read whole, layout included.",
+            "quadrant crops (2x2)": "Each picture is cut in 4, so its layout stops leaking in.",
+            "fine tiles (4x4)": "Cut in 16 small tiles: only colour and texture survive." },
     hint: "How the images on this tab are cut up before encoding. Crops and tiles "
         + "scramble their composition so only the look survives, which is the fix when "
         + "a moodboard reference keeps smuggling its own subject or layout into the "
         + "result. Full image keeps them whole." },
   { tab: "moodboard", key: "style_detail_px", label: "Style detail res", min: 128, max: 1536, step: 64, def: 384, vram: "med",
+    says: (v) => (v < 512 ? "Reads the broad look. Light on VRAM."
+                : v < 1024 ? "Reads finer pattern and fabric detail."
+                : "Reads fine fabric and print detail. Heavy on VRAM."),
     hint: "Vision budget per moodboard ref. Higher resolves fabric and pattern detail, "
         + "and feeds more vision tokens to the encoder." },
   { tab: "moodboard", key: "hide_style_refs", bool: true, def: true, label: "Hide style refs",
+    says: { true: "The pictures pass their look through the prompt only. Safest with people in them.",
+            false: "The pictures stay in view of the model: a much stronger look." },
     hint: "On (indirect): refs are deleted after encoding and style survives via the prompt, "
         + "safest with people in the refs. OFF keeps the vision tokens in the conditioning: "
         + "a much STRONGER style signal. Try off when the moodboard feels weak." },
   { tab: "moodboard", key: "style_directive", bool: true, def: true, label: "Style directive",
+    says: { true: "Adds a line telling the model: style from the pictures, content from my words.",
+            false: "No extra line: the pictures and the prompt mix freely." },
     hint: "Adds the 'style from the refs, subjects from the text' sentence." },
   { tab: "subject", key: "isolate_refs", bool: true, def: false, label: "Isolate refs", vram: "high",
     hint: "Two-subject setups: stops the references reading each other. Builds the same "
