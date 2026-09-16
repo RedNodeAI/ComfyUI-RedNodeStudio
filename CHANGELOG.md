@@ -89,7 +89,10 @@ cheap to judge.
 - The Subject's Auto prompt reads in the order it runs: People, the engines,
   Each person's caption (how the engines combine for one person), then the
   Combined prompt at the end. The Combined prompt shows the people's captions
-  joined as the queue will send them before any queue has run
+  joined as the queue will send them before any queue has run. Both steps
+  carry a small flow of what goes in, how it is joined and what comes out:
+  the engines that are on, Append or Blend, one caption per person; then the
+  people by name, Joined or Rewrite with Ollama, into the prompt row
 - Rewrite into the prompt with these names, in the Combined prompt: at queue
   time Ollama merges the prompt row named under Inject into with the people's
   captions, using the names. Preview rewrite asks for it now and shows it; the

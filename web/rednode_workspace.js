@@ -750,6 +750,17 @@ css.textContent = `
 .rn-ws-sub.inner .rn-ws-subt{padding:5px 10px;font-size:11px;background:#1b1e23}
 .rn-ws-sub.inner .rn-ws-subt.cur{background:#233247;border-color:#4a8fe0;color:#fff}
 .rn-ws-peoplewarn{color:#f0c58a}
+/* a small flow diagram: what goes in, how it is joined, what comes out */
+.rn-ws-flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 8px;
+  background:#15171b;border:1px solid #2e333a;border-radius:6px}
+.rn-ws-flow .fc{font-size:12px;color:#e8ecf1;background:#22262c;border:1px solid #3a3f47;
+  border-radius:12px;padding:2px 9px;white-space:nowrap}
+.rn-ws-flow .fc.none{color:#7f8792;font-style:italic}
+.rn-ws-flow .op{font-size:12px;font-weight:700;color:#fff;background:#233247;
+  border:1px solid #4a8fe0;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.rn-ws-flow .op.llm{background:#3a2a10;border-color:#e0a84a}
+.rn-ws-flow .out{font-size:12px;font-weight:650;color:#9fe0b4;white-space:nowrap}
+.rn-ws-flow .sym{color:#6b7280;font-size:13px}
 .rn-ws-person{display:flex;gap:10px;align-items:flex-start;background:#15171b;
   border:1px solid #2e333a;border-radius:6px;padding:6px 8px}
 .rn-ws-person.off{opacity:.6}
@@ -3982,6 +3993,28 @@ function injectRowUI(node, sect, tabName) {
 }
 
 // The engines an Auto prompt box can run, in list order.
+// A one-line flow: chips joined by "+", an arrow, the join, an arrow, the result.
+function flowRow(inputs, op, opIsLlm, out, emptyText) {
+  const row = document.createElement("div");
+  row.className = "rn-ws-flow";
+  const add = (cls, text) => {
+    const e = document.createElement("span");
+    e.className = cls;
+    e.textContent = text;
+    row.appendChild(e);
+  };
+  if (!inputs.length) add("fc none", emptyText);
+  inputs.forEach((t, i) => {
+    if (i) add("sym", "+");
+    add("fc", t);
+  });
+  add("sym", "→");
+  add("op" + (opIsLlm ? " llm" : ""), op);
+  add("sym", "→");
+  add("out", out);
+  return row;
+}
+
 // The engines an Auto prompt box can run, lightest first.
 const AUTO_ENGINES = [["clipgen", "CLIP gen"], ["wd14", "WD14 tags"], ["florence", "Florence"],
                       ["ollama", "Ollama"], ["qwen", "QwenVL"], ["joy", "JoyCaption"]];
@@ -4602,8 +4635,27 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     shared.className = "rn-ws-card rn-ws-shared";
     const sh = document.createElement("div");
     sh.className = "ch";
-    sh.textContent = tabName === "subject" ? "EACH PERSON'S CAPTION" : "EVERY ENGINE";
+    sh.textContent = tabName === "subject" ? "STEP 1 · EACH PERSON'S CAPTION" : "EVERY ENGINE";
     shared.appendChild(sh);
+    {
+      const onNames = AUTO_ENGINES.filter(([k]) => a[k] && avail[k][0]).map(([, l]) => l);
+      const blendOk = a.combine === "blend" && a.ollama && autoStatus.ollama;
+      shared.appendChild(flowRow(
+        onNames,
+        blendOk ? "Blend with Ollama" : "Append",
+        blendOk,
+        tabName === "subject" ? "One caption per person" : "This tab's caption",
+        "No engine on"));
+      const sn = document.createElement("div");
+      sn.className = "rn-ws-note";
+      sn.textContent = (tabName === "subject"
+        ? "Generate, or a queue, runs every engine that is on over one person's picture. "
+        : "A queue runs every engine that is on over this tab's picture. ")
+        + (blendOk
+          ? "Blend then has Ollama rewrite their words into one caption."
+          : "Append keeps their words in order: the paragraphs, then the tag line.");
+      shared.appendChild(sn);
+    }
     const srow = document.createElement("div");
     srow.className = "rn-ws-row";
     srow.style.flexWrap = "wrap";
@@ -4764,14 +4816,31 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     res.className = "rn-ws-card rn-ws-resultcard";
     const rh = document.createElement("div");
     rh.className = "ch";
-    rh.textContent = tabName === "subject" ? "COMBINED PROMPT" : "RESULT";
+    rh.textContent = tabName === "subject" ? "STEP 2 · ALL PEOPLE TOGETHER" : "RESULT";
     res.appendChild(rh);
     if (tabName === "subject") {
+      const S2 = cfg.tabs.subject;
+      const meta2 = S2.people_meta || {};
+      const order2 = S2.images.length ? [S2.sel, ...(S2.extra_sel || [])] : [];
+      const onPeople = order2.map((idx, k) => {
+        const m = meta2[S2.images[idx]] || {};
+        const on = m.auto === undefined ? k === 0 : !!m.auto;
+        return on ? (m.name || `Person ${k + 1}`) : null;
+      }).filter(Boolean);
+      const target = a.inject_row ? `Into ${a.inject_row}` : "The subject prompt";
+      res.appendChild(flowRow(
+        onPeople,
+        a.rewrite ? "Rewrite with Ollama" : "Joined by name",
+        !!a.rewrite,
+        target,
+        "No one switched on"));
       const rn = document.createElement("div");
       rn.className = "rn-ws-note";
-      rn.textContent = "The people's captions together, as the queue sends them. With "
-                     + "Rewrite on, Ollama merges them into the Inject into row using "
-                     + "the names.";
+      rn.textContent = a.rewrite
+        ? "Ollama merges the prompt row with every person's caption, using the names, "
+          + "once, and the queue reuses it. Preview rewrite shows it now."
+        : "Each person's caption goes in under their name, one line each. Turn Rewrite "
+          + "on to have Ollama weave them into the prompt row instead.";
       res.appendChild(rn);
       const rw = boolBtn("Rewrite into the prompt with these names", "rewrite", "");
       // a per-tab switch, not a shared one: bind it to this tab's auto settings
