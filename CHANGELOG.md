@@ -201,6 +201,13 @@ cheap to judge.
 - Boosts off stops a Subject or Scene fidelity above 1.0 but keeps one below it,
   so Loose works with Boosts off. A fidelity below 1.0 still builds the bias
   matrix, and the console says so
+- Img2Img's Auto prompt has two tabs: I2I prompt (the source picture's caption,
+  as before) and Image to text. Image to text has Style, Subject and Scene side
+  tabs, each with its own gallery and auto prompt: every picked picture is
+  described and the words join the chosen prompt (Style, Subject and
+  Surroundings by default). The pictures never reach the model, so it works on
+  any rig, and it runs with the Img2Img tab switched off. Scene reads the
+  Background or the Situation. Right-click Send to reaches all three
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

@@ -115,7 +115,9 @@ Denoise is a full-width bar, and with several passes each one can have its own d
 own scale. RE-ANGLE re-shoots the source from another viewpoint with the multi-angle edit model,
 from three bands or from the Camera tab's studio, and a switch stops after the re-shot so the rig
 never enters VRAM beside the edit model. SWAP puts the Subject's face, head or whole person onto
-the picture before the pass finishes it.
+the picture before the pass finishes it. Its Auto prompt page also holds IMAGE TO TEXT: Style,
+Subject and Scene galleries whose pictures are only described in words, never sent to the model,
+so a look, a person or a place can steer any rig's prompt.
 
 ![The Paint tab in full screen: the mask, the result, and the paint settings](images/paint.webp)
 

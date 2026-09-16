@@ -532,6 +532,14 @@ css.textContent = `
 .rn-ws-choicelab{min-width:84px;font-weight:600;color:#c8ccd2}
 .rn-ws-moodpics .rn-ws-reads{flex:none}
 .rn-ws-moodpics .cap b{color:#c8ccd2;font-weight:600}
+.rn-ws-sidewrap{display:flex;gap:10px;align-items:flex-start}
+.rn-ws-siderail{display:flex;flex-direction:column;gap:6px;flex:none;width:118px;
+  position:sticky;top:0}
+.rn-ws-siderail .rn-ws-sidet{flex:none;justify-content:flex-start;padding:9px 10px}
+@media (max-width:560px){.rn-ws-sidewrap{flex-direction:column}
+  .rn-ws-siderail{flex-direction:row;width:auto;position:static}
+  .rn-ws-siderail .rn-ws-sidet{flex:1 1 0}}
+.rn-ws-sidemain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px}
 .rn-ws-says{margin:-2px 0 4px 2px;opacity:.75;font-size:11.5px}
 .rn-ws-bpreset{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#c8ccd2;
   cursor:pointer;font-size:12.5px;font-weight:600;padding:7px 12px}
@@ -1015,11 +1023,22 @@ function hiddenTabSet() {
 }
 
 // ---- config ----------------------------------------------------------------
-const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard"]);
+// IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only captioned, never
+// sent to the model, so they work on any rig (matching workspace.py)
+const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
+const TEXT_TABS_META = {
+  text_style: { label: "Style", hint: "Pictures whose look is described in words." },
+  text_subject: { label: "Subject", hint: "Pictures whose person is described in words." },
+  text_scene: { label: "Scene", hint: "Pictures whose place or situation is described in words." },
+};
+const MULTI_TAB_IDS = ["moodboard", ...TEXT_TAB_IDS];
+const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
+const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", ...TEXT_TAB_IDS]);
 // Galleries are grouped into named COLLECTIONS ("red dress", "castle set"…). The legacy
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py
 // and old workflows read exactly what they always did.
-const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard"];
+const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
+                      ...TEXT_TAB_IDS];
 // tabs that carry a built-in Prompt Converter, matching workspace.py
 const CONVERTER_TABS = ["i2i", "subject", "scene"];
 const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_style",
@@ -1044,7 +1063,7 @@ function normaliseAutoUi(value, defaultMode) {
   return a;
 }
 function normSel(name, sel, imagesLen) {
-  if (name === "moodboard") {
+  if (MULTI_TAB_IDS.includes(name)) {
     const list = Array.isArray(sel) ? sel : (typeof sel === "number" ? [sel] : []);
     return list.filter((i) => Number.isInteger(i) && i >= 0 && i < imagesLen);
   }
@@ -1080,14 +1099,15 @@ export function readCfg(node) {
   try { d = JSON.parse(w?.value || "{}"); } catch (e) { d = {}; }
   if (!d || typeof d !== "object") d = {};
   d.tabs = d.tabs && typeof d.tabs === "object" ? d.tabs : {};
-  for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard", "boost_mask", "edit_mask"]) {
+  for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
+                      ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
     const t = (d.tabs[name] = d.tabs[name] && typeof d.tabs[name] === "object" ? d.tabs[name] : {});
     t.images = Array.isArray(t.images) ? t.images : [];
-    if (name === "moodboard") t.sel = Array.isArray(t.sel) ? t.sel : (typeof t.sel === "number" ? [t.sel] : []);
+    if (MULTI_TAB_IDS.includes(name)) t.sel = Array.isArray(t.sel) ? t.sel : (typeof t.sel === "number" ? [t.sel] : []);
     else t.sel = typeof t.sel === "number" ? t.sel : 0;
     if (t.on === undefined) t.on = TAB_DEFAULT_ON.has(name);
-    const autoMode = name === "scene" ? "scene_view"
-                   : name === "moodboard" ? "style"
+    const autoMode = name === "scene" || name === "text_scene" ? "scene_view"
+                   : name === "moodboard" || name === "text_style" ? "style"
                    : name === "i2i" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode);
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
@@ -1523,7 +1543,7 @@ export function setupProblems(node, cfg) {
   const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
   // a row an auto prompt feeds has words by queue time, even with its box empty
   const fed = new Set();
-  for (const name of ["subject", "scene", "moodboard", "i2i"]) {
+  for (const name of AUTO_TAB_IDS) {
     const t = cfg.tabs?.[name];
     if (t?.on && t.auto?.on && t.auto.inject_row) fed.add(t.auto.inject_row);
   }
@@ -1634,7 +1654,7 @@ async function uploadFiles(node, tabName, files) {
         t.images.push(entry);                                // t.images IS the active collection
         // a first moodboard upload joins the batch by itself; an empty batch outputs
         // nothing, and "I added images" reading as "it works" hides that
-        if (tabName === "moodboard" && Array.isArray(t.sel) && !t.sel.length) {
+        if (MULTI_TAB_IDS.includes(tabName) && Array.isArray(t.sel) && !t.sel.length) {
           t.sel.push(t.images.length - 1);
           activeGroup(t, tabName).sel = t.sel;
         }
@@ -1661,6 +1681,9 @@ const SEND_TARGETS = [
   ["subject", "Subject (main)"],
   ["subject_person", "Subject (add a person)"],
   ["scene", "Scene"],
+  ["text_style", "Image to text: Style"],
+  ["text_subject", "Image to text: Subject"],
+  ["text_scene", "Image to text: Scene"],
 ];
 
 async function copyGalleryImage(entry) {
@@ -1693,7 +1716,7 @@ function sendToTab(node, target, entry) {
     return;
   }
   const t = node._rnCfg.tabs[target];
-  const multi = target === "moodboard";
+  const multi = MULTI_TAB_IDS.includes(target);
   let idx = t.images.indexOf(entry);
   if (idx < 0) { t.images.push(entry); idx = t.images.length - 1; }
   if (multi) { if (!t.sel.includes(idx)) t.sel = [...t.sel, idx]; }
@@ -2375,7 +2398,7 @@ function openGalleryMenu(node, tabName, entry, ev) {
   }
   // the standalone auto prompt: bake this image's caption right now, no queue.
   // Same cache keys as a real run, so the next queue's REUSE hits instantly.
-  if (["subject", "scene", "moodboard", "i2i"].includes(tabName)) {
+  if (AUTO_TAB_IDS.includes(tabName)) {
     const sep2 = document.createElement("div");
     sep2.className = "sep";
     const busy = !!node._rnAutoBusy;
@@ -2515,7 +2538,7 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
   coll.append(
     sel2,
     mkBtn("＋", "New collection.", () => namePrompt("New collection", "", (v) => {
-      if (!t.groups[v]) t.groups[v] = { images: [], sel: tabName === "moodboard" ? [] : 0 };
+      if (!t.groups[v]) t.groups[v] = { images: [], sel: MULTI_TAB_IDS.includes(tabName) ? [] : 0 };
       t.group = v;
       mirrorActive(t, tabName);
       writeCfg(node); render(node);
@@ -2549,7 +2572,8 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
   );
   const gAccents = { i2i: "#4a8fe0", subject: "#3f9e63", scene: "#b8493c",
                      moodboard: "#c98a2d", subject2: "#3f9e63",
-                     subject3: "#3f9e63" };
+                     subject3: "#3f9e63", text_style: "#c98a2d",
+                     text_subject: "#3f9e63", text_scene: "#b8493c" };
   const gcard = sectionCard(tabsLayout ? "GALLERY" : tabName === "i2i" ? "SOURCE" : "IMAGES",
     gAccents[tabName] || "#8fa8c8",
     (t.images?.length || 0) + " image(s)",
@@ -3984,7 +4008,8 @@ function injectRowUI(node, sect, tabName) {
   if (!a) return;
   if (typeof a.inject_row !== "string") a.inject_row = "";
   const defSlot = { subject: "subject", scene: "surroundings",
-                    moodboard: "light_and_colour", i2i: "subject" };
+                    moodboard: "light_and_colour", i2i: "subject",
+                    text_style: "style", text_subject: "subject", text_scene: "surroundings" };
   if (!INJECT_SLOT_OPTS.some(([v]) => v === a.inject_slot)) {
     a.inject_slot = defSlot[tabName] || "subject";
   }
@@ -4188,7 +4213,7 @@ const moodReadsOf = (t, entry) => {
 };
 
 function autoSection(node, body, tabName, { flat = false } = {}) {
-  if (!["subject", "scene", "moodboard", "i2i", "paint"].includes(tabName)) return;
+  if (![...AUTO_TAB_IDS, "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
   const isPaint = tabName === "paint";
   const a = isPaint ? cfg.paint.auto : cfg.tabs[tabName].auto;
@@ -4657,9 +4682,10 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     // Generate and its latest caption, the People card's row for a single picture
     // THE PICTURES, on the Moodboard: a row per batch picture, each choosing any mix
     // of Style, Subject and Situation, with its own Generate and a caption per read
-    if (tabName === "moodboard") {
-      const M = cfg.tabs.moodboard;
-      const meta = (M.pic_meta ||= {});
+    if (tabName === "moodboard" || TEXT_TAB_IDS.includes(tabName)) {
+      const isMoodCard = tabName === "moodboard";
+      const M = cfg.tabs[tabName];
+      const meta = isMoodCard ? (M.pic_meta ||= {}) : {};
       const idxs = M.random ? M.images.map((_, i) => i) : M.sel;
       const mc = document.createElement("div");
       mc.className = "rn-ws-card rn-ws-describe rn-ws-moodpics";
@@ -4671,6 +4697,9 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       mn.className = "rn-ws-note";
       mn.textContent = !idxs.length
         ? "No pictures in the batch yet. Pick them in the Gallery."
+        : !isMoodCard
+          ? "Every picked picture is described in words, and the words join the prompt. "
+            + "The pictures themselves never reach the model."
         : (M.random ? "Random is on: the picture rolled each run uses its own choice. " : "")
           + "Pick what each picture gives: Style is the look, Subject the person, "
           + "Situation what is happening. Each one on writes its own caption.";
@@ -4678,7 +4707,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       idxs.forEach((imgIdx, k) => {
         const entry = M.images[imgIdx];
         if (!entry) return;
-        const reads = moodReadsOf(M, entry);
+        const reads = isMoodCard ? moodReadsOf(M, entry) : [a.mode];
         const row = document.createElement("div");
         row.className = "rn-ws-person" + (reads.length ? "" : " off");
         row.dataset.moodpic = String(k);
@@ -4719,7 +4748,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         const capBtn = document.createElement("button");
         capBtn.className = "rn-ws-btn rn-ws-compact";
         capBtn.style.padding = "0 10px";
-        const busy = node._rnAutoBusy === "moodboard:" + entry;
+        const busy = node._rnAutoBusy === tabName + ":" + entry;
         capBtn.textContent = busy ? "Generating…" : "Generate";
         capBtn.disabled = !!node._rnAutoBusy || !reads.length;
         capBtn.title = reads.length
@@ -4727,13 +4756,13 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
             + "below. Saved beside the picture and reused by the next queue."
           : "Switch on Style, Subject or Situation first.";
         capBtn.onclick = async () => {
-          node._rnAutoBusy = "moodboard:" + entry;
+          node._rnAutoBusy = tabName + ":" + entry;
           render(node);
           try {
             for (const m of reads) {
               const key = `${entry}|${m}`;
               try {
-                const text = await runStandaloneAutoPrompt(node, "moodboard", entry,
+                const text = await runStandaloneAutoPrompt(node, tabName, entry,
                                                            { keepTab: true, mode: m });
                 (node._rnPersonCaps ||= {})[key] = text || "";
               } catch (e) {
@@ -4746,7 +4775,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
             render(node);
           }
         };
-        top.append(tag, nm, seg, capBtn);
+        top.append(...[tag, nm, isMoodCard ? seg : null, capBtn].filter(Boolean));
         pb.appendChild(top);
         if (!reads.length) {
           const cap = document.createElement("div");
@@ -4755,16 +4784,20 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                           + "reaches the render through the batch.";
           pb.appendChild(cap);
         }
-        for (const [v, label] of MOOD_READS) {
-          if (!reads.includes(v)) continue;
+        const capReads = isMoodCard ? MOOD_READS.filter(([v]) => reads.includes(v))
+                                    : [[a.mode, ""]];
+        for (const [v, label] of capReads) {
           const cap = document.createElement("div");
           cap.className = "cap";
           const text = readCaption(node, entry, v);
-          const b = document.createElement("b");
-          b.textContent = `${label}: `;
           const s = document.createElement("span");
           s.textContent = text || "No caption yet. Generate one, or queue a run.";
-          cap.append(b, s);
+          if (label) {
+            const b = document.createElement("b");
+            b.textContent = `${label}: `;
+            cap.appendChild(b);
+          }
+          cap.appendChild(s);
           if (text) {
             cap.style.cursor = "pointer";
             cap.title = "Click to copy.";
@@ -4775,10 +4808,35 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         row.append(im, pb);
         mc.appendChild(row);
       });
+      if (tabName === "text_scene") {
+        // the scene in words: the place, or what is happening in it
+        const srow = document.createElement("div");
+        srow.className = "rn-ws-row rn-ws-sceneread";
+        srow.style.flexWrap = "wrap";
+        const sl = document.createElement("span");
+        sl.className = "rn-ws-swlabel";
+        sl.textContent = "Take from the pictures";
+        const reads2 = [
+          ["scene_view", "Background", "The place: location, layout, light and camera. "
+                                       + "People are left out."],
+          ["scene_action", "Situation", "What is happening: the activity and where the "
+                                        + "people are. Nobody's looks are described."],
+        ];
+        const cur = reads2.find(([v]) => v === a.mode) || reads2[0];
+        const seg2 = segSwitch(reads2, cur[0], (v) => { a.mode = v; writeCfg(node); render(node); });
+        seg2.dataset.reads = tabName;
+        const sn = document.createElement("span");
+        sn.className = "rn-ws-note";
+        sn.style.flex = "1 1 200px";
+        sn.textContent = cur[2];
+        srow.append(sl, seg2, sn);
+        mc.appendChild(srow);
+      }
       sect.appendChild(mc);
     }
 
-    if (tabName !== "subject" && tabName !== "moodboard" && !isPaint) {
+    if (tabName !== "subject" && tabName !== "moodboard" && !TEXT_TAB_IDS.includes(tabName)
+        && !isPaint) {
       const entry = autoEntry(cfg, tabName);
       const pc = document.createElement("div");
       pc.className = "rn-ws-card rn-ws-picturecard";
@@ -12425,7 +12483,14 @@ function continueRow(node, t) {
 // it where there is one. The body's kept scroll position is keyed on this.
 function viewKeyOf(node, cur) {
   const p = node.properties || {};
-  if (cur === "i2i") return "i2i/" + (node._rnI2iSub || p.rn_i2i_sub || "source");
+  if (cur === "i2i") {
+    const sub = node._rnI2iSub || p.rn_i2i_sub || "source";
+    if (sub !== "auto") return "i2i/" + sub;
+    const inner = node._rnI2iAuto || p.rn_i2i_auto || "i2i";
+    return inner === "text"
+      ? "i2i/auto/text/" + (node._rnTextSide || p.rn_text_side || "text_style")
+      : "i2i/auto/i2i";
+  }
   if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
   if (cur === "moodboard") return "moodboard/" + (node._rnMbSub || p.rn_moodboard_sub || "gallery");
   if (cur === "identity") {
@@ -12472,11 +12537,108 @@ function i2iSubLit(cfg, id) {
   if ((id === "source" || id === "passes") && t.on && i2iSkipped(t)) return "skip";
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
-  if (id === "auto") return !!(t.on && t.auto?.on);
+  if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
   if (id === "reangle") return !!(t.on && t.reangle?.on && !t.prompt_only);
   if (id === "swap") return !!(t.on && t.swap?.on && !t.prompt_only);
   if (id === "converter") return !!t.on && convActive(t.conv);
   return false;
+}
+
+const textTabLit = (cfg, id) => {
+  const t = cfg.tabs[id];
+  return !!(t?.on && t.auto?.on && t.sel?.length);
+};
+
+function i2iAutoPage(node, body) {
+  const cfg = node._rnCfg;
+  const props = (node.properties ||= {});
+  const I = cfg.tabs.i2i;
+  let inner = node._rnI2iAuto || props.rn_i2i_auto || "i2i";
+  if (inner !== "i2i" && inner !== "text") inner = "i2i";
+  node._rnI2iAuto = inner;
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub inner";
+  for (const [id, label, lit, tip] of [
+    ["i2i", "I2I PROMPT", !!(I.on && I.auto?.on),
+     "Describes the source picture for the image to image pass."],
+    ["text", "IMAGE TO TEXT", TEXT_TAB_IDS.some((x) => textTabLit(cfg, x)),
+     "Pictures described in words only, for Style, Subject and Scene. Works on any model."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === inner ? " cur" : "");
+    b.dataset.inner = id;
+    b.title = tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnI2iAuto = id; props.rn_i2i_auto = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+  if (inner === "i2i") {
+    if (!I.on) body.appendChild(tabOffNote("Img2Img"));
+    autoSection(node, body, "i2i", { flat: true });
+    return;
+  }
+
+  let side = node._rnTextSide || props.rn_text_side || "text_style";
+  if (!TEXT_TAB_IDS.includes(side)) side = "text_style";
+  node._rnTextSide = side;
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-sidewrap";
+  const rail = document.createElement("div");
+  rail.className = "rn-ws-siderail";
+  for (const id of TEXT_TAB_IDS) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt rn-ws-sidet" + (id === side ? " cur" : "");
+    b.dataset.side = id;
+    b.title = TEXT_TABS_META[id].hint;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (textTabLit(cfg, id) ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = TEXT_TABS_META[id].label.toUpperCase();
+    b.append(lt, tx);
+    b.onclick = () => { node._rnTextSide = id; props.rn_text_side = id; render(node); };
+    rail.appendChild(b);
+  }
+  const main = document.createElement("div");
+  main.className = "rn-ws-sidemain";
+  const t = cfg.tabs[side];
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const on = document.createElement("button");
+  on.className = "rn-ws-sw" + (t.on ? " on" : "");
+  on.title = t.on ? "These pictures are described into the prompt. Click to switch off."
+                  : "Off: nothing here is described.";
+  on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = `Image to text: ${TEXT_TABS_META[side].label}`;
+  bar.append(on, nm);
+  for (const text of [
+    `${t.sel.length} of ${t.images.length} Picked`,
+    t.auto?.on ? "Auto prompt on" : "Auto prompt off",
+    t.auto?.inject_row ? `Into ${t.auto.inject_row}` : "Not injected",
+  ]) {
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  main.appendChild(bar);
+  const intro = document.createElement("div");
+  intro.className = "rn-ws-card rn-ws-note";
+  intro.textContent = "Words only: the pictures here are described by the engines below and "
+    + "the words join the prompt you pick under Inject into. The pictures never reach the "
+    + "model, so this works on any rig. Pick the pictures to use in the gallery.";
+  main.appendChild(intro);
+  if (!t.on) main.appendChild(tabOffNote(`Image to text: ${TEXT_TABS_META[side].label}`));
+  galleryBody(node, main, side, TEXT_TABS_META[side], { multi: true, layout: "tabs" });
+  autoSection(node, main, side, { flat: true });
+  wrap.append(rail, main);
+  body.appendChild(wrap);
 }
 
 function i2iTabs(node, body) {
@@ -12546,10 +12708,11 @@ function i2iTabs(node, body) {
                   + "Prompt only, so the source only donates its prompt.";
     body.appendChild(n);
   };
-  if (!t.on && sub !== "source") body.appendChild(tabOffNote("Img2Img"));
+  // Image to text works with Img2Img off, so the auto page says so on its own tab
+  if (!t.on && sub !== "source" && sub !== "auto") body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
   else if (sub === "passes") passesTab(node, body);
-  else if (sub === "auto") autoSection(node, body, "i2i", { flat: true });
+  else if (sub === "auto") i2iAutoPage(node, body);
   else if (sub === "reangle") {
     if (t.prompt_only) onlyNote("Re-angle");
     else reangleSection(node, body, "i2i", { flat: true });

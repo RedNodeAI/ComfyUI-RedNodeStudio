@@ -105,7 +105,7 @@ def rerun_reasons(cfg):
     cause it, so the answer is on screen instead of being guesswork.
     """
     why = []
-    for name in ("subject", "subject2", "subject3", "scene", "moodboard", "i2i"):
+    for name in IMAGE_TABS:
         t = cfg["tabs"].get(name) or {}
         if t.get("random") and t.get("on") and len(t.get("images") or []) > 1:
             why.append(f"the {name} tab's dice is on, so it picks a different image "
@@ -145,7 +145,7 @@ def vram_report(cfg, tabs, post_cfg):
     if mb.get("on") and isinstance(mb.get("sel"), list) and len(mb["sel"]) > 2:
         heavy.append(f"{len(mb['sel'])} moodboard refs are encoded together")
     engines = []
-    for name in ("subject", "scene", "moodboard", "i2i"):
+    for name in AUTO_TABS:
         a = tabs.get(name, {}).get("auto") or {}
         if not (a.get("on") and tabs[name].get("on")):
             continue
@@ -449,7 +449,13 @@ def delete_vision_prompt(name):
     with open(_vision_path(make=True), "w", encoding="utf-8") as f:
         json.dump({"version": 1, "prompts": user}, f, indent=2, ensure_ascii=False)
 
-IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard")
+# IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only ever captioned.
+# Their pictures never reach the model, so they work on any rig.
+TEXT_TABS = ("text_style", "text_subject", "text_scene")
+IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard") + TEXT_TABS
+# the tabs with an auto prompt, and the ones whose selection is a list
+AUTO_TABS = ("subject", "scene", "moodboard", "i2i") + TEXT_TABS
+MULTI_TABS = ("moodboard",) + TEXT_TABS
 
 
 def _presets_path(make=False):
@@ -629,8 +635,9 @@ def parse_config(config_json):
         images = [str(x) for x in t.get("images", []) if str(x).strip()] \
             if isinstance(t.get("images"), list) else []
         sel = t.get("sel", 0)
-        if name == "moodboard":
-            # the moodboard batches several refs, so its selection is a list
+        if name in MULTI_TABS:
+            # the moodboard batches several refs, and Image to text captions every
+            # picked picture, so their selection is a list
             sel = [int(i) for i in sel if isinstance(i, (int, float))] if isinstance(sel, list) else \
                   ([int(sel)] if isinstance(sel, (int, float)) else [])
             sel = [i for i in sel if 0 <= i < len(images)]
@@ -641,10 +648,10 @@ def parse_config(config_json):
                 sel = 0
             if not (0 <= sel < len(images)):
                 sel = 0
-        default_mode = {"scene": "scene_view", "moodboard": "style",
-                        "i2i": "i2i"}.get(name, "subject")
+        default_mode = {"scene": "scene_view", "moodboard": "style", "i2i": "i2i",
+                        "text_style": "style", "text_scene": "scene_view"}.get(name, "subject")
         tabs[name] = {
-            "on": bool(t.get("on", name in ("subject", "scene", "moodboard"))),
+            "on": bool(t.get("on", name in ("subject", "scene", "moodboard") + TEXT_TABS)),
             "images": images,
             "sel": sel,
             "mask": str(t.get("mask") or ""),
@@ -2626,13 +2633,13 @@ class RedNodeStudioWorkspace:
         # model while the sampler holds its own VRAM is what turns captioning from
         # slow into stuck. It is released again below.
         ga0 = cfg["auto"]
-        ollama_tabs = [n for n in ("subject", "scene", "moodboard", "i2i")
+        ollama_tabs = [n for n in AUTO_TABS
                        if tabs[n]["auto"]["on"] and tabs[n]["auto"]["ollama"]
                        and tabs[n]["on"]]
         run_keep_alive = max(300, int(ga0["keep_alive"])) if ollama_tabs else \
             int(ga0["keep_alive"])
         low_vram = bool(ga0.get("low_vram"))
-        captioning = [n for n in ("subject", "scene", "moodboard", "i2i")
+        captioning = [n for n in AUTO_TABS
                       if tabs[n]["on"] and tabs[n]["auto"]["on"] and tabs[n]["images"]
                       and any(tabs[n]["auto"][k] for k in ("ollama", "wd14", "joy", "qwen",
                                                            "florence"))]
@@ -2648,10 +2655,10 @@ class RedNodeStudioWorkspace:
             autoprompt.free_vram()
             print("[RedNode Workspace] low VRAM captioning: models unloaded before the "
                   "auto prompt engines run (%s)" % ", ".join(captioning), flush=True)
-        for tab_name in ("subject", "scene", "moodboard", "i2i"):
+        for tab_name in AUTO_TABS:
             t = tabs[tab_name]
             a = t["auto"]
-            wired = [wired_map[tab_name]] if wired_map[tab_name] else []
+            wired = [wired_map[tab_name]] if wired_map.get(tab_name) else []
             if not (a["on"] and t["on"] and (t["images"] or wired)):
                 # a wired caption is text you plumbed in by hand, so it ALWAYS
                 # passes through, even with this tab's auto prompt (or the tab itself)
@@ -2694,6 +2701,12 @@ class RedNodeStudioWorkspace:
                            for _m in mood_reads(_pmeta.get(t["images"][_i]), a["mode"])]
                 if not targets and wired:
                     targets = [(0, None, False, a["mode"])]
+            if tab_name in TEXT_TABS and entry:
+                # IMAGE TO TEXT: every picked picture, each loading its own
+                _idx = chosen_index(tab_name)
+                _batch = _idx if isinstance(_idx, list) else [_idx]
+                targets = [(_k, t["images"][_i], True, a["mode"])
+                           for _k, _i in enumerate(_batch)]
             ga = cfg["auto"]
 
             # every tensor engine needs the image, not just WD14 — gating on WD14 alone
@@ -2774,6 +2787,9 @@ class RedNodeStudioWorkspace:
                     prompts[tab_name] = _caps[0][2]           # one person: as it always was
                 else:
                     prompts[tab_name] = "\n".join("%s: %s" % p for p in subject_people)
+            elif tab_name in TEXT_TABS:
+                people_caps.update({"%s|%s" % (e, m): c for _, e, c, m in _caps})
+                prompts[tab_name] = "\n".join(c for _, _, c, _m in _caps)
             elif tab_name == "moodboard" and targets and targets[0][1]:
                 # the panel shows each read's caption under its picture
                 people_caps.update({"%s|%s" % (e, m): c for _, e, c, m in _caps})
@@ -2808,7 +2824,7 @@ class RedNodeStudioWorkspace:
             tabs[n]["auto"]["on"] and (tabs[n]["auto"]["wd14"] or tabs[n]["auto"]["ollama"]
                                        or tabs[n]["auto"]["joy"] or tabs[n]["auto"]["qwen"]
                                        or tabs[n]["auto"]["florence"])
-            for n in ("subject", "scene", "moodboard", "i2i"))
+            for n in AUTO_TABS)
         # STYLE LOCK: the moodboard's prompt is the style authority. Style vocabulary in
         # the subject and scene prompts that the mood prompt does not itself use is
         # scrubbed (or LLM-rewritten), so an image-to-image source cannot smuggle its
@@ -2816,7 +2832,7 @@ class RedNodeStudioWorkspace:
         lock = cfg["auto"]["style_lock"]
         if lock != "off" and prompts.get("moodboard"):
             mood_text = prompts["moodboard"]
-            for tab_name in ("subject", "scene", "i2i"):
+            for tab_name in ("subject", "scene", "i2i", "text_subject", "text_scene"):
                 if not prompts.get(tab_name):
                     continue
                 if lock == "rewrite":
@@ -2840,7 +2856,7 @@ class RedNodeStudioWorkspace:
         injections = {}
         rewrite_people = {}          # row name -> the named people to merge into it
         injections_before = {}       # the same, for captions that go ahead of the typed words
-        for _tn in ("subject", "scene", "moodboard", "i2i"):
+        for _tn in AUTO_TABS:
             _a = tabs[_tn].get("auto") or {}
             _cap = (prompts.get(_tn) or "").strip()
             if (_tn == "subject" and _a.get("on") and _a.get("inject_row")
@@ -3856,7 +3872,7 @@ def standalone_autoprompt(config_json, tab_name, entry, mode=None):
     loaded text encoder, which only exists during execution; it is skipped here
     and reported back.
     """
-    if tab_name not in ("subject", "scene", "moodboard", "i2i", "paint"):
+    if tab_name not in AUTO_TABS + ("paint",):
         raise ValueError(f"the {tab_name!r} tab has no auto prompt")
     cfg = parse_config(config_json)
     a = cfg["paint"]["auto"] if tab_name == "paint" else cfg["tabs"][tab_name]["auto"]
