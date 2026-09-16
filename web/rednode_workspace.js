@@ -796,12 +796,17 @@ css.textContent = `
 .rn-ws-passcard .pn{flex:none;width:22px;font-size:17px;color:#6b7280;align-self:center;
   text-align:center}
 .rn-ws-passcard .pb{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0}
-.rn-ws-pline{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
-.rn-ws-pdial{flex:1 1 170px;display:flex;flex-direction:column;gap:2px;min-width:0}
-.rn-ws-pdial .k{font-size:11.5px;color:#9aa0a8}
+.rn-ws-pline{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+/* each setting its own little box: a coloured edge, its name in that colour, and the
+   value in a pill right beside its own bar, so the three never read as one */
+.rn-ws-pdial{flex:1 1 170px;display:flex;flex-direction:column;gap:4px;min-width:0;
+  background:#15171b;border:1px solid #2e333a;border-left:3px solid #6b7280;
+  border-radius:6px;padding:6px 10px}
+.rn-ws-pdial .k{font-size:13px;font-weight:650;color:#9aa0a8}
 .rn-ws-pdial .bar{display:flex;align-items:center;gap:8px}
 .rn-ws-pdial input[type=range]{flex:1;min-width:0;height:22px}
-.rn-ws-pdial .v{font-size:12px;color:#e8ecf1;min-width:70px;text-align:right}
+.rn-ws-pdial .v{font-size:12.5px;font-weight:650;color:#e8ecf1;background:#0f1114;
+  border:1px solid #33373d;border-radius:4px;padding:1px 7px;white-space:nowrap;flex:none}
 .rn-ws-pline2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .rn-ws-pline2 .dim{font-size:11.5px;color:#7f8792;margin-right:auto}
 .rn-ws-pline2 select{min-width:150px}
@@ -12312,8 +12317,10 @@ function passesTab(node, body, kind = "i2i") {
     const pdial = (label, value, v, i, cls) => {
       const w = document.createElement("div");
       w.className = "rn-ws-pdial " + cls;
+      w.style.borderLeftColor = v.accent;
       const k = document.createElement("span");
       k.className = "k";
+      k.style.color = v.accent;
       k.textContent = label;
       const barEl = document.createElement("div");
       barEl.className = "bar";
