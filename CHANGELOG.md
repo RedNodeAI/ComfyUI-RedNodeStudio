@@ -328,6 +328,18 @@ cheap to judge.
   rig runs once more over the swapped picture so the face sits in its light.
   The Run tab plans Swap and Swap polish boxes for it, and the Img2Img tab
   lights for it with the tab itself off
+- The VRAM estimate counts the Qwen edit engine when Swap or Re-angle will
+  run: its model, text encoder and VAE, and its working memory for the two
+  pictures it reads. It is a stage of its own, so the peak is the larger of
+  the render and the edit stage, and Hold holds the weights under the limit
+  less the larger working memory. The line on the Run tab names both stages
+- The estimate counts a Your own nodes rig: its files are read from the
+  loaders wired into its RedNode Rig Model node, through any patches between.
+  Such a rig used to count as working memory only, so Auto thought a 12 GB
+  model run fitted anywhere
+- The edit model leaves the card once Swap and Re-angle are done, and stays
+  in RAM for the next run. It used to sit on the card for the rest of the run
+  and into the next one
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a

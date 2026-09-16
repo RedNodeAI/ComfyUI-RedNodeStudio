@@ -66,6 +66,8 @@ def hold_mode(cfg):
 def _peak_and_work(estimate):
     """(peak GB, working GB) from estimate_vram's dict, a bare peak, or nothing."""
     if isinstance(estimate, dict):
+        if estimate.get("work") is not None:
+            return float(estimate.get("peak") or 0) or None, float(estimate["work"])
         work = sum(float(g) for n, g in estimate.get("parts", [])
                    if "Working memory" in str(n) or "boost matrix" in str(n))
         return float(estimate.get("peak") or 0) or None, work

@@ -617,6 +617,100 @@ def _file_gb(folders, name):
 
 # rough working memory for a diffusion transformer at batch 1, per megapixel sampled
 WORK_GB_PER_MP = 1.8
+# the Qwen edit model (Swap, Re-angle) per megapixel of each picture it reads
+EDIT_WORK_GB_PER_MP = 3.0
+
+# the widgets a loader names its file in, per socket of a RedNode Rig Model node
+RIG_FILE_KEYS = {
+    "model": ("unet_name", "ckpt_name"),
+    "clip": ("clip_name", "clip_name1", "clip_name2", "clip_name3", "ckpt_name"),
+    "vae": ("vae_name", "ckpt_name"),
+}
+
+
+def _add_rig_file(rec, key, value):
+    if key == "ckpt_name":
+        rec["checkpoint"] = value
+    elif key == "unet_name":
+        rec.setdefault("unet", value)
+    elif key == "vae_name":
+        rec.setdefault("vae", value)
+    elif value not in rec.setdefault("clips", []):
+        rec["clips"].append(value)
+
+
+def graph_rig_files(prompt):
+    """{rig name: {unet, checkpoint, clips, vae}} for "Your own nodes" rigs: the
+    files named by the loaders wired into each RedNode Rig Model node. The Models
+    tab holds no file names for such a rig, so its size was invisible."""
+    out = {}
+    if not isinstance(prompt, dict):
+        return out
+    for n in prompt.values():
+        if not isinstance(n, dict) or n.get("class_type") != "RedNodeRigModel":
+            continue
+        ins = n.get("inputs") or {}
+        rig = (ins.get("rig").strip() if isinstance(ins.get("rig"), str) else "") or "My rig"
+        rec = out.setdefault(rig, {})
+        for sock, keys in RIG_FILE_KEYS.items():
+            queue, seen = [ins.get(sock)], set()
+            while queue and len(seen) < 40:
+                link = queue.pop(0)
+                if not (isinstance(link, list) and len(link) == 2):
+                    continue
+                nid = str(link[0])
+                up = prompt.get(nid)
+                if nid in seen or not isinstance(up, dict):
+                    continue
+                seen.add(nid)
+                uin = up.get("inputs") or {}
+                hits = [(k, uin[k]) for k in keys if isinstance(uin.get(k), str) and uin[k]]
+                if hits:
+                    for k, v in hits:
+                        _add_rig_file(rec, k, v)
+                    continue
+                queue.extend(v for v in uin.values() if isinstance(v, list))
+    return out
+
+
+def _edit_stage(cfg, render_px, render_batch, i2i_run):
+    """(name, parts, total GB, working GB) for the Qwen edit engine when Swap or
+    Re-angle will run, else None. It loads after or before the render, so the
+    run's peak is the larger of the two stages, not their sum."""
+    it = cfg["tabs"]["i2i"]
+    if it.get("prompt_only"):
+        return None
+    sw = it.get("swap") or {}
+    ra = it.get("reangle") or {}
+    src_px = float(cfg["resize"] or 1024) ** 2 * 0.75
+    jobs = []
+    if i2i_run and ra.get("on"):
+        jobs.append(("Re-angle", ra, src_px, 1, 1))
+    if sw.get("on"):
+        if sw.get("target") == "render":
+            jobs.append(("Swap", sw, render_px, render_batch, 2))
+        elif i2i_run:
+            jobs.append(("Swap", sw, src_px, 1, 2))
+    if not jobs:
+        return None
+    best = None
+    for name, sc, px, batch, pics in jobs:
+        parts = []
+        for label, folders, key in (
+                ("Edit model", ("diffusion_models", "unet", "unet_gguf"), "unet"),
+                ("Edit text encoder", ("text_encoders", "clip"), "clip"),
+                ("Edit VAE", ("vae",), "vae")):
+            g = _file_gb(folders, sc.get(key))
+            if g:
+                parts.append(["%s (%s)" % (label, name), round(g, 1)])
+        work = EDIT_WORK_GB_PER_MP * (px / 1e6) * pics * batch
+        parts.append(["Edit working memory (%s, %.1f MP, %d pictures%s)"
+                      % (name, px / 1e6, pics, ", batch of %d" % batch if batch > 1 else ""),
+                      round(work, 1)])
+        total = sum(g for _n, g in parts)
+        if best is None or total > best[2]:
+            best = (name, parts, total, work)
+    return best
 
 
 def vae_images(t):
@@ -627,11 +721,14 @@ def vae_images(t):
     return t
 
 
-def estimate_vram(cfg):
-    """{"peak": GB, "parts": [[name, GB], ...]} for the Workspace's own render, from
-    the model files it will load and the size it works at. Rough on purpose: it
-    decides whether Auto holds, and it is shown so the number is not a mystery.
-    None when the Workspace does not render (external sampler, no rig)."""
+def estimate_vram(cfg, rig_files=None):
+    """{"peak": GB, "parts": [[name, GB], ...], "work": GB, "stages": [[name, GB]]}
+    for the Workspace's own run, from the model files it will load and the size it
+    works at. Rough on purpose: it decides whether Auto holds, and it is shown so
+    the number is not a mystery. `rig_files` names the files of "Your own nodes"
+    rigs (graph_rig_files). None when the Workspace does not render (external
+    sampler, no rig)."""
+    rig_files = rig_files if isinstance(rig_files, dict) else {}
     M = cfg["models"]
     rigs = M.get("rigs") or []
     if not rigs or M.get("sampler_mode") != "internal":
@@ -645,18 +742,31 @@ def estimate_vram(cfg):
         if run.get("rig_custom") else [active["name"]]
     used = [r for r in rigs if r["name"] in names] or [active]
 
+    def files(r):
+        # a rig of your own nodes names its files in the workflow, not on the tab
+        if r.get("kind") == "node":
+            got = rig_files.get(str(r.get("node") or r.get("name") or "").strip()) or {}
+            return {"unet": got.get("unet") or r.get("unet"),
+                    "checkpoint": got.get("checkpoint") or r.get("checkpoint"),
+                    "clips": got.get("clips") or ([r["clip"]] if r.get("clip") else []),
+                    "vae": got.get("vae") or r.get("vae")}
+        return {"unet": r.get("unet"), "checkpoint": r.get("checkpoint"),
+                "clips": [r["clip"]] if r.get("clip") else [], "vae": r.get("vae")}
+
     def model_gb(r):
-        return (_file_gb(("diffusion_models", "unet", "unet_gguf"), r.get("unet"))
-                or _file_gb(("checkpoints",), r.get("checkpoint")))
+        f = files(r)
+        return (_file_gb(("diffusion_models", "unet", "unet_gguf"), f["unet"])
+                or _file_gb(("checkpoints",), f["checkpoint"]))
 
     parts = []
     mg = max((model_gb(r), r["name"]) for r in used)
     if mg[0]:
         parts.append(["Model (%s)" % mg[1], round(mg[0], 1)])
-    te = _file_gb(("text_encoders", "clip"), active.get("clip"))
+    af = files(active)
+    te = sum(_file_gb(("text_encoders", "clip", "clip_gguf"), c) for c in af["clips"])
     if te:
         parts.append(["Text encoder", round(te, 1)])
-    vae = _file_gb(("vae",), active.get("vae"))
+    vae = _file_gb(("vae",), af["vae"])
     if vae:
         parts.append(["VAE", round(vae, 1)])
     # the size it works at: the Latent tab's canvas, or the resize for a source
@@ -686,8 +796,18 @@ def estimate_vram(cfg):
     if boosted:
         tokens = px / 256 * (1 + nrefs)
         parts.append(["Fidelity boost matrix", round(tokens * tokens * 4 / 1024 ** 3, 1)])
-    peak = round(sum(g for _n, g in parts), 1)
-    return {"peak": peak, "parts": parts}
+    render = round(sum(g for _n, g in parts), 1)
+    render_work = sum(g for n, g in parts if "Working memory" in n or "boost matrix" in n)
+    out = {"peak": render, "parts": parts, "work": round(render_work, 1),
+           "stages": [["Render", render]]}
+    edit = _edit_stage(cfg, px, batch, i2i_run)
+    if edit:
+        name, eparts, etotal, ework = edit
+        out["parts"] = parts + eparts
+        out["stages"].append([name, round(etotal, 1)])
+        out["peak"] = round(max(render, etotal), 1)
+        out["work"] = round(max(render_work, ework), 1)
+    return out
 
 
 def _normalise_taps(raw):
@@ -2329,7 +2449,7 @@ class RedNodeStudioWorkspace:
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
         from . import vram_hold as _hold
         try:
-            _est = estimate_vram(cfg)
+            _est = estimate_vram(cfg, graph_rig_files(prompt))
         except Exception as _ee:
             print("[RedNode Workspace] VRAM estimate failed: %s" % _ee, flush=True)
             _est = None
@@ -2652,6 +2772,19 @@ class RedNodeStudioWorkspace:
                 except Exception as exc:
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
                           % exc, flush=True)
+
+        def _edit_off():
+            # the Qwen edit model is done for this run: off the card, kept in RAM
+            try:
+                from . import reangle as _ra_off
+                if _ra_off.unload_from_card():
+                    print("[RedNode Workspace] the edit model left the card for the rest "
+                          "of the run (kept in RAM)", flush=True)
+            except Exception as exc:
+                print("[RedNode Workspace] could not move the edit model off the card: %s"
+                      % exc, flush=True)
+        if not (_sw.get("on") and _sw.get("target") == "render"):
+            _edit_off()
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
         # THE I2I PAIR takes over from here on: the built-in sampler, the paint
         # render, the sampler_name and scheduler sockets, and through those the
@@ -4042,6 +4175,7 @@ class RedNodeStudioWorkspace:
                     _run.end("swap", "Swap", "error", error=str(exc)[:200])
                     print("[RedNode Workspace] swap failed: %s; the render is kept as it is"
                           % exc, flush=True)
+                _edit_off()
                 _pv = vae if vae is not None else rig_vae
                 if _swapped is not None and _sw["polish"]:
                     if _mode != "internal" or model is None or positive is None or _pv is None:
@@ -4354,7 +4488,7 @@ try:
             data = await request.json()
             cfg = parse_config(str(data.get("config") or "{}"))
             from . import vram_hold as _vh
-            est = estimate_vram(cfg)
+            est = estimate_vram(cfg, data.get("rig_files"))
             lim = _vh.limit_gb(cfg)
             return web.json_response({
                 "estimate": est, "card": _vh.card_gb(cfg), "limit": lim,

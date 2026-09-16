@@ -192,6 +192,37 @@ def load_engine(unet, clip_name, vae_name, loras, shift, cfg_norm, tag="Re-angle
     return model, _BASE_CACHE["clip"], _BASE_CACHE["vae"]
 
 
+def unload_from_card():
+    """The edit engine off the card, still held in RAM, so a run that used it does
+    not keep 20 GB of VRAM for the rest of the run and into the next. Returns how
+    many loaded models went."""
+    try:
+        import comfy.model_management as mm
+    except Exception:
+        return 0
+    models = [m for m in (_MODEL_CACHE["model"], _BASE_CACHE["model"]) if m is not None]
+    parts = [getattr(x, "patcher", None) for x in (_BASE_CACHE["clip"], _BASE_CACHE["vae"])
+             if x is not None]
+    parts = [p for p in parts if p is not None]
+    if not models and not parts:
+        return 0
+    gone = 0
+    for i in range(len(mm.current_loaded_models) - 1, -1, -1):
+        lm = mm.current_loaded_models[i]
+        m = getattr(lm, "model", None)
+        if m is None:
+            continue
+        hit = any(m is p for p in parts) or any(
+            m is t or (hasattr(m, "is_clone") and m.is_clone(t)) for t in models)
+        if hit:
+            lm.model_unload()
+            mm.current_loaded_models.pop(i)
+            gone += 1
+    if gone:
+        mm.soft_empty_cache()
+    return gone
+
+
 def _load_engine(rc):
     return load_engine(rc["unet"], rc["clip"], rc["vae"],
                        [(rc["lora_light"], rc["lora_light_strength"]),

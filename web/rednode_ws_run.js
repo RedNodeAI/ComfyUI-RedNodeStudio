@@ -302,14 +302,66 @@ export function estimateText(cfg, d) {
       : (mode === "on" ? ` Under the ${lim} GB limit; Hold is On, so it holds anyway.`
          : ` Under the ${lim} GB limit, so it runs at full speed.`);
   }
-  return `Estimated peak about ${e.peak.toFixed(1)} GB (${parts}).${verdict} `
+  // a run with an edit stage peaks at the larger stage, not the sum of the parts
+  const st = Array.isArray(e.stages) && e.stages.length > 1
+    ? ` at its largest stage (${e.stages.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ")})`
+    : "";
+  return `Estimated peak about ${e.peak.toFixed(1)} GB${st} (${parts}).${verdict} `
          + "Captioners and the Detailer are not counted.";
+}
+
+// "Your own nodes" rigs name their files in the loaders wired into a RedNode Rig
+// Model node, not on the Models tab; the estimate reads them from the canvas
+// (matching workspace.graph_rig_files, which reads the queued workflow)
+const RIG_FILE_KEYS = {
+  model: ["unet_name", "ckpt_name"],
+  clip: ["clip_name", "clip_name1", "clip_name2", "clip_name3", "ckpt_name"],
+  vae: ["vae_name", "ckpt_name"],
+};
+function upstreamOf(n, input) {
+  const g = n?.graph;
+  if (!g || input?.link == null) return null;
+  const l = g.links?.get?.(input.link) ?? g.links?.[input.link];
+  return l ? (g.getNodeById?.(l.origin_id) ?? null) : null;
+}
+export function graphRigFiles() {
+  const out = {};
+  for (const n of liveNodes()) {
+    if (n.type !== "RedNodeRigModel") continue;
+    const rig = String(n.widgets?.find((w) => w.name === "rig")?.value || "").trim() || "My rig";
+    const rec = (out[rig] ||= {});
+    for (const [sock, keys] of Object.entries(RIG_FILE_KEYS)) {
+      const queue = [upstreamOf(n, (n.inputs || []).find((i) => i.name === sock))];
+      const seen = new Set();
+      while (queue.length && seen.size < 40) {
+        const u = queue.shift();
+        if (!u || seen.has(u)) continue;
+        seen.add(u);
+        const hits = (u.widgets || []).filter((w) => keys.includes(w.name)
+          && typeof w.value === "string" && w.value);
+        if (hits.length) {
+          for (const w of hits) {
+            if (w.name === "ckpt_name") rec.checkpoint = w.value;
+            else if (w.name === "unet_name") rec.unet ||= w.value;
+            else if (w.name === "vae_name") rec.vae ||= w.value;
+            else if (!(rec.clips ||= []).includes(w.value)) rec.clips.push(w.value);
+          }
+          continue;
+        }
+        for (const inp of u.inputs || []) queue.push(upstreamOf(u, inp));
+      }
+    }
+  }
+  return out;
 }
 
 let _estTimer = null;
 function fetchEstimate(node, line) {
+  let files = {};
+  try { files = graphRigFiles(); } catch (e) { files = {}; }
   const cfgStr = JSON.stringify(node._rnCfg || {});
-  if (_estCache.key === cfgStr && _estCache.data) {
+  const key = cfgStr + JSON.stringify(files);
+  if (_estCache.key === key && _estCache.data) {
     line.textContent = estimateText(node._rnCfg, _estCache.data);
     return;
   }
@@ -318,10 +370,10 @@ function fetchEstimate(node, line) {
     try {
       const res = await api.fetchApi("/rednode/vram_estimate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: cfgStr }),
+        body: JSON.stringify({ config: cfgStr, rig_files: files }),
       });
       const d = await res.json();
-      _estCache.key = cfgStr;
+      _estCache.key = key;
       _estCache.data = d;
       line.textContent = estimateText(node._rnCfg, d);
     } catch (e) { /* the line stays empty: an estimate is a nicety */ }
