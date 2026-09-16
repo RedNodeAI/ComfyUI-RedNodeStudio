@@ -13508,18 +13508,39 @@ const SUBJECT_BOOST_PRESETS = [
          identity_start: 0, identity_end: 1, isolate_refs: true, boost_blocks: "all" } },
 ];
 
-function boostPresetRow(node, cfg) {
+// The Scene's one dial, the same way. Below 1 weakens the scene's pull (the pack's
+// anime and real recipes use 0.47 on the subject for that); at or below 0 it is
+// clamped to almost nothing, so the slider stops at 0.
+const SCENE_BOOST_PRESETS = [
+  { id: "loose", label: "Loose",
+    tip: "The place is only a hint: the prompt is free to redraw it. Below 1 weakens the "
+       + "scene's pull.",
+    v: { scene_fidelity: 0.5 } },
+  { id: "normal", label: "Normal",
+    tip: "The default: the scene guides the place with no extra pull, and no boost matrix "
+       + "is built, so it is the lightest on VRAM.",
+    v: { scene_fidelity: 1 } },
+  { id: "close", label: "Close",
+    tip: "Stays near the scene picture's layout and look. Costs more VRAM.",
+    v: { scene_fidelity: 2 } },
+  { id: "copy", label: "Copy the scene",
+    tip: "Rebuilds the scene picture closely, the pack's anime and real conversion value. "
+       + "Costs more VRAM and follows the prompt less.",
+    v: { scene_fidelity: 3.2 } },
+];
+
+function boostPresetRow(node, cfg, presets = SUBJECT_BOOST_PRESETS) {
   const val = (k) => {
     if (cfg.dials[k] !== undefined) return cfg.dials[k];
     return DIALS.find((d) => d.key === k)?.def;
   };
-  const cur = SUBJECT_BOOST_PRESETS.find((p) =>
+  const cur = presets.find((p) =>
     Object.entries(p.v).every(([k, v]) => val(k) === v));
   const wrap = document.createElement("div");
   wrap.style.cssText = "display:flex;flex-direction:column;gap:6px;margin:4px 0 6px";
   const row = document.createElement("div");
   row.className = "rn-ws-bpresets";
-  for (const p of SUBJECT_BOOST_PRESETS) {
+  for (const p of presets) {
     const b = document.createElement("button");
     b.className = "rn-ws-bpreset" + (cur === p ? " cur" : "");
     b.dataset.preset = p.id;
@@ -13586,6 +13607,7 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
     (touched ? `: ${touched} set` : ": all at defaults");
   sect.appendChild(head);
   if (flat && tabId === "subject") sect.appendChild(boostPresetRow(node, cfg));
+  if (flat && tabId === "scene") sect.appendChild(boostPresetRow(node, cfg, SCENE_BOOST_PRESETS));
 
   if (open) {
     for (const d of dials) {

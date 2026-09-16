@@ -119,6 +119,9 @@ cheap to judge.
   place, people left out), Situation (what is happening: the activity and
   where the people are, nobody's looks described, a new caption mode) or
   Style (only the look). It replaces the View / Style dropdown
+- Scene Boosts has presets for Scene fidelity too: Loose (0.5, the place is a
+  hint), Normal (1.0, the default and lightest), Close (2.0) and Copy the
+  scene (3.2)
 - The Prompt Converter's labels and choices start with a capital
 - A Reset button on the Latent status bar puts back a square 1024 canvas,
   batch 1, random off and a single pass with nothing varied per pass
