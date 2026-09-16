@@ -246,7 +246,29 @@ def filter_tags(tags_line, mode):
 # ---------------------------------------------------------------------------
 # Ollama, plain HTTP
 # ---------------------------------------------------------------------------
+def ollama_url_allowed(url):
+    """Ollama lives on this machine or the LAN. The URL can come from an HTTP
+    request, so refuse anything else (public hosts, 169.254 metadata, file:)."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(str(url))
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return False
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 80)
+    except (OSError, ValueError):
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if ip.is_link_local or not (ip.is_loopback or ip.is_private):
+            return False
+    return bool(infos)
+
+
 def _http_json(url, payload=None, timeout=TIMEOUT):
+    if not ollama_url_allowed(url):
+        raise ValueError(f"Ollama URL must be a local or LAN address: {url}")
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode() if payload is not None else None,
         headers={"Content-Type": "application/json"},

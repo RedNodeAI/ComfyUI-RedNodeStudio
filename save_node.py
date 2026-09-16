@@ -1381,9 +1381,10 @@ class RedNodeSave:
                     f.write(text)
                 extra = cfg["prompts_folder"].strip()
                 if extra:
-                    mirror = os.path.join(out_dir,
-                                          *[p for p in resolve(extra, ctx)
-                                            .replace("\\", "/").split("/") if p])
+                    # slug every segment like build_path does: this is widget input
+                    segs = [_slug(p, "") for p in resolve(extra, ctx)
+                            .replace("\\", "/").split("/") if p.strip()]
+                    mirror = os.path.join(out_dir, *[s for s in segs if s])
                     os.makedirs(mirror, exist_ok=True)
                     with open(os.path.join(mirror, os.path.basename(base) + ".txt"),
                               "w", encoding="utf-8") as f:
