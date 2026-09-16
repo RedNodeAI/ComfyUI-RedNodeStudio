@@ -293,8 +293,8 @@ def run_rig(ctx, model, seed, steps, cfg, sampler, scheduler, positive, negative
             raise RuntimeError("the rig %r returned a picture, and there is no VAE to turn it "
                                "back into a latent for the next step" % rig)
         t = img
-        while t.ndim > 4:
-            t = t[0]
+        if t.ndim > 4:                          # a video VAE's [batch, frames, ...]
+            t = t.reshape((-1,) + tuple(t.shape[-3:]))
         out = dict(latent) if isinstance(latent, dict) else {}
         out.pop("noise_mask", None)
         out["samples"] = vae.encode(t[:, :, :, :3])

@@ -74,8 +74,8 @@ def preview_size(images, long_edge=DONE_MAX):
     try:
         import torch.nn.functional as F
         t = images
-        while t.ndim > 4:
-            t = t[0]
+        if t.ndim > 4:                          # a video VAE's [batch, frames, ...]
+            t = t.reshape((-1,) + tuple(t.shape[-3:]))
         h, w = int(t.shape[1]), int(t.shape[2])
         s = float(long_edge) / max(h, w)
         if s >= 1.0:

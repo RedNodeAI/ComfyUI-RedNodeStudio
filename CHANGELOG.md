@@ -327,6 +327,11 @@ cheap to judge.
   anything that failed or passed through are logged too, failures as warnings
 - Full screen from the Run tab's picture closes again (the Close button and
   Esc did nothing when the Review sub-tab had not been opened yet)
+- A batch rendered on Krea 2 in the Workspace keeps every picture. Krea 2's
+  VAE is a video VAE, and the decode kept only the first picture of what it
+  handed back, so a batch of two became one before the Detailer, Post FX and
+  the save ever saw it. The same fix covers a pass that changes model family,
+  a rig's own sampler chain, and the Live Preview's finished frame
 - A SeedVR2 upscale pass keeps every picture of a batch. SeedVR2 is a video
   upscaler and read a batch as one clip, so a batch of two came back as one
   picture; each picture now goes through on its own

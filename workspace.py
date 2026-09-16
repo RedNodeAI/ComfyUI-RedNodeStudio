@@ -617,6 +617,14 @@ def _file_gb(folders, name):
 WORK_GB_PER_MP = 1.8
 
 
+def vae_images(t):
+    """A decode as IMAGE [N, H, W, C]. A video VAE (Krea 2's Wan) hands back
+    [batch, frames, H, W, C]; taking [0] kept the first picture of a batch."""
+    if t.ndim > 4:
+        t = t.reshape((-1,) + tuple(t.shape[-3:]))
+    return t
+
+
 def estimate_vram(cfg):
     """{"peak": GB, "parts": [[name, GB], ...]} for the Workspace's own render, from
     the model files it will load and the size it works at. Rough on purpose: it
@@ -3901,9 +3909,7 @@ class RedNodeStudioWorkspace:
                                     "rig's VAE, and there is no VAE to decode it with first"
                                     % (_p + 1, _rig_p or rig_name))
                             else:
-                                _pix = _lat_vae.decode(_sm0)
-                                while _pix.ndim > 4:
-                                    _pix = _pix[0]
+                                _pix = vae_images(_lat_vae.decode(_sm0))
                                 _mv = {k_: v_ for k_, v_ in _out.items() if k_ != "noise_mask"}
                                 _mv["samples"] = _vae_p.encode(_pix[:, :, :, :3])
                                 _out = _mv
@@ -3976,8 +3982,7 @@ class RedNodeStudioWorkspace:
                                       "(%s); decoding it whole" % _de, flush=True)
                         if _img is None:
                             _img = _v.decode(_s)
-                        while _img.ndim > 4:
-                            _img = _img[0]
+                        _img = vae_images(_img)
                         _shot_images.append(_img)
                         _run.end("decode", "Decode")
                     _v = _v_run
