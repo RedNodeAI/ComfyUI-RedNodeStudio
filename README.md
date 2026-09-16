@@ -8,7 +8,7 @@ the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
-**59 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**62 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -52,7 +52,7 @@ built-in one existed.
 
 ## The Workspace
 
-Fourteen tabs, in four groups. The strip sits on the panel and the panel sits on the node; press
+Thirteen tabs, in four groups. The strip sits on the panel and the panel sits on the node; press
 the full screen button and the same panel takes the whole window. The socket tuck, the plug on the
 row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
 forty sockets is no taller than its panel.
@@ -73,19 +73,29 @@ pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock K
 scheduler socket is handed simple when a rig names one of those. A diffusion model file goes
 through the loader the rig names: by file name, a .gguf through ComfyUI-GGUF and anything else
 through the standard loader, or INT8 W8A8 outright through ComfyUI-INT8-Fast when that pack is
-installed; the file picker lists those packs' files beside the standard ones. The footer carries
-the UI scale and the presets cog; the resize long edge and the studio preset are on the Advanced
-tab.
+installed; the file picker lists those packs' files beside the standard ones. A rig can also be
+your own nodes: name it on RedNode Rig Model, Rig Inputs and Rig Result, and every pass on that rig
+samples through your graph, with no wire to the Workspace. A Krea 2 rig carries an Official Krea 2
+model switch, and the identity edit warns until it is set. The tab is laid out by purpose: a Rigs
+bar, then Files and Sampling side by side, the Seed across the bottom. The footer carries the UI
+scale and the presets cog; the resize long edge and the studio preset are on the Advanced tab.
 
 **Run.** Queue the workflow and watch it. Generate sits beside Full or Draft (Draft makes the
-Detailer and the Post chain pass the picture through for fast rerolls) and the VRAM limit, which
-clamps the expensive dials for a smaller card. Below them: a box per stage (captions, encode, each
-pass, decode, Detailer, Post FX, Save) with its state, time and step count; the picture forming;
-a VRAM chart with model loads and unloads marked and the models on the card now; and a log of what
-is happening in plain words. When the run is done the live picture shows the finished one. The
-Review sub-tab keeps every finished picture from this Workspace like an Image Review node, and
-the Stages sub-tab shows the last run's Stage Taps like a Stage View node. The Save sub-tab
-holds RedNode Save's settings: switched on, the Workspace files every finished picture itself.
+Detailer and the Post chain pass the picture through for fast rerolls) and the VRAM limit, your
+card's size from 8 GB to 32 GB+, or Free range. Under them the run's estimated peak, worked out
+from the model files it will load, the size it works at and, for Swap and Re-angle, the edit
+engine as a stage of its own. Hold is Auto, On or Off: Auto keeps the run under the limit only
+when the estimate says it must, so a run that fits keeps its speed, and holding streams the
+weights through the card instead of loading them whole. Below: a box per stage (captions, encode,
+each pass, decode, Swap, Detailer, Post FX, Save) with its state, time and step count; the picture
+forming, with a batch's frames as a strip under it; a VRAM chart with model loads and unloads
+marked and the models on the card now; and a log of what is happening in plain words, every
+Detailer pass and paint pass named with what it did. A box or a line opens the page that decides
+it, the finished picture opens full screen with the Review's menu, and History under the log
+reopens any run of the session. The Review sub-tab keeps every finished picture from this
+Workspace like an Image Review node, the Stages sub-tab shows the last run's Stage Taps like a
+Stage View node, and the Save sub-tab holds RedNode Save's settings: switched on, the Workspace
+files every finished picture itself.
 
 **Detailer.** The RedNode Studio Detailer's passes, run by the Workspace after the render and
 before Post FX when switched on, so a single Workspace renders, details, grades and files. A
@@ -93,8 +103,10 @@ Detailer, Post Process or Save node already in an older workflow steps aside for
 Workspace did.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
-the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain
-box for any other model. The frame's Camera section has a Camera words switch that stops every
+a Frame box, the prompt frame editor with Style, Subject, Surroundings and Light and colour and the
+framing dial between them, or a Plain box for any other model. Each writing box keeps its saved
+versions behind a Presets button, and an Anything else box under the frame takes raw text: Auto
+sort files it into the boxes, Rewrite rewrites the boxes in place. The frame's Camera section has a Camera words switch that stops every
 camera sentence it writes, shot size, height stop and the studio's paragraph alike, and the Camera
 tab's switch strips the studio's paragraph from the queued prompt as well as the LoRAs and the path. The auto prompt captions the references through a local vision model
 (Ollama, WD14, JoyCaption, QwenVL or Florence-2, one Florence model and task shared by every tab),
@@ -130,8 +142,11 @@ how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same s
 Denoise is a full-width bar, and with several passes each one can have its own denoise and its
 own scale. RE-ANGLE re-shoots the source from another viewpoint with the multi-angle edit model,
 from three bands or from the Camera tab's studio, and a switch stops after the re-shot so the rig
-never enters VRAM beside the edit model. SWAP puts the Subject's face, head or whole person onto
-the picture before the pass finishes it. Its Auto prompt page also holds IMAGE TO TEXT: Style,
+never enters VRAM beside the edit model. SWAP puts a face, head or whole person onto the picture: the Subject's, another picked person's,
+or a picture from Swap's own gallery. It works on the source before the pass, or on the new
+render, a Latent tab render too, with a polish pass by the rig afterwards; a Fast switch runs it
+on the Lightning LoRA, quick phrase buttons build its prompt, and both stages show their steps on
+the Run tab and run the edit model on PyTorch attention, so SageAttention does not break them. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
 
@@ -142,8 +157,11 @@ whichever renderer you point it at: a rig from the Models tab, the pack's own Pa
 outside chain through Paint Out and Paint In. Auto-mask the subject or the background rather than
 painting by hand, paint in colour to steer the fill, and run the low-denoise chain as passes in
 one Generate. While it samples, the picture forms over the result pane, step by step, at a frame
-size the tab chooses. Every result stays in a history, and one click sends the keeper through the
-post chain and into the save tree.
+size the tab chooses. Every result stays in a history with a full screen viewer of its own, and
+one click sends the keeper through the post chain and into the save tree. Blend sits beside
+Feather, the Detailer's dial for how much of the repaint goes back under the mask. Use last result
+can take the picture from before Post FX, so grain and grade never land under the brush, and the
+Subject, Scene and Moodboard reference toggles follow the Model choice's rig.
 
 ![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
 
@@ -152,12 +170,15 @@ each showing what is in use. Subject is one gallery where you pick the people in
 first is the main subject, and the others follow as Person 2, 3 and on (more than three still
 runs, with a warning that faces may blend). Scene is a place rebuilt as in-context latents.
 Subject and Scene each have Gallery, Boosts, Auto prompt and Converter tabs; the Subject boosts
-apply to every person. Masks holds the subject boost mask, which rides into the identity edit
+apply to every person. Scene has a window, from and until, and a Words only switch that captions
+the picture without sending it as a reference; Boosts off keeps a fidelity set below 1. Masks holds the subject boost mask, which rides into the identity edit
 and is sized against the main subject's picture. To change part of a picture in place, use
 the Paint tab.
 
 **Moodboard.** Batches several pictures into one style signal. Gallery, Boosts and Auto prompt
-tabs sit under a status bar, and Boosts has one-click presets from A hint to Outfit transfer. Right-click a picture in any
+tabs sit under a status bar, and Boosts has one-click presets from A hint to Outfit transfer. Its
+Auto prompt reads every picture as Style, Subject or Situation and injects the words into that
+slot of the prompt frame. Right-click a picture in any
 gallery for the gallery menu.
 
 ![The Post tab: saved effects, the chain list on the left, the selected effect's editor on the right](images/post-fx.webp)
@@ -231,7 +252,9 @@ Three kinds of pass:
 Duplicate a pass with the button beside its delete and nudge one number, which is how a chain
 gets built. Group titles fold and switch a set of passes at once. Premade layouts ship, the face
 identity chain among them, and your own save by name. Taps record the input, every pass and the
-output into a Stage View strip, so a chain can be read step by step.
+output into a Stage View strip, so a chain can be read step by step. A batch goes through every
+pass one picture at a time, SeedVR2 included, and the Run tab's log names each pass with what it
+did.
 
 ## Watching a render
 
@@ -630,7 +653,9 @@ a minute and a half per image. Krea 2 is a quality-first model rather than a fas
 
 For low VRAM: set resize to 1024, keep to one reference where you can, turn the fidelity dials off
 or set boost blocks to `all`, leave the captioner unload default on, and use smaller Ollama models.
-The Workspace has a VRAM tier button in its footer that clamps the expensive dials for you.
+The Run tab's VRAM limit is your card's size: it holds the expensive dials to what that card can
+take, estimates the run's peak from the files it will load, and Hold keeps the weights under the
+line when the estimate says they must be.
 
 **RedNode Free VRAM** is the other half of that. Put it in the chain before a second big model
 loads, and the first one is unloaded at that exact point rather than when the driver runs out of

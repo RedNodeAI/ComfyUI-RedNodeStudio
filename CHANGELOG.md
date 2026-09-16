@@ -6,9 +6,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.4.0** - 2026-09-14
 
-The sampler learned some tricks, the Detailer grew four kinds of pass, the
-Post tab became a list beside one editor, and a Draft switch makes a seed
-cheap to judge.
+The Workspace grew a Run tab and now renders, details, grades and files on
+its own; a rig can be your own nodes; the VRAM limit is your card's size, with
+an estimated peak and an automatic hold; Swap works on any render; the
+Detailer grew four kinds of pass; the Post tab became a list beside one
+editor; and a Draft switch makes a seed cheap to judge. The 1.3.1 security
+fixes are in.
 
 ### Previews
 
