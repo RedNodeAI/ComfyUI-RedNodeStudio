@@ -4,6 +4,19 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.3.1** - 2026-09-16
+
+A security fix. Please update.
+
+- Civitai LoRA downloads keep only the bare file name, only take .safetensors
+  files, and can no longer write outside your loras folder. A Civitai version
+  that only has a .ckpt or .pt file now has to be downloaded by hand
+- The Save node's prompts folder always stays inside the output folder
+- NovelAI vibe encoding only reads files from the input folder
+- Auto Prompt and Prompt Sort only talk to Ollama on this PC or your local
+  network
+- Uploading a .naiv4vibe file on the NAI panel works again
+
 **1.3.0** - 2026-09-13
 
 Watching the picture form, the Detailer as a proper list, and a handful of
