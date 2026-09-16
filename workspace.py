@@ -449,6 +449,11 @@ def delete_vision_prompt(name):
     with open(_vision_path(make=True), "w", encoding="utf-8") as f:
         json.dump({"version": 1, "prompts": user}, f, indent=2, ensure_ascii=False)
 
+# the tab names the Run tab's log uses
+RUN_TAB_NAMES = {"subject": "Subject", "scene": "Scene", "moodboard": "Moodboard",
+                 "i2i": "Img2Img", "text_style": "Image to text Style",
+                 "text_subject": "Image to text Subject", "text_scene": "Image to text Scene"}
+
 # IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only ever captioned.
 # Their pictures never reach the model, so they work on any rig.
 TEXT_TABS = ("text_style", "text_subject", "text_scene")
@@ -2168,6 +2173,9 @@ class RedNodeStudioWorkspace:
         # nodes (rn_rig_<id>). They only order the run; the records are read by name.
         latent_in = latent
         cfg = parse_config(config)
+        # the Run tab's feed (run_events.py): a new run, then each stage as it goes
+        from . import run_events as _run
+        _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
         # prompt's CLIP gen and everything after read `clip`, so a fill that arrived
         # just before the LoRA block left them seeing None. A wired input always wins.
@@ -2195,6 +2203,7 @@ class RedNodeStudioWorkspace:
         # Randomize re-rolls all of it together.
         run_seed = (_random.getrandbits(48) if cfg["models"]["seed_random"]
                     else cfg["models"]["seed"])
+        _run.info(seed=int(run_seed), rig=rig_name or "")
         # the panel's "Use last queued" and "Copy last seed" read this: the
         # run's seed goes out as an event the moment it is decided
         try:
@@ -2656,8 +2665,11 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] low VRAM captioning: could not unload the "
                       "models (%s)" % _ue, flush=True)
             autoprompt.free_vram()
+            _run.note("Low VRAM captioning: models unloaded before the captioners", "unload")
             print("[RedNode Workspace] low VRAM captioning: models unloaded before the "
                   "auto prompt engines run (%s)" % ", ".join(captioning), flush=True)
+        if captioning:
+            _run.begin("captions", "Captions", tabs=list(captioning))
         for tab_name in AUTO_TABS:
             t = tabs[tab_name]
             a = t["auto"]
@@ -2807,12 +2819,18 @@ class RedNodeStudioWorkspace:
                 # the caption itself is only echoed when asked for: it is your
                 # writing about your picture, and a console is a public place
                 # the moment a screenshot is taken
+                if tab_name in captioning:
+                    _run.note("%s caption made (%d words)"
+                              % (RUN_TAB_NAMES.get(tab_name, tab_name),
+                                 len(prompts[tab_name].split())))
                 if cfg["dials"].get("echo_prompts", True):
                     print(f"[RedNode Workspace] auto prompt ({tab_name}/{a['mode']}): "
                           f"{prompts[tab_name][:100]}...", flush=True)
                 else:
                     print(f"[RedNode Workspace] auto prompt ({tab_name}/{a['mode']}): "
                           f"{len(prompts[tab_name])} characters", flush=True)
+        if captioning:
+            _run.end("captions", "Captions")
         # hand the VRAM back if that is what you asked for; holding it was only
         # ever to get through this run's tabs on one load
         if ollama_tabs and (int(ga0["keep_alive"]) <= 0 or low_vram):
@@ -3298,8 +3316,11 @@ class RedNodeStudioWorkspace:
                   "community mixes; render on the official Turbo, or mark the rig "
                   "official on the Models tab if it is."
                   % _rigs_now[cfg["models"]["active"]]["name"], flush=True)
-        if clip is not None and not _stage_only and (
-                _mode == "internal" or (_prow or {}).get("text", "").strip()):
+        _enc_on = bool(clip is not None and not _stage_only and (
+            _mode == "internal" or (_prow or {}).get("text", "").strip()))
+        if _enc_on:
+            _run.begin("encode", "Encode", krea2=bool(_rig_is_krea2))
+        if _enc_on:
             try:
                 _enc_clip = lora_clip if lora_clip is not None else clip
                 if _rig_is_krea2:
@@ -3325,6 +3346,7 @@ class RedNodeStudioWorkspace:
                 _enc_err = exc
                 print("[RedNode Workspace] built-in encode failed: %s" % exc,
                       flush=True)
+            _run.end("encode", "Encode", "error" if _enc_err is not None else "done")
         # THE EMBEDDED SAMPLER: comfy core's common_ksampler with this rig's five
         # settings, then the VAE decode, so the whole render is one node and an
         # image output. A latent from the tabs (i2i, edit) keeps its denoise; a
@@ -3638,6 +3660,8 @@ class RedNodeStudioWorkspace:
                                                 "pass %d on the rig %r could not encode the "
                                                 "prompt with that rig's own text encoder: %s"
                                                 % (_p + 1, _rig_p, _pe)) from _pe
+                                        _run.note("Pass %d on %s: another text encoder, "
+                                                  "prompts encoded again" % (_p + 1, _rig_p))
                                         print("[RedNode Workspace] %s pass %d: the rig %r has "
                                               "another text encoder, so the prompts are "
                                               "encoded again with it (%s)"
@@ -3692,6 +3716,8 @@ class RedNodeStudioWorkspace:
                                 _mv["samples"] = _vae_p.encode(_pix[:, :, :, :3])
                                 _out = _mv
                                 _moved = True
+                                _run.note("Pass %d on %s: latent moved to its VAE"
+                                          % (_p + 1, _rig_p))
                                 print("[RedNode Workspace] %s pass %d: the rig %r has "
                                       "another VAE, so the latent is decoded and encoded "
                                       "again with it" % (_pass_what, _p + 1, _rig_p),
@@ -3706,6 +3732,20 @@ class RedNodeStudioWorkspace:
                         _rig_rec = (next((r for r in cfg["models"]["rigs"]
                                           if r.get("name") == _rig_p), None)
                                     if _rig_p else _ar) or {}
+                        _pkey = "pass%d" % (_p + 1)
+                        _plabel = "Pass %d · %s" % (
+                            _p + 1, "Refine" if _p > 0
+                            else ("Generate" if _pass_what == "latent" else "Img2Img"))
+                        try:
+                            _psz = [int(_out["samples"].shape[-1]) * 8,
+                                    int(_out["samples"].shape[-2]) * 8]
+                        except Exception:
+                            _psz = None
+                        _run.begin(_pkey, _plabel, steps=int(_steps_p),
+                                   denoise=round(float(_dnp), 2),
+                                   rig=_rig_p or rig_name or "", size=_psz,
+                                   shot=(_si + 1 if _si is not None
+                                         and len(_shot_list) > 1 else None))
                         with _rigc.using(_rigc.rig_for(_rig_rec), prompt,
                                          clip=_clip_p, vae=_vae_p):
                             _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
@@ -3714,12 +3754,14 @@ class RedNodeStudioWorkspace:
                                 denoise=_dnp, dials=_dials_p,
                                 sigmas=(_segs[_p] if _cont else None),
                                 disable_noise=bool(_cont and _p > 0))
+                        _run.end(_pkey, _plabel)
                     _last_out = _out
                     # the last pass's VAE decodes: after a pass on another family the
                     # latent is in that rig's space
                     _v_run = _v
                     _v = _lat_vae if _lat_vae is not None else _v
                     if _v is not None:
+                        _run.begin("decode", "Decode")
                         # the same courtesy the encode gets: past roughly 2
                         # megapixels a whole decode is a VRAM spike that reads as
                         # a hang, and a climbing scale reaches that on the last
@@ -3743,6 +3785,7 @@ class RedNodeStudioWorkspace:
                         while _img.ndim > 4:
                             _img = _img[0]
                         _shot_images.append(_img)
+                        _run.end("decode", "Decode")
                     _v = _v_run
                 result_latent_out = _last_out
                 if _v is None and not _shot_images:
@@ -3761,6 +3804,7 @@ class RedNodeStudioWorkspace:
                 _samp_err = exc
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)
+                _run.fail_active(exc)
 
         # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
         # queued THIS node with a run token stamped into the config copy. The pass

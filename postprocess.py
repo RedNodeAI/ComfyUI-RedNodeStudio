@@ -2508,12 +2508,19 @@ class RedNodePostProcess:
         return json.dumps(cfg, sort_keys=True)
 
     def run(self, image, prompt=None):
+        from . import run_events as _re
+        return _re.tracked("post", "Post FX")(self._run)(image, prompt)
+
+    def _run(self, image, prompt=None):
+        from . import run_events as _re
         remember_source(image)
         got = workspaces_from_prompt(prompt)
         cfg, ws_raw = (got if got else (None, {}))
         if not cfg or not any(cfg[n].get("on") for n in ORDER):
+            _re.skip("post", "Post FX", "no effects switched on")
             return (image,)
         if isinstance(ws_raw, dict) and ws_raw.get("draft"):
+            _re.skip("post", "Post FX", "Draft is on")
             print("[RedNode Post] the Workspace's Draft switch is on; the chain is skipped "
                   "and the picture passes through", flush=True)
             return (image,)

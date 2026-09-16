@@ -580,6 +580,8 @@ def _sam3_mask(image, target, threshold, sam_model="", precision=""):
         return None, "SAM3 failed on %r: %s" % (target, exc)
 
 
+from . import run_events as _run_events
+
 class RedNodeStudioDetailer:
     @classmethod
     def INPUT_TYPES(cls):
@@ -648,6 +650,7 @@ class RedNodeStudioDetailer:
         except Exception:
             pass
 
+    @_run_events.tracked("detailer", "Detailer")
     def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
         self._rn_prompt = prompt              # a rig's own sampler chain reads it
@@ -656,6 +659,7 @@ class RedNodeStudioDetailer:
         if image is None:
             print("[RedNode Detailer] no image arrived (paint run or external "
                   "sampler), passes skipped", flush=True)
+            _run_events.skip("detailer", "Detailer", "no image arrived")
             return (_ws.blocked(), "no image arrived, passes skipped")
         cfg = parse_pipeline(config)
         self._rn_uid = unique_id          # the Live Preview stream's tag for this node
@@ -663,6 +667,7 @@ class RedNodeStudioDetailer:
                   if s["on"] and s["type"] != "title"]
         report = []
         if not stages:
+            _run_events.skip("detailer", "Detailer", "no passes switched on")
             return (image, "no passes configured")
         try:
             ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
@@ -674,6 +679,7 @@ class RedNodeStudioDetailer:
             line = ("draft: the Workspace's Draft switch is on, every pass skipped and "
                     "the frame passed through")
             print("[RedNode Detailer] " + line, flush=True)
+            _run_events.skip("detailer", "Detailer", "Draft is on")
             self._notify(unique_id, -1, len(cfg["stages"]), "end")
             return (image, line)
         import random as _random
@@ -696,6 +702,8 @@ class RedNodeStudioDetailer:
         out = image
         for i, (card_idx, s) in enumerate(stages, 1):
             self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
+            _run_events.progress("detailer", "Detailer", current=i, of=len(stages),
+                                 what=str(s.get("title") or s["type"]))
             tag = "%d/%d %s" % (i, len(stages), s["type"])
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
                      sam_precision=cfg["sam_precision"])

@@ -1273,6 +1273,11 @@ class RedNodeSave:
                    "moving between ComfyUI and other front ends.")
 
     def save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None):
+        from . import run_events as _re
+        return _re.tracked("save", "Save")(self._save)(
+            images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo)
+
+    def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None):
         # an empty run (external mode, or a paint-only queue) passes None through
         # Review: file nothing, quietly, rather than TypeError inside the writer
         if images is None:
