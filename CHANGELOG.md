@@ -112,6 +112,9 @@ cheap to judge.
   lightest on VRAM), Pose only and Several people. A preset sets every
   subject dial at once and switches the dials on; the dials stay editable,
   and the row reads Custom once they no longer match
+- Scene, Img2Img and Moodboard auto prompts have a Picture card at the top:
+  the picture being captioned, its name, a Generate button that captions it
+  now, and its latest caption
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,

@@ -4569,6 +4569,75 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       sect.appendChild(dc);
     }
 
+    // THE PICTURE, on the other gallery tabs: the one being captioned, with its own
+    // Generate and its latest caption, the People card's row for a single picture
+    if (tabName !== "subject" && !isPaint) {
+      const entry = autoEntry(cfg, tabName);
+      const pc = document.createElement("div");
+      pc.className = "rn-ws-card rn-ws-picturecard";
+      const ph = document.createElement("div");
+      ph.className = "ch";
+      ph.textContent = "PICTURE";
+      pc.appendChild(ph);
+      if (!entry) {
+        const n0 = document.createElement("div");
+        n0.className = "rn-ws-note";
+        n0.textContent = "No picture picked yet. Pick one in the Gallery.";
+        pc.appendChild(n0);
+      } else {
+        const row = document.createElement("div");
+        row.className = "rn-ws-person";
+        const im = document.createElement("img");
+        im.src = thumbUrl(entry, 120);
+        im.alt = "";
+        im.title = entry;
+        const pb = document.createElement("div");
+        pb.className = "pb";
+        const top = document.createElement("div");
+        top.className = "top";
+        const nm = document.createElement("span");
+        nm.className = "tag";
+        nm.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;"
+                         + "white-space:nowrap;color:#e8ecf1";
+        nm.textContent = parseName(entry).filename;
+        const capBtn = document.createElement("button");
+        capBtn.className = "rn-ws-btn rn-ws-compact rn-ws-piccap";
+        capBtn.style.padding = "0 10px";
+        const busy = node._rnAutoBusy === tabName + ":" + entry;
+        capBtn.textContent = busy ? "Generating…" : "Generate";
+        capBtn.disabled = !!node._rnAutoBusy;
+        capBtn.title = "Caption this picture now with the engines below, without a queue. "
+                     + "The caption is saved beside the picture and reused by the next queue.";
+        capBtn.onclick = async () => {
+          try {
+            node._rnAutoBusy = tabName + ":" + entry;
+            render(node);
+            const text = await runStandaloneAutoPrompt(node, tabName, entry, { keepTab: true });
+            (node._rnPersonCaps ||= {})[entry] = text || "";
+          } catch (e) {
+            (node._rnPersonCaps ||= {})[entry] = `Could not caption: ${e.message}`;
+          } finally {
+            node._rnAutoBusy = null;
+            render(node);
+          }
+        };
+        top.append(nm, capBtn);
+        const cap = document.createElement("div");
+        cap.className = "cap";
+        const text = personCaption(node, entry);
+        cap.textContent = text || "No caption yet. Generate one, or queue a run.";
+        if (text) {
+          cap.style.cursor = "pointer";
+          cap.title = "Click to copy.";
+          cap.onclick = () => navigator.clipboard?.writeText?.(text);
+        }
+        pb.append(top, cap);
+        row.append(im, pb);
+        pc.appendChild(row);
+      }
+      sect.appendChild(pc);
+    }
+
     const cols = document.createElement("div");
     cols.className = "rn-ws-cols";
     const list = document.createElement("div");
