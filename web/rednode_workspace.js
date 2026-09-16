@@ -4650,28 +4650,40 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         row.append(im, pb);
         pc.appendChild(row);
       }
-      if (tabName === "scene") {
-        // WHAT THE SCENE GIVES: the place, what is going on, or only the look
-        const SCENE_READS = [
+      // WHAT THE PICTURE GIVES: Scene reads the place, what is going on, or only the
+      // look; the Moodboard reads the look, the person, or what is going on
+      const READS = {
+        scene: ["Take from the scene", [
           ["scene_view", "Background", "The place: location, layout, light and camera. "
                                        + "People are left out, only 'a person'."],
           ["scene_action", "Situation", "What is happening: the activity, where the people "
                                         + "are and what they do. Nobody's looks are described."],
           ["scene_style", "Style", "Only the look: palette, lighting, texture and rendering."],
-        ];
+        ]],
+        moodboard: ["Take from the pictures", [
+          ["style", "Style", "Only the look: palette, lighting, texture and rendering."],
+          ["subject", "Subject", "The person: face, hair, build, clothing and accessories. "
+                                 + "No place, light or pose."],
+          ["scene_action", "Situation", "What is happening: the activity, where the people "
+                                        + "are and what they do. Nobody's looks are described."],
+        ]],
+      };
+      if (READS[tabName]) {
+        const [readLabel, reads] = READS[tabName];
+        const cur = reads.find(([v]) => v === a.mode) || reads[0];
         const srow = document.createElement("div");
         srow.className = "rn-ws-row rn-ws-sceneread";
         srow.style.flexWrap = "wrap";
         const sl = document.createElement("span");
         sl.className = "rn-ws-swlabel";
-        sl.textContent = "Take from the scene";
-        const seg = segSwitch(SCENE_READS.map(([v, l, tip]) => [v, l, tip]),
-          SCENE_READS.some(([v]) => v === a.mode) ? a.mode : "scene_view",
+        sl.textContent = readLabel;
+        const seg = segSwitch(reads, cur[0],
           (v) => { a.mode = v; writeCfg(node); render(node); });
+        seg.dataset.reads = tabName;
         const sn = document.createElement("span");
         sn.className = "rn-ws-note";
         sn.style.flex = "1 1 200px";
-        sn.textContent = (SCENE_READS.find(([v]) => v === a.mode) || SCENE_READS[0])[2];
+        sn.textContent = cur[2];
         srow.append(sl, seg, sn);
         pc.appendChild(srow);
       }

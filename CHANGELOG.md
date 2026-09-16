@@ -175,6 +175,9 @@ cheap to judge.
   in-place edits, with a denoise. A painted edit mask in an older workflow is
   ignored; a MASK wired into edit_mask_in still goes out with its latent. The
   Subject boost mask card opens by itself
+- The Moodboard's Picture card chooses what its auto prompt takes from the
+  pictures, like the Scene's: Style (the default, only the look), Subject (the
+  person's traits and clothing) or Situation (what is happening)
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
