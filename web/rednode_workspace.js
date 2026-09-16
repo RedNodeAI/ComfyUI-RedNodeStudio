@@ -4290,7 +4290,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       nm.textContent = label;
       const st = document.createElement("span");
       st.className = "st";
-      st.textContent = !ok ? (key === "ollama" ? "not reachable" : "not installed") : "";
+      st.textContent = !ok ? (key === "ollama" ? "Not reachable" : "Not installed") : "";
       erow.append(sw, nm, st);
       erow.onclick = () => {
         node._rnAutoEngine = key;
@@ -10800,11 +10800,11 @@ function latentBody(node, body) {
   (v) => { L.source = v; writeCfg(node); render(node); });
   bar.append(on, nm, srcBtn);
   for (const text of [
-    L.source === "input" ? "wired latent" : L.random ? "random size"
+    L.source === "input" ? "Wired latent" : L.random ? "Random size"
       : `${eff(L.w)} × ${eff(L.h)}`,
-    L.source === "input" || L.random ? "" : (L.aspect || "custom"),
-    `batch ${L.batch}`,
-    nP > 1 ? `${nP} passes` : "single pass",
+    L.source === "input" || L.random ? "" : (L.aspect || "Custom"),
+    `Batch ${L.batch}`,
+    nP > 1 ? `${nP} Passes` : "Single pass",
   ]) {
     if (!text) continue;
     const c = document.createElement("span");
@@ -11479,6 +11479,8 @@ function continueRow(node, t) {
 const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PROMPT"],
                   ["reangle", "RE-ANGLE"], ["swap", "SWAP"], ["converter", "CONVERTER"]];
 
+const capFirst = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
+
 function convActive(c) {
   return !!(c && c.on !== false && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
@@ -11549,12 +11551,12 @@ function i2iTabs(node, body) {
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
   for (const text of [
-    t.canvas === "image" ? "wired image" : t.canvas === "latent" ? "wired latent"
-      : `${t.images.length} image${t.images.length === 1 ? "" : "s"}`,
-    t.prompt_only ? "prompt only"
-      : i2iSkipped(t) ? "passes skipped"
-      : npass > 1 ? `${npass} passes` : `denoise ${Number(t.denoise).toFixed(2)}`,
-    !t.auto?.on ? "auto prompt off" : engines.length ? engines.join(", ") : "no engine on",
+    t.canvas === "image" ? "Wired image" : t.canvas === "latent" ? "Wired latent"
+      : `${t.images.length} Image${t.images.length === 1 ? "" : "s"}`,
+    t.prompt_only ? "Prompt only"
+      : i2iSkipped(t) ? "Passes skipped"
+      : npass > 1 ? `${npass} Passes` : `Denoise ${Number(t.denoise).toFixed(2)}`,
+    !t.auto?.on ? "Auto prompt off" : engines.length ? engines.join(", ") : "No engine on",
   ]) {
     const c = document.createElement("span");
     c.className = "rn-ws-chip";
@@ -11630,7 +11632,7 @@ function passesTab(node, body, kind = "i2i") {
   };
   const fmtD = (v) => Number(v).toFixed(2);
   const fmtS = (v) => Number(v).toFixed(2) + "x";
-  const fmtT = (v) => (Number(v) > 0 ? Math.round(Number(v)) + " steps" : "rig's steps");
+  const fmtT = (v) => (Number(v) > 0 ? Math.round(Number(v)) + " Steps" : "Rig's steps");
 
   // the per-pass lists this render works with; only a switched-on list is stored
   const VARY = [
@@ -11899,7 +11901,7 @@ function passesTab(node, body, kind = "i2i") {
         t[v.key][i] = n;
         val.textContent = v.fmt(n);
         writeCfg(node);
-        if (v.flag === "scale_custom" && sizeEls[i]) sizeEls[i].textContent = "Output: " + sizeOf(n);
+        if (v.flag === "scale_custom" && sizeEls[i]) sizeEls[i].textContent = "Output: " + capFirst(sizeOf(n));
       });
       barEl.append(rg, val);
       w.append(k, barEl);
@@ -11931,16 +11933,16 @@ function passesTab(node, body, kind = "i2i") {
       }
       if (!line1.children.length) {
         line1.appendChild(dimLine(isLat
-          ? `Denoise ${i ? fmtD(t.refine ?? 0.45) : "1.00"} · the canvas size · the rig's steps`
+          ? `Denoise ${i ? fmtD(t.refine ?? 0.45) : "1.00"} · Canvas size · Rig's steps`
             + (many ? ", as set on the left" : "")
-          : `Denoise ${fmtD(t.denoise)} · Scale ${fmtS(t.scale)} · the rig's steps`
+          : `Denoise ${fmtD(t.denoise)} · Scale ${fmtS(t.scale)} · Rig's steps`
             + (many ? ", as set on the left" : "")));
       }
       const line2 = document.createElement("div");
       line2.className = "rn-ws-pline2";
       const sz = document.createElement("span");
       sz.className = "dim";
-      sz.textContent = "Output: " + sizeOf(lists.scale_custom ? lists.scale_custom[i] : baseScale);
+      sz.textContent = "Output: " + capFirst(sizeOf(lists.scale_custom ? lists.scale_custom[i] : baseScale));
       sizeEls[i] = sz;
       line2.appendChild(sz);
       if (lists.rig) {
@@ -11949,7 +11951,7 @@ function passesTab(node, body, kind = "i2i") {
         rl.textContent = "Rig";
         const sel = document.createElement("select");
         sel.className = "rn-ws-res";
-        for (const [val, txt] of [["", "(this rig)"], ...rigNames.map((nm) => [nm, nm])]) {
+        for (const [val, txt] of [["", "(This rig)"], ...rigNames.map((nm) => [nm, nm])]) {
           const o = document.createElement("option");
           o.value = val; o.textContent = txt; o.selected = val === lists.rig[i];
           sel.appendChild(o);
@@ -11964,7 +11966,7 @@ function passesTab(node, body, kind = "i2i") {
     }
     const last = lists.scale_custom ? lists.scale_custom[npass - 1] : baseScale;
     right.appendChild(dimLine(
-      `finishes at ${sizeOf(last)}`
+      `Finishes at ${sizeOf(last)}`
       + (many && t.handoff_continue
         ? ". Continue the noise is on: the passes share one schedule, so the denoise "
           + "per pass is ignored."
