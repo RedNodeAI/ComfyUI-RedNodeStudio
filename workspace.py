@@ -2622,18 +2622,20 @@ class RedNodeStudioWorkspace:
         # tab's denoise. After Re-angle on purpose: the face lands on the final
         # viewpoint. The result IS the i2i source from here on, like Re-angle's.
         _sw = it.get("swap") or {}
-        if it["on"] and not it["prompt_only"] and _sw.get("on") and i2i_img is not None:
+
+        def _swap_ref():
             # Person 2 and 3 are the Subject gallery's picks in order, or the old
             # galleries of the same name on a workflow saved before they merged
-            _people = [subject] + list(extra or [])
             if _sw["reference"] == "own":
-                _ref = tab_image("swap_ref")
-                _ref_name = "Swap page's own"
-            else:
-                _pk = {"subject": 0, "subject2": 1, "subject3": 2}.get(_sw["reference"], 0)
-                _ref = (_people[_pk] if _pk < len(_people) and _people[_pk] is not None
-                        else tab_image(_sw["reference"]))
-                _ref_name = _sw["reference"].replace("subject", "Subject ").strip()
+                return tab_image("swap_ref"), "Swap page's own"
+            _people = [subject] + list(extra or [])
+            _pk = {"subject": 0, "subject2": 1, "subject3": 2}.get(_sw["reference"], 0)
+            return ((_people[_pk] if _pk < len(_people) and _people[_pk] is not None
+                     else tab_image(_sw["reference"])),
+                    _sw["reference"].replace("subject", "Subject ").strip())
+        if (it["on"] and not it["prompt_only"] and _sw.get("on") and i2i_img is not None
+                and _sw.get("target", "source") == "source"):
+            _ref, _ref_name = _swap_ref()
             if _ref is None:
                 print("[RedNode Workspace] swap: the %s gallery is off or empty, so there "
                       "is no reference; the source is used as it is" % _ref_name, flush=True)
@@ -4012,6 +4014,65 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)
                 _run.fail_active(exc)
+
+        # SWAP ON THE RENDER: the finished picture (a Latent tab render as much as
+        # an Img2Img one) gets the person, then the rig polishes it at a low
+        # denoise, the pass a source swap gets from the Img2Img pass
+        if (_sw.get("on") and _sw.get("target") == "render" and rig_image is not None
+                and not _prt and not _stage_only):
+            _ref, _ref_name = _swap_ref()
+            if _ref is None:
+                _run.skip("swap", "Swap", "no reference picture")
+                print("[RedNode Workspace] swap: the %s gallery is off or empty, so there "
+                      "is no reference; the render is kept as it is" % _ref_name, flush=True)
+            else:
+                _swapped = None
+                try:
+                    from . import swap as _swap
+                    _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
+                    _run.begin("swap", "Swap", batch=int(rig_image.shape[0]))
+                    _swapped = _swap.render(_sw, rig_image, _ref, _sseed)[:, :, :, :3]
+                    _run.end("swap", "Swap")
+                    _tap("swap", "Swap result", _swapped)
+                    print("[RedNode Workspace] swap: %d picture(s), %s from the %s gallery, "
+                          "on the render" % (_swapped.shape[0], _sw["mode"], _ref_name),
+                          flush=True)
+                    rig_image = _swapped
+                except Exception as exc:
+                    _run.end("swap", "Swap", "error", error=str(exc)[:200])
+                    print("[RedNode Workspace] swap failed: %s; the render is kept as it is"
+                          % exc, flush=True)
+                _pv = vae if vae is not None else rig_vae
+                if _swapped is not None and _sw["polish"]:
+                    if _mode != "internal" or model is None or positive is None or _pv is None:
+                        _run.skip("swap_polish", "Swap polish", "needs the built-in sampler")
+                    else:
+                        try:
+                            from . import live_preview as _live
+                            from . import rig_chain as _rigc
+                            _pdn = float(_sw["polish_denoise"])
+                            _run.begin("swap_polish", "Swap polish", steps=int(rig_steps),
+                                       denoise=round(_pdn, 2), rig=rig_name or "",
+                                       batch=int(_swapped.shape[0]),
+                                       size=[int(_swapped.shape[2]), int(_swapped.shape[1])])
+                            _plat = {"samples": _pv.encode(_swapped)}
+                            with _rigc.using(_rigc.rig_for(_ar), prompt,
+                                             clip=lora_clip if lora_clip is not None else clip,
+                                             vae=_pv):
+                                _pout = _live.sampled(unique_id, _dials.sample_with_dials,
+                                                      label="swap polish")(
+                                    model, int(run_seed) + 1, rig_steps, rig_cfg, rig_sampler,
+                                    rig_scheduler, positive, negative, _plat,
+                                    denoise=_pdn, dials=_ar.get("dials") or {})
+                            rig_image = vae_images(_pv.decode(_pout["samples"]))[:, :, :, :3]
+                            result_latent_out = _pout
+                            _run.end("swap_polish", "Swap polish")
+                            print("[RedNode Workspace] swap polish: %d steps at denoise %.2f"
+                                  % (int(rig_steps), _pdn), flush=True)
+                        except Exception as exc:
+                            _run.end("swap_polish", "Swap polish", "error", error=str(exc)[:200])
+                            print("[RedNode Workspace] swap polish failed: %s; the swapped "
+                                  "picture is kept" % exc, flush=True)
 
         if rig_image is not None:
             _tap("final", "Workspace result", rig_image)

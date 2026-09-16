@@ -500,6 +500,11 @@ export function plannedStages(node, cfg) {
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
     out.push(["decode", "Decode"]);
   }
+  const SW = tabs.i2i?.swap || {};
+  if (SW.on && SW.target === "render" && !tabs.i2i?.prompt_only) {
+    out.push(["swap", "Swap"]);
+    if (SW.polish !== false && internal) out.push(["swap_polish", "Swap polish"]);
+  }
   const types = new Set(liveNodes().map((n) => n.type));
   const detOn = !!(cfg.detailer_on && (cfg.detailer?.stages || []).some((s) => s.on && s.type !== "title"));
   const postOn = cfg.post_on !== false && Object.values(cfg.post || {}).some((f) => f?.on);
@@ -557,6 +562,7 @@ export function jumpForStage(key, cfg) {
   if (key === "encode") return { tab: "prompts" };
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
   if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
+  if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
   if (key === "detailer") return { tab: "detailer" };
   if (key === "post") return { tab: "post" };
   if (key === "save") return { tab: "run", sub: "save" };
@@ -575,6 +581,7 @@ export function jumpForLine(text, cfg) {
   if (/^Encode /.test(t)) return { tab: "prompts" };
   if (/^Pass \d+/.test(t)) return passesPage(cfg);
   if (/^Decode /.test(t)) return { tab: "models" };
+  if (/^Swap /.test(t)) return { tab: "i2i", sub: "swap" };
   if (/^Detailer/.test(t)) return { tab: "detailer" };
   if (/^Post FX/.test(t)) return { tab: "post" };
   if (/^Save /.test(t)) return { tab: "run", sub: "save" };

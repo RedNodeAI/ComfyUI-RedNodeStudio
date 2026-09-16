@@ -1190,6 +1190,10 @@ export function readCfg(node) {
       if (!["auto", "body_first", "face_first"].includes(S.order)) S.order = "auto";
       if (typeof S.prompt !== "string") S.prompt = "";
       if (typeof S.keep_size !== "boolean") S.keep_size = false;
+      if (!Object.hasOwn(SW_TARGETS, S.target)) S.target = "source";
+      if (typeof S.polish !== "boolean") S.polish = true;
+      if (typeof S.polish_denoise !== "number") S.polish_denoise = 0.3;
+      S.polish_denoise = Math.max(0.05, Math.min(1, S.polish_denoise));
       if (typeof S.unet !== "string") S.unet = "";
       if (typeof S.clip !== "string") S.clip = "";
       if (typeof S.vae !== "string") S.vae = "";
@@ -12627,7 +12631,9 @@ function i2iSubLit(cfg, id) {
   if (id === "passes") return !!(t.on && !t.prompt_only);
   if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
   if (id === "reangle") return !!(t.on && t.reangle?.on && !t.prompt_only);
-  if (id === "swap") return !!(t.on && t.swap?.on && !t.prompt_only);
+  if (id === "swap") {
+    return !!(t.swap?.on && !t.prompt_only && (t.on || t.swap.target === "render"));
+  }
   if (id === "converter") return !!t.on && convActive(t.conv);
   return false;
 }
@@ -12796,7 +12802,9 @@ function i2iTabs(node, body) {
     body.appendChild(n);
   };
   // Image to text works with Img2Img off, so the auto page says so on its own tab
-  if (!t.on && sub !== "source" && sub !== "auto") body.appendChild(tabOffNote("Img2Img"));
+  // a swap on the render works with Img2Img off too
+  if (!t.on && sub !== "source" && sub !== "auto"
+      && !(sub === "swap" && t.swap?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
   else if (sub === "passes") passesTab(node, body);
   else if (sub === "auto") i2iAutoPage(node, body);
@@ -13573,6 +13581,8 @@ const RA_EL = ["low-angle shot", "eye-level shot", "elevated shot", "high-angle 
 const RA_DI = ["close-up", "medium shot", "wide shot"];
 const SW_MODES = ["face", "head", "person"];
 const SW_REFS = ["subject", "subject2", "subject3", "own"];
+// what Swap works on: the Img2Img source, or the finished render
+const SW_TARGETS = { source: true, render: true };
 const SW_MODE_TIP = {
   face: "Only the face. Hair, head shape and everything else stay from the picture (BFS Face).",
   head: "The whole head, hair included: the strongest identity (BFS Head, the author's recommended one).",
@@ -13809,7 +13819,8 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   const refName = (r) => r === "subject" ? "Main subject" : r === "own" ? "Own picture"
     : "Person " + r.replace("subject", "");
   const card = sectionCard("SWAP", "#e08fb0",
-    !S.on ? "off" : capFirst(S.mode) + " from " + refName(S.reference),
+    !S.on ? "off" : capFirst(S.mode) + " from " + refName(S.reference)
+      + (S.target === "render" ? " onto the render" : ""),
     flat ? null : { node, key: "i2i_swap", open: !!S.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
@@ -13822,12 +13833,70 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   sw.onclick = () => { S.on = !S.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
-  lab.textContent = S.on
-    ? refName(S.reference) + " goes onto the person first, then the i2i pass runs on it at the denoise above."
-    : "Put the Subject onto the person in the picture, then paint over it.";
+  lab.textContent = !S.on ? "Put a person onto the person in the picture, then paint over it."
+    : S.target === "render"
+      ? refName(S.reference) + " goes onto the finished render"
+        + (S.polish ? ", then the rig polishes it." : ".")
+      : refName(S.reference) + " goes onto the Img2Img source first, then the i2i pass runs on it.";
   row0.append(sw, lab);
   card.appendChild(row0);
   if (S.on) {
+    // WHAT IT WORKS ON: the Img2Img source before its pass, or the finished render
+    const trow = document.createElement("div");
+    trow.className = "rn-ws-row";
+    const tl = document.createElement("span");
+    tl.className = "rn-ws-note";
+    tl.textContent = "Works on";
+    const tseg = document.createElement("div");
+    tseg.className = "rn-ws-seg rn-ws-swaptarget";
+    for (const [v, label, tip] of [
+      ["source", "Img2Img source", "The Img2Img source picture, before its pass. The pass "
+                                   + "then finishes the swapped picture at its denoise."],
+      ["render", "New render", "The finished render, a Latent tab render as much as an "
+                               + "Img2Img one. Img2Img does not need to be on."],
+    ]) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb" + (S.target === v ? " on" : "");
+      b.textContent = label;
+      b.title = tip;
+      b.onclick = () => { S.target = v; writeCfg(node); render(node); };
+      tseg.appendChild(b);
+    }
+    trow.append(tl, tseg);
+    if (S.target === "render") {
+      const psw = document.createElement("div");
+      psw.className = "rn-ws-sw rn-ws-swappolish" + (S.polish ? " on" : "");
+      psw.title = "On: after the swap the rig runs once more over the picture at the denoise "
+                + "beside it, so the new face sits in the render's light and grain. Off: the "
+                + "swapped picture as the edit model left it.";
+      psw.onclick = () => { S.polish = !S.polish; writeCfg(node); render(node); };
+      const pl2 = document.createElement("span");
+      pl2.className = "rn-ws-note";
+      pl2.textContent = "Polish pass";
+      trow.append(psw, pl2);
+      if (S.polish) {
+        const dn = document.createElement("input");
+        dn.type = "number";
+        dn.className = "rn-ws-swapdenoise";
+        dn.min = "0.05"; dn.max = "1"; dn.step = "0.05";
+        dn.value = String(S.polish_denoise);
+        dn.title = "The polish pass's denoise. 0.2 to 0.35 blends the face in and keeps it.";
+        dn.style.cssText = "width:70px;background:#101216;border:1px solid #2a2e34;border-radius:4px;"
+                         + "color:#e2e5ea;font-size:12px;padding:3px 6px";
+        dn.onchange = () => {
+          const v = Number(dn.value);
+          if (Number.isFinite(v)) S.polish_denoise = Math.max(0.05, Math.min(1, v));
+          writeCfg(node);
+          render(node);
+        };
+        dn.addEventListener("wheel", () => dn.blur(), { passive: true });
+        const dl = document.createElement("span");
+        dl.className = "rn-ws-note";
+        dl.textContent = "Denoise";
+        trow.append(dl, dn);
+      }
+    }
+    card.appendChild(trow);
     const mrow = document.createElement("div");
     mrow.className = "rn-ws-row";
     const ml = document.createElement("span");

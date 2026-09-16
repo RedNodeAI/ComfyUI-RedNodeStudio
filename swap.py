@@ -82,6 +82,11 @@ def parse(raw):
         "order": pick("order", ORDERS, "auto"),
         "prompt": str(r.get("prompt") or "")[:2000],
         "keep_size": bool(r.get("keep_size", False)),
+        # source: the Img2Img source before its pass. render: the finished render
+        # (a Latent tab render too), then a polish pass of the rig over the result
+        "target": pick("target", ("source", "render"), "source"),
+        "polish": bool(r.get("polish", True)),
+        "polish_denoise": num("polish_denoise", 0.3, 0.05, 1.0),
         # the engine
         "unet": str(r.get("unet") or DEFAULTS["unet"]),
         "clip": str(r.get("clip") or DEFAULTS["clip"]),
