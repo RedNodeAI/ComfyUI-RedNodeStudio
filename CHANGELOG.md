@@ -365,6 +365,11 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Civitai downloads are no longer part of the pack. The Comfy Registry's scan
+  flags a node that fetches files onto the disk, and 1.2.0, 1.3.0 and 1.3.1
+  were all held back, so a registry install kept getting 1.1.0. The LoRA
+  panel keeps the update check, the version it needs and the Civitai links;
+  the file is yours to fetch
 - The Paint tab's Subject, Scene and Moodboard reference toggles follow the
   Model choice: a built-in rig picked there decides whether references are
   offered, instead of the Models tab's active rig. Generate on a built-in

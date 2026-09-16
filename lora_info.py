@@ -120,6 +120,12 @@ def _norm(text):
 
 _JOBS = {}          # id -> {state, got, total, name, error}
 _JOB_SEQ = [0]
+# THE DOWNLOAD ITSELF IS NOT IN THE PACK. The Comfy Registry's scan flags a node
+# that fetches files onto the disk, and 1.2.0 to 1.3.1 were held at 1.1.0 for
+# registry installs because of it. An install that wants it keeps
+# local/lora_download.py (gitignored); the panel shows its Download buttons only
+# when that loaded. The update check and the Civitai links stay for everyone.
+DOWNLOADS = False
 
 
 def _civitai_token():
@@ -239,76 +245,6 @@ def _pick_file(version):
     }
 
 
-def _download_job(job_id, version_id):
-    job = _JOBS[job_id]
-    try:
-        version = _get_json(CIVITAI_MODEL.replace("/models/{}", "/model-versions/{}").format(version_id))
-        if version.get("_error") or version.get("_notfound"):
-            raise RuntimeError(version.get("_error") or "That version no longer exists on Civitai")
-        info = _pick_file(version)
-        if not info or not info["url"]:
-            raise RuntimeError("No downloadable model file on that version")
-
-        dest_dir = get_download_dir()
-        if not dest_dir:
-            raise RuntimeError("No writable loras folder found")
-
-        need = int(info["size_kb"]) * 1024
-        try:
-            free = shutil.disk_usage(dest_dir).free
-            if need and free < need * 1.1:
-                raise RuntimeError(f"Not enough free space ({free // 2**20} MB free, "
-                                   f"{need // 2**20} MB needed)")
-        except OSError:
-            pass
-
-        job.update(name=info["name"], total=need, state="downloading")
-        url = info["url"]
-        tok = _civitai_token()
-        if tok:
-            url += ("&" if "?" in url else "?") + "token=" + tok
-        req = urllib.request.Request(url, headers={"User-Agent": "RedNodeStudio/RedNode"})
-
-        part = _unique_path(dest_dir, info["name"] + ".part")
-        h = hashlib.sha256()
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as out:
-                total = int(r.headers.get("Content-Length") or need or 0)
-                job["total"] = total
-                while True:
-                    if job.get("cancel"):
-                        raise RuntimeError("Cancelled")
-                    chunk = r.read(1 << 20)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    h.update(chunk)
-                    job["got"] += len(chunk)
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 403):
-                raise RuntimeError("Civitai refused the download (this model needs an API token — "
-                                   "set CIVITAI_API_TOKEN or create civitai_token.txt beside the presets)")
-            raise RuntimeError(f"Download failed (HTTP {e.code})")
-
-        got = h.hexdigest().lower()
-        if info["sha256"] and got != info["sha256"]:
-            os.remove(part)
-            raise RuntimeError("Downloaded file failed its SHA-256 check — deleted, nothing was installed")
-
-        final = _unique_path(dest_dir, info["name"])
-        os.replace(part, final)
-        rel = os.path.basename(final)
-        job.update(state="done", path=final, lora_name=rel, verified=bool(info["sha256"]))
-    except Exception as e:  # noqa: BLE001 — surface everything to the user
-        job.update(state="error", error=str(e))
-        for stray in (locals().get("part"),):
-            if stray and os.path.exists(stray):
-                try:
-                    os.remove(stray)
-                except OSError:
-                    pass
-
-
 # --------------------------------------------------------- base-model detection
 #
 # safetensors keeps a JSON header at the front of the file, so a LoRA's architecture
@@ -342,6 +278,7 @@ _ARCH_BY_KEYS = [
     ("lora_te", "SD/SDXL"),
     ("lora_unet_blocks_", "Anima"),
 ]
+
 
 
 def _safetensors_header(path, max_header=32 << 20):
@@ -564,33 +501,18 @@ try:
     from server import PromptServer
     from aiohttp import web
 
-    @PromptServer.instance.routes.post("/rednode/lora_download")
-    async def _rednode_lora_download(request):
-        """Start ONE verified download. Returns a job id to poll."""
-        try:
-            version_id = int((await request.json()).get("version_id"))
-        except Exception:
-            return web.json_response({"error": "bad request body"}, status=400)
-        if any(j["state"] == "downloading" for j in _JOBS.values()):
-            return web.json_response({"error": "a download is already running"}, status=409)
-        _JOB_SEQ[0] += 1
-        jid = str(_JOB_SEQ[0])
-        _JOBS[jid] = {"state": "starting", "got": 0, "total": 0, "name": "", "error": None}
-        threading.Thread(target=_download_job, args=(jid, version_id), daemon=True).start()
-        return web.json_response({"job": jid})
-
-    @PromptServer.instance.routes.get("/rednode/lora_download_status")
-    async def _rednode_lora_download_status(request):
-        job = _JOBS.get(request.query.get("job", ""))
-        if not job:
-            return web.json_response({"error": "unknown job"}, status=404)
-        if request.query.get("cancel") == "1":
-            job["cancel"] = True
-        return web.json_response(job)
+    try:
+        from .local import lora_download as _local_dl
+        DOWNLOADS = bool(_local_dl.register(PromptServer.instance.routes, web))
+    except ImportError:
+        pass
+    except Exception as _e:
+        print(f"[RedNode Krea2] local LoRA download not loaded: {_e}", flush=True)
 
     @PromptServer.instance.routes.get("/rednode/lora_folders")
     async def _rednode_lora_folders(request):
-        return web.json_response({"folders": lora_folders(), "current": get_download_dir()})
+        return web.json_response({"folders": lora_folders(), "current": get_download_dir(),
+                                  "can_download": DOWNLOADS})
 
     @PromptServer.instance.routes.post("/rednode/lora_folders")
     async def _rednode_set_lora_folder(request):
@@ -657,6 +579,7 @@ try:
             known = await loop.run_in_executor(None, lookup_by_version, vid)
             known.update(missing=True, search_url=data.get("search_url"))
             data = known
+        data["can_download"] = DOWNLOADS
         return web.json_response(data)
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)

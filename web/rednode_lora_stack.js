@@ -468,9 +468,9 @@ async function openInfo(node, slot, anchor, refresh = false) {
       ${d.trained_words?.length ? `<div class="words"><b>Trigger words</b><br>${esc(d.trained_words.join(", "))}</div>` : ""}
       <div class="acts">
         ${d.update?.installed_as ? `<button data-a="switch">Switch to ${esc(shortName(d.update.installed_as))}</button>` : ""}
-        ${d.update?.available && !d.update.installed_as && d.update.latest_id
+        ${d.can_download && d.update?.available && !d.update.installed_as && d.update.latest_id
           ? `<button data-a="dl">⬇ Download ${esc(d.update.latest)}</button>` : ""}
-      ${d.missing && d.version_id
+      ${d.can_download && d.missing && d.version_id
           ? `<button data-a="dlthis">⬇ Download this LoRA</button>` : ""}
         ${d.trained_words?.length ? `<button data-a="use">Use as Keywords</button>` : ""}
         ${d.url ? `<button data-a="open">Open on Civitai</button>` : ""}
@@ -1218,6 +1218,11 @@ export function openCog(node, anchor) {
   dlNote.textContent = "loading…";
   dlWrap.appendChild(dlNote);
   api.fetchApi("/rednode/lora_folders").then((r) => r.json()).then((d) => {
+    if (!d.can_download) {                 // no download in this build: nothing to set
+      hDl.remove();
+      dlWrap.remove();
+      return;
+    }
     dlNote.textContent = d.current || "(no loras folder found)";
     if ((d.folders || []).length > 1) {
       const sel = document.createElement("select");
