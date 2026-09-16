@@ -683,6 +683,8 @@ def parse_config(config_json):
         if name in CONVERTER_TABS:
             conv_in = t.get("conv") if isinstance(t.get("conv"), dict) else {}
             tabs[name]["conv"] = {
+                # the converter's own switch; on for every workflow saved before it
+                "on": bool(conv_in.get("on", True)),
                 "gender": conv_in.get("gender") if conv_in.get("gender") in SWAP_MODES else "off",
                 "style": conv_in.get("style") if conv_in.get("style") in STYLE_MODES else "off",
                 "act": conv_in.get("act") if conv_in.get("act") in ACT_MODES else "off",
@@ -2942,7 +2944,7 @@ class RedNodeStudioWorkspace:
         # standalone node's pipeline
         for tab_name in CONVERTER_TABS:
             conv = tabs[tab_name].get("conv") or {}
-            if not (prompts.get(tab_name) and conv):
+            if not (prompts.get(tab_name) and conv and conv.get("on", True)):
                 continue
             before = prompts[tab_name]
             prompts[tab_name] = convert_text(

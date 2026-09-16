@@ -1100,6 +1100,7 @@ export function readCfg(node) {
       for (const [k, dv] of [["gender", "off"], ["style", "off"], ["act", "off"]]) {
         if (typeof t.conv[k] !== "string") t.conv[k] = dv;
       }
+      t.conv.on = t.conv.on === undefined ? true : !!t.conv.on;   // on for older configs
       t.conv.remove_cum = !!t.conv.remove_cum;
       t.conv.shave = !!t.conv.shave;
       if (typeof t.conv.rules !== "string") t.conv.rules = "";
@@ -11693,7 +11694,7 @@ const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PRO
                   ["reangle", "RE-ANGLE"], ["swap", "SWAP"], ["converter", "CONVERTER"]];
 
 function convActive(c) {
-  return !!(c && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
+  return !!(c && c.on !== false && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
 }
 
@@ -12634,6 +12635,7 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
   const c = cfg.tabs[tabName].conv;
   const open = flat || !!(node._rnConvOpen ||= {})[tabName];
   const active = convActive(c);
+  const isOn = c.on !== false;
 
   const sect = document.createElement("div");
   sect.className = "rn-ws-sect rn-ws-conv" + (flat ? " flat" : "");
@@ -12644,8 +12646,22 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
   arr.textContent = open ? "▾" : "▸";
   const ttl = document.createElement("span");
   ttl.className = "ttl";
-  ttl.textContent = "PROMPT CONVERTER" + (active ? "" : ": all off");
-  head.append(arr, ttl);
+  ttl.textContent = "PROMPT CONVERTER"
+    + (!isOn ? ": off" : active ? "" : ": nothing set");
+  const onSw = document.createElement("button");
+  onSw.className = "rn-ws-sw" + (isOn ? " on" : "");
+  onSw.title = isOn
+    ? "On: this tab's prompt runs through the converter below. Switch off to pass it "
+      + "through untouched; the settings are kept."
+    : "Off: this tab's prompt passes through untouched. The settings below are kept "
+      + "for when it is switched back on.";
+  onSw.onclick = (e) => {
+    e.stopPropagation();
+    c.on = !isOn;
+    writeCfg(node);
+    render(node);
+  };
+  head.append(arr, onSw, ttl);          // toggle in front of the title
   if (flat) {
     arr.style.display = "none";
     head.style.cursor = "default";

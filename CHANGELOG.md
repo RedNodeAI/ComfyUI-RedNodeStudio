@@ -68,6 +68,9 @@ cheap to judge.
   engine's own settings beside them, then the settings every engine shares and
   the result. The settings cog is gone; picking an engine is how its settings
   open
+- The Prompt Converter has its own on switch in its header, so it reads as on
+  or off at a glance. Off passes the prompt through untouched and keeps the
+  settings; workflows saved before it load with the converter on
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
