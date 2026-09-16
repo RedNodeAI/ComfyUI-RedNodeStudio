@@ -449,6 +449,11 @@ def delete_vision_prompt(name):
     with open(_vision_path(make=True), "w", encoding="utf-8") as f:
         json.dump({"version": 1, "prompts": user}, f, indent=2, ensure_ascii=False)
 
+# THE WORKSPACE'S OWN STAGE TAPS: the moments it can photograph for the Stage View,
+# in the order they happen. Off unless switched on (the STAGES sub-tab).
+TAP_POINTS = ("refs", "source", "reangle", "swap", "passes", "final")
+TAP_PX = (320, 512, 768, 1024, 1536, 0)
+
 # the tab names the Run tab's log uses
 RUN_TAB_NAMES = {"subject": "Subject", "scene": "Scene", "moodboard": "Moodboard",
                  "i2i": "Img2Img", "text_style": "Image to text Style",
@@ -588,6 +593,19 @@ def _normalise_auto(auto_in, default_mode):
                 else MOOD_SLOT_DEFAULTS[m])
             for m in MOOD_READS},
     }
+
+
+def _normalise_taps(raw):
+    t = raw if isinstance(raw, dict) else {}
+    pts = t.get("points")
+    try:
+        px = int(t.get("px", 768))
+    except (TypeError, ValueError):
+        px = 768
+    return {"on": bool(t.get("on")),
+            "px": px if px in TAP_PX else 768,
+            "points": ([p for p in TAP_POINTS if p in pts] if isinstance(pts, list)
+                       else list(TAP_POINTS))}
 
 
 def _pass_list(raw, on, base, lo, hi, n, first=None):
@@ -1308,6 +1326,9 @@ def parse_config(config_json):
             # is on, so a seed iterates on the base render alone; one flip renders
             # the keeper in full. Off by default.
             "draft": bool(data.get("draft")),
+            # hold the run under the VRAM limit's card size (vram_hold.py)
+            "vram_hold": bool(data.get("vram_hold")),
+            "taps": _normalise_taps(data.get("taps")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
             "camera": camera_cfg,
@@ -2176,6 +2197,36 @@ class RedNodeStudioWorkspace:
         # the Run tab's feed (run_events.py): a new run, then each stage as it goes
         from . import run_events as _run
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
+        from . import vram_hold as _hold
+        _held = _hold.apply(cfg)
+        if _held:
+            _run.note("Holding under %d GB: ComfyUI keeps %.1f GB free, so a model that "
+                      "does not fit loads in part" % (_held[0], _held[1] / 1024), "unload")
+        _taps = cfg["taps"]
+
+        def _tap(point, label, img=None, latent=None, model_for=None):
+            """One picture for the Stage View, when that tap point is switched on."""
+            if not (_taps["on"] and point in _taps["points"]):
+                return
+            try:
+                from . import stages as _stg
+                if img is None and latent is not None and model_for is not None:
+                    # a pass result is a latent: the pack's small preview decoder
+                    # draws it, no full VAE decode per pass
+                    from . import live_preview as _lpv
+                    _prev, _how = _lpv.our_previewer(model_for)
+                    if _prev is None:
+                        return
+                    _x0 = latent["samples"][:1]
+                    _f, _pil, _m = _prev.decode_latent_to_preview_image("PNG", _x0)
+                    _arr = np.asarray(_pil.convert("RGB")).astype(np.float32) / 255.0
+                    img = torch.from_numpy(_arr)[None]
+                if img is not None:
+                    _stg.record(img, label, prompt=prompt, source="workspace",
+                                px=_taps["px"])
+            except Exception as _te:
+                print("[RedNode Workspace] the %s tap was skipped: %s" % (label, _te),
+                      flush=True)
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
         # prompt's CLIP gen and everything after read `clip`, so a fill that arrived
         # just before the LoRA block left them seeing None. A wired input always wins.
@@ -2261,6 +2312,7 @@ class RedNodeStudioWorkspace:
 
         subject = tab_image("subject")
         scene = tab_image("scene")
+        _tap("refs", "Subject reference", subject)
         scene_words_only = bool(tabs["scene"].get("words_only") and scene is not None)
         if scene_words_only:
             print("[RedNode Workspace] Scene is words only: its picture is captioned, not "
@@ -2363,6 +2415,10 @@ class RedNodeStudioWorkspace:
             else:
                 print("[RedNode Workspace] the i2i canvas is set to Wired latent "
                       "but nothing is wired into latent", flush=True)
+        if scene is not None:
+            _tap("refs", "Scene reference", scene)
+        if it["on"] and not it["prompt_only"] and i2i_img is not None:
+            _tap("source", "Img2Img source", i2i_img)
         # RE-ANGLE: image to image from a different
         # angle. Before the i2i pass, the source is re-shot by the multi-angle edit
         # model from the camera this tab asks for - the three bands here, or the
@@ -2402,6 +2458,7 @@ class RedNodeStudioWorkspace:
                 _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
                 _before = tuple(i2i_img.shape)
                 i2i_img = _re.render(_rg, i2i_img, _prompts, _rseed)
+                _tap("reangle", "Re-angle result", i2i_img)
                 print("[RedNode Workspace] re-angle: %d view(s) from %s -> the i2i source "
                       "(%d x %d)" % (i2i_img.shape[0], "the studio" if _cams else "the bands",
                                      i2i_img.shape[2], i2i_img.shape[1]), flush=True)
@@ -2438,6 +2495,7 @@ class RedNodeStudioWorkspace:
                     from . import swap as _swap
                     _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
                     i2i_img = _swap.render(_sw, i2i_img, _ref, _sseed)
+                    _tap("swap", "Swap result", i2i_img)
                     print("[RedNode Workspace] swap: %d frame(s), %s from the %s tab -> "
                           "the i2i source (%d x %d)" % (i2i_img.shape[0], _sw["mode"],
                                                         _sw["reference"], i2i_img.shape[2],
@@ -3347,6 +3405,8 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in encode failed: %s" % exc,
                       flush=True)
             _run.end("encode", "Encode", "error" if _enc_err is not None else "done")
+            if _hold.before_sampling(cfg):
+                _run.note("Text encoder unloaded before sampling (holding the limit)", "unload")
         # THE EMBEDDED SAMPLER: comfy core's common_ksampler with this rig's five
         # settings, then the VAE decode, so the whole render is one node and an
         # image output. A latent from the tabs (i2i, edit) keeps its denoise; a
@@ -3755,6 +3815,7 @@ class RedNodeStudioWorkspace:
                                 sigmas=(_segs[_p] if _cont else None),
                                 disable_noise=bool(_cont and _p > 0))
                         _run.end(_pkey, _plabel)
+                        _tap("passes", _plabel, latent=_out, model_for=_model_p)
                     _last_out = _out
                     # the last pass's VAE decodes: after a pass on another family the
                     # latent is in that rig's space
@@ -3805,6 +3866,9 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in sampler failed: %s" % exc,
                       flush=True)
                 _run.fail_active(exc)
+
+        if rig_image is not None:
+            _tap("final", "Workspace result", rig_image)
 
         # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
         # queued THIS node with a run token stamped into the config copy. The pass

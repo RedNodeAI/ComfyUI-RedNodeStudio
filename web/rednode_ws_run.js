@@ -281,6 +281,92 @@ function stageHost(node) {
   return node._rnStageHost;
 }
 
+// ---- the taps ------------------------------------------------------------------
+const TAP_POINTS = [
+  ["refs", "References", "The Subject and Scene pictures as the model gets them."],
+  ["source", "Img2Img source", "The source picture before Re-angle and Swap."],
+  ["reangle", "Re-angle", "The re-shot picture."],
+  ["swap", "Swap", "The picture after the face or person swap."],
+  ["passes", "Each pass", "Every pass's result, drawn by the small preview decoder."],
+  ["final", "Final picture", "The Workspace's finished picture."],
+];
+const TAP_SIZES = [[320, "320 px"], [512, "512 px"], [768, "768 px"], [1024, "1024 px"],
+                   [1536, "1536 px"], [0, "Full size"]];
+
+function tapsCard(node) {
+  const cfg = node._rnCfg;
+  const T = (cfg.taps && typeof cfg.taps === "object") ? cfg.taps : (cfg.taps = {});
+  if (typeof T.on !== "boolean") T.on = false;
+  if (!TAP_SIZES.some(([v]) => v === T.px)) T.px = 768;
+  if (!Array.isArray(T.points)) T.points = TAP_POINTS.map(([v]) => v);
+  const card = el("div", "rn-ws-card rn-run-taps");
+  card.appendChild(el("div", "ch", "TAPS"));
+  // the Workspace's own
+  const row = el("div", "rn-ws-row");
+  row.style.flexWrap = "wrap";
+  const sw = el("button", "rn-ws-sw" + (T.on ? " on" : ""));
+  sw.dataset.choice = "ws_taps";
+  sw.title = "Photograph moments of the Workspace's run for the strip below.";
+  sw.onclick = () => { T.on = !T.on; writeCfg(node); render(node); };
+  const size = el("select", "rn-ws-res");
+  for (const [v, label] of TAP_SIZES) {
+    const o = el("option", "", label);
+    o.value = String(v);
+    o.selected = T.px === v;
+    size.appendChild(o);
+  }
+  size.title = "The size each tap is kept at for the big view. The strip stays small.";
+  size.onchange = () => { T.px = parseInt(size.value, 10); writeCfg(node); };
+  row.append(sw, el("span", "rn-ws-swlabel rn-run-tapname", "Workspace"), size);
+  const chips = el("div", "rn-ws-seg rn-ws-switch rn-run-tappoints");
+  chips.dataset.choice = "tap_points";
+  for (const [v, label, tip] of TAP_POINTS) {
+    const on = T.points.includes(v);
+    const b = el("button", "rn-ws-segb" + (on ? " on" : ""), label);
+    b.title = tip + (on ? " Click to leave it out." : " Click to tap it.");
+    b.disabled = !T.on;
+    b.onclick = () => {
+      const next = on ? T.points.filter((x) => x !== v) : [...T.points, v];
+      T.points = TAP_POINTS.map(([x]) => x).filter((x) => next.includes(x));
+      writeCfg(node);
+      render(node);
+    };
+    chips.appendChild(b);
+  }
+  row.appendChild(chips);
+  card.appendChild(row);
+  // each Detailer's own switch, written into that node's settings
+  const dets = (node.graph?._nodes || app.graph?._nodes || [])
+    .filter((n) => n.type === "RedNodeStudioDetailer");
+  for (const d of dets) {
+    const w = d.widgets?.find((x) => x.name === "config");
+    let dc = {};
+    try { dc = JSON.parse(w?.value || "{}"); } catch (e) { dc = {}; }
+    const drow = el("div", "rn-ws-row");
+    const dsw = el("button", "rn-ws-sw" + (dc.taps ? " on" : ""));
+    dsw.dataset.detailer = String(d.id);
+    dsw.title = "The Detailer's own taps: its input, a frame after every pass, its output.";
+    dsw.onclick = () => {
+      dc.taps = !dc.taps;
+      if (w) w.value = JSON.stringify(dc);
+      d.graph?.setDirtyCanvas?.(true, false);
+      d._rnAdvRender?.();
+      render(node);
+    };
+    drow.append(dsw, el("span", "rn-ws-swlabel rn-run-tapname",
+                        d.title && d.title !== "RedNode Studio Detailer" ? d.title : `Detailer ${d.id}`),
+                el("span", "rn-ws-note", "Its input, every pass and its output"));
+    card.appendChild(drow);
+  }
+  const nTaps = (node.graph?._nodes || app.graph?._nodes || [])
+    .filter((n) => n.type === "RedNodeStageTap").length;
+  card.appendChild(el("div", "rn-ws-note",
+    (nTaps ? `${nTaps} Stage Tap node${nTaps === 1 ? "" : "s"} in the workflow also record. ` : "")
+    + "Taps show after the next run. A RedNode Stage Tap node can photograph any other "
+    + "point of the graph."));
+  return card;
+}
+
 // ---- what this workflow will run -------------------------------------------------
 const PASS_LABEL = (i, latent) => `Pass ${i} · ${i > 1 ? "Refine" : latent ? "Generate" : "Img2Img"}`;
 
@@ -361,6 +447,7 @@ export function runTabBody(node, body) {
     return;
   }
   if (sub === "stages") {
+    body.appendChild(tapsCard(node));
     const host = el("div");
     body.appendChild(host);
     mountStagePanel(stageHost(node), host);
@@ -407,6 +494,17 @@ function runPage(node, body) {
              + "ceiling. Anything held back is named in the log and the console.";
   tier.onchange = () => { cfg.vram_tier = tier.value; writeCfg(node); render(node); };
   tierWrap.appendChild(tier);
+  if (TIER_TARGET_GB[cfg.vram_tier]) {
+    const hold = el("button", "rn-ws-sw" + (cfg.vram_hold ? " on" : ""));
+    hold.dataset.choice = "vram_hold";
+    hold.title = cfg.vram_hold
+      ? `On: ComfyUI keeps the card past ${TIER_TARGET_GB[cfg.vram_tier]} GB free, so a model `
+        + "that does not fit loads in part, and the text encoder leaves the card before "
+        + "sampling. Slower; it stays near the line."
+      : "Off: the limit only holds the dials down; the models still load whole.";
+    hold.onclick = () => { cfg.vram_hold = !cfg.vram_hold; writeCfg(node); render(node); };
+    tierWrap.append(hold, el("span", "rn-ws-note", "Hold under it"));
+  }
   const facts = el("div", "rn-run-facts");
   view.refs.facts = facts;
   top.append(gen, mode, tierWrap, facts);
@@ -662,7 +760,7 @@ function drawChart(cv, tier) {
     ctx.moveTo(L, ty);
     ctx.lineTo(w - Rm, ty);
     ctx.stroke();
-    txt(`${TIER_NAME[tier]} limit ${target} GB`, w - Rm - 2, ty - 3, "right", "#e0a84a");
+    txt(`${TIER_NAME[tier]} limit ${target} GB`, L + 4, ty - 3, "left", "#e0a84a");
   }
   ctx.setLineDash?.([]);
   // loads and unloads
@@ -743,6 +841,9 @@ export const RUN_CSS = `
 .rn-run-model{display:grid;grid-template-columns:minmax(80px,1fr) 2fr auto;gap:8px;
   align-items:center;font-size:12px;color:#c8ccd2}
 .rn-run-model .bar i{background:#a855f7}
+.rn-run-taps .rn-ws-row{gap:8px;align-items:center}
+.rn-run-tapname{min-width:90px;font-weight:600;color:#c8ccd2}
+.rn-run-tappoints .rn-ws-segb:disabled{opacity:.45;cursor:default}
 .rn-run-model .mb{color:#9aa0a8;font-variant-numeric:tabular-nums}
 .rn-run-log{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:3px}
 .rn-run-line{display:grid;grid-template-columns:44px 10px 1fr;gap:8px;align-items:center;

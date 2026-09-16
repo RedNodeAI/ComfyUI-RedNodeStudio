@@ -233,6 +233,19 @@ cheap to judge.
   (copy, open the folder, run again); Stages is the Stage View panel with the
   last run's taps and the compare wipe. Both panels can now be hosted outside
   their own nodes
+- The Workspace has its own stage taps, switched on from the Run tab's Stages
+  sub-tab: References, Img2Img source, Re-angle, Swap, Each pass (drawn by the
+  small preview decoder, no extra VAE decode) and Final picture, each on or off,
+  at a chosen size. The same card switches each Detailer's taps and counts the
+  Stage Tap nodes in the workflow
+- Hold under it, beside the VRAM limit on Low or Medium: ComfyUI keeps the card
+  past 16 or 24 GB free for the run (its --reserve-vram setting), so a model
+  that does not fit loads in part, and the text encoder leaves the card before
+  sampling. Slower, and it stays near the line. Off puts ComfyUI's own reserve
+  back on the next run
+- The Run tab's log says a model loaded once it holds a real share of the card
+  (no more "loaded (0.0 GB)"), and the limit's label on the chart sits on the
+  left, clear of the latest value
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

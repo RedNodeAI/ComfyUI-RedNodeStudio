@@ -34,12 +34,14 @@ _state = {
     "last": 0.0,       # when anything was last sent
     "skipped": set(),  # stages a tracked call skipped itself
     "news": 0.0,       # when a stage last started, moved or ended
+    "announced": set(),  # models whose load was said, so their unload can be
 }
 _lock = threading.Lock()
 _ticker = {"thread": None}
 TICK = 1.0             # seconds between samples while a stage runs
 IDLE_STOP = 30.0       # the sampler stops after this long with nothing running
 STUCK_STOP = 1800.0    # and after this long with no stage news at all
+LOAD_NOTE_MB = 100     # a load is said once the model holds this much
 
 
 def _send(payload):
@@ -116,14 +118,20 @@ def _sample(force_models=False):
     if force_models or models != before:
         payload["models"] = models
         if before is not None:
-            old_names = {m["name"] for m in before}
             new_names = {m["name"] for m in models}
+            said = _state["announced"]
             for m in models:
-                if m["name"] not in old_names:
+                # a model is said once it holds a real share of the card; one caught
+                # at the start of its load would read 0.0 GB
+                if m["name"] not in said and m["mb"] >= LOAD_NOTE_MB:
+                    said.add(m["name"])
                     note("%s loaded (%.1f GB)" % (m["name"], m["mb"] / 1024), "load")
             for m in before:
-                if m["name"] not in new_names:
+                if m["name"] not in new_names and m["name"] in said:
+                    said.discard(m["name"])
                     note("%s unloaded (%.1f GB freed)" % (m["name"], m["mb"] / 1024), "unload")
+        else:
+            _state["announced"] = {m["name"] for m in models}
         _state["models"] = models
     _state["last"] = time.time()
     _send(payload)
