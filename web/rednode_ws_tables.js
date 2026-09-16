@@ -23,6 +23,8 @@ export const TAB_ORDER = [
   // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
   { id: "post", label: "Post", group: "post" },
+  // queue the workflow and watch it go (rednode_ws_run.js)
+  { id: "run", label: "Run", group: "run" },
   { id: "advanced", label: "Advanced", group: "cfg" },
 ];
 

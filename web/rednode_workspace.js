@@ -11,6 +11,7 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
+import { runTabBody, RUN_CSS, runLit, listenRun } from "./rednode_ws_run.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
@@ -964,6 +965,10 @@ css.textContent = `
 let styled = false;
 function injectStyle() {
   if (styled || !document.head) return;
+  // the Run tab's rules join here, at runtime: the two files import each other,
+  // so its string is not safe to read while this file is still loading
+  css.textContent += RUN_CSS;
+  listenRun();
   document.head.appendChild(css);
   styled = true;
 }
@@ -14527,6 +14532,7 @@ const tabLit = (cfg, id) =>
   : id === "camera" ? !!(cfg.camera?.on !== false
                          && (cfg.prompts?.rows?.some?.((x) => x.frame && String(x.frame.camera || "").trim())
                              || String(cfg.tabs?.i2i?.reangle?.studio || "").trim()))
+  : id === "run" ? runLit()
   : id === "advanced" ? cfg.use_dials &&
       DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
   // IMG2IMG DOES NOT NEED A GALLERY IMAGE ( the dot stays
@@ -14699,11 +14705,12 @@ export function render(node) {
   else if (cur === "advanced") advancedTools(node, body);
   else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
   else if (cur === "moodboard") moodboardTabs(node, body);
+  else if (cur === "run") runTabBody(node, body);
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (!["i2i", "identity", "moodboard"].includes(cur)) {
+  if (!["i2i", "identity", "moodboard", "run"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image
@@ -14771,48 +14778,14 @@ export function render(node) {
   });
   uiWrap.append(uiLab, uiRng, uiVal);
   foot.appendChild(uiWrap);
-  const TIERS = ["high", "medium", "low"];
-  const tierBtn = document.createElement("button");
-  tierBtn.className = "rn-ws-btn rn-ws-tier " + (cfg.vram_tier || "high");
-  tierBtn.style.width = "auto";
-  tierBtn.style.padding = "0 10px";
-  tierBtn.textContent = { high: "VRAM: free range", medium: "VRAM: medium",
-                          low: "VRAM: low" }[cfg.vram_tier || "high"];
-  tierBtn.title = "How much VRAM this workspace is allowed to spend. Low and medium "
-                + "hold the expensive dials (the fidelity pair, the likeness caps, "
-                + "style detail, resize, latent size and the moodboard batch) to "
-                + "numbers that tier can take, so a slider cannot quietly cost you "
-                + "gigabytes. Free range removes every ceiling. Anything held back is "
-                + "named in the console.";
-  tierBtn.onclick = () => {
-    const i = TIERS.indexOf(cfg.vram_tier || "high");
-    cfg.vram_tier = TIERS[(i + 1) % TIERS.length];
-    writeCfg(node);
-    render(node);
-  };
-
-  // DRAFT: iterate on the base render alone. The Detailer and Post nodes read this
-  // off the queued workspace and pass the picture through while it is on, so a seed
-  // costs one sampler run to judge and one flip renders the keeper in full.
-  const draftBtn = document.createElement("button");
-  draftBtn.className = "rn-ws-btn rn-ws-draft" + (cfg.draft ? " on" : "");
-  draftBtn.style.width = "auto";
-  draftBtn.style.padding = "0 10px";
-  draftBtn.textContent = cfg.draft ? "DRAFT" : "Draft";
-  draftBtn.title = cfg.draft
-    ? "Draft is ON: the Detailer and the Post chain pass the picture through, so a "
-      + "queue is the base render alone. Click to render the keeper in full."
-    : "Draft: skip the Detailer passes and the Post chain for fast rerolls on the "
-      + "base render. Nothing on those nodes changes; they pass the picture through "
-      + "until this is off again.";
-  draftBtn.onclick = () => { cfg.draft = !cfg.draft; writeCfg(node); render(node); };
-
+  // Draft and the VRAM limit moved to the Run tab (rednode_ws_run.js), beside the
+  // Generate they change
   const cog = document.createElement("button");
   cog.className = "rn-ws-cog";
   cog.textContent = "⚙";
   cog.title = "Save or delete workspace presets.";
   cog.onclick = () => openCog(node, cog);
-  foot.append(draftBtn, tierBtn, cog);
+  foot.append(cog);
   // INSIDE the host, not on the wrap. The host carries the UI zoom, and a sibling
   // placed after a zoomed flex item is laid out against the UNZOOMED height, so at any
   // scale above 1 the foot rendered part-way up the panel, floating over the effect

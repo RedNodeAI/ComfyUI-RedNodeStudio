@@ -73,8 +73,16 @@ pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock K
 scheduler socket is handed simple when a rig names one of those. A diffusion model file goes
 through the loader the rig names: by file name, a .gguf through ComfyUI-GGUF and anything else
 through the standard loader, or INT8 W8A8 outright through ComfyUI-INT8-Fast when that pack is
-installed; the file picker lists those packs' files beside the standard ones. The footer carries the UI scale, the resize long edge, the studio preset, a Draft switch that makes the Detailer and the Post chain pass the picture through for fast rerolls, and the VRAM
-tier, which clamps the expensive dials for a smaller card.
+installed; the file picker lists those packs' files beside the standard ones. The footer carries
+the UI scale and the presets cog; the resize long edge and the studio preset are on the Advanced
+tab.
+
+**Run.** Queue the workflow and watch it. Generate sits beside Full or Draft (Draft makes the
+Detailer and the Post chain pass the picture through for fast rerolls) and the VRAM limit, which
+clamps the expensive dials for a smaller card. Below them: a box per stage (captions, encode, each
+pass, decode, Detailer, Post FX, Save) with its state, time and step count; the picture forming;
+a VRAM chart with model loads and unloads marked and the models on the card now; and a log of what
+is happening in plain words.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain

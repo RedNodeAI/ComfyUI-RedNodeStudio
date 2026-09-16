@@ -148,7 +148,8 @@ cheap to judge.
 - A switched-off tab lights nothing underneath it: its Auto prompt, Boosts,
   Converter, Re-angle and Swap lights go dark and those pages say the tab is
   off and nothing on them is used
-- The footer keeps only the UI size, Draft, VRAM and the presets cog. Resize
+- The footer keeps only the UI size and the presets cog (Draft and the VRAM
+  limit are on the Run tab). Resize
   long edge, Studio preset and the workspace presets (with Save as and
   Delete) move to a Workspace card at the top of the Advanced tab
 - An auto prompt injected into an unnamed prompt row now lands: the server
@@ -214,6 +215,14 @@ cheap to judge.
   runs Florence on the older transformers path, which on current transformers
   captions nothing but a line of <s> tokens. The console says when a copy is
   being passed over, and when Florence returns no words
+- A Run tab: Generate queues the workflow beside Full or Draft and the VRAM
+  limit, with the run number, seed and time. A box per stage (captions,
+  encode, each pass, decode, Detailer, Post FX, Save) shows Waiting, the step
+  it is on, Done with its time, Skipped with the reason, or Failed. The picture
+  forming shows beside a VRAM chart with model loads and unloads marked, the
+  card's size dashed, and the models on the card now; a log says what is
+  happening in plain words (captions made, models loaded and freed, a pass on
+  another model family). The server sends these as rednode.run_stage events
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
@@ -232,7 +241,7 @@ cheap to judge.
   type when that is the likely cause), or no VAE. The Models tab lists the same
   problems at the top before a queue, and the Models and Prompts tabs show a red
   dot while something is missing
-- A Draft switch in the footer: on, the Detailer and the Post chain pass the
+- A Draft switch (Full or Draft on the Run tab): on, the Detailer and the Post chain pass the
   picture through, so a queue is the base render alone; off again, the next
   queue renders the keeper in full
 - Sampler dials per rig, folded on the rig card: AuraFlow shift, Detail Daemon
