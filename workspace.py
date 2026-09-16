@@ -1362,6 +1362,10 @@ def parse_config(config_json):
         "region_floor": bool(pin.get("region_floor")),
         "feather": max(0, min(64, int(pin.get("feather", 4))
                               if isinstance(pin.get("feather"), (int, float)) else 4)),
+        # BLEND, the Detailer's: how much of the repaint goes back under the mask.
+        # 1 is the repaint, 0.5 keeps half of what was painted over as it was
+        "blend": max(0.0, min(1.0, float(pin.get("blend", 1.0))
+                              if isinstance(pin.get("blend"), (int, float)) else 1.0)),
         # What the painted region should become. Empty means "use whatever conditioning
         # is wired into the render node", which is the whole-image prompt and rarely
         # what you want for a patch.

@@ -350,6 +350,10 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- The Paint tab has the Detailer's Blend, beside Feather: how much of the
+  repaint goes back under the mask. 1.00 is the repaint as before; 0.50
+  keeps half of what was painted over, so a high denoise with a blend under 1
+  repaints harder and still keeps the original's skin and grain
 - The Paint tab's Use last result can pull the picture from before Post FX:
   a Before Post / After Post choice beside the button. Post's grain, vignette
   and grade were baked into what you painted and are hard to paint out; with

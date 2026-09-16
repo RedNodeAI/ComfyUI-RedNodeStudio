@@ -810,7 +810,7 @@ class RedNodePaintRender:
                 return _out(painted)
             m = F.interpolate(mask.unsqueeze(1), size=(big_h, big_w),
                               mode="bilinear", align_corners=False).squeeze(1)
-            m = m.unsqueeze(-1).to(painted.dtype)
+            m = blend_mask(m.unsqueeze(-1).to(painted.dtype), pc)
             result = up * (1 - m) + painted[..., :up.shape[-1]] * m
             print(f"[RedNode Paint] done; the frame comes back at {big_w} x {big_h}, "
                   "with only the painted area re-rendered", flush=True)
@@ -828,13 +828,24 @@ class RedNodePaintRender:
             # the model can see the entire picture for context, not so it may repaint
             # all of it. Compositing the raw render in whole-frame mode replaced parts
             # of the image nobody painted over.
-            m = mask[:, y0:y1, x0:x1].unsqueeze(-1).to(back.dtype)
+            m = blend_mask(mask[:, y0:y1, x0:x1].unsqueeze(-1).to(back.dtype), pc)
             result[:, y0:y1, x0:x1, :] = crop * (1 - m) + back * m
         else:
             result[:, y0:y1, x0:x1, :] = back
         print("[RedNode Paint] done; the rest of the picture was never re-rendered",
               flush=True)
         return _out(result)
+
+
+def blend_mask(m, pc):
+    """The matte scaled by the Paint tab's Blend, the Detailer's dial: 1 puts the
+    repaint back whole, 0.5 keeps half of the painted area as it was."""
+    try:
+        b = float(pc.get("blend", 1.0))
+    except (TypeError, ValueError):
+        b = 1.0
+    b = max(0.0, min(1.0, b))
+    return m if b >= 1.0 else m * b
 
 
 def _out(image):

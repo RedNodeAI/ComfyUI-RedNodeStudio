@@ -1439,6 +1439,8 @@ export function readCfg(node) {
   delete d.paint.lora_groups;
   if (typeof d.paint.brush !== "number") d.paint.brush = 48;
   if (typeof d.paint.feather !== "number") d.paint.feather = 4;
+  if (typeof d.paint.blend !== "number") d.paint.blend = 1;
+  d.paint.blend = Math.max(0, Math.min(1, d.paint.blend));
   // clamped to the same range workspace.py clamps to, or a config holding an old 256
   // would show 256 on the slider while the server quietly rendered at 512
   d.paint.mask_size = Math.max(MASK_MIN, Math.min(MASK_MAX,
@@ -9097,6 +9099,11 @@ function paintBody(node, body) {
   };
   srow("Feather", "feather", 0, 64, 1, 0,
        "Softens the mask edge so the repaint blends instead of leaving a seam.");
+  srow("Blend", "blend", 0, 1, 0.05, 2,
+       "How much of the repaint goes back under the mask, the Detailer's Blend. 1.00 is "
+       + "the repaint; 0.50 keeps half of what you painted over as it was. Tune it "
+       + "against Denoise: a high denoise with a blend under 1 repaints harder and "
+       + "still keeps the original's skin and grain.");
   srow("CFG", "cfg", 1, 30, 0.1, 1,
        "How hard the sampler is pushed toward the prompt. Rides the cfg output of "
        + "RedNode Paint Out, and drives RedNode Paint Render directly.");
