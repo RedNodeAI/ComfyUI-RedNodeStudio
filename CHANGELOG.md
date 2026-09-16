@@ -107,6 +107,11 @@ cheap to judge.
 - Inject into has a Before my words / After my words choice on every tab: an
   injected caption can lead the words already typed in its slot instead of
   following them. After is the default, as before
+- Subject Boosts has one-click presets above the dials, each with a plain
+  description: Balanced (the default), Strong likeness, Prompt first (the
+  lightest on VRAM), Pose only and Several people. A preset sets every
+  subject dial at once and switches the dials on; the dials stay editable,
+  and the row reads Custom once they no longer match
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,

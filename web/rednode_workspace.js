@@ -528,6 +528,11 @@ css.textContent = `
   font-size:12px;padding:4px 6px;text-align:right;flex:none}
 .rn-ws-note{font-size:11.5px;opacity:.5;line-height:1.45}
 /* a switch's label row: note-coloured words, but the switch stays at full strength */
+.rn-ws-bpresets{display:flex;gap:6px;flex-wrap:wrap}
+.rn-ws-bpreset{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#c8ccd2;
+  cursor:pointer;font-size:12.5px;font-weight:600;padding:7px 12px}
+.rn-ws-bpreset:hover{border-color:#b8283c;color:#fff}
+.rn-ws-bpreset.cur{background:#b8283c;border-color:#b8283c;color:#fff}
 .rn-ws-swlabel{font-size:12px;color:#8a919b;display:flex;align-items:center;gap:6px}
 .rn-ws-bigbtn{height:30px!important;padding:0 14px!important;font-size:13px!important;
   width:auto!important}
@@ -13236,6 +13241,71 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
 }
 
 // A collapsible "Dials" box at the bottom of the tab those dials belong to.
+// ONE-CLICK BOOST SETTINGS for Subject, from recipes the pack already uses. Each sets
+// every subject dial at once; the dials below stay editable, and a preset reads as
+// picked while they still match it.
+const SUBJECT_BOOST_PRESETS = [
+  { id: "balanced", label: "Balanced",
+    tip: "The default: a clear likeness that still follows the prompt.",
+    v: { reference_fidelity: 2.5, likeness_vs_obedience: 768, subject_likeness_px: 0,
+         identity_start: 0, identity_end: 1, isolate_refs: false, boost_blocks: "all" } },
+  { id: "strong", label: "Strong likeness",
+    tip: "Holds the faces harder, for when a person drifts. Costs more VRAM and follows "
+       + "the prompt a little less.",
+    v: { reference_fidelity: 4, likeness_vs_obedience: 1024, subject_likeness_px: 1024,
+         identity_start: 0, identity_end: 1, isolate_refs: false, boost_blocks: "all" } },
+  { id: "prompt", label: "Prompt first",
+    tip: "A looser likeness so the prompt leads, for new styles and big changes. No boost "
+       + "matrix is built, so it is the lightest on VRAM.",
+    v: { reference_fidelity: 1, likeness_vs_obedience: 512, subject_likeness_px: 0,
+         identity_start: 0, identity_end: 1, isolate_refs: false, boost_blocks: "all" } },
+  { id: "pose", label: "Pose only",
+    tip: "The people guide only the first part of the render: their pose and layout carry "
+       + "over, while the look comes from the prompt.",
+    v: { reference_fidelity: 2.5, likeness_vs_obedience: 768, subject_likeness_px: 0,
+         identity_start: 0, identity_end: 0.3, isolate_refs: false, boost_blocks: "all" } },
+  { id: "group", label: "Several people",
+    tip: "For two or three people: each reference is kept from reading the others, so "
+       + "faces blend less. Costs more VRAM.",
+    v: { reference_fidelity: 2.5, likeness_vs_obedience: 768, subject_likeness_px: 0,
+         identity_start: 0, identity_end: 1, isolate_refs: true, boost_blocks: "all" } },
+];
+
+function boostPresetRow(node, cfg) {
+  const val = (k) => {
+    if (cfg.dials[k] !== undefined) return cfg.dials[k];
+    return DIALS.find((d) => d.key === k)?.def;
+  };
+  const cur = SUBJECT_BOOST_PRESETS.find((p) =>
+    Object.entries(p.v).every(([k, v]) => val(k) === v));
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;flex-direction:column;gap:6px;margin:4px 0 6px";
+  const row = document.createElement("div");
+  row.className = "rn-ws-bpresets";
+  for (const p of SUBJECT_BOOST_PRESETS) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-bpreset" + (cur === p ? " cur" : "");
+    b.dataset.preset = p.id;
+    b.textContent = p.label;
+    b.title = p.tip;
+    b.onclick = () => {
+      Object.assign(cfg.dials, p.v);
+      cfg.use_dials = true;          // a preset only counts with the dials going out
+      writeCfg(node);
+      render(node);
+    };
+    row.appendChild(b);
+  }
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.style.opacity = ".8";
+  note.textContent = cur
+    ? `${cur.label}: ${cur.tip}`
+    : "Custom: the dials below no longer match a preset. Pick one to start again.";
+  wrap.append(row, note);
+  return wrap;
+}
+
 function dialSection(node, body, tabId, { flat = false } = {}) {
   const cfg = node._rnCfg;
   const dials = DIALS.filter((d) => d.tab === tabId);
@@ -13278,6 +13348,7 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
   if (tabId === "advanced") ttl.textContent = "STUDIO SETTINGS" +
     (touched ? `: ${touched} set` : ": all at defaults");
   sect.appendChild(head);
+  if (flat && tabId === "subject") sect.appendChild(boostPresetRow(node, cfg));
 
   if (open) {
     for (const d of dials) {
