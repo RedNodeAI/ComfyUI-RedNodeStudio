@@ -11925,6 +11925,44 @@ function passesTab(node, body) {
     setup.appendChild(tiles);
     if (!many) setup.appendChild(dimLine("One pass: add a pass to vary settings per pass."));
 
+    // RAMP: space a varied setting evenly across the passes, lowest to highest (Up)
+    // or highest to lowest (Down), so a climb or a fall needs no bar set by hand
+    const rampable = VARY.filter((v) => v.key && lists[v.flag]);
+    if (rampable.length) {
+      setup.appendChild(heading("RAMP"));
+      for (const v of rampable) {
+        const rrow = document.createElement("div");
+        rrow.className = "rn-ws-row rn-ws-ramp";
+        const rl = document.createElement("span");
+        rl.className = "rn-ws-note";
+        rl.style.minWidth = "58px";
+        rl.textContent = v.label;
+        rrow.appendChild(rl);
+        for (const [dir, word, tip] of [
+          ["up", "Up", "lowest on the first pass, highest on the last"],
+          ["down", "Down", "highest on the first pass, lowest on the last"],
+        ]) {
+          const b = document.createElement("button");
+          b.className = "rn-ws-btn rn-ws-compact";
+          b.style.cssText = "flex:1 1 0;padding:0 10px";
+          b.dataset.ramp = v.flag + ":" + dir;
+          b.textContent = (dir === "up" ? "↗ " : "↘ ") + word;
+          b.title = `Space the ${v.label.toLowerCase()} evenly across the passes, ${tip}.`;
+          b.onclick = () => {
+            const list = passValueList(t, v.key, v.base, v.min, v.max);
+            const lo = Math.min(...list), hi = Math.max(...list);
+            const [a, z] = dir === "up" ? [lo, hi] : [hi, lo];
+            t[v.key] = list.map((_, i) =>
+              snapStep(a + (z - a) * (i / Math.max(1, list.length - 1)), v.min, v.max, v.step));
+            writeCfg(node);
+            render(node);
+          };
+          rrow.appendChild(b);
+        }
+        setup.appendChild(rrow);
+      }
+    }
+
     setup.append(document.createElement("hr"), heading("SAME FOR EVERY PASS"));
     const shDial = (label, key, min, max, step, accent, fmt, tip) => {
       const w = document.createElement("div");
