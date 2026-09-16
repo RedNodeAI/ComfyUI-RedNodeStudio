@@ -11961,6 +11961,21 @@ function continueRow(node, t) {
   return { row, sync };
 }
 
+// Which page of the panel is showing: the tab, and the sub-tab (and inner tab) inside
+// it where there is one. The body's kept scroll position is keyed on this.
+function viewKeyOf(node, cur) {
+  const p = node.properties || {};
+  if (cur === "i2i") return "i2i/" + (node._rnI2iSub || p.rn_i2i_sub || "source");
+  if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
+  if (cur === "identity") {
+    let sub = node._rnIdSub || p.rn_identity_sub || "subject";
+    if (sub === "people") sub = "subject";
+    const inner = node._rnIdInner?.[sub] || p["rn_identity_" + sub] || "gallery";
+    return sub === "masks" ? "identity/masks" : `identity/${sub}/${inner}`;
+  }
+  return cur;
+}
+
 // ---- Img2Img as sub-tabs ---------------------------------------------------------
 // One section at a time under a strip of tabs, each with a light saying whether that
 // section is doing anything, and a status bar that stays put. The sections are the
@@ -13652,9 +13667,13 @@ export function render(node) {
   const cur = TAB_ORDER.some((t) => t.id === node._rnTab) ? node._rnTab : fallbackTab;
   // Most controls still rebuild this body today. Keep the outgoing tab's position in
   // the one rebuild funnel so no button can forget it; a different tab starts clean.
+  // The kept position belongs to the VIEW, not just the tab: Img2Img, Latent and
+  // Identity hold several pages under one tab, and one page's offset on another reads
+  // as the panel jumping.
+  const viewKey = viewKeyOf(node, cur);
   const previousBody = node._rnBodyEl;
   const previousBodyTab = node._rnBodyTab;
-  const previousScroll = previousBodyTab === cur ? Number(previousBody?.scrollTop || 0) : 0;
+  const previousScroll = previousBodyTab === viewKey ? Number(previousBody?.scrollTop || 0) : 0;
   root.replaceChildren();
   const host = document.createElement("div");
   host.className = "rn-ws-host";
@@ -13747,8 +13766,8 @@ export function render(node) {
   try { node._rnAfterMount?.(); } catch (e) { /* a restore is never worth a broken panel */ }
   node._rnAfterMount = null;
   node._rnBodyEl = body;
-  node._rnBodyTab = cur;
-  if (previousBody && previousBodyTab === cur) {
+  node._rnBodyTab = viewKey;
+  if (previousBody && previousBodyTab === viewKey) {
     body.scrollTop = previousScroll;
     // The rebuilt body may not be able to HOLD the restored offset yet: canvases get
     // their height on image load, so scrollHeight is briefly small and the browser
@@ -13758,7 +13777,7 @@ export function render(node) {
       // remember WHERE the clamp landed, not just that it did: a body tall enough
       // for 200 of the 400 wanted clamps to 200, and a payer that only fires from
       // exactly 0 would drop that restore on the floor
-      node._rnScrollOwed = { tab: cur, top: previousScroll,
+      node._rnScrollOwed = { tab: viewKey, top: previousScroll,
                              clamped: Number(body.scrollTop || 0) };
     } else {
       delete node._rnScrollOwed;
