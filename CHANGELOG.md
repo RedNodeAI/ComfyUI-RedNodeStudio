@@ -82,6 +82,13 @@ cheap to judge.
   engine's own settings beside them, then the settings every engine shares and
   the result. The settings cog is gone; picking an engine is how its settings
   open
+- The engines list lightest first (CLIP gen, WD14, Florence, Ollama, QwenVL,
+  JoyCaption), each with a rough VRAM figure and a total for the ones switched
+  on. Ollama's comes from the picked model's size
+- Low VRAM captioning, a switch shared by every tab and off by default:
+  the main model is unloaded before the engines caption, and every engine
+  (Ollama and JoyCaption included) is unloaded before the sampler loads the
+  model again. Slower, but the captioners and the model never share the card
 - The Prompt Converter has its own on switch in its header, so it reads as on
   or off at a glance. Off passes the prompt through untouched and keeps the
   settings; workflows saved before it load with the converter on

@@ -1174,6 +1174,9 @@ def parse_config(config_json):
         # response; wd14_unload drops the tagger's ONNX session after each run.
         "keep_alive": int(_num("keep_alive", 0, 0, 3600)),
         "wd14_unload": bool(auto_in.get("wd14_unload", True)),
+        # LOW VRAM CAPTIONING, off unless asked: the main model leaves the card before
+        # the engines run, and every engine leaves before the sampler loads it again
+        "low_vram": bool(auto_in.get("low_vram", False)),
         "frank": bool(auto_in.get("frank")),
         # The two halves of the Ollama call. instruction replaces the mode's shipped
         # system wording; question replaces autoprompt.DEFAULT_QUESTION. Engine settings,
@@ -2523,6 +2526,23 @@ class RedNodeStudioWorkspace:
                        and tabs[n]["on"]]
         run_keep_alive = max(300, int(ga0["keep_alive"])) if ollama_tabs else \
             int(ga0["keep_alive"])
+        low_vram = bool(ga0.get("low_vram"))
+        captioning = [n for n in ("subject", "scene", "moodboard", "i2i")
+                      if tabs[n]["on"] and tabs[n]["auto"]["on"] and tabs[n]["images"]
+                      and any(tabs[n]["auto"][k] for k in ("ollama", "wd14", "joy", "qwen",
+                                                           "florence"))]
+        if low_vram and captioning:
+            # a cached caption costs nothing, but there is no cheap way to know that
+            # ahead, so the card is cleared whenever an engine could run
+            try:
+                import comfy.model_management as _mm
+                _mm.unload_all_models()
+            except Exception as _ue:
+                print("[RedNode Workspace] low VRAM captioning: could not unload the "
+                      "models (%s)" % _ue, flush=True)
+            autoprompt.free_vram()
+            print("[RedNode Workspace] low VRAM captioning: models unloaded before the "
+                  "auto prompt engines run (%s)" % ", ".join(captioning), flush=True)
         for tab_name in ("subject", "scene", "moodboard", "i2i"):
             t = tabs[tab_name]
             a = t["auto"]
@@ -2579,7 +2599,7 @@ class RedNodeStudioWorkspace:
                     use_clip=a["clipgen"], clip=clip,
                     use_florence=a["florence"],
                     florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
-                    unload_heavy=ga["wd14_unload"],
+                    unload_heavy=ga["wd14_unload"] or low_vram,
                     combine=a["combine"], max_words=a["length"],
                     model=ga["model"], url=ga["url"],
                     wd14_model=ga["wd14_model"], threshold=ga["threshold"],
@@ -2592,7 +2612,8 @@ class RedNodeStudioWorkspace:
                     think=ga["think"], keep_alive=run_keep_alive,
                     frank=ga["frank"],
                     joy_opts={"quantization": ga["joy_quant"], "prompt_style": ga["joy_style"],
-                              "caption_length": ga["joy_length"], "memory": ga["joy_memory"],
+                              "caption_length": ga["joy_length"],
+                              "memory": "Clear After Run" if low_vram else ga["joy_memory"],
                               "use_mode_prompt": ga["joy_mode_prompts"]},
                     instruction=ga["instruction"], question=ga["question"],
                     # cache_base stays exactly as it was. build_prompt folds the
@@ -2619,8 +2640,13 @@ class RedNodeStudioWorkspace:
                           f"{len(prompts[tab_name])} characters", flush=True)
         # hand the VRAM back if that is what you asked for; holding it was only
         # ever to get through this run's tabs on one load
-        if ollama_tabs and int(ga0["keep_alive"]) <= 0:
+        if ollama_tabs and (int(ga0["keep_alive"]) <= 0 or low_vram):
             autoprompt.ollama_unload(ga0["model"], ga0["url"])
+        if low_vram and captioning:
+            # every engine off the card before the sampler loads the model again
+            autoprompt.release_engines("", ga0["url"])
+            print("[RedNode Workspace] low VRAM captioning: the engines are unloaded; "
+                  "the main model loads again for sampling", flush=True)
 
         any_engines = any(
             tabs[n]["auto"]["on"] and (tabs[n]["auto"]["wd14"] or tabs[n]["auto"]["ollama"]
@@ -3648,7 +3674,7 @@ def standalone_autoprompt(config_json, tab_name, entry):
         use_clip=False, clip=None,
         use_florence=a["florence"],
         florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
-        unload_heavy=ga["wd14_unload"],
+        unload_heavy=ga["wd14_unload"] or ga.get("low_vram", False),
         combine=a["combine"], max_words=a["length"],
         model=ga["model"], url=ga["url"],
         wd14_model=ga["wd14_model"], threshold=ga["threshold"],
@@ -3677,9 +3703,13 @@ try:
     @PromptServer.instance.routes.get("/rednode/autoprompt_status")
     async def _rednode_autoprompt_status(request):
         url = request.query.get("url") or autoprompt.OLLAMA_URL
-        models = autoprompt.ollama_models(url)
+        sizes = autoprompt.ollama_model_sizes(url)
+        models = sorted(sizes)
         return web.json_response({
             "ollama": bool(models), "models": models,
+            # for the panel's VRAM estimates
+            "ollama_sizes": sizes,
+            "engine_defaults": autoprompt.engine_defaults(),
             "wd14": autoprompt.wd14_available(),
             "wd14_model": autoprompt.wd14_default_model(),
             "wd14_models": autoprompt.wd14_models(),

@@ -238,12 +238,18 @@ def _io_bytes():
     return _io.BytesIO()
 
 
-def ollama_models(url=OLLAMA_URL, transport=_http_json):
+def ollama_model_sizes(url=OLLAMA_URL, transport=_http_json):
+    """{model name: file size in bytes} from Ollama's list; {} when it is not running."""
     try:
         data = transport(f"{url.rstrip('/')}/api/tags", None, 10)
-        return sorted(m.get("name", "") for m in data.get("models", []) if m.get("name"))
+        return {m["name"]: int(m.get("size") or 0)
+                for m in data.get("models", []) if m.get("name")}
     except Exception:
-        return []
+        return {}
+
+
+def ollama_models(url=OLLAMA_URL, transport=_http_json):
+    return sorted(ollama_model_sizes(url, transport))
 
 
 import re as _re
@@ -566,6 +572,17 @@ _fl_model = {"key": None, "obj": None}
 FLORENCE_TASKS = ("more_detailed_caption", "detailed_caption", "caption",
                   "prompt_gen_mixed_caption", "prompt_gen_mixed_caption_plus",
                   "prompt_gen_tags", "prompt_gen_analyze")
+
+
+def engine_defaults():
+    """The installed caption packs' own default model and quantization, for the panel's
+    VRAM estimates. Empty strings where a pack is missing."""
+    qwen, joy = _node_cls("AILab_QwenVL"), (_node_cls("JC_adv") or _node_cls("JC"))
+    return {
+        "qwen_model": str(_widget_default(qwen, "model_name") or "") if qwen else "",
+        "qwen_quant": str(_widget_default(qwen, "quantization") or "") if qwen else "",
+        "joy_quant": str(_widget_default(joy, "quantization") or "") if joy else "",
+    }
 
 
 def florence_available():

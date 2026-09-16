@@ -1363,6 +1363,7 @@ export function readCfg(node) {
   d.auto.replace_underscore = !!d.auto.replace_underscore;
   d.auto.think = !!d.auto.think;
   if (d.auto.wd14_unload === undefined) d.auto.wd14_unload = true;
+  d.auto.low_vram = !!d.auto.low_vram;
   d.auto.frank = !!d.auto.frank;
   for (const k of ["joy_quant", "joy_style", "joy_length"]) {
     if (typeof d.auto[k] !== "string") d.auto[k] = "";
@@ -3876,8 +3877,42 @@ function injectRowUI(node, sect, tabName) {
 }
 
 // The engines an Auto prompt box can run, in list order.
-const AUTO_ENGINES = [["ollama", "Ollama"], ["wd14", "WD14 tags"], ["joy", "JoyCaption"],
-                      ["qwen", "QwenVL"], ["florence", "Florence"], ["clipgen", "CLIP gen"]];
+// The engines an Auto prompt box can run, lightest first.
+const AUTO_ENGINES = [["clipgen", "CLIP gen"], ["wd14", "WD14 tags"], ["florence", "Florence"],
+                      ["ollama", "Ollama"], ["qwen", "QwenVL"], ["joy", "JoyCaption"]];
+
+// A ROUGH VRAM figure per engine, for the list: what its model needs on the card while
+// it captions. Weights plus a margin, from the model's size where one is known.
+function engineVram(key, cfg) {
+  const A = cfg.auto || {};
+  const D = autoStatus.engine_defaults || {};
+  const quantGb = (billions, quant) => (/4/.test(quant) ? billions * 0.7 + 1.5
+    : /8/.test(quant) ? billions * 1.2 + 1.2 : billions * 2.1 + 1);
+  if (key === "clipgen") return { gb: 0, text: "No extra" };
+  if (key === "wd14") return { gb: 0.5, text: "~0.5 GB" };
+  if (key === "florence") {
+    const m = String(A.florence_model || (autoStatus.florence_models || [])[0] || "");
+    const gb = /large/i.test(m) ? 1.6 : 0.6;
+    return { gb, text: `~${gb} GB` };
+  }
+  if (key === "ollama") {
+    const bytes = Number((autoStatus.ollama_sizes || {})[A.model] || 0);
+    if (!bytes) return { gb: null, text: "Its own" };
+    const gb = Math.round((bytes / 1e9 * 1.15 + 0.5) * 10) / 10;
+    return { gb, text: `~${gb} GB` };
+  }
+  if (key === "qwen") {
+    const b = Number((String(D.qwen_model || "").match(/(\d+(?:\.\d+)?)\s*B/i) || [])[1]);
+    if (!b) return { gb: null, text: "Several GB" };
+    const gb = Math.round(quantGb(b, String(D.qwen_quant || "")) * 10) / 10;
+    return { gb, text: `~${gb} GB` };
+  }
+  if (key === "joy") {
+    const gb = Math.round(quantGb(8, String(A.joy_quant || D.joy_quant || "")) * 10) / 10;
+    return { gb, text: `~${gb} GB` };
+  }
+  return { gb: null, text: "" };
+}
 
 // THE AUTO PROMPT BOX: the engines as a list on the left, the picked engine's own
 // settings beside it, the settings every engine shares under those, and the result
@@ -4290,7 +4325,13 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       nm.textContent = label;
       const st = document.createElement("span");
       st.className = "st";
-      st.textContent = !ok ? (key === "ollama" ? "Not reachable" : "Not installed") : "";
+      const est = engineVram(key, cfg);
+      st.textContent = !ok ? (key === "ollama" ? "Not reachable" : "Not installed") : est.text;
+      if (ok && est.text) {
+        st.title = key === "ollama"
+          ? "Roughly what the picked Ollama model needs, loaded in Ollama's own process."
+          : "Roughly what this engine's model needs on the card while it captions.";
+      }
       erow.append(sw, nm, st);
       erow.onclick = () => {
         node._rnAutoEngine = key;
@@ -4298,6 +4339,27 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         render(node);
       };
       list.appendChild(erow);
+    }
+    // what the engines that are on need together
+    {
+      const on = AUTO_ENGINES.filter(([k]) => a[k] && avail[k][0]);
+      const parts = on.map(([k]) => engineVram(k, cfg));
+      const known = parts.filter((p) => p.gb !== null).reduce((s2, p) => s2 + p.gb, 0);
+      const tot = document.createElement("div");
+      tot.className = "rn-ws-erow rn-ws-etotal";
+      tot.style.cursor = "default";
+      const tl = document.createElement("span");
+      tl.className = "nm";
+      tl.textContent = on.length ? "On together" : "Nothing on";
+      const tv = document.createElement("span");
+      tv.className = "st";
+      tv.textContent = !on.length ? ""
+        : `~${Math.round(known * 10) / 10} GB` + (parts.some((p) => p.gb === null) ? " +" : "");
+      tot.title = "A rough total for the engines switched on, on top of the main model "
+                + "unless Low VRAM captioning is on. Engines run one after another, but "
+                + "each stays loaded unless it is set to unload.";
+      tot.append(tl, tv);
+      list.appendChild(tot);
     }
 
     const right = document.createElement("div");
@@ -4335,6 +4397,15 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     frank.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:auto";
     srow.append(fixedBtn, frank);
     shared.appendChild(srow);
+    const lowRow = boolBtn("Low VRAM captioning", "low_vram",
+                           "On: the main model is unloaded before the engines caption, and "
+                           + "every engine is unloaded before the sampler loads the model "
+                           + "again. Slower, since the model reloads each run, but the "
+                           + "captioners and the model never share the card. For smaller "
+                           + "cards. Shared by every tab.");
+    lowRow.className = "rn-ws-note";
+    lowRow.style.cssText = "display:flex;align-items:center;gap:6px";
+    shared.appendChild(lowRow);
 
     if (tabName === "i2i" || isPaint) {
       const mrow = document.createElement("div");
@@ -11630,7 +11701,7 @@ function identityTabs(node, body) {
   }
   const nm = document.createElement("span");
   nm.className = "nm";
-  nm.textContent = "Krea 2 Identity";
+  nm.textContent = sub === "subject" ? "Subject" : sub === "scene" ? "Scene" : "Krea 2 Identity";
   bar.appendChild(nm);
   const pics = (n) => `${n} Image${n === 1 ? "" : "s"}`;
   const tabState = (t) => (t.on ? pics(t.images.length) : "Off");
