@@ -750,12 +750,16 @@ css.textContent = `
 .rn-ws-sub.inner .rn-ws-subt{padding:5px 10px;font-size:11px;background:#1b1e23}
 .rn-ws-sub.inner .rn-ws-subt.cur{background:#233247;border-color:#4a8fe0;color:#fff}
 .rn-ws-peoplewarn{color:#f0c58a}
-.rn-ws-people{display:flex;gap:8px;flex-wrap:wrap}
-.rn-ws-pthumb{display:flex;flex-direction:column;align-items:center;gap:3px;background:#15171b;
-  border:1px solid #2e333a;border-radius:6px;padding:4px 6px;cursor:pointer;font-size:11px;
-  color:#c8ccd2}
-.rn-ws-pthumb img{width:52px;height:52px;object-fit:cover;border-radius:4px}
-.rn-ws-pthumb.cur{border-color:#b8283c;background:#2a1a1f;color:#fff}
+.rn-ws-person{display:flex;gap:10px;align-items:flex-start;background:#15171b;
+  border:1px solid #2e333a;border-radius:6px;padding:6px 8px}
+.rn-ws-person.off{opacity:.6}
+.rn-ws-person img{width:52px;height:52px;object-fit:cover;border-radius:4px;flex:none}
+.rn-ws-person .pb{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0}
+.rn-ws-person .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rn-ws-person .tag{font-size:11px;font-weight:700;color:#9aa0a8;min-width:52px}
+.rn-ws-person input[type=text]{flex:1 1 120px;min-width:0;background:#0f1114;
+  border:1px solid #33373d;border-radius:5px;color:#e8ecf1;padding:4px 8px}
+.rn-ws-person .cap{font-size:12px;color:#aab0b8;white-space:pre-wrap;line-height:1.4}
 .rn-ws-skipnote{border-color:#e0a84a88;color:#f0c58a}
 .rn-ws-badge{align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.06em;
   padding:2px 8px;border-radius:5px;background:#2a2e35;color:#c8ccd2}
@@ -1001,7 +1005,7 @@ function normaliseAutoUi(value, defaultMode) {
   a.qwen = !!a.qwen;
   a.clipgen = !!a.clipgen;
   a.florence = !!a.florence;
-  a.person = Number.isInteger(a.person) && a.person >= 0 ? a.person : 0;
+  a.rewrite = !!a.rewrite;
   return a;
 }
 function normSel(name, sel, imagesLen) {
@@ -1051,6 +1055,10 @@ export function readCfg(node) {
                    : name === "moodboard" ? "style"
                    : name === "i2i" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode);
+    if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
+                               || Array.isArray(t.people_meta))) {
+      t.people_meta = {};
+    }
     if (name === "boost_mask" || name === "edit_mask") {
       // the mask painter's own fields: the flattened mask FILE, and an OWN uploaded
       // source pinned by path so it survives a reload. "" means follow the gallery
@@ -2062,11 +2070,11 @@ async function runPaintFinal(node, r, withPost) {
 
 /** Run one image through the standalone caption route. Gallery thumbnails and Paint
  *  results share this path so the server's 409 and the panel's busy state cannot drift. */
-async function runStandaloneAutoPrompt(node, tabName, entry) {
-  if (node._rnAutoBusy) {
+async function runStandaloneAutoPrompt(node, tabName, entry, { keepTab = false } = {}) {
+  if (node._rnAutoBusy && !keepTab) {
     throw new Error("An auto prompt is already running.");
   }
-  node._rnAutoBusy = tabName;
+  if (!keepTab) node._rnAutoBusy = tabName;
   render(node);
   try {
     const cfgW = findWidget(node, "config");
@@ -2082,15 +2090,17 @@ async function runStandaloneAutoPrompt(node, tabName, entry) {
         : `Auto prompt request failed (${res.status}).`));
     }
     const prompt = d.prompt || "";
-    (node._rnPrompts ||= {})[tabName] = prompt;
+    if (!keepTab) (node._rnPrompts ||= {})[tabName] = prompt;
     if (d.skipped?.length) {
       console.log("[RedNode Workspace] standalone auto prompt skipped:",
                   d.skipped.join("; "));
     }
     return prompt;
   } finally {
-    node._rnAutoBusy = null;
-    render(node);
+    if (!keepTab) {
+      node._rnAutoBusy = null;
+      render(node);
+    }
   }
 }
 
@@ -4013,11 +4023,29 @@ function autoEntry(cfg, tabName) {
   const t = cfg.tabs[tabName];
   if (!t) return "";
   const idx = Array.isArray(t.sel) ? (t.sel[0] ?? 0) : t.sel;
-  if (tabName === "subject" && t.auto?.person > 0) {
-    const pick = (t.extra_sel || [])[t.auto.person - 1];
-    if (pick !== undefined) return t.images[pick] || "";
-  }
   return (t.images || [])[idx] || "";
+}
+
+// A person's last caption: this session's, else the one saved beside the picture
+const _personFetched = new Set();
+function personCaption(node, entry) {
+  const cached = node._rnPersonCaps?.[entry];
+  if (cached !== undefined) return cached;
+  if (!_personFetched.has(entry)) {
+    _personFetched.add(entry);
+    api.fetchApi(`/rednode/image_prompts?entry=${encodeURIComponent(entry)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const parts = Object.values(d?.parts || {});
+        const text = parts.length ? String(parts[0]?.text || "") : "";
+        if (text) {
+          (node._rnPersonCaps ||= {})[entry] = text;
+          render(node);
+        }
+      })
+      .catch(() => {});
+  }
+  return "";
 }
 
 function autoSection(node, body, tabName, { flat = false } = {}) {
@@ -4397,44 +4425,111 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       return g;
     };
 
-    // WHO IT DESCRIBES, on Subject: the picked people as small pictures
+    // THE PEOPLE, on Subject: a row per picked person with a name, its own switch, a
+    // Generate button and its caption; then the rewrite that merges them into the row
     if (tabName === "subject") {
       const S = cfg.tabs.subject;
+      const meta = (S.people_meta ||= {});
       const order = S.images.length ? [S.sel, ...(S.extra_sel || [])] : [];
-      if (a.person >= order.length) a.person = 0;
       const dc = document.createElement("div");
       dc.className = "rn-ws-card rn-ws-describe";
       const dh = document.createElement("div");
       dh.className = "ch";
-      dh.textContent = "DESCRIBE";
+      dh.textContent = "PEOPLE";
       dc.appendChild(dh);
-      if (order.length > 1) {
-        const row = document.createElement("div");
-        row.className = "rn-ws-people";
-        order.forEach((imgIdx, k) => {
-          const b = document.createElement("button");
-          b.className = "rn-ws-pthumb" + (a.person === k ? " cur" : "");
-          b.dataset.person = String(k);
-          b.title = `Describe ${k ? "person " + (k + 1) : "the main subject"}: ${S.images[imgIdx]}`;
-          const im = document.createElement("img");
-          im.src = thumbUrl(S.images[imgIdx], 120);
-          im.alt = "";
-          const lb = document.createElement("span");
-          lb.textContent = k ? `#${k + 1}` : "#1 Main";
-          b.append(im, lb);
-          b.onclick = () => { a.person = k; writeCfg(node); render(node); };
-          row.appendChild(b);
-        });
-        dc.appendChild(row);
+      if (!order.length) {
+        const n0 = document.createElement("div");
+        n0.className = "rn-ws-note";
+        n0.textContent = "No people picked yet. Pick them in the Gallery.";
+        dc.appendChild(n0);
       }
-      const dn = document.createElement("div");
-      dn.className = "rn-ws-note";
-      dn.textContent = order.length > 1
-        ? `The caption describes ${a.person ? "person " + (a.person + 1) : "the main subject"}. `
-          + "Click a picture to describe someone else; Saved prompts reads that picture."
-        : "The caption describes the main subject. Pick more people in the Gallery to "
-          + "choose who it describes.";
-      dc.appendChild(dn);
+      order.forEach((imgIdx, k) => {
+        const entry = S.images[imgIdx];
+        const m = (meta[entry] ||= {});
+        const on = m.auto === undefined ? k === 0 : !!m.auto;
+        const row = document.createElement("div");
+        row.className = "rn-ws-person" + (on ? "" : " off");
+        row.dataset.person = String(k);
+        const im = document.createElement("img");
+        im.src = thumbUrl(entry, 120);
+        im.alt = "";
+        im.title = entry;
+        const pb = document.createElement("div");
+        pb.className = "pb";
+        const top = document.createElement("div");
+        top.className = "top";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = k ? `#${k + 1}` : "#1 Main";
+        const nameIn = document.createElement("input");
+        nameIn.type = "text";
+        nameIn.value = m.name || "";
+        nameIn.placeholder = `Person ${k + 1}`;
+        nameIn.title = "A name for this person, used in the caption and by the rewrite, "
+                     + "e.g. a character's name. Empty reads as Person " + (k + 1) + ".";
+        nameIn.addEventListener("change", () => {
+          m.name = nameIn.value.trim().slice(0, 40);
+          writeCfg(node);
+        });
+        const sw = document.createElement("button");
+        sw.className = "rn-ws-sw" + (on ? " on" : "");
+        sw.title = on ? "This person is captioned at queue time. Click to leave them out."
+                      : "Not captioned. Click to caption this person at queue time too.";
+        sw.onclick = () => { m.auto = !on; writeCfg(node); render(node); };
+        const capBtn = document.createElement("button");
+        capBtn.className = "rn-ws-btn rn-ws-compact";
+        capBtn.style.padding = "0 10px";
+        const busy = node._rnAutoBusy === "subject:" + entry;
+        capBtn.textContent = busy ? "Generating…" : "Generate";
+        capBtn.disabled = !!node._rnAutoBusy;
+        capBtn.title = "Caption this person now with the engines below, without a queue. The "
+                  + "caption is saved beside the picture and reused by the next queue.";
+        capBtn.onclick = async () => {
+          try {
+            node._rnAutoBusy = "subject:" + entry;
+            render(node);
+            const text = await runStandaloneAutoPrompt(node, "subject", entry, { keepTab: true });
+            (node._rnPersonCaps ||= {})[entry] = text || "";
+          } catch (e) {
+            (node._rnPersonCaps ||= {})[entry] = `Could not caption: ${e.message}`;
+          } finally {
+            node._rnAutoBusy = null;
+            render(node);
+          }
+        };
+        top.append(tag, nameIn, sw, capBtn);
+        const cap = document.createElement("div");
+        cap.className = "cap";
+        const text = personCaption(node, entry);
+        cap.textContent = text || "No caption yet. Generate one, or queue a run.";
+        if (text) {
+          cap.style.cursor = "pointer";
+          cap.title = "Click to copy.";
+          cap.onclick = () => navigator.clipboard?.writeText?.(text);
+        }
+        pb.append(top, cap);
+        row.append(im, pb);
+        dc.appendChild(row);
+      });
+      const rw = boolBtn("Rewrite into the prompt with these names", "rewrite", "");
+      // a per-tab switch, not a shared one: bind it to this tab's auto settings
+      const rwSw = rw.querySelector ? rw.querySelector(".rn-ws-sw") : rw.children[1];
+      rwSw.className = "rn-ws-sw" + (a.rewrite ? " on" : "");
+      rwSw.title = "On: at queue time Ollama merges the prompt row named in Inject into "
+                 + "with these people's captions, using their names. It runs once and is "
+                 + "reused; Fresh runs it every queue. Off: the captions are joined into "
+                 + "the row as they are.";
+      rwSw.onclick = () => { a.rewrite = !a.rewrite; writeCfg(node); render(node); };
+      rw.className = "rn-ws-note";
+      rw.style.cssText = "display:flex;align-items:center;gap:6px";
+      dc.appendChild(rw);
+      if (a.rewrite && !a.inject_row) {
+        const wn = document.createElement("div");
+        wn.className = "rn-ws-note rn-ws-peoplewarn";
+        wn.textContent = "Pick a prompt row under Inject into (Result, below) for the "
+                       + "rewrite to work on.";
+        dc.appendChild(wn);
+      }
       sect.appendChild(dc);
     }
 
@@ -14011,6 +14106,9 @@ api.addEventListener("rednode.workspace_prompts", (e) => {
     for (const n of (graph._nodes || graph.nodes || [])) {
       if (n.type === NODE_NAME && String(n.id) === String(d.node)) {
         n._rnPrompts = d.prompts || {};
+        if (d.people && typeof d.people === "object") {
+          n._rnPersonCaps = { ...(n._rnPersonCaps || {}), ...d.people };
+        }
         render(n);
         return;
       }

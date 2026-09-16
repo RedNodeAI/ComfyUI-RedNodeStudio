@@ -534,9 +534,8 @@ def _normalise_auto(auto_in, default_mode):
         # fixed (default): the same image reuses the cached prompt. Unfixed
         # re-runs the LLM every queue for fresh wording each run.
         "fixed": bool(auto_in.get("fixed", True)),
-        # the Subject tab's: which picked person the caption describes, 0 the main one
-        "person": (max(0, int(auto_in.get("person")))
-                   if isinstance(auto_in.get("person"), (int, float)) else 0),
+        # the Subject tab's: rewrite the prompt row with the named people's captions
+        "rewrite": bool(auto_in.get("rewrite")),
         # Injection: this tab's caption lands in a named Prompts-tab row, into one
         # Frame slot, automatically at queue time. Empty = the caption only rides
         # its own output socket, exactly as before.
@@ -631,6 +630,13 @@ def parse_config(config_json):
                     seen.add(int(i))
                     extra_sel.append(int(i))
             tabs[name]["extra_sel"] = extra_sel
+            # per picture: the person's name and whether its auto prompt runs
+            pm_in = t.get("people_meta") if isinstance(t.get("people_meta"), dict) else {}
+            tabs[name]["people_meta"] = {
+                str(k): {"name": str((v or {}).get("name") or "").strip()[:40],
+                         "auto": (bool(v.get("auto")) if isinstance(v, dict) and "auto" in v
+                                  else None)}
+                for k, v in pm_in.items() if isinstance(v, dict)}
         if name == "i2i":
             tabs[name]["prompt_only"] = bool(t.get("prompt_only"))
             # the i2i canvas source: the gallery as always, or a wired image or
@@ -2550,6 +2556,8 @@ class RedNodeStudioWorkspace:
         tensor_map = {"subject": subject, "scene": scene, "moodboard": mood,
                       "i2i": i2i_img}
         prompts = {}
+        subject_people = []          # [(name, caption)] for the Subject's picked people
+        people_caps = {}             # picture -> its caption, for the panel
         # Ollama across several tabs: keep the model resident for the run instead of
         # letting keep_alive 0 unload and reload it per tab. Four reloads of a vision
         # model while the sampler holds its own VRAM is what turns captioning from
@@ -2599,28 +2607,18 @@ class RedNodeStudioWorkspace:
                 if isinstance(idx, list):
                     idx = idx[0] if idx else 0
                 entry = t["images"][idx]
-            # the Subject auto prompt can describe another picked person
-            person_pick = False
-            if tab_name == "subject" and entry and a.get("person", 0) > 0:
-                _ex = t.get("extra_sel") or []
-                if a["person"] - 1 < len(_ex):
-                    entry = t["images"][_ex[a["person"] - 1]]
-                    person_pick = True
-                    print(f"[RedNode Workspace] subject auto prompt describes person "
-                          f"{a['person'] + 1}: {entry}", flush=True)
-            img_bytes = None
-            if entry and a["ollama"]:
-                # re-encoded, not the raw file: a webp the endpoint cannot read, or
-                # a huge original, both just look like a slow captioner. Deferred, so
-                # a cached caption costs no resize at all.
-                img_bytes = (lambda pth=_filepath(entry):
-                             autoprompt.vision_payload(pth))
-            mtime = None
-            if entry:
-                try:
-                    mtime = os.path.getmtime(_filepath(entry))
-                except OSError:
-                    pass
+            # WHO IS CAPTIONED: the one picture on most tabs; on Subject, every picked
+            # person whose auto prompt is on (the main one by default), each by name
+            targets = [(0, entry, False)]
+            if tab_name == "subject" and entry:
+                _meta = t.get("people_meta") or {}
+                _people = [idx] + [i for i in (t.get("extra_sel") or []) if i != idx]
+                targets = []
+                for _k, _i in enumerate(_people):
+                    _pm = _meta.get(t["images"][_i]) or {}
+                    _on = _pm.get("auto")
+                    if (_k == 0) if _on is None else _on:
+                        targets.append((_k, t["images"][_i], _k > 0))
             ga = cfg["auto"]
 
             # every tensor engine needs the image, not just WD14 — gating on WD14 alone
@@ -2628,50 +2626,79 @@ class RedNodeStudioWorkspace:
             # moodboard tensor is a BATCH: caption its first ref (the resolved entry).
             need_tensor = (a["wd14"] or a["joy"] or a["qwen"] or a["clipgen"]
                            or a["florence"])
-            t_img = (load_image(entry, target) if person_pick else tensor_map[tab_name]) \
-                if need_tensor else None
-            if t_img is not None and t_img.shape[0] > 1:
-                t_img = t_img[:1]
+            _caps = []
+            for _k, entry, _own_img in targets:
+                img_bytes = None
+                if entry and a["ollama"]:
+                    # re-encoded, not the raw file: a webp the endpoint cannot read, or
+                    # a huge original, both just look like a slow captioner. Deferred, so
+                    # a cached caption costs no resize at all.
+                    img_bytes = (lambda pth=_filepath(entry):
+                                 autoprompt.vision_payload(pth))
+                mtime = None
+                if entry:
+                    try:
+                        mtime = os.path.getmtime(_filepath(entry))
+                    except OSError:
+                        pass
+                t_img = ((load_image(entry, target) if _own_img else tensor_map[tab_name])
+                         if need_tensor else None)
+                if t_img is not None and t_img.shape[0] > 1:
+                    t_img = t_img[:1]
 
-            def _build(a=a, img_bytes=img_bytes, tab_name=tab_name, wired=wired, ga=ga,
-                       t_img=t_img):
-                return autoprompt.build_prompt(
-                    a["mode"], image_bytes=img_bytes,
-                    image_tensor=t_img,
-                    wired=wired, use_ollama=a["ollama"], use_wd14=a["wd14"],
-                    use_joy=a["joy"], use_qwen=a["qwen"],
-                    use_clip=a["clipgen"], clip=clip,
-                    use_florence=a["florence"],
-                    florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
-                    unload_heavy=ga["wd14_unload"] or low_vram,
-                    combine=a["combine"], max_words=a["length"],
-                    model=ga["model"], url=ga["url"],
-                    wd14_model=ga["wd14_model"], threshold=ga["threshold"],
-                    character_threshold=ga["character_threshold"],
-                    replace_underscore=ga["replace_underscore"],
-                    exclude_tags=ga["exclude_tags"],
-                    ollama_options={"temperature": ga["temperature"], "seed": ga["seed"],
-                                    "num_ctx": ga["num_ctx"], "num_predict": ga["num_predict"],
-                                    "top_k": ga["top_k"], "top_p": ga["top_p"]},
-                    think=ga["think"], keep_alive=run_keep_alive,
-                    frank=ga["frank"],
-                    joy_opts={"quantization": ga["joy_quant"], "prompt_style": ga["joy_style"],
-                              "caption_length": ga["joy_length"],
-                              "memory": "Clear After Run" if low_vram else ga["joy_memory"],
-                              "use_mode_prompt": ga["joy_mode_prompts"]},
-                    instruction=ga["instruction"], question=ga["question"],
-                    # cache_base stays exactly as it was. build_prompt folds the
-                    # instruction into Ollama's own key, and only once one is typed,
-                    # so nobody's saved captions move.
-                    cache_base=[tab_name, entry, mtime, a["mode"], ga["frank"]],
-                    use_cache=a["fixed"],
-                    sidecar=(_filepath(entry) + ".rn.json")
-                            if entry and _managed(entry) else None)
+                def _build(a=a, img_bytes=img_bytes, tab_name=tab_name, wired=wired, ga=ga,
+                           t_img=t_img, entry=entry, mtime=mtime):
+                    return autoprompt.build_prompt(
+                        a["mode"], image_bytes=img_bytes,
+                        image_tensor=t_img,
+                        wired=wired, use_ollama=a["ollama"], use_wd14=a["wd14"],
+                        use_joy=a["joy"], use_qwen=a["qwen"],
+                        use_clip=a["clipgen"], clip=clip,
+                        use_florence=a["florence"],
+                        florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
+                        unload_heavy=ga["wd14_unload"] or low_vram,
+                        combine=a["combine"], max_words=a["length"],
+                        model=ga["model"], url=ga["url"],
+                        wd14_model=ga["wd14_model"], threshold=ga["threshold"],
+                        character_threshold=ga["character_threshold"],
+                        replace_underscore=ga["replace_underscore"],
+                        exclude_tags=ga["exclude_tags"],
+                        ollama_options={"temperature": ga["temperature"], "seed": ga["seed"],
+                                        "num_ctx": ga["num_ctx"], "num_predict": ga["num_predict"],
+                                        "top_k": ga["top_k"], "top_p": ga["top_p"]},
+                        think=ga["think"], keep_alive=run_keep_alive,
+                        frank=ga["frank"],
+                        joy_opts={"quantization": ga["joy_quant"], "prompt_style": ga["joy_style"],
+                                  "caption_length": ga["joy_length"],
+                                  "memory": "Clear After Run" if low_vram else ga["joy_memory"],
+                                  "use_mode_prompt": ga["joy_mode_prompts"]},
+                        instruction=ga["instruction"], question=ga["question"],
+                        # cache_base stays exactly as it was. build_prompt folds the
+                        # instruction into Ollama's own key, and only once one is typed,
+                        # so nobody's saved captions move.
+                        cache_base=[tab_name, entry, mtime, a["mode"], ga["frank"]],
+                        use_cache=a["fixed"],
+                        sidecar=(_filepath(entry) + ".rn.json")
+                                if entry and _managed(entry) else None)
 
-            # per-engine caching happens INSIDE build_prompt now: the key carries the
-            # image and mode, so toggling one engine reuses every other engine's part.
-            # FRESH (fixed off) rebuilds but still stores, so flipping back is warm.
-            prompts[tab_name] = _build()
+                # per-engine caching happens INSIDE build_prompt now: the key carries the
+                # image and mode, so toggling one engine reuses every other engine's part.
+                # FRESH (fixed off) rebuilds but still stores, so flipping back is warm.
+                _cap = _build()
+                if _cap:
+                    _caps.append((_k, entry, _cap))
+            if tab_name == "subject" and targets:
+                _meta = t.get("people_meta") or {}
+                subject_people = [((_meta.get(e) or {}).get("name") or "Person %d" % (k + 1), c)
+                                  for k, e, c in _caps]
+                people_caps.update({e: c for _, e, c in _caps})
+                _named = any((_meta.get(e) or {}).get("name") for _, e, _c in _caps)
+                if len(_caps) == 1 and _caps[0][0] == 0 and not _named:
+                    prompts[tab_name] = _caps[0][2]           # one person: as it always was
+                else:
+                    prompts[tab_name] = "\n".join("%s: %s" % p for p in subject_people)
+            else:
+                prompts[tab_name] = _caps[0][2] if _caps else ""
             if prompts[tab_name]:
                 # the caption itself is only echoed when asked for: it is your
                 # writing about your picture, and a console is a public place
@@ -2726,9 +2753,14 @@ class RedNodeStudioWorkspace:
         # the caption on the matching *_in input, which joins it AFTER the typed
         # text, the standing rule; a plain row appends it. No button, no wire.
         injections = {}
+        rewrite_people = {}          # row name -> the named people to merge into it
         for _tn in ("subject", "scene", "moodboard", "i2i"):
             _a = tabs[_tn].get("auto") or {}
             _cap = (prompts.get(_tn) or "").strip()
+            if (_tn == "subject" and _a.get("on") and _a.get("inject_row")
+                    and _a.get("rewrite") and subject_people):
+                rewrite_people[_a["inject_row"]] = (subject_people, bool(_a.get("fixed", True)))
+                continue
             if _a.get("on") and _a.get("inject_row") and _cap:
                 injections.setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
         _wired_frame = {"style": style_in, "subject": subject_in,
@@ -2822,6 +2854,26 @@ class RedNodeStudioWorkspace:
                     _row["text"] = _pf_expand(_row["text"], run_seed, True)
         except Exception as exc:
             print("[RedNode Workspace] wildcard resolve failed: %s" % exc, flush=True)
+
+        # THE PEOPLE REWRITE: the row and the named people's captions, merged by
+        # Ollama into one prompt that uses the names. Once, then reused, unless the
+        # Subject auto prompt is on Fresh. Without an answer the captions are appended.
+        for _row in cfg["prompts"]["rows"]:
+            _rp = rewrite_people.get(_row["name"])
+            if not _rp:
+                continue
+            _merged = autoprompt.merge_people(
+                _row["text"], _rp[0], model=cfg["auto"]["model"], url=cfg["auto"]["url"],
+                keep_alive=cfg["auto"]["keep_alive"], reuse=_rp[1])
+            if _merged:
+                _row["text"] = _merged
+                print("[RedNode Workspace] %r rewritten with %s"
+                      % (_row["name"] or "a prompt row",
+                         ", ".join(n for n, _c in _rp[0])), flush=True)
+            else:
+                _t = _row["text"].strip().rstrip(",")
+                _add = " ".join("%s: %s." % (n, c.rstrip(".")) for n, c in _rp[0])
+                _row["text"] = (_t + ". " + _add) if _t else _add
 
         # a paint prompt that came FROM a row must see the injected version
         if cfg["paint"].get("prompt_from") == "prompts_tab":
@@ -3038,7 +3090,8 @@ class RedNodeStudioWorkspace:
             try:
                 from server import PromptServer
                 PromptServer.instance.send_sync(
-                    "rednode.workspace_prompts", {"node": unique_id, "prompts": prompts})
+                    "rednode.workspace_prompts", {"node": unique_id, "prompts": prompts,
+                                                  "people": people_caps})
             except Exception:
                 pass
 

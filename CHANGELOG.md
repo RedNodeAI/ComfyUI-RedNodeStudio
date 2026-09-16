@@ -82,9 +82,14 @@ cheap to judge.
   Scene fidelity. With extra people and no Scene picture, the main subject
   is now the last reference, where the boost and the boost mask aim; before,
   those landed on the last extra person
-- The Subject auto prompt has a Describe card: the picked people as small
-  pictures, and a click chooses who the caption describes (the main subject
-  by default). Saved prompts reads the chosen picture's captions
+- The Subject auto prompt has a People card: a row per picked person with a
+  name box, its own switch (the main subject on by default), a Generate
+  button and that person's latest caption. Captions for several people are
+  joined under their names, "Person 2" where none is given
+- Rewrite into the prompt with these names: at queue time Ollama merges the
+  prompt row named under Inject into with the people's captions, using the
+  names. It runs once and is reused; Fresh asks again every queue. Without an
+  answer the captions are appended as they are
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,

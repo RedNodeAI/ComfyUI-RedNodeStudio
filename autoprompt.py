@@ -295,6 +295,51 @@ def ollama_generate(model, system, prompt, image_bytes=None, url=OLLAMA_URL,
         return ""
 
 
+MERGE_PEOPLE_SYSTEM = """You merge an image prompt with descriptions of the people in it, for a text to image model.
+
+Rules:
+1. Keep every fact of the prompt: the scene, the action, the camera, the light, the style.
+2. The people are named. Where the prompt mentions people in general ("a woman", "two friends", "they"), use their names instead, and describe each person by name with the facts from their description: looks, hair, clothing.
+3. A person the prompt does not mention is placed into the scene naturally.
+4. Leave out anything in a description about a background or a setting; the prompt owns the setting.
+5. Write flowing sentences. No lists, no headings, no quotes around names. Add nothing that changes the picture.
+6. Answer with ONLY the finished prompt."""
+
+_MERGE_CACHE = {}
+
+
+def merge_people(prompt, people, model, url=OLLAMA_URL, keep_alive=0, reuse=True,
+                 generate=None):
+    """The prompt and the named people's captions, rewritten into one prompt by Ollama.
+
+    people: [(name, caption)]. REUSE keeps the last answer for the same inputs, so the
+    rewrite runs once; FRESH asks again. "" on any failure, having printed why."""
+    people = [(str(n), str(c)) for n, c in people if str(c).strip()]
+    if not people:
+        return ""
+    key = json.dumps([str(prompt), people, str(model)])
+    if reuse and key in _MERGE_CACHE:
+        print("[RedNode AutoPrompt] people rewrite: reused", flush=True)
+        return _MERGE_CACHE[key]
+    lines = "\n".join("%s: %s" % (n, c) for n, c in people)
+    user = ("Prompt:\n%s\n\nPeople:\n%s\n\nWrite the merged prompt."
+            % (str(prompt).strip() or "(empty)", lines))
+    gen = generate or (lambda m, s, p: ollama_generate(
+        m, s, p, url=url, options={"temperature": 0.4, "num_predict": 700},
+        keep_alive=keep_alive))
+    text = _strip_think(str(gen(model, MERGE_PEOPLE_SYSTEM, user) or "")).strip().strip('"')
+    if not text:
+        print("[RedNode AutoPrompt] people rewrite: no answer, the captions are "
+              "appended instead", flush=True)
+        return ""
+    if len(_MERGE_CACHE) >= 64:
+        _MERGE_CACHE.pop(next(iter(_MERGE_CACHE)))
+    _MERGE_CACHE[key] = text
+    print("[RedNode AutoPrompt] people rewrite: %d people merged into the prompt"
+          % len(people), flush=True)
+    return text
+
+
 def ollama_unload(model, url=OLLAMA_URL, transport=_http_json):
     """Drop the model from Ollama's memory now.
 
