@@ -65,7 +65,9 @@ cheap to judge.
   vary per pass, and the values every pass shares) beside one card per pass
   holding only the settings that vary, with Ramp Up and Down for each one.
   With Re-angle's Skip the pass on, the Source and Passes lights turn amber and
-  the Passes tab says the passes are skipped
+  the Passes tab says the passes are skipped. A Reset button puts every pass's
+  denoise, scale and steps back to the defaults, and a pass's steps start at
+  the main rig's step count
 - Subject, People, Scene and Masks are one Krea 2 Identity tab with a sub-tab
   each, the same strip of lights and status bar as Img2Img, so the top bar is
   three tabs shorter. A workflow saved on one of the old tabs opens on its

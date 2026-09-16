@@ -11244,12 +11244,16 @@ function latentBody(node, body) {
 // is the Latent tab: pass 1 generates the picture and the passes after it refine what
 // it made, so the list opens at a full denoise instead of at the refine dial. Left
 // out, pass 1 falls back to the dial like every other pass, which is the Img2Img tab.
-function passValueList(t, key, base, min, max, first) {
+// `base` is the config key of the single dial, or a number to use as the dial (the
+// rig's step count). `fillNew` gives passes added past a stored list the dial value
+// instead of a copy of the last pass.
+function passValueList(t, key, base, min, max, first, fillNew = false) {
   const n = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const src = Array.isArray(t[key]) ? t[key] : [];
   const fit = (v) => Math.max(min, Math.min(max, v));
-  const dial = () => fit(Number(t[base]) || min);
-  const head = () => fit(Number(first === undefined ? t[base] : first) || min);
+  const baseVal = () => (typeof base === "number" ? base : t[base]);
+  const dial = () => fit(Number(baseVal()) || min);
+  const head = () => fit(Number(first === undefined ? baseVal() : first) || min);
   const out = [];
   for (let i = 0; i < n; i++) {
     // With nothing stored yet the list opens on the dial, pass 1 aside. With a list
@@ -11258,6 +11262,7 @@ function passValueList(t, key, base, min, max, first) {
     // what the sampler actually reads: the two disagreeing is a bug you only see
     // at render time.
     if (!src.length) { out.push(i ? dial() : head()); continue; }
+    if (i >= src.length && fillNew) { out.push(dial()); continue; }
     const v = Number(i < src.length ? src[i] : src[src.length - 1]);
     out.push(Number.isFinite(v) ? fit(v) : (i ? out[i - 1] : head()));
   }
@@ -11704,6 +11709,10 @@ function passesTab(node, body, kind = "i2i") {
   const fmtD = (v) => Number(v).toFixed(2);
   const fmtS = (v) => Number(v).toFixed(2) + "x";
   const fmtT = (v) => (Number(v) > 0 ? Math.round(Number(v)) + " Steps" : "Rig's steps");
+  // a new pass takes the main rig's step count as a real number
+  const rigs0 = cfg.models?.rigs || [];
+  const rig0 = rigs0[Math.max(0, Math.min(rigs0.length - 1, Math.round(Number(cfg.models?.active) || 0)))];
+  const rigSteps = Math.max(1, Math.min(60, Math.round(Number(rig0?.steps) || 8)));
 
   // the per-pass lists this render works with; only a switched-on list is stored
   const VARY = [
@@ -11725,7 +11734,7 @@ function passesTab(node, body, kind = "i2i") {
           + "after it climb. Going up costs the square of it in pixels."
         : "Each pass runs at its own size, the first setting the size the source is "
           + "encoded at. Going up between passes costs the square of it in pixels." },
-    { flag: "steps_custom", label: "Steps", key: "pass_steps", base: "pass_steps_dial",
+    { flag: "steps_custom", label: "Steps", key: "pass_steps", base: rigSteps, fillNew: true,
       min: 0, max: 60, step: 1, accent: "#e0a84a", fmt: fmtT,
       tip: "Each pass runs its own step count, 0 meaning the rig's. A relay drafts in one "
          + "or two steps and finishes at the full count." },
@@ -11746,7 +11755,7 @@ function passesTab(node, body, kind = "i2i") {
   for (const v of VARY) {
     if (!(many && t[v.flag])) continue;
     if (v.flag === "rig_custom") lists.rig = t.pass_rig = rigList();
-    else lists[v.flag] = t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
+    else lists[v.flag] = t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first, v.fillNew);
   }
 
   if (!(t.prompt_only && !isLat)) {
@@ -11762,7 +11771,7 @@ function passesTab(node, body, kind = "i2i") {
       for (const v of VARY) {
         if (!t[v.flag]) continue;
         if (v.flag === "rig_custom") t.pass_rig = rigList();
-        else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
+        else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first, v.fillNew);
       }
       writeCfg(node);
       render(node);
@@ -11787,6 +11796,26 @@ function passesTab(node, body, kind = "i2i") {
     plus.onclick = () => setPasses(npass + 1);
     stepper.append(minus, pInp, plus);
     prow.append(plab, stepper);
+    if (many) {
+      const reset = document.createElement("button");
+      reset.className = "rn-ws-btn rn-ws-compact rn-ws-passreset";
+      reset.style.cssText = "margin-left:auto;padding:0 12px";
+      reset.textContent = "↺ Reset";
+      reset.title = "Put every pass's denoise, scale and steps back to the defaults: "
+                  + (isLat ? "pass 1 at 1.00 and the rest at Refine, " : "the shared denoise, ")
+                  + "the shared scale, and the main rig's " + rigSteps + " steps. The rig "
+                  + "per pass is kept.";
+      reset.onclick = () => {
+        for (const v of VARY) {
+          if (!v.key) continue;
+          delete t[v.key];
+          if (t[v.flag]) t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first, v.fillNew);
+        }
+        writeCfg(node);
+        render(node);
+      };
+      prow.appendChild(reset);
+    }
     setup.append(prow, document.createElement("hr"), heading("VARY PER PASS"));
 
     const tiles = document.createElement("div");
@@ -11804,7 +11833,7 @@ function passesTab(node, body, kind = "i2i") {
         t[v.flag] = !t[v.flag];
         if (t[v.flag]) {
           if (v.flag === "rig_custom") t.pass_rig = rigList();
-          else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first);
+          else t[v.key] = passValueList(t, v.key, v.base, v.min, v.max, v.first, v.fillNew);
         }
         writeCfg(node);
         render(node);
@@ -11839,7 +11868,7 @@ function passesTab(node, body, kind = "i2i") {
           b.textContent = (dir === "up" ? "↗ " : "↘ ") + word;
           b.title = `Space the ${v.label.toLowerCase()} evenly across the passes, ${tip}.`;
           b.onclick = () => {
-            const list = passValueList(t, v.key, v.base, v.min, v.max, v.first);
+            const list = passValueList(t, v.key, v.base, v.min, v.max, v.first, v.fillNew);
             const lo = Math.min(...list), hi = Math.max(...list);
             const [a, z] = dir === "up" ? [lo, hi] : [hi, lo];
             t[v.key] = list.map((_, i) =>
