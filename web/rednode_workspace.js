@@ -1395,6 +1395,8 @@ export function readCfg(node) {
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
   d.paint.on = !!d.paint.on;
   if (typeof d.paint.source !== "string") d.paint.source = "";
+  // Use last result pulls the picture after Post FX, or the one before it
+  if (d.paint.last_from !== "before") d.paint.last_from = "after";
   if (typeof d.paint.mask !== "string") d.paint.mask = "";
   if (typeof d.paint.auto_mask !== "string") d.paint.auto_mask = "";
   d.paint.keep_mask = !!d.paint.keep_mask;
@@ -6546,6 +6548,9 @@ function workspacePrefs(node, body) {
 // edit_mask / output_latent / denoise sockets the rest of the node uses. So the
 // inpaint runs on whatever sampler chain you already have, with nothing rewired.
 let lastResult = null;                               // {filename, subfolder, type}
+// the same run's picture before Post FX, when the Workspace ran Post itself
+// (rn_before_post on its executed event); the tab can start from it instead
+let lastBeforePost = null;
 let lastPaintResultOwner = null;                     // Workspace that queued it
 // WHAT THE RESULT PANE SHOWS, which is deliberately not the same thing. lastResult
 // keeps quietly tracking the newest image out of ANY queue, because that is what Use
@@ -9482,12 +9487,39 @@ function paintBody(node, body) {
   useLast.className = "rn-ws-btn rn-ws-compact";
   useLast.style.width = "auto";
   useLast.style.padding = "0 10px";
+  const P0 = node._rnCfg.paint;
+  const wantBefore = P0.last_from === "before";
+  const havePre = !!(lastBeforePost && lastResult && lastBeforePost.prompt_id === lastResult.prompt_id);
   useLast.textContent = "Use last result";
   useLast.disabled = !lastResult;
-  useLast.title = lastResult
-    ? "Pull the newest image out of your workflow onto the canvas. A one-off: nothing "
-      + "arrives here on its own except what this tab's own Generate makes."
-    : "Nothing has come out of the workflow yet.";
+  useLast.title = !lastResult ? "Nothing has come out of the workflow yet."
+    : wantBefore && havePre
+      ? "Pull the newest picture as it was before Post FX onto the canvas, so the "
+        + "grain, vignette and grade are not baked into what you paint."
+    : wantBefore
+      ? "Before Post is picked, but the newest run kept no picture before Post (Post "
+        + "was off, or ran in its own node), so the finished picture is pulled."
+      : "Pull the newest image out of your workflow onto the canvas. A one-off: nothing "
+        + "arrives here on its own except what this tab's own Generate makes.";
+  // BEFORE OR AFTER POST FX: Post's grain and grade are hard to paint out, so the
+  // tab can start from the picture underneath. Only a run where the Workspace ran
+  // Post itself keeps one; otherwise the finished picture is what there is.
+  const lastFrom = document.createElement("div");
+  lastFrom.className = "rn-ws-seg rn-ws-switch rn-ws-lastfrom";
+  lastFrom.dataset.choice = "paint_last_from";
+  for (const [v, label, tip] of [
+    ["after", "After Post", "Use last result pulls the finished picture, Post FX and all."],
+    ["before", "Before Post", "Use last result pulls the picture before Post FX ran, when the "
+                              + "Workspace ran Post itself. Grain, vignette and grade stay off "
+                              + "what you paint; Post runs again on the painted result."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (P0.last_from === v ? " on" : "");
+    b.textContent = label;
+    b.title = tip;
+    b.onclick = () => { P0.last_from = v; writeCfg(node); render(node); };
+    lastFrom.appendChild(b);
+  }
   // A PULL, not a mode. It used to blank the source, which meant "follow the
   // workflow", so pressing it once signed you up for every later queue replacing the
   // picture. Now it pins the file it found, through the same path the result pane's
@@ -9495,6 +9527,10 @@ function paintBody(node, body) {
   useLast.onclick = () => {
     if (!lastResult) return;
     showResult(lastResult, node);    // asked for, so now it may appear on the pane
+    if (wantBefore && havePre) {
+      adoptResult(node, lastBeforePost, "Use last result pressed, before Post");
+      return;
+    }
     adoptResult(node, lastResult, "Use last result pressed");
   };
 
@@ -10161,7 +10197,7 @@ function paintBody(node, body) {
   const maskActions = document.createElement("div");
   maskActions.className = "rn-ws-row";
   state.classList.add("rn-ws-file-state");
-  maskActions.append(open, useLast, keep, clear, state);
+  maskActions.append(open, useLast, lastFrom, keep, clear, state);
   autoMaskBox.appendChild(row2);             // background, subject and Cut
   maskStateBox.appendChild(maskActions);
   if (!P.mask_only) {
@@ -15733,8 +15769,17 @@ app.registerExtension({
     // each overwriting the one before, and the single redraw happens when ComfyUI
     // says the prompt is over.
     api.addEventListener?.("executed", (e) => {
+      const pre = e?.detail?.output?.rn_before_post;
+      if (Array.isArray(pre) && pre.length) {
+        const p = pre[0];
+        lastBeforePost = { filename: p.filename, subfolder: p.subfolder || "",
+                           type: p.type || "temp", rand: (Math.random() * 1e9) | 0,
+                           prompt_id: String(e?.detail?.prompt_id || ""), before_post: true };
+      }
+      // core's images, the paint pass's, or what the Workspace's own save filed
       const imgs = e?.detail?.output?.images
-        || e?.detail?.output?.rn_paint_images;
+        || e?.detail?.output?.rn_paint_images
+        || e?.detail?.output?.rn_run_images;
       if (!Array.isArray(imgs) || !imgs.length) return;
       const im = imgs[imgs.length - 1];
       const finalNodeId = String(e?.detail?.node ?? "");
@@ -15767,6 +15812,8 @@ app.registerExtension({
       lastResult = { filename: im.filename, subfolder: im.subfolder || "",
                      type: im.type || "output", rand: (Math.random() * 1e9) | 0,
                      prompt_id: promptId, fresh: true };
+      // a Before Post picture belongs to its own run only
+      if (lastBeforePost && lastBeforePost.prompt_id !== promptId) lastBeforePost = null;
       // ONLY A PAINT RUN ADOPTS ITS OWN RESULT. That is the loop the tab exists for:
       // paint, generate, the result becomes the thing you paint on, again. Every other
       // queue just updates the result pane and leaves the canvas alone.

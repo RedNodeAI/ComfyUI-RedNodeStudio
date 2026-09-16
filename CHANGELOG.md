@@ -350,6 +350,14 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- The Paint tab's Use last result can pull the picture from before Post FX:
+  a Before Post / After Post choice beside the button. Post's grain, vignette
+  and grade were baked into what you painted and are hard to paint out; with
+  Before Post the tab starts from the picture underneath, and Post runs again
+  on the painted result. The Workspace keeps that picture as a temp file when
+  it runs Post itself; a run without one pulls the finished picture and the
+  button says so. Use last result also sees a run the Workspace saved itself,
+  with no Review or Save node after it
 - A Fast switch on Swap: on puts the Lightning speed LoRA on the swap at 4
   steps and cfg 1, about 8 times faster; off takes it out and puts the LoRA
   author's 16 steps at cfg 2 back. The engine fold still tunes each by hand

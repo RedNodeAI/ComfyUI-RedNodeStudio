@@ -1688,6 +1688,32 @@ def rig_vae_key(rec, vae, from_rec=True):
     return ("file", str(rec.get("vae") or "ckpt:%s" % (rec.get("checkpoint") or "")))
 
 
+def keep_before_post(image):
+    """The finished picture before Post FX, written to the temp folder, as file
+    records for the Paint tab's Use last result (Before Post). Post's grain,
+    vignette and grade are hard to paint out, so the tab can start from the
+    picture underneath. Never fatal: a failed write is just no Before Post."""
+    try:
+        import folder_paths
+        out_dir = folder_paths.get_temp_directory()
+        os.makedirs(out_dir, exist_ok=True)
+        recs = []
+        t = image
+        if t.ndim > 4:
+            t = t.reshape((-1,) + tuple(t.shape[-3:]))
+        for k in range(int(t.shape[0])):
+            arr = (t[k].detach().cpu().float().clamp(0, 1).numpy() * 255).astype("uint8")
+            name = "rednode_prepost_%08x.png" % _random.randint(0, 0xffffffff)
+            Image.fromarray(arr[..., :3], mode="RGB").save(os.path.join(out_dir, name),
+                                                          compress_level=4)
+            recs.append({"filename": name, "subfolder": "", "type": "temp"})
+        return recs
+    except Exception as exc:
+        print("[RedNode Workspace] could not keep the picture before Post: %s" % exc,
+              flush=True)
+        return []
+
+
 def blocked(message=None):
     """An ExecutionBlocker: downstream nodes skip instead of crashing.
 
@@ -4279,6 +4305,10 @@ class RedNodeStudioWorkspace:
                     print("[RedNode Workspace] the built-in Detailer failed: %s; the "
                           "render goes on without it" % exc, flush=True)
             if cfg["post_on"] and postprocess.active_fx(post_cfg):
+                _pre = keep_before_post(rig_image)
+                if _pre:
+                    ui_extra = dict(ui_extra or {})
+                    ui_extra["rn_before_post"] = _pre
                 try:
                     rig_image = postprocess.RedNodePostProcess().run(rig_image, prompt=prompt)[0]
                     _chain.mark("post")
