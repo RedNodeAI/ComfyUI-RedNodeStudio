@@ -214,6 +214,9 @@ cheap to judge.
   runs Florence on the older transformers path, which on current transformers
   captions nothing but a line of <s> tokens. The console says when a copy is
   being passed over, and when Florence returns no words
+- Generate works before anything has been queued since ComfyUI started. An
+  engine with a progress bar (Florence among them) used to fail on "no attribute
+  last_prompt_id" and return no caption
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older

@@ -3867,6 +3867,39 @@ class RedNodeStudioWorkspace:
 # ---------------------------------------------------------------------------
 # HTTP API for the panel (presets live on disk, shared by every workflow)
 # ---------------------------------------------------------------------------
+class _progress_outside_a_run:
+    """Progress bars made while no queued run is going.
+
+    ComfyUI's progress hook falls back to the server's last prompt id, which only
+    exists once something has been queued this session; a Generate press before
+    that made every engine with a progress bar (Florence among them) fail. Inside
+    this block the hook skips that one AttributeError; interrupts still raise."""
+
+    def __enter__(self):
+        try:
+            import comfy.utils as _cu
+        except Exception:
+            self._cu = None
+            return self
+        self._cu, self._orig = _cu, _cu.PROGRESS_BAR_HOOK
+        orig = self._orig
+        if orig is not None:
+            def _hook(*a, **kw):
+                try:
+                    return orig(*a, **kw)
+                except AttributeError as e:
+                    if "last_prompt_id" in str(e) or "last_node_id" in str(e):
+                        return None
+                    raise
+            _cu.PROGRESS_BAR_HOOK = _hook
+        return self
+
+    def __exit__(self, *exc):
+        if self._cu is not None:
+            self._cu.PROGRESS_BAR_HOOK = self._orig
+        return False
+
+
 def standalone_autoprompt(config_json, tab_name, entry, mode=None):
     """One tab's caption engines for one image, right now, outside the queue.
 
@@ -3900,32 +3933,33 @@ def standalone_autoprompt(config_json, tab_name, entry, mode=None):
         mtime = None
     t_img = (load_image(entry, cfg["resize"])
              if (a["wd14"] or a["joy"] or a["qwen"] or a["florence"]) else None)
-    prompt = autoprompt.build_prompt(
-        mode, image_bytes=img_bytes, image_tensor=t_img,
-        wired=(), use_ollama=a["ollama"], use_wd14=a["wd14"],
-        use_joy=a["joy"], use_qwen=a["qwen"],
-        use_clip=False, clip=None,
-        use_florence=a["florence"],
-        florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
-        unload_heavy=ga["wd14_unload"] or ga.get("low_vram", False),
-        combine=a["combine"], max_words=a["length"],
-        model=ga["model"], url=ga["url"],
-        wd14_model=ga["wd14_model"], threshold=ga["threshold"],
-        character_threshold=ga["character_threshold"],
-        replace_underscore=ga["replace_underscore"],
-        exclude_tags=ga["exclude_tags"],
-        ollama_options={"temperature": ga["temperature"], "seed": ga["seed"],
-                        "num_ctx": ga["num_ctx"], "num_predict": ga["num_predict"],
-                        "top_k": ga["top_k"], "top_p": ga["top_p"]},
-        think=ga["think"], keep_alive=ga["keep_alive"],
-        frank=ga["frank"],
-        joy_opts={"quantization": ga["joy_quant"], "prompt_style": ga["joy_style"],
-                  "caption_length": ga["joy_length"], "memory": ga["joy_memory"],
-                  "use_mode_prompt": ga["joy_mode_prompts"]},
-        instruction=ga["instruction"], question=ga["question"],
-        cache_base=[tab_name, entry, mtime, mode, ga["frank"]],
-        use_cache=a["fixed"],
-        sidecar=(path + ".rn.json") if _managed(entry) else None)
+    with _progress_outside_a_run():
+        prompt = autoprompt.build_prompt(
+            mode, image_bytes=img_bytes, image_tensor=t_img,
+            wired=(), use_ollama=a["ollama"], use_wd14=a["wd14"],
+            use_joy=a["joy"], use_qwen=a["qwen"],
+            use_clip=False, clip=None,
+            use_florence=a["florence"],
+            florence_opts={"model": ga["florence_model"], "task": ga["florence_task"]},
+            unload_heavy=ga["wd14_unload"] or ga.get("low_vram", False),
+            combine=a["combine"], max_words=a["length"],
+            model=ga["model"], url=ga["url"],
+            wd14_model=ga["wd14_model"], threshold=ga["threshold"],
+            character_threshold=ga["character_threshold"],
+            replace_underscore=ga["replace_underscore"],
+            exclude_tags=ga["exclude_tags"],
+            ollama_options={"temperature": ga["temperature"], "seed": ga["seed"],
+                            "num_ctx": ga["num_ctx"], "num_predict": ga["num_predict"],
+                            "top_k": ga["top_k"], "top_p": ga["top_p"]},
+            think=ga["think"], keep_alive=ga["keep_alive"],
+            frank=ga["frank"],
+            joy_opts={"quantization": ga["joy_quant"], "prompt_style": ga["joy_style"],
+                      "caption_length": ga["joy_length"], "memory": ga["joy_memory"],
+                      "use_mode_prompt": ga["joy_mode_prompts"]},
+            instruction=ga["instruction"], question=ga["question"],
+            cache_base=[tab_name, entry, mtime, mode, ga["frank"]],
+            use_cache=a["fixed"],
+            sidecar=(path + ".rn.json") if _managed(entry) else None)
     return {"prompt": prompt, "skipped": skipped, "mode": mode}
 
 
