@@ -151,6 +151,23 @@ css.textContent = `
 /* the PILL CONTROL, the Sick Ollie primitive the user asked to adopt: one
    dark rounded box per setting, dim label left, bold value right, uniform
    height, laid in a responsive grid. Unity comes from repetition. */
+.rn-ws-mbox{flex:1 1 380px;min-width:300px;gap:8px}
+.rn-ws-mbox.wide{flex:1 1 100%}
+.rn-ws-mhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rn-ws-mhead .ch{margin:0}
+.rn-ws-rigbar{gap:10px}
+.rn-ws-rigbottom{gap:14px}
+.rn-ws-holdtwo{padding-left:14px;border-left:1px solid #2a2e35}
+.rn-ws-managerigs{border-color:#b8283c;color:#f3b0ba}
+.rn-ws-managerigs.on{background:#b8283c;color:#fff}
+.rn-ws-mgroup{display:flex;flex-direction:column;gap:6px;padding:8px;background:#15171b;
+  border:1px solid #2a2e35;border-radius:7px}
+.rn-ws-mgtitle{font-size:12.5px;font-weight:700;color:#e8ecf1}
+.rn-ws-filerow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rn-ws-filerow>.k{font-size:12px;color:#c8ccd2;min-width:110px;flex:none}
+.rn-ws-filerow .rn-ws-seg{flex:1 1 auto}
+.rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
+  border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
 .rn-ws-pillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
   gap:8px}
 .rn-ws-pill{display:flex;align-items:center;gap:10px;min-height:40px;
@@ -10399,24 +10416,21 @@ function modelsBody(node, page) {
   // box headers carry an icon, an accent and an optional badge now, the
   // ChatGPT-mock direction the direction pointed at: sections identify themselves
   // at a glance and the border whispers the same colour
-  const mkBox = (title, accent, icon, badge) => {
-    const a = accent || "#c8ccd2";
+  const mkBox = (title, accent, icon, badge, sub) => {
     const b = document.createElement("div");
-    b.style.cssText = "flex:1 1 340px;max-width:560px;min-width:300px;display:flex;"
-                    + "flex-direction:column;gap:6px;padding:9px;background:#1a1d22;"
-                    + "border:1px solid " + a + "44;border-radius:7px";
+    b.className = "rn-ws-card rn-ws-mbox";
     const t = document.createElement("div");
-    t.style.cssText = "display:flex;align-items:center;gap:7px;font-size:12.5px;"
-                    + "font-weight:700;letter-spacing:.04em;color:" + a;
-    if (icon) {
-      const ic = document.createElement("span");
-      ic.textContent = icon;
-      ic.style.cssText = "font-size:13px";
-      t.appendChild(ic);
-    }
+    t.className = "rn-ws-mhead";
     const tt = document.createElement("span");
-    tt.textContent = title;
+    tt.className = "ch";
+    tt.textContent = title.toUpperCase();
     t.appendChild(tt);
+    if (sub) {
+      const st = document.createElement("span");
+      st.className = "rn-ws-note";
+      st.textContent = sub;
+      t.appendChild(st);
+    }
     if (badge) {
       const bd = document.createElement("span");
       bd.textContent = badge;
@@ -10432,13 +10446,33 @@ function modelsBody(node, page) {
   // pills flow in a grid; the grid appears where the first pill lands, so
   // notes and other rows keep their document order around it
   const pillMount = (box) => {
-    if (!box._grid || box._grid !== box.lastChild) {
+    const g0 = box._grid;
+    const inBox = (n) => { for (let x = n; x; x = x.parentNode || x._parent) if (x === box) return true; return false; };
+    const live = g0 && inBox(g0) && g0.parentNode?.lastChild === g0;
+    if (!live) {
       const g = document.createElement("div");
       g.className = "rn-ws-pillgrid";
       box.appendChild(g);
       box._grid = g;
     }
     return box._grid;
+  };
+  // a titled group inside a box (Main render, Image to image, Detailer): the pills
+  // that follow land in it
+  const group = (box, title, sub) => {
+    const g = document.createElement("div");
+    g.className = "rn-ws-mgroup";
+    const h = document.createElement("div");
+    h.className = "rn-ws-mgtitle";
+    h.textContent = title;
+    if (sub) h.title = sub;
+    g.appendChild(h);
+    const grid = document.createElement("div");
+    grid.className = "rn-ws-pillgrid";
+    g.appendChild(grid);
+    box.appendChild(g);
+    box._grid = grid;
+    return g;
   };
   const pill = (box, label, control, hint) => {
     const row = document.createElement("div");
@@ -10461,33 +10495,33 @@ function modelsBody(node, page) {
     h1.textContent = "Models";
     const sub = document.createElement("div");
     sub.className = "rn-ws-note";
-    sub.textContent = "Configure the active rig and sampling settings.";
+    sub.textContent = "One rig is active and renders. Prompts elsewhere link to rigs by name.";
     head.append(h1, sub);
     page.insertBefore(head, mwrap);
 
     const bar = document.createElement("div");
-    bar.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;"
-      + "background:#1a1d22;border:1px solid #2a2e34;border-radius:7px;"
-      + "padding:9px";
-    const blab = document.createElement("div");
-    blab.style.cssText = "display:flex;flex-direction:column;flex:none;"
-      + "max-width:170px";
+    bar.className = "rn-ws-card rn-ws-rigbar";
+    const hrow = document.createElement("div");
+    hrow.className = "rn-ws-mhead";
     const bt = document.createElement("span");
-    bt.style.cssText = "font-size:11px;font-weight:700;letter-spacing:.06em;"
-      + "color:#b8283c";
-    bt.textContent = "RIG";
+    bt.className = "ch";
+    bt.textContent = "RIGS";
     const bh = document.createElement("span");
     bh.className = "rn-ws-note";
-    bh.textContent = "The active rig loads at queue time.";
-    blab.append(bt, bh);
-    bar.appendChild(blab);
+    bh.textContent = "Choose which rig renders and which prompt names target it.";
+    hrow.append(bt, bh);
+    bar.appendChild(hrow);
+    const crow = document.createElement("div");
+    crow.className = "rn-ws-row";
+    crow.style.flexWrap = "wrap";
+    bar.appendChild(crow);
     M.rigs.forEach((r, i) => {
       const chip = document.createElement("button");
       const activeChip = M.active === i;
       chip.style.cssText = "display:flex;align-items:center;gap:7px;"
         + "padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;"
-        + "font-weight:600;background:" + (activeChip ? "#a855f71a" : "#15171b")
-        + ";border:1px solid " + (activeChip ? "#a855f7" : "#2a2e34")
+        + "font-weight:600;background:" + (activeChip ? "#b8283c" : "#15171b")
+        + ";border:1px solid " + (activeChip ? "#b8283c" : "#2a2e34")
         + ";color:#e8ecf1";
       const dot = document.createElement("span");
       dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none;"
@@ -10509,7 +10543,7 @@ function modelsBody(node, page) {
           + "below."
         : "Make this rig active. The boxes below edit the active rig.";
       chip.onclick = () => { M.active = i; writeCfg(node); render(node); };
-      bar.appendChild(chip);
+      crow.appendChild(chip);
     });
     const addChip = document.createElement("button");
     addChip.className = "rn-ws-btn";
@@ -10522,10 +10556,12 @@ function modelsBody(node, page) {
       node._rnRigManage = true;
       writeCfg(node); render(node);
     };
-    bar.appendChild(addChip);
-    const spring = document.createElement("span");
-    spring.style.flex = "1";
-    bar.appendChild(spring);
+    crow.appendChild(addChip);
+    // the second line: which prompt this rig renders, and the RAM hold for all rigs
+    const brow = document.createElement("div");
+    brow.className = "rn-ws-row rn-ws-rigbottom";
+    brow.style.flexWrap = "wrap";
+    bar.appendChild(brow);
     // ACTIVE PROMPT: which Prompts-tab row this rig renders,
     // right here, and a switcher. Choosing a row moves this rig into that
     // row's rig list (and out of the others), so one rig has one prompt.
@@ -10538,7 +10574,8 @@ function modelsBody(node, page) {
       const pwrap = document.createElement("div");
       pwrap.style.cssText = "display:flex;align-items:center;gap:6px";
       const pl = document.createElement("span");
-      pl.className = "rn-ws-note";
+      pl.className = "rn-ws-swlabel";
+      pl.style.fontWeight = "600";
       pl.textContent = "Active prompt";
       const psel = document.createElement("select");
       psel.className = "rn-ws-select";
@@ -10575,18 +10612,43 @@ function modelsBody(node, page) {
         node._rnTab = "prompts"; (node.properties ||= {}).rn_tab = "prompts"; render(node);
       };
       pwrap.append(pl, psel, goP);
-      bar.appendChild(pwrap);
+      brow.appendChild(pwrap);
+    }
+    // HOLD TWO RIGS: the two-rig Detailer flow (mix render, official face pass)
+    // reloads both models from disk every queue on the one-slot cache. This
+    // keeps both in system RAM instead. Off by default, per the house rule: it
+    // costs a second model's RAM the whole session.
+    {
+      const hwrap = document.createElement("div");
+      hwrap.className = "rn-ws-row rn-ws-holdtwo";
+      hwrap.style.flexWrap = "wrap";
+      const hl = document.createElement("span");
+      hl.className = "rn-ws-swlabel";
+      hl.style.fontWeight = "600";
+      hl.textContent = "Hold two rigs";
+      const hseg = segSwitch([
+        ["on", "On", "Keep the last two rigs loaded in RAM, so a chain that renders on one "
+                     + "rig and detail-passes on another stops reloading both from disk. "
+                     + "Costs a second model's system RAM (about 13 GB for a Krea 2)."],
+        ["", "Off", "One rig in RAM at a time."],
+      ], M.hold_two ? "on" : "", (v) => { M.hold_two = v === "on"; writeCfg(node); render(node); });
+      hseg.dataset.choice = "hold_two";
+      const hn = document.createElement("span");
+      hn.className = "rn-ws-note";
+      hn.textContent = "Keep two rigs loaded in RAM so switching is fast.";
+      hwrap.append(hl, hseg, hn);
+      brow.appendChild(hwrap);
     }
     const manage = document.createElement("button");
-    manage.className = "rn-ws-btn";
-    manage.style.cssText = "width:auto;padding:0 14px";
-    manage.textContent = "⚙ Manage rigs";
+    manage.className = "rn-ws-btn rn-ws-managerigs" + (node._rnRigManage ? " on" : "");
+    manage.style.cssText = "width:auto;padding:0 14px;margin-left:auto";
+    manage.textContent = "Manage rigs";
     manage.title = "Rename, reorder or remove rigs.";
     manage.onclick = () => {
       node._rnRigManage = !node._rnRigManage;
       render(node);
     };
-    bar.appendChild(manage);
+    hrow.appendChild(manage);
     page.insertBefore(bar, mwrap);
   }
 
@@ -10656,15 +10718,12 @@ function modelsBody(node, page) {
 
   const rig = M.rigs[M.active];
   if (!rig) return;
-  body = mkBox("Model", "#4a8fe0", "🧊");
+  body = mkBox("Files", "", "", "", "What this active rig loads.");
 
   // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
   // with recents shared per kind so the model you use daily is always on top
   const L = MODEL_LISTS
     || { checkpoints: [], unets: [], clips: [], clip_types: [], vaes: [] };
-  const FILE_ICONS = { "Checkpoint": "📦", "Diffusion model": "✳",
-                       "CLIP": "🔗", "VAE": "〰", "Base model": "🧊",
-                       "LoRA": "⭐" };
   const pickRow = (label, key, items, recentKey, hint) => {
     const input = document.createElement("input");
     input.type = "text";
@@ -10676,31 +10735,22 @@ function modelsBody(node, page) {
       writeCfg(node); render(node);
     }, { current: () => rig[key], emptyLabel: "none", recent: recentKey });
     // the mock's file pill: icon, label over the value, Local files button
+    // the label on the left, the file in its own box, the picker button after it
     const row = document.createElement("div");
-    row.className = "rn-ws-pill";
-    row.style.cssText = "min-height:52px;grid-column:1/-1";
+    row.className = "rn-ws-filerow";
     if (hint) row.title = hint;
-    const ic = document.createElement("span");
-    ic.style.cssText = "font-size:15px;flex:none";
-    ic.textContent = FILE_ICONS[label] || "📄";
-    const mid = document.createElement("div");
-    mid.style.cssText = "display:flex;flex-direction:column;gap:1px;flex:1;"
-      + "min-width:0";
     const lab = document.createElement("span");
     lab.className = "k";
     lab.textContent = label;
-    input.style.cssText = "background:transparent;border:none;outline:none;"
-      + "color:#e8ecf1;font-size:13px;font-weight:600;text-align:left;"
-      + "padding:0;width:100%";
-    mid.append(lab, input);
+    input.className = "rn-ws-filebox";
     const browse = document.createElement("button");
     browse.className = "rn-ws-btn";
     browse.style.cssText = "width:auto;padding:0 12px;flex:none";
     browse.textContent = "📁 Local files";
     browse.title = "Browse and search the installed files.";
     browse.onclick = () => { input.focus(); input.click(); };
-    row.append(ic, mid, browse);
-    pillMount(body).appendChild(row);
+    row.append(lab, input, browse);
+    body.appendChild(row);
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
   // workspace (the NovelAI chain). No files load; its numbers and prompt ride
@@ -10829,23 +10879,25 @@ function modelsBody(node, page) {
     // ComfyUI-GGUF and anything else through core; an INT8 W8A8 file is a
     // .safetensors, so that loader has to be named here.
     const absent = (list) => (MODEL_LISTS && !(list || []).length ? " (pack not installed)" : "");
-    const sel = document.createElement("select");
-    for (const [v, t] of [["", "By file name"], ["core", "Standard"],
-                          ["gguf", "GGUF" + absent(L.ggufs)],
-                          ["int8", "INT8 W8A8" + absent(L.int8s)]]) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = t;
-      o.selected = v === (rig.unet_loader || "");
-      sel.appendChild(o);
-    }
-    sel.title = "The loader the diffusion model goes through. By file name: a .gguf "
-              + "through ComfyUI-GGUF, anything else through the standard loader. "
-              + "INT8 W8A8 files look like any .safetensors, so pick that loader "
-              + "for one (ComfyUI-INT8-Fast). A pack that is not installed says so "
-              + "in the console when the rig loads.";
-    sel.onchange = () => { rig.unet_loader = sel.value; writeCfg(node); render(node); };
-    pill(body, "Loader", sel);
+    const ltip = "The loader the diffusion model goes through. By file name: a .gguf "
+               + "through ComfyUI-GGUF, anything else through the standard loader. "
+               + "INT8 W8A8 files look like any .safetensors, so pick that loader "
+               + "for one (ComfyUI-INT8-Fast). A pack that is not installed says so "
+               + "in the console when the rig loads.";
+    const seg = segSwitch([
+      ["", "By file name", "A .gguf through ComfyUI-GGUF, anything else through the standard loader."],
+      ["core", "Standard", "ComfyUI's own diffusion model loader."],
+      ["gguf", "GGUF" + absent(L.ggufs), "ComfyUI-GGUF's loader."],
+      ["int8", "INT8 W8A8" + absent(L.int8s), "ComfyUI-INT8-Fast's loader; INT8 files look like any .safetensors."],
+    ], rig.unet_loader || "", (v) => { rig.unet_loader = v; writeCfg(node); render(node); }, ltip);
+    seg.dataset.choice = "unet_loader";
+    const lrow = document.createElement("div");
+    lrow.className = "rn-ws-filerow";
+    const llab = document.createElement("span");
+    llab.className = "k";
+    llab.textContent = "Loader";
+    lrow.append(llab, seg);
+    body.appendChild(lrow);
     if ((rig.unet_loader || "") === "int8") {
       const ts = document.createElement("select");
       for (const t of ["", ...(L.int8_types || [])]) {
@@ -10904,31 +10956,6 @@ function modelsBody(node, page) {
       + "; VAE from " + from(rig.vae, "VAE") + ".";
     body.appendChild(src);
   }
-  }
-
-  // HOLD TWO RIGS: the two-rig Detailer flow (mix render, official face pass)
-  // reloads both models from disk every queue on the one-slot cache. This
-  // toggle keeps both in system RAM instead. Explicitly off by default, per
-  // the house rule: it costs a second model's RAM the whole session.
-  {
-    const hs = document.createElement("select");
-    for (const [v, lbl] of [["", "Off"], ["on", "On"]]) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = lbl;
-      o.selected = (M.hold_two ? "on" : "") === v;
-      hs.appendChild(o);
-    }
-    hs.onchange = () => {
-      M.hold_two = hs.value === "on";
-      writeCfg(node); render(node);
-    };
-    pill(body, "Hold two rigs", hs,
-         "Keep the last TWO rigs loaded instead of one, so a chain that "
-         + "renders on one rig and detail-passes on another stops reloading "
-         + "both models from disk every queue. Costs a second model's system "
-         + "RAM (roughly 13 GB for a Krea 2) for as long as ComfyUI runs - "
-         + "only worth it with plenty of RAM to spare.");
   }
 
   // IDENTITY RESCUE, SHELVED: restoring the
@@ -10996,22 +11023,18 @@ function modelsBody(node, page) {
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
   // scheduler from the workspace outputs and the channel run becomes optional.
-  body = mkBox("Sampler", "#3f9e63", "🎛");
+  body = mkBox("Sampling", "", "", "",
+               "How this rig renders, including main, image to image and Detailer.");
+  group(body, "Main render", "The render every queue starts with.");
   // the mock's Sampler presets: the saved sampler profiles, applied to this
   // rig's five numbers in one pick
   {
-    const headRow = body.firstChild;
-    const spring = document.createElement("span");
-    spring.style.flex = "1";
-    headRow.appendChild(spring);
     const psel = document.createElement("select");
-    psel.className = "rn-ws-res";
-    psel.style.cssText = "font-size:11px;max-width:150px";
     const fill = (profiles) => {
       psel.replaceChildren();
       const o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "Sampler presets";
+      o0.textContent = "Default";
       psel.appendChild(o0);
       Object.keys(profiles || {}).forEach((nm) => {
         const o = document.createElement("option");
@@ -11039,7 +11062,7 @@ function modelsBody(node, page) {
       }
       writeCfg(node); render(node);
     };
-    headRow.appendChild(psel);
+    pill(body, "Sampler presets", psel, psel.title);
   }
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";
@@ -11142,7 +11165,8 @@ function modelsBody(node, page) {
       sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
       pill(body, label, sel, hint);
     };
-    i2iRow("i2i sampler", "i2i_sampler", L.samplers || [],
+    group(body, "Image to image", "The pair an image to image run samples with.");
+    i2iRow("I2I sampler", "i2i_sampler", L.samplers || [],
            "The sampler an IMAGE TO IMAGE run uses in place of the one above. The "
          + "whole run follows it: the render, the paint pass, and the detailer, "
          + "which inherits whatever the rig hands it. The sampler that draws well "
@@ -11154,6 +11178,7 @@ function modelsBody(node, page) {
          + "the same terms as the i2i sampler beside it. Same as above leaves i2i "
          + "on the main scheduler.");
   }
+  group(body, "Detailer", "What the Detailer passes on this rig take.");
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for detailer passes, on its own output.");
   // LORA SET: which LoRAs-tab set this rig renders with. Main by default.
@@ -11167,7 +11192,8 @@ function modelsBody(node, page) {
               + "the + on the LoRAs tab.");
     pill(body, "LoRA set", sel,
          "Which LoRAs-tab set this rig renders with. Main = the first tab there.");
-    dialsCard(node, rig, body);
+    dialsCard(node, rig, (body._dials = document.createElement("div")));
+    body._dials.className = "rn-ws-mgroup";
   }
 
   // The embedded sampler: comfy core's KSampler run inside the node. External is
@@ -11194,14 +11220,10 @@ function modelsBody(node, page) {
   }
   smRow.appendChild(smSeg);
   body.appendChild(smRow);
+  if (body._dials) body.appendChild(body._dials);       // the fold sits under the switch
   if (M.sampler_mode === "internal") {
-    body = mkBox("Seed", "#8fa8c8", "🎲");
-    {
-      const sub = document.createElement("div");
-      sub.className = "rn-ws-note";
-      sub.textContent = "Seed value used to generate results.";
-      body.appendChild(sub);
-    }
+    body = mkBox("Seed", "", "", "", "The run seed lives here.");
+    body.classList.add("wide");
     // THE NUMBER, in its own big field: the mock's seed box, tall and full
     // width, the state riding inside at the right edge
     const seedBox = document.createElement("div");

@@ -283,6 +283,14 @@ cheap to judge.
   working memory, so the sampler's own memory lands on the line instead of over
   it. The log says the held figure. The Run tab's pipeline boxes are narrower,
   so a chain with a rig load fits on one row
+- The Models tab is laid out by purpose: a Rigs bar (the rig chips, Manage
+  rigs, the Active prompt, and Hold two rigs, which moved here from the rig's
+  files), then Files and Sampling side by side, then the Seed across the
+  bottom. Sampling groups its rows as Main render, Image to image and
+  Detailer, with the Sampler presets as a row of the first; the External or
+  Built-in switch and the Sampler dials fold sit under them. The Loader is a
+  button switch, file rows read label, file, picker, and every box has a
+  one-line note under its header
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
