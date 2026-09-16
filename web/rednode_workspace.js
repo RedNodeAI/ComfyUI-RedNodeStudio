@@ -527,6 +527,10 @@ css.textContent = `
 .rn-ws-dial .val{width:60px;background:#15171b;border:1px solid #33373d;border-radius:4px;color:#e8ecf1;
   font-size:12px;padding:4px 6px;text-align:right;flex:none}
 .rn-ws-note{font-size:11.5px;opacity:.5;line-height:1.45}
+/* a switch's label row: note-coloured words, but the switch stays at full strength */
+.rn-ws-swlabel{font-size:12px;color:#8a919b;display:flex;align-items:center;gap:6px}
+.rn-ws-bigbtn{height:30px!important;padding:0 14px!important;font-size:13px!important;
+  width:auto!important}
 .rn-ws-warn{font-size:10.5px;color:#f0c58a;line-height:1.45}
 .rn-ws-foot{display:flex;gap:7px;align-items:center;flex:none;padding-top:2px}
 .rn-ws-res{background:#15171b;border:1px solid #33373d;border-radius:5px;color:#ddd;font-size:11px;
@@ -4676,7 +4680,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     const frank = boolBtn("frank wording", "frank",
                           "Appends a clause telling every engine to describe nudity and sexual "
                           + "content plainly, without euphemism. Off ships the neutral prompts.");
-    frank.className = "rn-ws-note";
+    frank.className = "rn-ws-swlabel";
     frank.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:auto";
     srow.append(fixedBtn, frank);
     shared.appendChild(srow);
@@ -4686,7 +4690,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                            + "again. Slower, since the model reloads each run, but the "
                            + "captioners and the model never share the card. For smaller "
                            + "cards. Shared by every tab.");
-    lowRow.className = "rn-ws-note";
+    lowRow.className = "rn-ws-swlabel";
     lowRow.style.cssText = "display:flex;align-items:center;gap:6px";
     shared.appendChild(lowRow);
 
@@ -4814,6 +4818,9 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       shared.appendChild(bw);
     }
 
+    // where the result goes is a choice too, so it lives with the others
+    if (!isPaint) injectRowUI(node, shared, tabName);
+
     cols.append(list, right);
     sect.appendChild(cols);
     // its own box under the list, so picking an engine never moves it
@@ -4859,13 +4866,13 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                  + "reused; Fresh runs it every queue. Off: the captions are joined into "
                  + "the row as they are.";
       rwSw.onclick = () => { a.rewrite = !a.rewrite; writeCfg(node); render(node); };
-      rw.className = "rn-ws-note";
+      rw.className = "rn-ws-swlabel";
       rw.style.cssText = "display:flex;align-items:center;gap:6px";
       res.appendChild(rw);
       if (a.rewrite && !a.inject_row) {
         const wn = document.createElement("div");
         wn.className = "rn-ws-note rn-ws-peoplewarn";
-        wn.textContent = "Pick a prompt row under Inject into, below, for the "
+        wn.textContent = "Pick a prompt row under Inject into, in step 1, for the "
                        + "rewrite to work on.";
         res.appendChild(wn);
       }
@@ -4925,7 +4932,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
      // so they can simply be read back. Nothing is regenerated and nothing is
      // overwritten by looking.
     const recall = document.createElement("button");
-    recall.className = "rn-ws-btn";
+    recall.className = "rn-ws-btn rn-ws-bigbtn";
     recall.style.width = "auto";
     recall.style.padding = "0 10px";
     recall.textContent = "Saved prompts";
@@ -4974,7 +4981,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       const rowText = (cfg.prompts?.rows || []).find((r, i) =>
         (r.name || `Prompt ${i + 1}`) === a.inject_row)?.text || "";
       const pv = document.createElement("button");
-      pv.className = "rn-ws-btn rn-ws-rwprev";
+      pv.className = "rn-ws-btn rn-ws-rwprev rn-ws-bigbtn";
       pv.style.cssText = "width:auto;padding:0 10px";
       pv.textContent = rwPrev ? "Rewrite again" : "Preview rewrite";
       pv.disabled = !!node._rnAutoBusy || !a.inject_row || !people.length;
@@ -5009,6 +5016,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       const cl = document.createElement("button");
       cl.className = "rn-ws-btn";
       cl.style.cssText = "width:auto;padding:0 10px";
+      cl.className = "rn-ws-btn rn-ws-bigbtn";
       cl.textContent = "Clear preview";
       cl.onclick = () => { node._rnRewritePreview = null; render(node); };
       rrow.appendChild(cl);
@@ -5034,7 +5042,6 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       res.appendChild(box);
     }
 
-    if (!isPaint) injectRowUI(node, res, tabName);
     sect.appendChild(res);
   }
   body.appendChild(sect);
@@ -13766,26 +13773,6 @@ export function render(node) {
   try { node._rnAfterMount?.(); } catch (e) { /* a restore is never worth a broken panel */ }
   node._rnAfterMount = null;
   node._rnBodyEl = body;
-  node._rnBodyTab = viewKey;
-  if (previousBody && previousBodyTab === viewKey) {
-    body.scrollTop = previousScroll;
-    // The rebuilt body may not be able to HOLD the restored offset yet: canvases get
-    // their height on image load, so scrollHeight is briefly small and the browser
-    // clamps the write toward zero. Record what was wanted; the paint image's ready
-    // path re-applies it once, when the layout can carry it.
-    if (previousScroll && Number(body.scrollTop || 0) !== previousScroll) {
-      // remember WHERE the clamp landed, not just that it did: a body tall enough
-      // for 200 of the 400 wanted clamps to 200, and a payer that only fires from
-      // exactly 0 would drop that restore on the floor
-      node._rnScrollOwed = { tab: viewKey, top: previousScroll,
-                             clamped: Number(body.scrollTop || 0) };
-    } else {
-      delete node._rnScrollOwed;
-    }
-  } else {
-    delete node._rnScrollOwed;
-  }
-
   const foot = document.createElement("div");
   foot.className = "rn-ws-foot";
   // Panel size, in the panel, next to the other things that apply to the whole panel.
@@ -13935,6 +13922,28 @@ export function render(node) {
   foot.style.zoom = Math.abs((cfg.ui_scale || 1) - 1) < 0.001
     ? "" : String(1 / cfg.ui_scale);
   host.appendChild(foot);
+  // the kept scroll goes back now, with the footer in: restored before it, a place
+  // near the bottom was clamped short by the footer's height
+  node._rnBodyTab = viewKey;
+  if (previousBody && previousBodyTab === viewKey) {
+    body.scrollTop = previousScroll;
+    // The rebuilt body may not be able to HOLD the restored offset yet: canvases get
+    // their height on image load, so scrollHeight is briefly small and the browser
+    // clamps the write toward zero. Record what was wanted; the paint image's ready
+    // path re-applies it once, when the layout can carry it.
+    if (previousScroll && Number(body.scrollTop || 0) !== previousScroll) {
+      // remember WHERE the clamp landed, not just that it did: a body tall enough
+      // for 200 of the 400 wanted clamps to 200, and a payer that only fires from
+      // exactly 0 would drop that restore on the floor
+      node._rnScrollOwed = { tab: viewKey, top: previousScroll,
+                             clamped: Number(body.scrollTop || 0) };
+    } else {
+      delete node._rnScrollOwed;
+    }
+  } else {
+    delete node._rnScrollOwed;
+  }
+
 
   applyTuck(node);
   saveFolds(node);        // after the body built, so every fold map exists to snapshot
