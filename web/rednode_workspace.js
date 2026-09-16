@@ -14753,10 +14753,13 @@ const tabLit = (cfg, id) =>
   // its own and the plain rule below - on AND a gallery image - can never light
   // it, however hard it is working. Prompt-only counts too: the tab is then
   // contributing its words rather than a canvas, which is still doing something.
-  : id === "i2i" ? !!(cfg.tabs.i2i.on
-                      && (cfg.tabs.i2i.images.length
-                          || cfg.tabs.i2i.canvas !== "gallery"
-                          || cfg.tabs.i2i.prompt_only))
+  // A swap on the render runs with the tab off, so it lights the tab too.
+  : id === "i2i" ? !!((cfg.tabs.i2i.on
+                       && (cfg.tabs.i2i.images.length
+                           || cfg.tabs.i2i.canvas !== "gallery"
+                           || cfg.tabs.i2i.prompt_only))
+                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render"
+                          && !cfg.tabs.i2i.prompt_only))
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the

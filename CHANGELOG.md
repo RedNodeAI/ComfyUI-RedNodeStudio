@@ -326,7 +326,8 @@ cheap to judge.
   tab render as much as an Img2Img one, with Img2Img off if you like. A render
   swap is followed by a Polish pass, on by default at denoise 0.30, where the
   rig runs once more over the swapped picture so the face sits in its light.
-  The Run tab plans Swap and Swap polish boxes for it
+  The Run tab plans Swap and Swap polish boxes for it, and the Img2Img tab
+  lights for it with the tab itself off
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a
