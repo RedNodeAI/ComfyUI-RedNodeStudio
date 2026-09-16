@@ -226,6 +226,13 @@ cheap to judge.
   The VRAM chart has a GB scale, times, the peak and the latest value marked,
   and with the VRAM limit on Low or Medium a line at the card that limit suits
   (16 or 24 GB); the line under the chart says when a run went over it
+- The Run tab's live picture shows the finished picture once a run is done:
+  what RedNode Save filed, else what Image Review or Live Preview showed, else
+  any preview. The Run tab has Run, Review and Stages sub-tabs. Review is the
+  Image Review panel holding every finished picture from this Workspace's runs
+  (copy, open the folder, run again); Stages is the Stage View panel with the
+  last run's taps and the compare wipe. Both panels can now be hosted outside
+  their own nodes
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

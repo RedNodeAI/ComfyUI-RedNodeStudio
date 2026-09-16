@@ -82,7 +82,9 @@ Detailer and the Post chain pass the picture through for fast rerolls) and the V
 clamps the expensive dials for a smaller card. Below them: a box per stage (captions, encode, each
 pass, decode, Detailer, Post FX, Save) with its state, time and step count; the picture forming;
 a VRAM chart with model loads and unloads marked and the models on the card now; and a log of what
-is happening in plain words.
+is happening in plain words. When the run is done the live picture shows the finished one. The
+Review sub-tab keeps every finished picture from this Workspace like an Image Review node, and
+the Stages sub-tab shows the last run's Stage Taps like a Stage View node.
 
 **Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
 the Krea 2 frame editor, Subject and Surroundings with the framing dial between them, or a plain

@@ -12506,6 +12506,7 @@ function viewKeyOf(node, cur) {
   }
   if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
   if (cur === "moodboard") return "moodboard/" + (node._rnMbSub || p.rn_moodboard_sub || "gallery");
+  if (cur === "run") return "run/" + (node._rnRunSub || p.rn_run_sub || "run");
   if (cur === "identity") {
     let sub = node._rnIdSub || p.rn_identity_sub || "subject";
     if (sub === "people") sub = "subject";

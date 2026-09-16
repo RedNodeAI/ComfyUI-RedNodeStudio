@@ -2,6 +2,8 @@ import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
 import { writeCfg, render, setupProblems } from "./rednode_workspace.js";
+import { mountReviewPanel, pushReviewEntry } from "./rednode_review.js";
+import { mountStagePanel } from "./rednode_stages.js";
 
 // The Run tab: queue the workflow and watch it go.
 //
@@ -30,6 +32,9 @@ const RUN = {
   total: 0,            // the card's size, MB
   frame: null,         // {src, label, step, total}
   cached: false,       // the Workspace node was not run: its stages are last run's
+  outputs: [],         // {rank, images} the run's picture outputs, as they arrive
+  final: null,         // the finished picture's /view URL
+  promptId: null,
 };
 const LOG_MAX = 200;
 const VRAM_MAX = 900;
@@ -62,6 +67,8 @@ function resetRun() {
   RUN.marks = [];
   RUN.frame = null;
   RUN.cached = false;
+  RUN.outputs = [];
+  RUN.final = null;
   logLine("Run started");
 }
 
@@ -89,7 +96,8 @@ function refreshAll() {
     _refreshQueued = false;
     for (const v of [...views]) {
       // a tab switched away from, or rebuilt since, is not fed any more
-      if (v.node._rnTab !== "run" || v.gen !== v.node._rnRunGen) { views.delete(v); continue; }
+      if (v.node._rnTab !== "run" || (v.node._rnRunSub || "run") !== "run"
+          || v.gen !== v.node._rnRunGen) { views.delete(v); continue; }
       try { refresh(v); } catch (e) { console.warn("[RedNode Run] refresh failed:", e); }
     }
   };
@@ -183,7 +191,12 @@ export function listenRun() {
   api.addEventListener("rednode.run_stage", (e) => onRunEvent(e?.detail));
   api.addEventListener("rednode-live-frame", (e) => onFrame(e?.detail));
   api.addEventListener("progress", (e) => onProgress(e?.detail));
-  api.addEventListener("execution_start", () => { resetRun(); refreshAll(); });
+  api.addEventListener("execution_start", (e) => {
+    resetRun();
+    RUN.promptId = e?.detail?.prompt_id ?? null;
+    refreshAll();
+  });
+  api.addEventListener("executed", (e) => onExecuted(e?.detail));
   api.addEventListener("execution_cached", (e) => {
     const ids = (e?.detail?.nodes || []).map(String);
     const ws = (app.graph?._nodes || []).filter((n) => n.type === "RedNodeStudioWorkspace")
@@ -194,13 +207,78 @@ export function listenRun() {
       refreshAll();
     }
   });
-  api.addEventListener("execution_success", () => { finishRun("done"); refreshAll(); });
+  api.addEventListener("execution_success", () => {
+    const best = bestOutput();
+    if (best) {
+      RUN.final = viewUrl(best[0]);
+      for (const ws of workspaceNodes()) pushReviewEntry(reviewHost(ws), best, RUN.promptId);
+    }
+    finishRun("done");
+    refreshAll();
+  });
   api.addEventListener("execution_error", (e) => {
     finishRun("error", String(e?.detail?.exception_message || "").slice(0, 160));
     refreshAll();
   });
   api.addEventListener("execution_interrupted", () => { finishRun("stopped"); refreshAll(); });
   setInterval(() => { if (RUN.status === "running" && views.size) refreshAll(); }, 1000);
+}
+
+// ---- the finished picture ------------------------------------------------------
+// Which node's pictures count as the run's result, best first: what Save filed,
+// then what Review or Live Preview showed, then any stock preview.
+const OUTPUT_RANK = { RedNodeSave: 4, RedNodeImageReview: 3, RedNodeLivePreview: 2 };
+
+function nodeById(id) {
+  const seen = new Set();
+  const find = (g) => {
+    if (!g || seen.has(g)) return null;
+    seen.add(g);
+    for (const n of (g._nodes || g.nodes || [])) {
+      if (String(n.id) === String(id)) return n;
+      const sub = n.subgraph && find(n.subgraph);
+      if (sub) return sub;
+    }
+    return null;
+  };
+  return find(app.graph);
+}
+
+function onExecuted(d) {
+  const images = d?.output?.images;
+  if (!Array.isArray(images) || !images.length || RUN.status !== "running") return;
+  const n = nodeById(d.display_node ?? d.node);
+  RUN.outputs.push({ rank: OUTPUT_RANK[n?.type] ?? 1, images: images.map((f) => ({ ...f })) });
+}
+
+function bestOutput() {
+  let best = null;
+  for (const o of RUN.outputs) if (!best || o.rank >= best.rank) best = o;
+  return best ? best.images : null;
+}
+
+const viewUrl = (f) => api.apiURL(`/view?${new URLSearchParams({
+  filename: f.filename || "", subfolder: f.subfolder || "", type: f.type || "output",
+})}`);
+
+const workspaceNodes = () => (app.graph?._nodes || [])
+  .filter((n) => n.type === "RedNodeStudioWorkspace");
+
+// The Review and Stages sub-tabs keep their panel state on a host of their own, so it
+// never meets the Workspace's own fields; the history rides the node's properties.
+function reviewHost(node) {
+  node.properties ||= {};
+  node.properties.rn_run_review ||= {};
+  node._rnReviewHost ||= { id: `${node.id}:run`, type: "RedNodeImageReview" };
+  node._rnReviewHost.properties = node.properties.rn_run_review;
+  node._rnReviewHost.graph = node.graph;
+  return node._rnReviewHost;
+}
+
+function stageHost(node) {
+  node._rnStageHost ||= { id: `${node.id}:stages`, type: "RedNodeStageView" };
+  node._rnStageHost.graph = node.graph;
+  return node._rnStageHost;
 }
 
 // ---- what this workflow will run -------------------------------------------------
@@ -251,8 +329,47 @@ async function queueWorkflow(btn) {
   }
 }
 
+const RUN_SUBS = [
+  ["run", "RUN", "Queue the workflow and watch the stages, the picture and the memory."],
+  ["review", "REVIEW", "Every finished picture from this Workspace's runs, newest first. "
+                       + "Right-click one to copy it, open its folder, or run it again."],
+  ["stages", "STAGES", "What each Stage Tap and the Detailer's taps photographed in the "
+                       + "last run, with a wipe to compare two."],
+];
+
 export function runTabBody(node, body) {
   listenRun();
+  const props = (node.properties ||= {});
+  let sub = node._rnRunSub || props.rn_run_sub || "run";
+  if (!RUN_SUBS.some(([id]) => id === sub)) sub = "run";
+  node._rnRunSub = sub;
+  const strip = el("div", "rn-ws-sub");
+  for (const [id, label, tip] of RUN_SUBS) {
+    const b = el("button", "rn-ws-subt" + (id === sub ? " cur" : ""));
+    b.dataset.sub = id;
+    b.title = tip;
+    const lt = el("span", "lt" + (id === "run" && RUN.status === "running" ? " on" : ""));
+    b.append(lt, el("span", "", label));
+    b.onclick = () => { node._rnRunSub = id; props.rn_run_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+  if (sub === "review") {
+    const host = el("div");
+    body.appendChild(host);
+    mountReviewPanel(reviewHost(node), host);
+    return;
+  }
+  if (sub === "stages") {
+    const host = el("div");
+    body.appendChild(host);
+    mountStagePanel(stageHost(node), host);
+    return;
+  }
+  runPage(node, body);
+}
+
+function runPage(node, body) {
   const cfg = node._rnCfg;
   const root = el("div", "rn-run");
   node._rnRunGen = (node._rnRunGen || 0) + 1;
@@ -427,7 +544,12 @@ function refresh(view) {
 
   // picture
   const fr = RUN.frame;
-  if (fr?.src) {
+  if (RUN.final && RUN.status === "done") {
+    if (refs.img.src !== RUN.final) refs.img.src = RUN.final;
+    refs.img.style.display = "";
+    refs.picEmpty.style.display = "none";
+    refs.picLabel.textContent = "Finished picture";
+  } else if (fr?.src) {
     if (refs.img.src !== fr.src) refs.img.src = fr.src;
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";

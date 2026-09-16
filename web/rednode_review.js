@@ -22,6 +22,7 @@ const THUMB_H = 64;
 
 const css = document.createElement("style");
 css.textContent = `
+.rn-rv-hosted{height:620px !important;border:1px solid #2a2e35}
 .rn-rv-wrap{display:flex;flex-direction:column;gap:6px;padding:8px;box-sizing:border-box;
   font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;width:100%;height:100%;overflow:hidden}
 .rn-rv-main{flex:1;min-height:100px;display:flex;align-items:center;justify-content:center;
@@ -977,6 +978,42 @@ function build(node) {
   } catch (e) { /* already defined: the noop onExecuted still catches most of it */ }
 
   render(node);
+}
+
+// THE SAME PANEL, HOSTED: the Workspace's Run tab shows this history for its own runs.
+// A host is a plain object carrying what the panel keeps on a node (properties, the
+// view and slot, the root element); it has no widget and no size of its own.
+export function mountReviewPanel(host, el) {
+  injectStyle();
+  host.properties ||= {};
+  host.size ||= [0, 0];
+  host.setSize ||= () => {};
+  host._rnSized = true;
+  el.classList.add("rn-rv-wrap", "rn-rv-hosted");
+  for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick", "keydown"]) {
+    el.addEventListener(t, (e) => e.stopPropagation());
+  }
+  el.addEventListener("wheel", (e) => {
+    if (!e.shiftKey) return;                       // the plain wheel scrolls the panel
+    e.preventDefault();
+    const strip = el.querySelector(".rn-rv-strip");
+    if (strip) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
+  }, { passive: false });
+  host._rnRootEl = el;
+  arrowKeys(el, (dir) => {
+    const h = hist(host);
+    if (!h.length) return;
+    const at = host._rnView || 0;
+    host._rnView = dir === "first" ? 0
+                 : dir === "last" ? h.length - 1
+                 : Math.max(0, Math.min(h.length - 1, at + dir));
+    render(host);
+  }, (dir) => stepSlot(host, dir));
+  render(host);
+}
+
+export function pushReviewEntry(host, images, promptId) {
+  pushEntry(host, images.map((f) => ({ ...f })), promptId);
 }
 
 // every execution of one of our nodes appends to that node's history, paired with the

@@ -17,6 +17,7 @@ const MIN_PANEL_H = 300;
 
 const css = document.createElement("style");
 css.textContent = `
+.rn-sg-hosted{height:620px !important;border:1px solid #2a2e35}
 .rn-sg-wrap{display:flex;flex-direction:column;gap:7px;padding:9px;box-sizing:border-box;
   font:13px system-ui,sans-serif;color:#ddd;background:#16181c;border-radius:6px;
   width:100%;height:100%;overflow:auto}
@@ -415,6 +416,27 @@ function build(node) {
 }
 
 const viewers = new Set();
+
+// THE SAME PANEL, HOSTED: the Workspace's Run tab shows the taps too. A host is a plain
+// object standing in for the node; mounting it again moves the panel to a new element.
+export function mountStagePanel(host, el) {
+  injectStyle();
+  host.size ||= [0, 0];
+  host.setSize ||= () => {};
+  host._rnSized = true;
+  el.classList.add("rn-sg-wrap", "rn-sg-hosted");
+  for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick",
+                   "keydown", "contextmenu"]) {
+    el.addEventListener(t, (e) => e.stopPropagation());
+  }
+  el.addEventListener("dragstart", (e) => e.preventDefault());
+  host._rnRootEl = el;
+  arrowKeys(el, (dir) => stepStage(host, dir, host._rnShift));
+  el.addEventListener("pointermove", (e) => { host._rnShift = e.shiftKey; });
+  viewers.add(host);
+  render(host);
+  refreshStages().then(() => render(host));
+}
 
 app.registerExtension({
   name: "RedNode.Stages",
