@@ -13650,6 +13650,23 @@ export function swQuickToggle(prompt, text, mode) {
   if (p && !/[.!?]$/.test(p)) p += ".";
   return (p + " " + text + ".").trim();
 }
+// FAST: the Lightning speed LoRA on the swap, with the numbers it wants. On sets
+// the LoRA (the first Lightning file in the folder, else the default name) and
+// 4 steps at cfg 1; off takes the LoRA out and puts the author's 16 steps at
+// cfg 2 back. The engine fold still tunes each of them by hand.
+const SW_FAST = { steps: 4, cfg: 1 };
+const SW_SLOW = { steps: 16, cfg: 2 };
+const swFastOn = (S) => !!(S.lora_light && S.lora_light !== "None");
+function swSetFast(S, on, loras) {
+  if (on) {
+    S.lora_light = (loras || []).find((n) => /lightning/i.test(n)) || RA_DEFAULT.lora_light;
+    S.lora_light_strength = 1;
+    Object.assign(S, SW_FAST);
+  } else {
+    S.lora_light = "None";
+    Object.assign(S, SW_SLOW);
+  }
+}
 // what Swap works on: the Img2Img source, or the finished render
 const SW_TARGETS = { source: true, render: true };
 const SW_MODE_TIP = {
@@ -13967,6 +13984,25 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
       }
     }
     card.appendChild(trow);
+    // FAST: the speed LoRA and its numbers in one switch
+    const frow = document.createElement("div");
+    frow.className = "rn-ws-row";
+    const fsw = document.createElement("div");
+    fsw.className = "rn-ws-sw rn-ws-swapfast" + (swFastOn(S) ? " on" : "");
+    fsw.title = swFastOn(S)
+      ? "On: the Lightning speed LoRA, 4 steps at cfg 1, about 8 times faster. The BFS "
+        + "author warns it flattens skin; a Polish pass or a Detailer face pass puts the "
+        + "grain back. Click for the author's 16 steps at cfg 2 without it."
+      : "Off: the author's 16 steps at cfg 2, no speed LoRA. Click for the Lightning "
+        + "LoRA at 4 steps, cfg 1, about 8 times faster.";
+    fsw.onclick = () => { swSetFast(S, !swFastOn(S), L.loras); writeCfg(node); render(node); };
+    const fl = document.createElement("span");
+    fl.className = "rn-ws-note";
+    fl.textContent = swFastOn(S)
+      ? "Fast: " + S.lora_light.replace(/\.safetensors$/i, "") + " \u00b7 " + S.steps + " steps \u00b7 cfg " + S.cfg
+      : "Fast: off \u00b7 " + S.steps + " steps \u00b7 cfg " + S.cfg;
+    frow.append(fsw, fl);
+    card.appendChild(frow);
     const mrow = document.createElement("div");
     mrow.className = "rn-ws-row";
     const ml = document.createElement("span");

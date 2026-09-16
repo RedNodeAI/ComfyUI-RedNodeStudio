@@ -350,6 +350,9 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- A Fast switch on Swap: on puts the Lightning speed LoRA on the swap at 4
+  steps and cfg 1, about 8 times faster; off takes it out and puts the LoRA
+  author's 16 steps at cfg 2 back. The engine fold still tunes each by hand
 - Quick phrases under Swap's prompt: Match skin tone, Keep lighting, Keep
   expression, Keep age and more, with Keep hair for Face and the clothing
   ones for Person. A click adds one, starting from the LoRA author's prompt
