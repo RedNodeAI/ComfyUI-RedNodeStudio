@@ -4,6 +4,11 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.3.2** - 2026-09-17
+
+The 1.3.1 security fixes, published again for the Comfy Registry. No other
+changes: same code as 1.3.1 under a new version number.
+
 **1.3.1** - 2026-09-16
 
 A security fix. Please update.
