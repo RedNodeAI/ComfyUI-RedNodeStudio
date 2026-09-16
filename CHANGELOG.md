@@ -86,10 +86,15 @@ cheap to judge.
   name box, its own switch (the main subject on by default), a Generate
   button and that person's latest caption. Captions for several people are
   joined under their names, "Person 2" where none is given
-- Rewrite into the prompt with these names: at queue time Ollama merges the
-  prompt row named under Inject into with the people's captions, using the
-  names. It runs once and is reused; Fresh asks again every queue. Without an
-  answer the captions are appended as they are
+- The Subject's Auto prompt reads in the order it runs: People, the engines,
+  Each person's caption (how the engines combine for one person), then the
+  Combined prompt at the end. The Combined prompt shows the people's captions
+  joined as the queue will send them before any queue has run
+- Rewrite into the prompt with these names, in the Combined prompt: at queue
+  time Ollama merges the prompt row named under Inject into with the people's
+  captions, using the names. Preview rewrite asks for it now and shows it; the
+  queue reuses that answer while the text and people stay the same, and Fresh
+  asks again every queue. Without an answer the captions are appended
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,

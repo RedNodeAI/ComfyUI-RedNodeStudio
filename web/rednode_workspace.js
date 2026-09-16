@@ -4516,25 +4516,6 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         row.append(im, pb);
         dc.appendChild(row);
       });
-      const rw = boolBtn("Rewrite into the prompt with these names", "rewrite", "");
-      // a per-tab switch, not a shared one: bind it to this tab's auto settings
-      const rwSw = rw.querySelector ? rw.querySelector(".rn-ws-sw") : rw.children[1];
-      rwSw.className = "rn-ws-sw" + (a.rewrite ? " on" : "");
-      rwSw.title = "On: at queue time Ollama merges the prompt row named in Inject into "
-                 + "with these people's captions, using their names. It runs once and is "
-                 + "reused; Fresh runs it every queue. Off: the captions are joined into "
-                 + "the row as they are.";
-      rwSw.onclick = () => { a.rewrite = !a.rewrite; writeCfg(node); render(node); };
-      rw.className = "rn-ws-note";
-      rw.style.cssText = "display:flex;align-items:center;gap:6px";
-      dc.appendChild(rw);
-      if (a.rewrite && !a.inject_row) {
-        const wn = document.createElement("div");
-        wn.className = "rn-ws-note rn-ws-peoplewarn";
-        wn.textContent = "Pick a prompt row under Inject into (Result, below) for the "
-                       + "rewrite to work on.";
-        dc.appendChild(wn);
-      }
       sect.appendChild(dc);
     }
 
@@ -4621,7 +4602,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     shared.className = "rn-ws-card rn-ws-shared";
     const sh = document.createElement("div");
     sh.className = "ch";
-    sh.textContent = "EVERY ENGINE";
+    sh.textContent = tabName === "subject" ? "EACH PERSON'S CAPTION" : "EVERY ENGINE";
     shared.appendChild(sh);
     const srow = document.createElement("div");
     srow.className = "rn-ws-row";
@@ -4783,22 +4764,83 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     res.className = "rn-ws-card rn-ws-resultcard";
     const rh = document.createElement("div");
     rh.className = "ch";
-    rh.textContent = "RESULT";
+    rh.textContent = tabName === "subject" ? "COMBINED PROMPT" : "RESULT";
     res.appendChild(rh);
+    if (tabName === "subject") {
+      const rn = document.createElement("div");
+      rn.className = "rn-ws-note";
+      rn.textContent = "The people's captions together, as the queue sends them. With "
+                     + "Rewrite on, Ollama merges them into the Inject into row using "
+                     + "the names.";
+      res.appendChild(rn);
+      const rw = boolBtn("Rewrite into the prompt with these names", "rewrite", "");
+      // a per-tab switch, not a shared one: bind it to this tab's auto settings
+      const rwSw = rw.querySelector ? rw.querySelector(".rn-ws-sw") : rw.children[1];
+      rwSw.className = "rn-ws-sw" + (a.rewrite ? " on" : "");
+      rwSw.title = "On: at queue time Ollama merges the prompt row named in Inject into "
+                 + "with these people's captions, using their names. It runs once and is "
+                 + "reused; Fresh runs it every queue. Off: the captions are joined into "
+                 + "the row as they are.";
+      rwSw.onclick = () => { a.rewrite = !a.rewrite; writeCfg(node); render(node); };
+      rw.className = "rn-ws-note";
+      rw.style.cssText = "display:flex;align-items:center;gap:6px";
+      res.appendChild(rw);
+      if (a.rewrite && !a.inject_row) {
+        const wn = document.createElement("div");
+        wn.className = "rn-ws-note rn-ws-peoplewarn";
+        wn.textContent = "Pick a prompt row under Inject into, below, for the "
+                       + "rewrite to work on.";
+        res.appendChild(wn);
+      }
+    }
     const last = node._rnPrompts?.[tabName];
     const autoError = node._rnAutoErrors?.[tabName];
+    // ON SUBJECT, A PREVIEW BEFORE ANY QUEUE: the switched-on people's captions joined
+    // the way the queue joins them, and the rewrite when one has been asked for
+    let people = [];
+    let joined = "";
+    if (tabName === "subject") {
+      const S = cfg.tabs.subject;
+      const meta = S.people_meta || {};
+      const order = S.images.length ? [S.sel, ...(S.extra_sel || [])] : [];
+      people = order.map((idx, k) => {
+        const e = S.images[idx];
+        const m = meta[e] || {};
+        const on = m.auto === undefined ? k === 0 : !!m.auto;
+        return { k, named: !!m.name, name: m.name || `Person ${k + 1}`, on,
+                 cap: node._rnPersonCaps?.[e] || "" };
+      }).filter((p) => p.on && p.cap);
+      joined = people.length === 1 && people[0].k === 0 && !people[0].named
+        ? people[0].cap
+        : people.map((p) => `${p.name}: ${p.cap}`).join("\n");
+    }
+    const rwPrev = tabName === "subject" ? node._rnRewritePreview : null;
+    const shown = rwPrev || last || joined;
     const prev = document.createElement("div");
     prev.className = "rn-ws-note rn-ws-result";
-    prev.textContent = node._rnAutoBusy === tabName
-      ? "generating the auto prompt..."
+    prev.textContent = node._rnAutoBusy === tabName || node._rnAutoBusy === "rewrite"
+      ? (node._rnAutoBusy === "rewrite" ? "asking Ollama for the rewrite..."
+                                        : "generating the auto prompt...")
       : autoError ? `automatic prompt failed: ${autoError}`
-      : last ? last : isPaint
+      : rwPrev ? rwPrev
+      : last ? last
+      : joined ? joined
+      : isPaint
         ? "no prompt generated yet; right-click a result"
         : "no prompt generated yet; queue a run, or right-click a thumbnail";
-    prev.title = last ? "The prompt the last run produced. Click to copy." : "";
-    if (last) {
+    if (!node._rnAutoBusy && (rwPrev || (!last && joined))) {
+      const lab = document.createElement("div");
+      lab.className = "rn-ws-note";
+      lab.style.fontWeight = "600";
+      lab.textContent = rwPrev
+        ? `Rewrite preview${a.inject_row ? ` for ${a.inject_row}` : ""}: the next queue uses this`
+        : "Preview from the captions above: the next queue sends this";
+      res.appendChild(lab);
+    }
+    prev.title = shown ? "Click to copy." : "";
+    if (shown) {
       prev.style.cursor = "pointer";
-      prev.onclick = () => navigator.clipboard?.writeText?.(last);
+      prev.onclick = () => navigator.clipboard?.writeText?.(shown);
     }
     res.appendChild(prev);
     // What this picture has been called before. A session that has just opened
@@ -4848,7 +4890,52 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     }
     const rrow = document.createElement("div");
     rrow.className = "rn-ws-row";
+    rrow.style.flexWrap = "wrap";
     rrow.appendChild(recall);
+    if (tabName === "subject" && a.rewrite) {
+      // the rewrite, asked now: same merge, same cache, so the queue reuses the answer
+      const rowText = (cfg.prompts?.rows || []).find((r, i) =>
+        (r.name || `Prompt ${i + 1}`) === a.inject_row)?.text || "";
+      const pv = document.createElement("button");
+      pv.className = "rn-ws-btn rn-ws-rwprev";
+      pv.style.cssText = "width:auto;padding:0 10px";
+      pv.textContent = rwPrev ? "Rewrite again" : "Preview rewrite";
+      pv.disabled = !!node._rnAutoBusy || !a.inject_row || !people.length;
+      pv.title = !a.inject_row ? "Pick a prompt row under Inject into first."
+        : !people.length ? "Caption at least one switched-on person first (Generate)."
+        : "Ask Ollama now to merge " + (a.inject_row) + " with these people, and show it "
+          + "here. The queue reuses this answer while the text and people stay the same.";
+      pv.onclick = async () => {
+        node._rnAutoBusy = "rewrite";
+        render(node);
+        try {
+          const r = await api.fetchApi("/rednode/people_rewrite", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              prompt: rowText, people: people.map((p) => [p.name, p.cap]),
+              config: findWidget(node, "config")?.value ?? "{}",
+              fresh: !!rwPrev || !a.fixed,
+            }),
+          });
+          const d = await r.json();
+          node._rnRewritePreview = d.text || `Could not rewrite: ${d.error || r.status}`;
+        } catch (e) {
+          node._rnRewritePreview = `Could not rewrite: ${e.message}`;
+        } finally {
+          node._rnAutoBusy = null;
+          render(node);
+        }
+      };
+      rrow.appendChild(pv);
+    }
+    if (tabName === "subject" && rwPrev) {
+      const cl = document.createElement("button");
+      cl.className = "rn-ws-btn";
+      cl.style.cssText = "width:auto;padding:0 10px";
+      cl.textContent = "Clear preview";
+      cl.onclick = () => { node._rnRewritePreview = null; render(node); };
+      rrow.appendChild(cl);
+    }
     if (!isPaint && node._rnSaved) {
       const clr = document.createElement("button");
       clr.className = "rn-ws-btn";

@@ -3864,6 +3864,30 @@ try:
         data["managed"] = True
         return web.json_response(data)
 
+    @PromptServer.instance.routes.post("/rednode/people_rewrite")
+    async def _rednode_people_rewrite(request):
+        # the Subject's Preview rewrite: the same merge the queue runs, asked now, so
+        # the answer is cached and the queue reuses it for the same text and people
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        people = [(str(p[0]), str(p[1])) for p in (data.get("people") or [])
+                  if isinstance(p, (list, tuple)) and len(p) == 2]
+        if not people:
+            return web.json_response({"error": "no captions to merge yet"}, status=400)
+        ga = parse_config(str(data.get("config") or "{}"))["auto"]
+        import asyncio
+        text = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: autoprompt.merge_people(
+                str(data.get("prompt") or ""), people, model=ga["model"], url=ga["url"],
+                keep_alive=ga["keep_alive"], reuse=not data.get("fresh")))
+        if not text:
+            return web.json_response(
+                {"error": "Ollama gave no answer; check it is running and a model is picked"},
+                status=400)
+        return web.json_response({"text": text})
+
     @PromptServer.instance.routes.post("/rednode/release_engines")
     async def _rednode_release_engines(request):
         try:
