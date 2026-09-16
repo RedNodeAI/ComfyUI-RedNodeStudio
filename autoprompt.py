@@ -34,13 +34,16 @@ TIMEOUT = 120
 # per-mode system prompts for the captioning LLM (not the Krea 2 vision encoder)
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPTS = {
+    # the person's TRAITS only: the prompt and the camera own the setting, the light,
+    # the framing and the pose, so a caption that describes them fights both
     "subject": (
-        "Describe the person in the image for an image generation prompt. Cover face, "
-        "hair, eyes, build, clothing, pose and expression precisely. State the image "
-        "orientation (portrait or landscape) and the camera shot type (close-up, half "
-        "body, full body). Mix plain sentences with comma-separated descriptors. Do not "
-        "describe the background or location. Do not use names. Answer with the "
-        "description only, no preamble."),
+        "Describe only the person in the image, for an image generation prompt: their "
+        "face, eyes, hair, skin, apparent age, build, expression, makeup, tattoos, "
+        "clothing and accessories, precisely. Leave out everything that is not the "
+        "person: the background, the location, the lighting, the camera, the shot type, "
+        "the framing and the pose. Do not say what is absent. Do not use names. Mix plain "
+        "sentences with comma-separated descriptors. Answer with the description only, "
+        "no preamble."),
     "scene_view": (
         "Describe the location, layout, lighting and camera framing of the image for an "
         "image generation prompt. State the image orientation and the camera angle. "
@@ -146,6 +149,62 @@ COUNT_WORDS = {
     "multiple_girls": "several people", "multiple_boys": "several people",
     "6+girls": "a group of people", "6+boys": "a group of people",
 }
+
+
+# SUBJECT CAPTIONS KEEP THE PERSON. Florence and the taggers take no instruction, and
+# the language models drift, so every subject caption is cut at use: a sentence about
+# the setting, the light, the camera or the framing goes, a mixed sentence loses the
+# clause that is about them, and statements of what is absent go.
+import re as _re
+
+_NOT_PERSON = (
+    "background", "backdrop", "setting", "scene", "room", "wall", "street", "road",
+    "city", "building", "outdoor", "indoor", "sky", "landscape", "window", "studio",
+    "lighting", "sunlight", "daylight", "natural light", "soft light", "light source",
+    "illuminat", "backlit", "shadow", "camera", "shot", "close-up", "closeup",
+    "orientation", "framing", "framed", "in frame", "cropped", "centered", "centred",
+    "composition", "photograph", "the image", "this image", "the photo", "the picture",
+    "depth of field", "bokeh", "blurred", "blurry", "visible", "facing", "looking at",
+    "pose", "posing", "posed", "standing", "sitting", "seated", "leaning",
+)
+_PERSON = (
+    "hair", "eye", "face", "skin", "lip", "nose", "brow", "cheek", "freckle", "makeup",
+    "wear", "dress", "shirt", "top", "sweater", "jacket", "coat", "necklace", "earring",
+    "tattoo", "woman", "man", "girl", "boy", "person", "she ", "he ", "her ", "his ",
+    "expression", "smile", "complexion", "build", "beard", "glasses",
+)
+_WHERE = _re.compile(
+    r"\s*\b(?:standing|sitting|seated|posing|leaning)?\s*\b(?:on|in|at|against|near|"
+    r"in front of|outside|inside|by)\s+(?:a|an|the)\s+[^,.;]*?\b(?:street|road|room|"
+    r"wall|city|building|background|backdrop|studio|park|beach|forest|field|window|"
+    r"cafe|café|market|garden|kitchen|bedroom|office)\b[^,.;]*", _re.I)
+_ABSENT = _re.compile(r"^\s*(?:there (?:is|are) )?no\s+\w+(?:\s+\w+)?\s*\.?\s*$", _re.I)
+
+
+def _about(text, words):
+    t = " " + text.lower() + " "
+    return any(w in t for w in words)
+
+
+def subject_only(text):
+    """A subject caption with the setting, light, camera, framing and pose taken out."""
+    out = []
+    for sent in _re.split(r"(?<=[.!?])\s+", str(text or "").strip()):
+        s = _WHERE.sub("", sent).strip()
+        if not s or _ABSENT.match(s):
+            continue
+        if not _about(s, _NOT_PERSON):
+            out.append(s)
+            continue
+        if not _about(s, _PERSON):
+            continue                                   # a sentence about something else
+        # a mixed sentence keeps its clauses about the person
+        end = s[-1] if s[-1] in ".!?" else "."
+        kept = [c.strip() for c in _re.split(r",\s*|\s+with\s+", s.rstrip(".!?"))
+                if c.strip() and not _about(c, _NOT_PERSON)]
+        if kept and _about(" ".join(kept), _PERSON):
+            out.append(", ".join(kept) + end)
+    return " ".join(out).strip()
 
 
 def _matches(tag, parts):
@@ -884,6 +943,10 @@ def build_prompt(mode, *, image_bytes=None, image_tensor=None, wired=(),
                     lambda: (clip_fn or clipgen_caption)(clip, image_tensor, prompt_text))
         if text:
             paragraphs.append(text)
+    if mode in ("subject", "people"):
+        # the person's traits only, applied at use, so captions saved before this read
+        # clean too; a wired caption is your own text and passes untouched
+        paragraphs = [p for p in (subject_only(x) for x in paragraphs) if p]
     paragraphs.extend(str(w).strip() for w in wired if str(w or "").strip())
 
     tag_line = ""

@@ -98,6 +98,12 @@ cheap to judge.
   captions, using the names. Preview rewrite asks for it now and shows it; the
   queue reuses that answer while the text and people stay the same, and Fresh
   asks again every queue. Without an answer the captions are appended
+- Subject captions keep to the person's traits. The instruction asks for the
+  face, hair, skin, build, expression, clothing and accessories and leaves out
+  the background, lighting, camera, framing and pose, and every subject
+  caption (Florence and the taggers included, and captions saved before) is
+  cut at use: sentences about the place, the light or the shot go, a mixed
+  sentence keeps its clauses about the person, and "No nudity" style lines go
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,
