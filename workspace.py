@@ -540,6 +540,8 @@ def _normalise_auto(auto_in, default_mode):
         # Frame slot, automatically at queue time. Empty = the caption only rides
         # its own output socket, exactly as before.
         "inject_row": str(auto_in.get("inject_row") or ""),
+        # before or after the words already typed in that slot
+        "inject_pos": "before" if auto_in.get("inject_pos") == "before" else "after",
         "inject_slot": (str(auto_in.get("inject_slot"))
                         if auto_in.get("inject_slot") in
                         ("subject", "surroundings", "light_and_colour", "prompt")
@@ -2754,6 +2756,7 @@ class RedNodeStudioWorkspace:
         # text, the standing rule; a plain row appends it. No button, no wire.
         injections = {}
         rewrite_people = {}          # row name -> the named people to merge into it
+        injections_before = {}       # the same, for captions that go ahead of the typed words
         for _tn in ("subject", "scene", "moodboard", "i2i"):
             _a = tabs[_tn].get("auto") or {}
             _cap = (prompts.get(_tn) or "").strip()
@@ -2762,7 +2765,8 @@ class RedNodeStudioWorkspace:
                 rewrite_people[_a["inject_row"]] = (subject_people, bool(_a.get("fixed", True)))
                 continue
             if _a.get("on") and _a.get("inject_row") and _cap:
-                injections.setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
+                (injections_before if _a.get("inject_pos") == "before" else injections) \
+                    .setdefault(_a["inject_row"], {})                     .setdefault(_a.get("inject_slot", "subject"), []).append(_cap)
         _wired_frame = {"style": style_in, "subject": subject_in,
                         "surroundings": surroundings_in,
                         "light_and_colour": light_and_colour_in}
@@ -2781,6 +2785,7 @@ class RedNodeStudioWorkspace:
                         _hit0.setdefault(_k, []).append(_v)
         for _row in cfg["prompts"]["rows"]:
             _hit = injections.get(_row["name"])
+            _pre = injections_before.get(_row["name"]) or {}
             # ALWAYS RE-ASSEMBLE A KREA 2 ROW WITH A FRAME AT QUEUE TIME. The
             # row's text is the panel's last preview; with the studio on its own
             # Camera tab, moving the camera there changed the studio state but
@@ -2792,8 +2797,11 @@ class RedNodeStudioWorkspace:
             _has_frame = (_row["kind"] == "krea2"
                           and any(str(_fr0.get(k) or "").strip()
                                   for k in ("subject", "surroundings", "style", "light_and_colour", "placement")))
-            if not _hit and not _has_frame:
+            if not _hit and not _pre and not _has_frame:
                 continue
+            # a caption set to go BEFORE the typed words leads the slot it joins
+            _lead = lambda key, typed: ", ".join(
+                [c for c in _pre.get(key, []) if c] + ([typed] if typed else []))
             _hit = _hit or {}
             _flat = ", ".join(c for k in ("style", "subject", "surroundings",
                                           "light_and_colour", "prompt")
@@ -2805,11 +2813,12 @@ class RedNodeStudioWorkspace:
                     _ins = {k: ", ".join(v) for k, v in _hit.items() if k != "prompt"}
                     _extra = ", ".join(_hit.get("prompt", []))
                     _row["text"], _n2 = RedNodePromptFrame().run(
-                        subject=str(_fr.get("subject") or ""),
-                        surroundings=str(_fr.get("surroundings") or ""),
+                        subject=_lead("subject", str(_fr.get("subject") or "")),
+                        surroundings=_lead("surroundings", str(_fr.get("surroundings") or "")),
                         framing=str(_fr.get("framing") or "Balanced"),
                         placement=str(_fr.get("placement") or ""),
-                        light_and_colour=str(_fr.get("light_and_colour") or ""),
+                        light_and_colour=_lead("light_and_colour",
+                                               str(_fr.get("light_and_colour") or "")),
                         placement_where=str(_fr.get("placement_where") or "None"),
                         placement_what=str(_fr.get("placement_what") or "None"),
                         lighting=str(_fr.get("lighting") or "None"),
@@ -2832,15 +2841,20 @@ class RedNodeStudioWorkspace:
                         light_and_colour_in=", ".join(
                             x for x in (_ins.get("light_and_colour", ""), _extra) if x),
                         seed=run_seed)
-                    if _hit:
+                    if _pre.get("prompt"):
+                        _row["text"] = ", ".join(_pre["prompt"] + [_row["text"]])
+                    if _hit or _pre:
                         print("[RedNode Workspace] auto prompt injected into %r"
                               % (_row["name"] or "a prompt row"), flush=True)
                 except Exception as exc:
                     print("[RedNode Workspace] could not re-assemble %r: %s"
                           % (_row["name"], exc), flush=True)
-            elif _flat:
+            elif _flat or _pre:
                 _t = _row["text"].strip().rstrip(",")
-                _row["text"] = (_t + ", " + _flat) if _t else _flat
+                _first = ", ".join(c for k in ("style", "subject", "surroundings",
+                                               "light_and_colour", "prompt")
+                                   for c in _pre.get(k, []))
+                _row["text"] = ", ".join(x for x in (_first, _t, _flat) if x)
                 print("[RedNode Workspace] auto prompt injected into %r"
                       % (_row["name"] or "a prompt row"), flush=True)
         # WILDCARDS RESOLVE AT QUEUE TIME, with the run seed. The tab stores the

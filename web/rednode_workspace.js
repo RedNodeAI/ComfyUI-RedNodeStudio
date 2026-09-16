@@ -3988,7 +3988,15 @@ function injectRowUI(node, sect, tabName) {
   slotSel.title = "Which Frame slot the caption joins on a Krea 2 prompt. On a "
                 + "plain prompt every choice appends to the text.";
   slotSel.onchange = () => { a.inject_slot = slotSel.value; writeCfg(node); };
-  row.append(lab, rowSel, slotSel);
+  if (a.inject_pos !== "before") a.inject_pos = "after";
+  const posSeg = segSwitch([
+    ["before", "Before my words", "The caption goes ahead of what you typed in that slot."],
+    ["after", "After my words", "The caption follows what you typed in that slot, as it "
+                                + "always has."],
+  ], a.inject_pos, (v) => { a.inject_pos = v; writeCfg(node); render(node); });
+  posSeg.classList.add("rn-ws-injpos");
+  row.style.flexWrap = "wrap";
+  row.append(lab, rowSel, slotSel, posSeg);
   sect.appendChild(row);
 }
 

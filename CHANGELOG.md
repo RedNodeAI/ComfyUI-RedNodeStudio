@@ -104,6 +104,9 @@ cheap to judge.
   caption (Florence and the taggers included, and captions saved before) is
   cut at use: sentences about the place, the light or the shot go, a mixed
   sentence keeps its clauses about the person, and "No nudity" style lines go
+- Inject into has a Before my words / After my words choice on every tab: an
+  injected caption can lead the words already typed in its slot instead of
+  following them. After is the default, as before
 - The Prompt Converter's labels and choices start with a capital
 - The Latent tab is two sub-tabs, Canvas and Passes, with the same lights and
   status bar. Canvas keeps the aspect buttons and the drag-to-reshape preview,
