@@ -750,6 +750,12 @@ css.textContent = `
 .rn-ws-sub.inner .rn-ws-subt{padding:5px 10px;font-size:11px;background:#1b1e23}
 .rn-ws-sub.inner .rn-ws-subt.cur{background:#233247;border-color:#4a8fe0;color:#fff}
 .rn-ws-peoplewarn{color:#f0c58a}
+.rn-ws-people{display:flex;gap:8px;flex-wrap:wrap}
+.rn-ws-pthumb{display:flex;flex-direction:column;align-items:center;gap:3px;background:#15171b;
+  border:1px solid #2e333a;border-radius:6px;padding:4px 6px;cursor:pointer;font-size:11px;
+  color:#c8ccd2}
+.rn-ws-pthumb img{width:52px;height:52px;object-fit:cover;border-radius:4px}
+.rn-ws-pthumb.cur{border-color:#b8283c;background:#2a1a1f;color:#fff}
 .rn-ws-skipnote{border-color:#e0a84a88;color:#f0c58a}
 .rn-ws-badge{align-self:flex-start;font-size:10.5px;font-weight:700;letter-spacing:.06em;
   padding:2px 8px;border-radius:5px;background:#2a2e35;color:#c8ccd2}
@@ -995,6 +1001,7 @@ function normaliseAutoUi(value, defaultMode) {
   a.qwen = !!a.qwen;
   a.clipgen = !!a.clipgen;
   a.florence = !!a.florence;
+  a.person = Number.isInteger(a.person) && a.person >= 0 ? a.person : 0;
   return a;
 }
 function normSel(name, sel, imagesLen) {
@@ -4002,6 +4009,17 @@ function engineVram(key, cfg) {
 // at the bottom. It used to show every engine's settings at once, most of them for
 // engines that were not even on. `flat` is the Img2Img sub-tab, where the tab itself
 // is the fold.
+function autoEntry(cfg, tabName) {
+  const t = cfg.tabs[tabName];
+  if (!t) return "";
+  const idx = Array.isArray(t.sel) ? (t.sel[0] ?? 0) : t.sel;
+  if (tabName === "subject" && t.auto?.person > 0) {
+    const pick = (t.extra_sel || [])[t.auto.person - 1];
+    if (pick !== undefined) return t.images[pick] || "";
+  }
+  return (t.images || [])[idx] || "";
+}
+
 function autoSection(node, body, tabName, { flat = false } = {}) {
   if (!["subject", "scene", "moodboard", "i2i", "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
@@ -4379,6 +4397,47 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       return g;
     };
 
+    // WHO IT DESCRIBES, on Subject: the picked people as small pictures
+    if (tabName === "subject") {
+      const S = cfg.tabs.subject;
+      const order = S.images.length ? [S.sel, ...(S.extra_sel || [])] : [];
+      if (a.person >= order.length) a.person = 0;
+      const dc = document.createElement("div");
+      dc.className = "rn-ws-card rn-ws-describe";
+      const dh = document.createElement("div");
+      dh.className = "ch";
+      dh.textContent = "DESCRIBE";
+      dc.appendChild(dh);
+      if (order.length > 1) {
+        const row = document.createElement("div");
+        row.className = "rn-ws-people";
+        order.forEach((imgIdx, k) => {
+          const b = document.createElement("button");
+          b.className = "rn-ws-pthumb" + (a.person === k ? " cur" : "");
+          b.dataset.person = String(k);
+          b.title = `Describe ${k ? "person " + (k + 1) : "the main subject"}: ${S.images[imgIdx]}`;
+          const im = document.createElement("img");
+          im.src = thumbUrl(S.images[imgIdx], 120);
+          im.alt = "";
+          const lb = document.createElement("span");
+          lb.textContent = k ? `#${k + 1}` : "#1 Main";
+          b.append(im, lb);
+          b.onclick = () => { a.person = k; writeCfg(node); render(node); };
+          row.appendChild(b);
+        });
+        dc.appendChild(row);
+      }
+      const dn = document.createElement("div");
+      dn.className = "rn-ws-note";
+      dn.textContent = order.length > 1
+        ? `The caption describes ${a.person ? "person " + (a.person + 1) : "the main subject"}. `
+          + "Click a picture to describe someone else; Saved prompts reads that picture."
+        : "The caption describes the main subject. Pick more people in the Gallery to "
+          + "choose who it describes.";
+      dc.appendChild(dn);
+      sect.appendChild(dc);
+    }
+
     const cols = document.createElement("div");
     cols.className = "rn-ws-cols";
     const list = document.createElement("div");
@@ -4653,9 +4712,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                    + "one is shown below.";
     } else {
       recall.onclick = async () => {
-        const t2 = cfg.tabs[tabName];
-        const idx = Array.isArray(t2.sel) ? (t2.sel[0] ?? 0) : t2.sel;
-        const entry = (t2.images || [])[idx];
+        const entry = autoEntry(cfg, tabName);
         if (!entry) { alert("Pick an image on this tab first."); return; }
         try {
           const res = await api.fetchApi(

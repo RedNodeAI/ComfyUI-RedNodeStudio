@@ -534,6 +534,9 @@ def _normalise_auto(auto_in, default_mode):
         # fixed (default): the same image reuses the cached prompt. Unfixed
         # re-runs the LLM every queue for fresh wording each run.
         "fixed": bool(auto_in.get("fixed", True)),
+        # the Subject tab's: which picked person the caption describes, 0 the main one
+        "person": (max(0, int(auto_in.get("person")))
+                   if isinstance(auto_in.get("person"), (int, float)) else 0),
         # Injection: this tab's caption lands in a named Prompts-tab row, into one
         # Frame slot, automatically at queue time. Empty = the caption only rides
         # its own output socket, exactly as before.
@@ -2596,6 +2599,15 @@ class RedNodeStudioWorkspace:
                 if isinstance(idx, list):
                     idx = idx[0] if idx else 0
                 entry = t["images"][idx]
+            # the Subject auto prompt can describe another picked person
+            person_pick = False
+            if tab_name == "subject" and entry and a.get("person", 0) > 0:
+                _ex = t.get("extra_sel") or []
+                if a["person"] - 1 < len(_ex):
+                    entry = t["images"][_ex[a["person"] - 1]]
+                    person_pick = True
+                    print(f"[RedNode Workspace] subject auto prompt describes person "
+                          f"{a['person'] + 1}: {entry}", flush=True)
             img_bytes = None
             if entry and a["ollama"]:
                 # re-encoded, not the raw file: a webp the endpoint cannot read, or
@@ -2616,7 +2628,8 @@ class RedNodeStudioWorkspace:
             # moodboard tensor is a BATCH: caption its first ref (the resolved entry).
             need_tensor = (a["wd14"] or a["joy"] or a["qwen"] or a["clipgen"]
                            or a["florence"])
-            t_img = tensor_map[tab_name] if need_tensor else None
+            t_img = (load_image(entry, target) if person_pick else tensor_map[tab_name]) \
+                if need_tensor else None
             if t_img is not None and t_img.shape[0] > 1:
                 t_img = t_img[:1]
 
