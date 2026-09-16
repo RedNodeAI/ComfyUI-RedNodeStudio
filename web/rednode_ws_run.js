@@ -230,6 +230,56 @@ export function listenRun() {
   setInterval(() => { if (RUN.status === "running" && views.size) refreshAll(); }, 1000);
 }
 
+// ---- what the run should need ---------------------------------------------------
+const VRAM_TIER_FOR = { 8: "low", 12: "low", 16: "low", 24: "medium" };
+const HEADROOM_GB = 0.5;
+const _estCache = { key: "", data: null };
+
+export function estimateText(cfg, d) {
+  if (!d || d.error) return "";
+  const lim = cfg.vram_gb ? cfg.vram_gb - HEADROOM_GB : null;
+  const e = d.estimate;
+  if (!e) {
+    return lim ? `Limit ${lim} GB. No estimate: the Workspace is not rendering with its `
+                 + "own sampler." : "";
+  }
+  const parts = e.parts.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ");
+  let verdict = "";
+  if (lim) {
+    const over = e.peak > lim;
+    const mode = cfg.vram_hold_mode || "auto";
+    verdict = over
+      ? (mode === "off" ? ` Over the ${lim} GB limit, and Hold is Off, so it may run out.`
+         : ` Over the ${lim} GB limit, so it will hold: slower, and it stays near the line.`)
+      : (mode === "on" ? ` Under the ${lim} GB limit; Hold is On, so it holds anyway.`
+         : ` Under the ${lim} GB limit, so it runs at full speed.`);
+  }
+  return `Estimated peak about ${e.peak.toFixed(1)} GB (${parts}).${verdict} `
+         + "Captioners and the Detailer are not counted.";
+}
+
+let _estTimer = null;
+function fetchEstimate(node, line) {
+  const cfgStr = JSON.stringify(node._rnCfg || {});
+  if (_estCache.key === cfgStr && _estCache.data) {
+    line.textContent = estimateText(node._rnCfg, _estCache.data);
+    return;
+  }
+  clearTimeout(_estTimer);
+  _estTimer = setTimeout(async () => {
+    try {
+      const res = await api.fetchApi("/rednode/vram_estimate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfgStr }),
+      });
+      const d = await res.json();
+      _estCache.key = cfgStr;
+      _estCache.data = d;
+      line.textContent = estimateText(node._rnCfg, d);
+    } catch (e) { /* the line stays empty: an estimate is a nicety */ }
+  }, 150);
+}
+
 // ---- the finished picture ------------------------------------------------------
 // Which node's pictures count as the run's result, best first: what Save filed,
 // then what Review or Live Preview showed, then any stock preview.
@@ -533,33 +583,54 @@ function runPage(node, body) {
   const tierWrap = el("label", "rn-run-tier");
   tierWrap.appendChild(el("span", "rn-ws-note", "VRAM limit"));
   const tier = el("select", "rn-ws-res");
-  tier.dataset.choice = "vram_tier";
-  for (const [v, label] of [["high", "Free range"], ["medium", "Medium"], ["low", "Low"]]) {
+  tier.dataset.choice = "vram_gb";
+  for (const [v, label] of [[0, "Free range"], [24, "24 GB card"], [16, "16 GB card"],
+                            [12, "12 GB card"], [8, "8 GB card"]]) {
     const o = el("option", "", label);
-    o.value = v;
-    o.selected = (cfg.vram_tier || "high") === v;
+    o.value = String(v);
+    o.selected = (cfg.vram_gb || 0) === v;
     tier.appendChild(o);
   }
-  tier.title = "How much VRAM this workspace may spend. Medium and Low hold the "
-             + "expensive dials to what that card can take; Free range lifts every "
-             + "ceiling. Anything held back is named in the log and the console.";
-  tier.onchange = () => { cfg.vram_tier = tier.value; writeCfg(node); render(node); };
+  tier.title = "Your card's VRAM. The run is kept half a GB under it, the expensive "
+             + "dials are held to what that card can take, and Hold decides whether "
+             + "ComfyUI keeps the rest of the card free. Free range lifts it all.";
+  tier.onchange = () => {
+    cfg.vram_gb = parseInt(tier.value, 10) || 0;
+    cfg.vram_tier = VRAM_TIER_FOR[cfg.vram_gb] || "high";
+    writeCfg(node);
+    render(node);
+  };
   tierWrap.appendChild(tier);
-  if (TIER_TARGET_GB[cfg.vram_tier]) {
-    const hold = el("button", "rn-ws-sw" + (cfg.vram_hold ? " on" : ""));
-    hold.dataset.choice = "vram_hold";
-    hold.title = cfg.vram_hold
-      ? `On: ComfyUI keeps the card past ${TIER_TARGET_GB[cfg.vram_tier]} GB free, so a model `
-        + "that does not fit loads in part, and the text encoder leaves the card before "
-        + "sampling. Slower; it stays near the line."
-      : "Off: the limit only holds the dials down; the models still load whole.";
-    hold.onclick = () => { cfg.vram_hold = !cfg.vram_hold; writeCfg(node); render(node); };
-    tierWrap.append(hold, el("span", "rn-ws-note", "Hold under it"));
+  if (cfg.vram_gb) {
+    const lim = cfg.vram_gb - HEADROOM_GB;
+    const hold = el("div", "rn-ws-seg rn-ws-switch rn-run-hold");
+    hold.dataset.choice = "vram_hold_mode";
+    for (const [v, label, tip] of [
+      ["auto", "Auto", `Holds only when the estimated peak is over ${lim} GB, so a run that `
+                       + "fits keeps its speed."],
+      ["on", "On", `Always holds under ${lim} GB: ComfyUI keeps the rest of the card free, `
+                   + "a model that does not fit loads in part, and the text encoder leaves "
+                   + "the card before sampling. Slower."],
+      ["off", "Off", "Never holds: the limit only holds the dials down, and the models load "
+                     + "whole."],
+    ]) {
+      const b = el("button", "rn-ws-segb" + ((cfg.vram_hold_mode || "auto") === v ? " on" : ""),
+                   label);
+      b.title = tip;
+      b.onclick = () => { cfg.vram_hold_mode = v; writeCfg(node); render(node); };
+      hold.appendChild(b);
+    }
+    tierWrap.append(el("span", "rn-ws-note", "Hold"), hold);
   }
   const facts = el("div", "rn-run-facts");
   view.refs.facts = facts;
   top.append(gen, mode, tierWrap, facts);
   root.appendChild(top);
+  const estLine = el("div", "rn-ws-note rn-run-est");
+  estLine.dataset.est = "1";
+  top.appendChild(estLine);
+  view.refs.est = estLine;
+  fetchEstimate(node, estLine);
   const probs = setupProblems(node, cfg) || [];
   if (probs.length) {
     const pc = el("div", "rn-ws-card rn-ws-note rn-ws-peoplewarn rn-run-probs");
@@ -714,11 +785,11 @@ function refresh(view) {
   }
 
   // memory
-  drawChart(refs.chart, node._rnCfg.vram_tier || "high");
+  drawChart(refs.chart, node._rnCfg.vram_gb || 0);
   const last = RUN.vram[RUN.vram.length - 1];
   const gb = (mb) => `${(mb / 1024).toFixed(1)} GB`;
   const peak = RUN.vram.reduce((m, v) => Math.max(m, v.used), 0);
-  const tgt = TIER_TARGET_GB[node._rnCfg.vram_tier];
+  const tgt = node._rnCfg.vram_gb ? node._rnCfg.vram_gb - HEADROOM_GB : 0;
   refs.memLine.textContent = RUN.total
     ? `${last ? gb(last.used) : "-"} of ${gb(RUN.total)} in use${peak ? ` · peak ${gb(peak)}` : ""}`
       + (tgt ? ` · limit ${tgt} GB${peak > tgt * 1024 ? `, went over by ${gb(peak - tgt * 1024)}` : ""}` : "")
@@ -752,15 +823,14 @@ function refresh(view) {
 
 // What each VRAM limit is sized for. The limit itself only holds the expensive dials
 // down; these are the cards it suits, drawn so a run that goes past one shows it.
-export const TIER_TARGET_GB = { low: 16, medium: 24 };
-const TIER_NAME = { low: "Low", medium: "Medium" };
+
 
 function niceStep(maxGb) {
   for (const s of [1, 2, 4, 8, 16, 32]) if (maxGb / s <= 5) return s;
   return 64;
 }
 
-function drawChart(cv, tier) {
+function drawChart(cv, cardGb) {
   const ctx = cv.getContext?.("2d");
   if (!ctx) return;
   const w = Math.max(240, Math.round(cv.clientWidth || cv.parentNode?.clientWidth || 360));
@@ -805,7 +875,7 @@ function drawChart(cv, tier) {
   ctx.stroke();
   txt(`Card ${gb(total).toFixed(1)} GB`, L + 4, y(total) + 11, "left");
   // the VRAM limit's target card, when one is set
-  const target = TIER_TARGET_GB[tier];
+  const target = cardGb ? cardGb - HEADROOM_GB : 0;
   if (target && target * 1024 < total) {
     const ty = y(target * 1024);
     ctx.strokeStyle = "#e0a84a";
@@ -813,7 +883,7 @@ function drawChart(cv, tier) {
     ctx.moveTo(L, ty);
     ctx.lineTo(w - Rm, ty);
     ctx.stroke();
-    txt(`${TIER_NAME[tier]} limit ${target} GB`, L + 4, ty + 11, "left", "#e0a84a");
+    txt(`${cardGb} GB card: limit ${target} GB`, L + 4, ty + 11, "left", "#e0a84a");
   }
   ctx.setLineDash?.([]);
   // loads and unloads
@@ -858,7 +928,8 @@ export const RUN_CSS = `
   font-size:14px;letter-spacing:.04em;border-radius:8px;padding:9px 22px;cursor:pointer}
 .rn-run-go:hover{background:#cf2f45}
 .rn-run-go:disabled{opacity:.6;cursor:wait}
-.rn-run-tier{display:flex;align-items:center;gap:6px}
+.rn-run-tier{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rn-run-est{flex:1 1 100%;font-size:11.5px}
 .rn-run-facts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
 .rn-run-status.running{border-color:#4a8fe0;color:#cfe0f5}
 .rn-run-status.done{border-color:#2e7d4f;color:#9fe0b4}

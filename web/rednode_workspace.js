@@ -1029,6 +1029,9 @@ function hiddenTabSet() {
 }
 
 // ---- config ----------------------------------------------------------------
+const VRAM_TIER_FOR_GB = { 8: "low", 12: "low", 16: "low", 24: "medium" };
+// what the VRAM limit is called where a ceiling is explained
+export const vramLimitName = (cfg) => (cfg?.vram_gb ? `${cfg.vram_gb} GB` : "free range");
 // IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only captioned, never
 // sent to the model, so they work on any rig (matching workspace.py)
 const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
@@ -1254,6 +1257,15 @@ export function readCfg(node) {
   if (typeof d.latent.h !== "number") d.latent.h = 1024;
   if (typeof d.latent.batch !== "number") d.latent.batch = 1;
   d.vram_tier = ["low", "medium", "high"].includes(d.vram_tier) ? d.vram_tier : "high";
+  // THE VRAM LIMIT IS A CARD SIZE; the tier the dial ceilings use follows from it,
+  // and a workflow saved with Low or Medium reads as 16 or 24 GB (vram_hold.py)
+  if (![0, 8, 12, 16, 24].includes(d.vram_gb)) {
+    d.vram_gb = { low: 16, medium: 24 }[d.vram_tier] || 0;
+  }
+  d.vram_tier = VRAM_TIER_FOR_GB[d.vram_gb] || "high";
+  if (!["auto", "on", "off"].includes(d.vram_hold_mode)) {
+    d.vram_hold_mode = d.vram_hold === true ? "on" : "auto";
+  }
   d.loras = d.loras && typeof d.loras === "object" ? d.loras : {};
   d.loras.on = d.loras.on === undefined ? true : !!d.loras.on;
   if (!Array.isArray(d.loras.slots)) d.loras.slots = [];
@@ -9345,7 +9357,7 @@ function paintBody(node, body) {
         // or pointless resize that looks like success reads as the button being broken
         console.log(`[RedNode Workspace] resize skipped: source is `
                   + `${im.naturalWidth}x${im.naturalHeight}, `
-                  + (t.capped ? `the ${node._rnCfg?.vram_tier} tier caps the ask` :
+                  + (t.capped ? `the ${vramLimitName(node._rnCfg)} VRAM limit caps the ask` :
                      `already at or past ${live.mask_size}`));
         alert(t.capped
           ? "The VRAM tier's ceiling is at or below the picture's own size, so there "
@@ -10136,7 +10148,7 @@ function paintBody(node, body) {
     fb.textContent = P.fit_whole ? `Fit to ${cap}px` : "Full size";
     fb.title = P.fit_whole
       ? `A whole-frame paint larger than ${cap}px is rendered at ${cap} and scaled `
-        + "back. That ceiling comes from the VRAM tier in the footer. Without it a 4K "
+        + "back. That ceiling comes from the VRAM limit on the Run tab. Without it a 4K "
         + "frame is minutes of sampling and can run out of memory."
       : "Whole-frame paints render at the picture's full size. Sharpest, and on a big "
         + "image the slowest by far.";
@@ -10144,7 +10156,7 @@ function paintBody(node, body) {
     capRow.appendChild(fb);
     const note = document.createElement("span");
     note.className = "hint";
-    note.textContent = `${cfg.vram_tier} VRAM tier`;
+    note.textContent = `${vramLimitName(cfg)} VRAM limit`;
     capRow.appendChild(note);
     maskStateBox.appendChild(capRow);
   }
@@ -14263,8 +14275,8 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
       lab.title = d.hint + (ceiling !== undefined && ceiling < d.max
         ? `
 
-Held to ${ceiling} by the ${cfg.vram_tier} VRAM tier. Change the tier `
-          + "in the footer to go higher."
+Held to ${ceiling} by the ${vramLimitName(cfg)} VRAM limit. Change the limit `
+          + "on the Run tab to go higher."
         : "");
       let setChip = null;
       if (d.vram) {

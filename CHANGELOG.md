@@ -265,6 +265,14 @@ cheap to judge.
   Process or Save node already after the Workspace passes the picture through
   when the Workspace did that step, so nothing runs twice. The Run tab plans and
   times these steps either way
+- The VRAM limit is your card's size: 8, 12, 16 or 24 GB, or Free range. A run
+  is kept half a GB under it (15.5 on a 16 GB card), 8, 12 and 16 GB hold the
+  dials to the old Low ceilings and 24 GB to Medium, and a workflow saved with
+  Low or Medium opens as 16 or 24 GB. Hold is Auto, On or Off: Auto estimates
+  the run's peak from the model files it will load and the size it works at,
+  and holds only when that is over the limit, so a run that fits keeps its
+  speed. The Run tab shows the estimate with its parts and what Hold will do;
+  the log says it again when the run starts
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption

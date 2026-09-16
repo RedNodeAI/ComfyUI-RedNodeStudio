@@ -595,6 +595,90 @@ def _normalise_auto(auto_in, default_mode):
     }
 
 
+def _file_gb(folders, name):
+    """A model file's size in GB, looked up in the first folder that has it."""
+    if not name:
+        return 0.0
+    try:
+        import folder_paths
+    except Exception:
+        return 0.0
+    for f in folders:
+        try:
+            p = folder_paths.get_full_path(f, name)
+        except Exception:
+            p = None
+        if p and os.path.isfile(p):
+            return os.path.getsize(p) / 1024 ** 3
+    return 0.0
+
+
+# rough working memory for a diffusion transformer at batch 1, per megapixel sampled
+WORK_GB_PER_MP = 1.8
+
+
+def estimate_vram(cfg):
+    """{"peak": GB, "parts": [[name, GB], ...]} for the Workspace's own render, from
+    the model files it will load and the size it works at. Rough on purpose: it
+    decides whether Auto holds, and it is shown so the number is not a mystery.
+    None when the Workspace does not render (external sampler, no rig)."""
+    M = cfg["models"]
+    rigs = M.get("rigs") or []
+    if not rigs or M.get("sampler_mode") != "internal":
+        return None
+    active = rigs[min(M.get("active", 0), len(rigs) - 1)]
+    tabs = cfg["tabs"]
+    it = tabs["i2i"]
+    i2i_run = it["on"] and not it["prompt_only"] and (it["images"] or it["canvas"] != "gallery")
+    run = it if i2i_run else cfg["latent"]
+    names = [active["name"]] + [n for n in (run.get("pass_rig") or []) if n] \
+        if run.get("rig_custom") else [active["name"]]
+    used = [r for r in rigs if r["name"] in names] or [active]
+
+    def model_gb(r):
+        return (_file_gb(("diffusion_models", "unet", "unet_gguf"), r.get("unet"))
+                or _file_gb(("checkpoints",), r.get("checkpoint")))
+
+    parts = []
+    mg = max((model_gb(r), r["name"]) for r in used)
+    if mg[0]:
+        parts.append(["Model (%s)" % mg[1], round(mg[0], 1)])
+    te = _file_gb(("text_encoders", "clip"), active.get("clip"))
+    if te:
+        parts.append(["Text encoder", round(te, 1)])
+    vae = _file_gb(("vae",), active.get("vae"))
+    if vae:
+        parts.append(["VAE", round(vae, 1)])
+    # the size it works at: the Latent tab's canvas, or the resize for a source
+    if i2i_run:
+        edge = cfg["resize"] or 1024
+        px = edge * edge * 0.75
+    else:
+        px = cfg["latent"]["w"] * cfg["latent"]["h"]
+    scales = [float(x) for x in (run.get("pass_scale") or []) if x] \
+        if run.get("scale_custom") else [float(run.get("scale") or 1.0)]
+    px *= max([1.0] + scales) ** 2
+    batch = max(1, int(cfg["latent"].get("batch") or 1)) if not i2i_run else 1
+    krea2 = active.get("clip_type") == "krea2"
+    nrefs = 0
+    if krea2:
+        nrefs = sum(1 for n in ("subject", "scene")
+                    if tabs[n]["on"] and tabs[n]["images"]
+                    and not (n == "scene" and tabs[n].get("words_only")))
+        nrefs += len(tabs["subject"].get("extra_sel") or [])
+    work = WORK_GB_PER_MP * (px / 1e6) * batch * (1 + 0.5 * nrefs)
+    parts.append(["Working memory (%.1f MP%s)" % (px / 1e6, ", %d refs" % nrefs if nrefs else ""),
+                  round(work, 1)])
+    d = cfg["dials"]
+    boosted = krea2 and nrefs and cfg.get("use_dials") and any(
+        abs(float(d.get(k, 1.0)) - 1.0) > 1e-6 for k in ("reference_fidelity", "scene_fidelity"))
+    if boosted:
+        tokens = px / 256 * (1 + nrefs)
+        parts.append(["Fidelity boost matrix", round(tokens * tokens * 4 / 1024 ** 3, 1)])
+    peak = round(sum(g for _n, g in parts), 1)
+    return {"peak": peak, "parts": parts}
+
+
 def _normalise_taps(raw):
     t = raw if isinstance(raw, dict) else {}
     pts = t.get("points")
@@ -1246,6 +1330,13 @@ def parse_config(config_json):
                 paint_cfg["negative"] = _row["negative"]
     tier = str(data.get("vram_tier") or "high").lower()
     tier = tier if tier in VRAM_TIERS else "high"
+    # THE VRAM LIMIT IS A CARD SIZE (8, 12, 16, 24 GB or free range); the dial
+    # ceilings follow from it. A workflow saved with Low or Medium reads as 16 or 24.
+    from . import vram_hold as _vh
+    vram_gb = _vh.card_gb({"vram_gb": data.get("vram_gb"), "vram_tier": tier}
+                          if "vram_gb" in data else {"vram_tier": tier})
+    tier = _vh.TIER_FOR_GB.get(vram_gb, "high")
+    vram_hold_mode = _vh.hold_mode(data)
     studio_preset = str(data.get("studio_preset") or "").strip()
     auto_in = data.get("auto") if isinstance(data.get("auto"), dict) else {}
     def _num(key, default, lo, hi):
@@ -1328,6 +1419,7 @@ def parse_config(config_json):
             "draft": bool(data.get("draft")),
             # hold the run under the VRAM limit's card size (vram_hold.py)
             "vram_hold": bool(data.get("vram_hold")),
+            "vram_gb": vram_gb, "vram_hold_mode": vram_hold_mode,
             # THE BUILT-IN CHAIN: the Workspace runs the Detailer passes, Post FX and
             # the save itself when these are on. The settings are the Detailer and
             # Save nodes' own, so a card means the same thing in either place.
@@ -2223,10 +2315,22 @@ class RedNodeStudioWorkspace:
         from . import run_events as _run
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
         from . import vram_hold as _hold
-        _held = _hold.apply(cfg)
+        try:
+            _est = estimate_vram(cfg)
+        except Exception as _ee:
+            print("[RedNode Workspace] VRAM estimate failed: %s" % _ee, flush=True)
+            _est = None
+        _held = _hold.apply(cfg, _est["peak"] if _est else None)
+        _lim = _hold.limit_gb(cfg)
+        if _est and _lim:
+            _run.note("Estimated peak about %.1f GB against the %d GB card's %.1f GB limit"
+                      % (_est["peak"], _hold.card_gb(cfg), _lim))
         if _held:
-            _run.note("Holding under %d GB: ComfyUI keeps %.1f GB free, so a model that "
-                      "does not fit loads in part" % (_held[0], _held[1] / 1024), "unload")
+            _run.note("Holding under %.1f GB (%s): ComfyUI keeps %.1f GB free, so a model "
+                      "that does not fit loads in part"
+                      % (_held[0], _hold.hold_mode(cfg).capitalize(), _held[1] / 1024), "unload")
+        elif _lim and _hold.hold_mode(cfg) == "auto":
+            _run.note("Not holding: the run fits under the limit, so it keeps its speed")
         _taps = cfg["taps"]
 
         def _tap(point, label, img=None, latent=None, model_for=None):
@@ -4164,6 +4268,22 @@ try:
         })
 
     _standalone_busy = {"on": False}
+
+    @PromptServer.instance.routes.post("/rednode/vram_estimate")
+    async def _rednode_vram_estimate(request):
+        # what a run with these settings should need, for the Run tab's VRAM line
+        try:
+            data = await request.json()
+            cfg = parse_config(str(data.get("config") or "{}"))
+            from . import vram_hold as _vh
+            est = estimate_vram(cfg)
+            lim = _vh.limit_gb(cfg)
+            return web.json_response({
+                "estimate": est, "card": _vh.card_gb(cfg), "limit": lim,
+                "mode": _vh.hold_mode(cfg),
+                "hold": _vh.should_hold(cfg, est["peak"] if est else None)})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=400)
 
     @PromptServer.instance.routes.post("/rednode/autoprompt_run")
     async def _rednode_autoprompt_run(request):
