@@ -589,7 +589,9 @@ export function openFullscreen(node) {
   }, { passive: false });
   arrowKeys(fshost, step, (d) => stepSlot(node, d));
 
-  node._rnFsPrev = node._rnRootEl;
+  // a hosted panel not shown yet (the Run tab's picture) has no root: a spare
+  // one stands in, so "open" never reads as closed and Close still works
+  node._rnFsPrev = node._rnRootEl || document.createElement("div");
   node._rnRootEl = fshost;
   const close = () => {
     if (!node._rnFsPrev) return;

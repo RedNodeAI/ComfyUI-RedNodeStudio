@@ -325,6 +325,8 @@ cheap to judge.
   and when it finishes, with what it did, and the pipeline box shows the pass
   running. Found targets, working sizes, LoRAs, tone lock, freed VRAM and
   anything that failed or passed through are logged too, failures as warnings
+- Full screen from the Run tab's picture closes again (the Close button and
+  Esc did nothing when the Review sub-tab had not been opened yet)
 - A SeedVR2 upscale pass keeps every picture of a batch. SeedVR2 is a video
   upscaler and read a batch as one clip, so a batch of two came back as one
   picture; each picture now goes through on its own

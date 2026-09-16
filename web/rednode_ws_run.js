@@ -350,6 +350,11 @@ function reviewHost(node) {
   node._rnReviewHost ||= { id: `${node.id}:run`, type: "RedNodeImageReview" };
   node._rnReviewHost.properties = node.properties.rn_run_review;
   node._rnReviewHost.graph = node.graph;
+  // hosted from the start: full screen from the picture can render it before the
+  // Review sub-tab ever mounted it
+  node._rnReviewHost.size ||= [0, 0];
+  node._rnReviewHost.setSize ||= () => {};
+  node._rnReviewHost._rnSized = true;
   return node._rnReviewHost;
 }
 
