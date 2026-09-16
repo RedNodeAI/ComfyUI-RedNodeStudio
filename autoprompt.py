@@ -561,6 +561,17 @@ def _first_string(result):
     return str(result).strip()
 
 
+def _output_named(cls, result, name):
+    """One output of a pack's node by its RETURN_NAMES entry, else the first string.
+    JoyCaption's advanced node returns (PROMPT, STRING): the first is the question it
+    was asked, the caption is the second."""
+    vals = result.get("result", ()) if isinstance(result, dict) else result
+    names = list(getattr(cls, "RETURN_NAMES", None) or ())
+    if isinstance(vals, (list, tuple)) and name in names and names.index(name) < len(vals):
+        return _first_string(vals[names.index(name)])
+    return _first_string(vals)
+
+
 # ---------------------------------------------------------------------------
 # JoyCaption and QwenVL, through their installed packs. Singleton instances on
 # purpose: both cache their model on the node INSTANCE, so a fresh instance per
@@ -626,7 +637,7 @@ def joycaption_caption(image_tensor, prompt, unload=True, quantization="",
         fn = getattr(_jc_instance, cls.FUNCTION)
         mem = memory if memory in ("Keep in Memory", "Clear After Run", "Global Cache") \
             else ("Clear After Run" if unload else "Keep in Memory")
-        text = _first_string(_call_filtered(
+        out = _call_filtered(
             fn, image=image_tensor,
             model=_widget_default(cls, "model"),
             quantization=quantization or _widget_default(cls, "quantization"),
@@ -634,7 +645,13 @@ def joycaption_caption(image_tensor, prompt, unload=True, quantization="",
             caption_length=caption_length or _widget_default(cls, "caption_length") or "any",
             max_new_tokens=512, temperature=0.6, top_p=0.9, top_k=0,
             custom_prompt=prompt if use_mode_prompt else "",
-            memory_management=mem))
+            memory_management=mem)
+        text = _output_named(cls, out, "STRING")
+        if not text:
+            # a load failure comes back as the first output with an empty caption
+            first = _first_string(out)
+            if first.lower().startswith("error"):
+                print(f"[RedNode AutoPrompt] JoyCaption: {first}", flush=True)
         if mem == "Clear After Run":
             free_vram()                      # hand the space back before the next engine loads
         return text
@@ -961,7 +978,9 @@ def build_prompt(mode, *, image_bytes=None, image_tensor=None, wired=(),
         if text:
             paragraphs.append(text)
     if use_joy and image_tensor is not None:
-        text = part("joy", [joy_opts],
+        # "caption-output": captions saved before this read JoyCaption's PROMPT output
+        # (the question it was asked), so they are never reused
+        text = part("joy", [joy_opts, "caption-output"],
                     (lambda: joy_fn(image_tensor, prompt_text, unload_heavy))
                     if joy_fn is not None else
                     (lambda: joycaption_caption(image_tensor, prompt_text, unload_heavy,

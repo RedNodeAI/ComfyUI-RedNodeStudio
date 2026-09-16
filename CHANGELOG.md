@@ -217,6 +217,10 @@ cheap to judge.
 - Generate works before anything has been queued since ComfyUI started. An
   engine with a progress bar (Florence among them) used to fail on "no attribute
   last_prompt_id" and return no caption
+- JoyCaption's caption is its caption again: the advanced node returns the
+  question it was asked first and the caption second, and the auto prompt was
+  reading the question. JoyCaption captions saved before this are not reused,
+  and a model load error is said in the console instead of becoming the caption
 - A new Workspace starts ready to render: the built-in sampler, and the latent
   on at a square 1024. Loaded workflows keep what they saved
 - A new rig is named Rig 1, Rig 2 and so on, and an unnamed rig in an older
