@@ -11865,12 +11865,15 @@ function passesTab(node, body, kind = "i2i") {
     const r8 = (v) => Math.max(8, Math.floor(v / 8) * 8);
     const latW = r8(Number(t.w || 1024) * (Number(t.scale) || 1));
     const latH = r8(Number(t.h || 1024) * (Number(t.scale) || 1));
+    // a size that is not known until the run: say what it is, times the scale
+    const ofUnknown = (sc, what) => Math.abs(Number(sc) - 1) < 1e-6
+      ? what : `${Number(sc).toFixed(2)}x ${what}`;
     const sizeOf = (sc) => isLat
-      ? (t.source === "input" ? `${Number(sc).toFixed(2)}x the wired latent`
-         : t.random ? `${Number(sc).toFixed(2)}x a rolled size`
+      ? (t.source === "input" ? ofUnknown(sc, "the wired latent's size")
+         : t.random ? ofUnknown(sc, "the size rolled each run")
          : `${r8(latW * sc)} × ${r8(latH * sc)}`)
       : resize > 0 ? `${Math.round(resize * sc)} px`
-                   : `${Number(sc).toFixed(2)}x the original`;
+                   : ofUnknown(sc, "the source's own size");
     // what a pass runs at when the setting does not vary
     const baseScale = isLat ? 1 : t.scale;
     const rigNames = (cfg.models?.rigs || []).map((r) => String(r.name || "")).filter(Boolean);
