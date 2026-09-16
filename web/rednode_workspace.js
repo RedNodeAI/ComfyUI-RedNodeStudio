@@ -4255,11 +4255,11 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         g.append(
           num("Temperature", "temperature", 0, 2, 0.05, "Higher = looser wording. 0.2 is factual."),
           num("Seed", "seed", 0, 2147483647, 1, "0 = unseeded. A fixed seed pins the wording."),
-          num("num_ctx", "num_ctx", 0, 131072, 256, "Context window. 0 = the model's default."),
-          num("num_predict", "num_predict", 0, 8192, 16, "Response length cap. 0 = default."),
-          num("top_k", "top_k", 0, 200, 1, "0 = default."),
-          num("top_p", "top_p", 0, 1, 0.01, "0 = default."),
-          boolBtn("think", "think", "Reasoning models think before answering: better reads, slower."),
+          num("Context (num_ctx)", "num_ctx", 0, 131072, 256, "Context window. 0 = the model's default."),
+          num("Max length (num_predict)", "num_predict", 0, 8192, 16, "Response length cap. 0 = default."),
+          num("Top k", "top_k", 0, 200, 1, "0 = default."),
+          num("Top p", "top_p", 0, 1, 0.01, "0 = default."),
+          boolBtn("Think", "think", "Reasoning models think before answering: better reads, slower."),
           num("Keep alive s", "keep_alive", 0, 3600, 5,
               "How long Ollama keeps the model in RAM after a response. 0 unloads immediately (saves RAM, reloads next call); 300 keeps it warm."),
         );
@@ -4420,8 +4420,8 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         g.append(
           num("Threshold", "threshold", 0, 1, 0.01, "General tag confidence floor."),
           num("Character thr", "character_threshold", 0, 1, 0.01, "Character tag confidence floor."),
-          boolBtn("underscores→spaces", "replace_underscore", "Replace underscores with spaces in tags."),
-          boolBtn("unload after run", "wd14_unload",
+          boolBtn("Underscores → spaces", "replace_underscore", "Replace underscores with spaces in tags."),
+          boolBtn("Unload after run", "wd14_unload",
                   "Drop the tagger's model from RAM after each run. Off keeps it loaded for speed."),
         );
         const ex = document.createElement("label");
@@ -4451,7 +4451,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                   + "hungriest."),
           pickSel("Prompt style", "joy_style", withDefault(packOpts.prompt_style),
                   "Only used when mode prompts are OFF."),
-          boolBtn("mode prompts", "joy_mode_prompts",
+          boolBtn("Mode prompts", "joy_mode_prompts",
                   "On: this panel's per-tab prompts steer JoyCaption (scene stays "
                   + "anonymous, style stays subject-free). Off: the pack's own prompt "
                   + "style takes over."),
@@ -4776,7 +4776,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
                          + "graph downstream recomputes."],
     ], a.fixed ? "reuse" : "fresh",
     (v) => { a.fixed = v === "reuse"; writeCfg(node); render(node); });
-    const frank = boolBtn("frank wording", "frank",
+    const frank = boolBtn("Frank wording", "frank",
                           "Appends a clause telling every engine to describe nudity and sexual "
                           + "content plainly, without euphemism. Off ships the neutral prompts.");
     frank.className = "rn-ws-swlabel";
