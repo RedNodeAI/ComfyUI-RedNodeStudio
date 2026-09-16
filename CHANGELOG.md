@@ -365,6 +365,8 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The NovelAI rig is no longer part of the pack: it is a personal-only
+  module again, as it was before 1.2.0
 - Civitai downloads are no longer part of the pack. The Comfy Registry's scan
   flags a node that fetches files onto the disk, and 1.2.0, 1.3.0 and 1.3.1
   were all held back, so a registry install kept getting 1.1.0. The LoRA

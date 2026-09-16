@@ -849,15 +849,6 @@ else:
           flush=True)
 
 # ---- personal-only extensions ---------------------------------------------
-# The NovelAI rig: a Models-tab rig kind that renders through NovelAI's API
-# instead of a checkpoint. Public since 2026-08-19 (it was a local-only module
-# before). It needs your own NovelAI subscription and token; the pack
-# ships no credential and stores none in a workflow.
-try:
-    from . import nai_rig as _nai_rig                          # noqa: F401
-except Exception as _nai_e:                                    # pragma: no cover
-    print(f"[RedNode Krea2] NovelAI rig not loaded: {_nai_e}", flush=True)
-
 # Anything under local/ loads if present and ships never (the folder is
 # gitignored). A local module may register rig-kind handlers in
 # workspace.RIG_KIND_HANDLERS or add node mappings of its own. A public
