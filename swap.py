@@ -149,8 +149,9 @@ def resolve(sc):
     else:
         face, body = "Picture 2", "Picture 1"
     template = sc["prompt"].strip() or PROMPTS[sc["mode"]]
-    if sc["mode"] == "face" and not sc["prompt"].strip():
-        # the Face V1 card says "Image N"; keep its words
+    if sc["mode"] == "face" and template.startswith(PROMPTS["face"]):
+        # the Face V1 card says "Image N"; keep its words, with quick phrases added
+        # after them too
         face, body = face.replace("Picture", "Image"), body.replace("Picture", "Image")
     prompt = template.replace("{face}", face).replace("{body}", body)
     return lora, order, prompt

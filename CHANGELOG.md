@@ -350,6 +350,12 @@ cheap to judge.
   on a Live Preview, like any pass, with a step count on their pipeline box.
   Re-angle and a swap on the Img2Img source have boxes of their own, before
   the encode, where they run
+- Quick phrases under Swap's prompt: Match skin tone, Keep lighting, Keep
+  expression, Keep age and more, with Keep hair for Face and the clothing
+  ones for Person. A click adds one, starting from the LoRA author's prompt
+  when the box is empty; a second click takes it out, and Author's prompt
+  empties the box. Face mode keeps the author's Image wording with phrases
+  added
 - History under the Run tab's log: this session's finished runs, up to 20,
   each with its time, how it ended, batch and seed. Picking one shows its
   whole sheet again (pipeline, finished pictures, VRAM chart, log) under a

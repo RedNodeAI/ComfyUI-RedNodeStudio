@@ -13607,6 +13607,42 @@ function editAttnRow(node, grid, rec) {
   }
   grid.append(l, seg);
 }
+// QUICK PHRASES under Swap's prompt: a click adds one (starting from the author's
+// prompt when the box is empty), a second click takes it out. {face} is the
+// reference, {body} the picture being edited; swap.py fills in the numbers.
+const SW_QUICK = [
+  { label: "Match skin tone", text: "match the skin tone to {body}" },
+  { label: "Keep lighting", text: "keep the lighting and shadows of {body}" },
+  { label: "Keep expression", text: "keep the facial expression of {body}" },
+  { label: "Face's expression", text: "use the facial expression of {face}" },
+  { label: "Keep eye colour", text: "keep the eye color of {face}" },
+  { label: "Keep makeup", text: "keep the makeup of {face}" },
+  { label: "Keep age", text: "keep the age of {face}" },
+  { label: "Keep hair", text: "keep the hair of {body}", modes: "face" },
+  { label: "Keep head angle", text: "keep the head angle and gaze of {body}", modes: "face,head" },
+  { label: "Face's hairstyle", text: "keep the hairstyle and hair color of {face}", modes: "head,person" },
+  { label: "Keep clothing", text: "keep the clothing of {body}", modes: "person" },
+  { label: "Face's clothing", text: "use the clothing of {face}", modes: "person" },
+  { label: "Keep body shape", text: "keep the body shape of {body}", modes: "person" },
+  { label: "Sharp details", text: "high quality, sharp details" },
+];
+const swQuickHas = (prompt, text) => String(prompt || "").toLowerCase().includes(text.toLowerCase());
+export function swQuickToggle(prompt, text, mode) {
+  let p = String(prompt || "").trim();
+  if (swQuickHas(p, text)) {
+    const at = p.toLowerCase().indexOf(text.toLowerCase());
+    let a = at;
+    let b = at + text.length;
+    // take the joining punctuation with it
+    if (p[b] === ".") b += 1;
+    else if (p.slice(Math.max(0, a - 2), a) === ", ") a -= 2;
+    p = (p.slice(0, a) + p.slice(b)).replace(/\s{2,}/g, " ").trim();
+    return p;
+  }
+  if (!p) p = SW_PROMPT_HINT[mode] || "";
+  if (p && !/[.!?]$/.test(p)) p += ".";
+  return (p + " " + text + ".").trim();
+}
 // what Swap works on: the Img2Img source, or the finished render
 const SW_TARGETS = { source: true, render: true };
 const SW_MODE_TIP = {
@@ -13985,9 +14021,32 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
     px.placeholder = SW_PROMPT_HINT[S.mode];
     px.title = "Empty = the LoRA author's prompt for this mode (the placeholder). Your own words replace it; {face} and {body} become the Picture numbers in the order the LoRA wants.";
     px.style.cssText = "flex:1;min-width:120px;background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
-    px.onchange = () => { S.prompt = px.value; writeCfg(node); };
+    px.onchange = () => { S.prompt = px.value; writeCfg(node); render(node); };
     prow.append(pl, px);
     card.appendChild(prow);
+    const qrow = document.createElement("div");
+    qrow.className = "rn-ws-row rn-ws-swapquick";
+    qrow.style.flexWrap = "wrap";
+    for (const q of SW_QUICK) {
+      if (q.modes && !q.modes.split(",").includes(S.mode)) continue;
+      const on = swQuickHas(S.prompt, q.text);
+      const b = document.createElement("button");
+      b.className = "rn-ws-segb rn-ws-swapq" + (on ? " on" : "");
+      b.textContent = q.label;
+      b.title = (on ? "In the prompt; click to take it out: " : "Add to the prompt: ") + q.text
+        + ". {face} is the reference picture, {body} the picture being edited.";
+      b.onclick = () => { S.prompt = swQuickToggle(S.prompt, q.text, S.mode); writeCfg(node); render(node); };
+      qrow.appendChild(b);
+    }
+    if (S.prompt.trim()) {
+      const clr = document.createElement("button");
+      clr.className = "rn-ws-segb rn-ws-swapqclear";
+      clr.textContent = "Author's prompt";
+      clr.title = "Empty the box: the LoRA author's prompt for this mode is used again.";
+      clr.onclick = () => { S.prompt = ""; writeCfg(node); render(node); };
+      qrow.appendChild(clr);
+    }
+    card.appendChild(qrow);
     // engine (folded)
     const eh = document.createElement("button");
     eh.className = "rn-ws-on";
