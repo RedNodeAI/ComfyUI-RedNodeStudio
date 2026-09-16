@@ -166,9 +166,16 @@ const STYLE = `
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr) minmax(0,.95fr);
   gap: 10px; align-items: start; }
 .rn-pf-colpv { position: sticky; top: 0; }
+/* the writing column spans two rows, so the tools and the Anything else box fill
+   the space under the camera and the preview instead of sitting under everything */
+.rn-pf-cols > .rn-pf-col:first-child { grid-row: 1 / span 2; }
+.rn-pf-under { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 8px;
+  min-width: 0; }
 @container (max-width: 980px) {
   .rn-pf-cols { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .rn-pf-cols > .rn-pf-col:first-child { grid-row: auto; }
   .rn-pf-colpv { grid-column: 1 / -1; position: static; }
+  .rn-pf-under { grid-column: 1 / -1; }
 }
 .rn-pf-live { margin-left: auto; font-size: 11.5px; color: #9fe0b4; display: inline-flex;
   align-items: center; gap: 6px; }
@@ -988,9 +995,12 @@ export function buildFrameEditor(wrap, F) {
         [lightRow, brightRow, counted(lac, 200, "Light and colour"), lightSnip],
         presetsBtn(lightSnip));
   refreshSnips();
-  // the tools sit right above the Anything else box, under the columns: type a
-  // lump, press Auto sort, and it lands in the boxes above
-  wrap.appendChild(head);
+  // the tools sit right above the Anything else box. With columns, both go in
+  // the space under the camera and the preview (the writing column is the tall
+  // one); without, under everything. Type a lump, press Auto sort, done.
+  const under = colP ? el("div", "rn-pf-under") : wrap;
+  if (colP) wrap.querySelector(".rn-pf-cols").appendChild(under);
+  under.appendChild(head);
   {
     const xbox = el("div", "rn-pf-box rn-pf-extrabox");
     const xh = el("div", "head");
@@ -1003,7 +1013,7 @@ export function buildFrameEditor(wrap, F) {
     xb.appendChild(counted(extra, 1000, "Anything else"));
     xbox.appendChild(xh);
     xbox.appendChild(xb);
-    wrap.appendChild(xbox);
+    under.appendChild(xbox);
   }
 
   // ---- notice + preview ----------------------------------------------------------------
