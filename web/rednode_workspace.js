@@ -746,6 +746,8 @@ css.textContent = `
 .rn-ws-subt.cur{background:#b8283c;border-color:#b8283c;color:#fff}
 .rn-ws-subt .lt{width:9px;height:9px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-subt .lt.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
+.rn-ws-subt .lt.skip{background:#e0a84a;box-shadow:0 0 6px #e0a84a}
+.rn-ws-skipnote{border-color:#e0a84a88;color:#f0c58a}
 .rn-ws-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#1b1e23;
   border:1px solid #2e333a;border-radius:7px;padding:7px 10px}
 .rn-ws-status .nm{font-size:13px;color:#e8ecf1;margin-right:4px}
@@ -11698,8 +11700,16 @@ function convActive(c) {
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
 }
 
+// Re-angle's "skip the pass": the re-shot picture is the image output, so the
+// source's own encode and every pass stand aside
+function i2iSkipped(t) {
+  return !!(t.reangle?.on && t.reangle?.skip_pass && !t.prompt_only);
+}
+
+// true (lit), false (dark), or "skip" (amber: stood aside for Re-angle's skip)
 function i2iSubLit(cfg, id) {
   const t = cfg.tabs.i2i;
+  if ((id === "source" || id === "passes") && t.on && i2iSkipped(t)) return "skip";
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
   if (id === "auto") return !!t.auto?.on;
@@ -11724,7 +11734,15 @@ function i2iTabs(node, body) {
     b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
     b.dataset.sub = id;
     const lt = document.createElement("span");
-    lt.className = "lt" + (i2iSubLit(cfg, id) ? " on" : "");
+    const lit = i2iSubLit(cfg, id);
+    lt.className = "lt" + (lit === "skip" ? " skip" : lit ? " on" : "");
+    if (lit === "skip") {
+      b.title = id === "source"
+        ? "Re-angle skips the pass: the source is re-shot and that picture goes "
+          + "straight to the image output, with no encode of its own."
+        : "Re-angle skips the pass: none of these passes run. Switch Skip the pass "
+          + "off on the Re-angle tab to run them on the re-shot picture.";
+    }
     const tx = document.createElement("span");
     tx.textContent = label;
     b.append(lt, tx);
@@ -11750,6 +11768,7 @@ function i2iTabs(node, body) {
     t.canvas === "image" ? "wired image" : t.canvas === "latent" ? "wired latent"
       : `${t.images.length} image${t.images.length === 1 ? "" : "s"}`,
     t.prompt_only ? "prompt only"
+      : i2iSkipped(t) ? "passes skipped"
       : npass > 1 ? `${npass} passes` : `denoise ${Number(t.denoise).toFixed(2)}`,
     !t.auto?.on ? "auto prompt off" : engines.length ? engines.join(", ") : "no engine on",
   ]) {
@@ -12016,6 +12035,14 @@ function passesTab(node, body) {
   const right = document.createElement("div");
   right.className = "r";
   right.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:0";
+  if (i2iSkipped(t)) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-card rn-ws-note rn-ws-skipnote";
+    n.textContent = "Skipped: Re-angle's Skip the pass is on, so the re-shot picture "
+                  + "goes straight to the image output and none of these passes run. "
+                  + "The settings are kept for when it is switched off.";
+    right.appendChild(n);
+  }
   if (t.prompt_only) {
     const n = document.createElement("div");
     n.className = "rn-ws-card rn-ws-note";

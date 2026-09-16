@@ -63,7 +63,9 @@ cheap to judge.
   size on a toolbar, and a strip under it naming the chosen picture with its
   size. Passes has a setup column (the pass kind, the count, which settings
   vary per pass, and the values every pass shares) beside one card per pass
-  holding only the settings that vary, with Ramp Up and Down for each one
+  holding only the settings that vary, with Ramp Up and Down for each one.
+  With Re-angle's Skip the pass on, the Source and Passes lights turn amber and
+  the Passes tab says the passes are skipped
 - Every Auto prompt box lists its engines on the left and shows the picked
   engine's own settings beside them, then the settings every engine shares and
   the result. The settings cog is gone; picking an engine is how its settings
