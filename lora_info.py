@@ -171,6 +171,21 @@ def set_download_dir(path):
     return path
 
 
+def _safe_name(name):
+    """A bare .safetensors file name, or "". The name comes from Civitai, so never
+    trust it with a folder part, a drive, or a pickle format."""
+    name = re.split(r"[\\/]", str(name or ""))[-1]
+    name = re.sub(r'[\x00-\x1f<>:"|?*]', "_", name).strip(" .")
+    if not name.lower().endswith(".safetensors") or len(name) <= len(".safetensors"):
+        return ""
+    return name
+
+
+def _inside(path, root):
+    real, base = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(root))
+    return real.startswith(base.rstrip("\\/") + os.sep)
+
+
 def _unique_path(folder, filename):
     stem, ext = os.path.splitext(filename)
     cand = os.path.join(folder, filename)
@@ -178,22 +193,24 @@ def _unique_path(folder, filename):
     while os.path.exists(cand):
         cand = os.path.join(folder, f"{stem} ({n}){ext}")
         n += 1
+    if not _inside(cand, folder):
+        raise RuntimeError("Download path left the loras folder")
     return cand
 
 
 def _pick_file(version):
-    """The primary model file of a version (largest .safetensors), plus its hash."""
+    """The primary model file of a version (largest .safetensors), plus its hash.
+    Only safetensors: .ckpt/.pt are pickles and this is reachable over HTTP."""
     best = None
     for f in version.get("files") or []:
-        name = f.get("name") or ""
-        if not name.lower().endswith((".safetensors", ".ckpt", ".pt")):
+        if not _safe_name(f.get("name")):
             continue
         if best is None or (f.get("sizeKB") or 0) > (best.get("sizeKB") or 0):
             best = f
     if not best:
         return None
     return {
-        "name": best.get("name"),
+        "name": _safe_name(best.get("name")),
         "url": best.get("downloadUrl") or version.get("downloadUrl"),
         "sha256": ((best.get("hashes") or {}).get("SHA256") or "").lower(),
         "size_kb": best.get("sizeKB") or 0,

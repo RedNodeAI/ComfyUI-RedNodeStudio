@@ -270,9 +270,9 @@ def _vibe_dir(make=False):
 def _read_vibe_file(rel):
     """A vibe file's bytes as base64, from inside input/ only."""
     import folder_paths
-    root = os.path.realpath(folder_paths.get_input_directory())
-    path = os.path.realpath(os.path.join(root, rel))
-    if not (path == root or path.startswith(root + os.sep)):
+    root = os.path.normcase(os.path.realpath(folder_paths.get_input_directory()))
+    path = os.path.realpath(os.path.join(root, *str(rel).replace("\\", "/").split("/")))
+    if not os.path.normcase(path).startswith(root.rstrip("\\/") + os.sep):
         raise ValueError("outside the input folder")
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("ascii")
@@ -282,7 +282,6 @@ try:
     from server import PromptServer
     from aiohttp import web
 
-    @PromptServer.instance.routes.post("/rednode/nai_vibe_upload")
     @PromptServer.instance.routes.get("/rednode/nai_token")
     async def _rn_nai_token_get(request):
         """Whether a token is set, and where from. NEVER the token itself."""
@@ -332,11 +331,7 @@ try:
         rel = str(body.get("file") or "")
         if not img_b64 and rel:
             try:
-                import folder_paths
-                path = os.path.join(folder_paths.get_input_directory(),
-                                    *rel.split("/"))
-                with open(path, "rb") as f:
-                    img_b64 = base64.b64encode(f.read()).decode("utf-8")
+                img_b64 = _read_vibe_file(rel)     # contained to input/
             except Exception as exc:
                 return web.json_response({"error": "cannot read %r: %s" % (rel, exc)},
                                          status=400)
@@ -358,6 +353,7 @@ try:
                                   "anlas": 2 if spent else 0,
                                   "model": model, "info": info})
 
+    @PromptServer.instance.routes.post("/rednode/nai_vibe_upload")
     async def _rn_nai_vibe_upload(request):
         """A .naiv4vibe file into input/rednode/nai_vibe (comfy's image
         upload refuses non-images). Images go through /upload/image."""
