@@ -12965,9 +12965,14 @@ function i2iTabs(node, body) {
 
   const onlyNote = (what) => {
     const n = document.createElement("div");
-    n.className = "rn-ws-card rn-ws-note";
-    n.textContent = `${what} works on an image to image pass. The Passes tab is set to `
-                  + "Prompt only, so the source only donates its prompt.";
+    n.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-onlynote";
+    const h = document.createElement("b");
+    h.textContent = "Prompt only is on. ";
+    const m = document.createElement("span");
+    m.textContent = `${what} works on an image to image pass, and the Passes tab is set to `
+                  + "Prompt only, so the source only donates its prompt. Pick a denoise on "
+                  + "the Passes tab to bring this page back.";
+    n.append(h, m);
     body.appendChild(n);
   };
   // Image to text works with Img2Img off, so the auto page says so on its own tab
