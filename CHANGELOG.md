@@ -365,6 +365,14 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Nothing rendered never fails silently again. The Run tab's log says why (no
+  rig, no VAE, External sampler with nothing wired to it), the Models tab
+  warns about External sampler whenever Save, the Detailer or Post FX expect
+  a picture from it, not only when the image output is wired, and the
+  pipeline always carries a Render box under External sampler naming it. A
+  run with Save off still hands the panel its finished picture, kept as a
+  temp file, so the Live picture and the Review are never empty just because
+  nothing was written to disk
 - Re-angle and Swap share one shape. Both work on the Img2Img source before
   its pass or on the new render, a Latent tab render too with Img2Img off if
   you like; an edit on the render is followed by a Polish pass by the rig, on

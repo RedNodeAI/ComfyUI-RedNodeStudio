@@ -1703,11 +1703,10 @@ def rig_vae_key(rec, vae, from_rec=True):
     return ("file", str(rec.get("vae") or "ckpt:%s" % (rec.get("checkpoint") or "")))
 
 
-def keep_before_post(image):
-    """The finished picture before Post FX, written to the temp folder, as file
-    records for the Paint tab's Use last result (Before Post). Post's grain,
-    vignette and grade are hard to paint out, so the tab can start from the
-    picture underneath. Never fatal: a failed write is just no Before Post."""
+def _write_temp_batch(image, prefix, whose):
+    """[{filename, subfolder, type: "temp"}] for every picture in `image`, written to
+    ComfyUI's temp folder. Shared by keep_before_post and keep_final_result. Never
+    fatal: a failed write just means no picture there."""
     try:
         import folder_paths
         out_dir = folder_paths.get_temp_directory()
@@ -1718,15 +1717,29 @@ def keep_before_post(image):
             t = t.reshape((-1,) + tuple(t.shape[-3:]))
         for k in range(int(t.shape[0])):
             arr = (t[k].detach().cpu().float().clamp(0, 1).numpy() * 255).astype("uint8")
-            name = "rednode_prepost_%08x.png" % _random.randint(0, 0xffffffff)
+            name = "%s%08x.png" % (prefix, _random.randint(0, 0xffffffff))
             Image.fromarray(arr[..., :3], mode="RGB").save(os.path.join(out_dir, name),
                                                           compress_level=4)
             recs.append({"filename": name, "subfolder": "", "type": "temp"})
         return recs
     except Exception as exc:
-        print("[RedNode Workspace] could not keep the picture before Post: %s" % exc,
-              flush=True)
+        print("[RedNode Workspace] could not keep %s: %s" % (whose, exc), flush=True)
         return []
+
+
+def keep_before_post(image):
+    """The finished picture before Post FX, written to the temp folder, as file
+    records for the Paint tab's Use last result (Before Post). Post's grain,
+    vignette and grade are hard to paint out, so the tab can start from the
+    picture underneath."""
+    return _write_temp_batch(image, "rednode_prepost_", "the picture before Post")
+
+
+def keep_final_result(image):
+    """The finished picture, written to the temp folder, when the Save switch is
+    off or the built-in save failed. So the Run tab's Live picture and the Review
+    always have this run's result, even when it was never written to disk."""
+    return _write_temp_batch(image, "rednode_final_", "the final picture")
 
 
 def blocked(message=None):
@@ -4426,6 +4439,18 @@ class RedNodeStudioWorkspace:
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in save failed: %s" % exc,
                           flush=True)
+            if unique_id and not (ui_extra or {}).get("rn_run_images"):
+                # SAVE OFF, OR IT FAILED: the Run tab's Live picture and the Review
+                # still get this run's result, kept in the temp folder rather than
+                # lost. The save above already covers the normal case; this is only
+                # the gap it leaves. Gated on a real node id (unique_id, always set
+                # by ComfyUI's executor) so a programmatic build() with no id, the
+                # way most of this pack's own tests call it, keeps returning a plain
+                # tuple exactly as before.
+                _fimgs = keep_final_result(rig_image)
+                if _fimgs:
+                    ui_extra = dict(ui_extra or {})
+                    ui_extra["rn_final_images"] = _fimgs
 
         _empty = None
         if rig_image is None or result_latent_out is None:
@@ -4434,6 +4459,9 @@ class RedNodeStudioWorkspace:
                                           _no_vae))
             if _why and rig_image is None:
                 print("[RedNode Workspace] %s" % _why, flush=True)
+                _run.note(_why, "warn")          # the Run tab's log says it too, so a
+                                                  # sampler mode left on External by
+                                                  # accident does not fail silently
             _empty = blocked(_why if rig_image is None else None)
         _result = (workspace, subject, scene, mood, extra, boost, edit, settings, latent,
                 style_strength if style_strength is not None else 0.5,

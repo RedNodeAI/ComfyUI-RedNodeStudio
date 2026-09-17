@@ -1606,9 +1606,22 @@ export function setupProblems(node, cfg) {
   const wired = (name) => (node?.inputs || []).some((s) => s?.name === name && s.link != null);
   const imageUsed = (node?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length);
   if (M.sampler_mode !== "internal") {
-    if (imageUsed) {
-      out.push("The image output is wired, but External sampler renders nothing here. Choose "
-             + "Built-in sampler, or take the picture from your own KSampler.");
+    // External sampler renders nothing itself; warn whenever something here
+    // expects a picture from it, not only a wired image output, so the Run tab's
+    // Generate (the built-in save, the Detailer, Post FX) never fails silently on
+    // a sampler mode left over from a different graph
+    const why = [];
+    if (imageUsed) why.push("the image output is wired");
+    if (cfg.save_on) why.push("the Save switch on the Run tab is on");
+    if (cfg.detailer_on && (cfg.detailer?.stages || []).some((s) => s.on && s.type !== "title")) {
+      why.push("a Detailer pass is on");
+    }
+    if (cfg.post_on !== false && POST_FX.some((fx) => cfg.post?.[fx.id]?.on)) why.push("Post FX is on");
+    if (why.length) {
+      const list = why.length > 1
+        ? why.slice(0, -1).join(", ") + " and " + why[why.length - 1] : why[0];
+      out.push(`External sampler renders nothing here, but ${list}. Choose Built-in `
+             + "sampler on the Models tab, or take the picture from your own KSampler.");
     }
     return out;
   }

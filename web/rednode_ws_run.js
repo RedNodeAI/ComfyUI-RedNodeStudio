@@ -408,6 +408,14 @@ function onExecuted(d) {
   if (Array.isArray(filed) && filed.length && RUN.status === "running") {
     RUN.outputs.push({ rank: 5, images: filed.map((f) => ({ ...f })) });
   }
+  // no Save this run: the result the built-in chain would have saved, kept so the
+  // Live picture and the Review are never empty just because nothing was written
+  // to disk. Lowest rank: a real save, a wired Save node, the Review or Live
+  // Preview on the canvas all outrank it.
+  const kept = d?.output?.rn_final_images;
+  if (Array.isArray(kept) && kept.length && RUN.status === "running") {
+    RUN.outputs.push({ rank: 0, images: kept.map((f) => ({ ...f })) });
+  }
   const images = d?.output?.images;
   if (!Array.isArray(images) || !images.length || RUN.status !== "running") return;
   const n = nodeById(d.display_node ?? d.node);
@@ -558,6 +566,10 @@ export function plannedStages(node, cfg) {
     const n = Math.max(1, Math.round(Number(i2iRun ? I.passes : cfg.latent?.passes) || 1));
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
     out.push(["decode", "Decode"]);
+  } else {
+    // the Workspace itself renders nothing on External sampler; without this the
+    // pipeline was just empty, with no reason
+    out.push(["external", "Render"]);
   }
   // a swap on the render runs whatever the pass mode (workspace.py swaps the
   // finished render), so Prompt only does not stand it down
@@ -626,7 +638,7 @@ export function jumpForStage(key, cfg) {
   }
   if (key === "encode") return { tab: "prompts" };
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
-  if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
+  if (key === "decode" || key === "external" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
   if (key === "reangle" || key === "reangle_polish") return { tab: "i2i", sub: "reangle" };
   if (key === "paint") return { tab: "paint" };
@@ -1009,7 +1021,11 @@ function stageRows(node) {
     }
   }
   const wsKeys = new Set(["captions", "encode", "decode"]);
+  const EXTERNAL_WHY = "External sampler renders nothing here. Choose Built-in sampler "
+                      + "on the Models tab, or take the picture from your own KSampler.";
   return rows.map((r) => {
+    // never reported by the server: it names why the plan itself is empty, always
+    if (r.key === "external") return { ...r, s: { why: EXTERNAL_WHY }, state: "skip" };
     const s = RUN.stages.get(r.key);
     let state = s?.state || "waiting";
     if (!s && RUN.cached && (wsKeys.has(r.key) || r.key.startsWith("pass"))) state = "cached";
