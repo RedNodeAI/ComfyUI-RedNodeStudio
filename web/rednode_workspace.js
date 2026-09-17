@@ -131,8 +131,8 @@ css.textContent = `
 /* The socket tuck rides its own thin row ABOVE the strip. It used to be the last
    item of the wrapping strip, so once the tabs filled the width it wrapped onto a
    stray line between the tabs and the box, the one place it must never be. */
-.rn-ws-toprow{display:flex;justify-content:flex-end;flex:none;padding-bottom:6px}
-.rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
+.rn-ws-tabrow{display:flex;align-items:flex-start;gap:6px;flex:none;padding-bottom:7px}
+.rn-ws-tabs{display:flex;gap:6px;flex:1 1 auto;flex-wrap:wrap;min-width:0}
 .rn-ws-tab{background:#15171b;border:1px solid #2a2e35;border-radius:7px;
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 15px;display:flex;
   align-items:center;justify-content:center;gap:7px;position:relative;overflow:hidden}
@@ -6205,23 +6205,25 @@ function workspaceCard(node, body) {
   line("Studio preset", [psel],
        "Hands the studio node a preset through the bundle. Node's own leaves its widget in "
        + "charge; custom (use settings) hands control to the dials.");
-  // the workspace presets: the node's own preset widget, with save and delete beside it
-  const pw = findWidget(node, "preset");
+  // THE WORKSPACE PRESETS, the whole of them: this is where they live now, the
+  // node's own combo across the top of the panel having gone
+  if (node._rnWsPresets === undefined) { node._rnWsPresets = []; fetchPresetNames(node); }
+  const picked = node._rnWsPreset || CUSTOM_SENTINEL;
   const wsel = document.createElement("select");
   wsel.className = "rn-ws-res rn-ws-wspreset";
-  for (const v of (pw?.options?.values || [CUSTOM_SENTINEL])) {
+  for (const v of [CUSTOM_SENTINEL, ...(node._rnWsPresets || [])]) {
     const o = document.createElement("option");
     o.value = v;
     o.textContent = v === CUSTOM_SENTINEL ? "Custom (live)" : v;
-    o.selected = (pw?.value ?? CUSTOM_SENTINEL) === v;
+    o.selected = picked === v;
     wsel.appendChild(o);
   }
   wsel.title = "Load a saved workspace: galleries, selections, masks and dials. Loading "
-             + "replaces the whole panel.";
+             + "replaces the whole panel. Custom (live) is whatever is in the panel now, "
+             + "which is what an edit after a load leaves you with.";
   wsel.onchange = () => {
-    if (!pw) return;
-    pw.value = wsel.value;
-    pw.callback?.(wsel.value);
+    if (wsel.value === CUSTOM_SENTINEL) { node._rnWsPreset = CUSTOM_SENTINEL; render(node); return; }
+    loadWorkspacePreset(node, wsel.value);
   };
   const saveAs = document.createElement("button");
   saveAs.className = "rn-ws-btn rn-ws-bigbtn";
@@ -6238,16 +6240,17 @@ function workspaceCard(node, body) {
       const d = await r.json();
       if (d.error) throw new Error(d.error);
       refreshPresetList(node, d.presets || []);
+      node._rnWsPreset = name;            // saved as, so that is what is loaded now
       render(node);
     } catch (e) { alert(`Could not save: ${e.message}`); }
   };
   const del = document.createElement("button");
   del.className = "rn-ws-btn rn-ws-bigbtn";
   del.textContent = "Delete";
-  del.disabled = !pw || !pw.value || pw.value === CUSTOM_SENTINEL;
-  del.title = del.disabled ? "Pick a saved preset first." : `Delete "${pw.value}".`;
+  del.disabled = picked === CUSTOM_SENTINEL;
+  del.title = del.disabled ? "Pick a saved preset first." : `Delete "${picked}".`;
   del.onclick = async () => {
-    const name = pw?.value;
+    const name = picked;
     if (!name || name === CUSTOM_SENTINEL) return;
     try {
       const r = await api.fetchApi("/rednode/workspace_presets", {
@@ -6255,8 +6258,8 @@ function workspaceCard(node, body) {
         body: JSON.stringify({ action: "delete", name }),
       });
       const d = await r.json();
+      node._rnWsPreset = CUSTOM_SENTINEL;
       refreshPresetList(node, d.presets || []);
-      pw.value = CUSTOM_SENTINEL;
       render(node);
     } catch (e) { alert(`Could not delete: ${e.message}`); }
   };
@@ -15479,11 +15482,12 @@ export function render(node) {
     applyTuck(node);
     render(node);
   };
-  // its own row, above the tabs: the strip stays pure tabs and sits on the box
-  const toprow = document.createElement("div");
-  toprow.className = "rn-ws-toprow";
-  toprow.appendChild(tuck);
-  host.append(toprow, tabs);
+  // beside the tabs, not above them. The strip wraps and the plug does not, so
+  // it sits at the right of the first row however many tabs there are.
+  const tabrow = document.createElement("div");
+  tabrow.className = "rn-ws-tabrow";
+  tabrow.append(tabs, tuck);
+  host.appendChild(tabrow);
 
   const body = document.createElement("div");
   body.className = "rn-ws-body"
@@ -15751,11 +15755,39 @@ function pushStudioPreset(node) {
 
 // ---- presets ---------------------------------------------------------------
 function refreshPresetList(node, names) {
-  const w = findWidget(node, "preset");
-  if (!w) return;
-  w.options = w.options || {};
-  w.options.values = [CUSTOM_SENTINEL, ...names];
-  if (!w.options.values.includes(w.value)) w.value = CUSTOM_SENTINEL;
+  node._rnWsPresets = [...names];
+  if (!node._rnWsPresets.includes(node._rnWsPreset)) node._rnWsPreset = CUSTOM_SENTINEL;
+}
+
+// LOADING ONE replaces the whole workspace. Every control captured the config it
+// was built with, so the panel is rebuilt against the new object: without that
+// they keep writing into the one the preset just replaced, the edit lands on an
+// orphan, and the change is silently lost.
+async function loadWorkspacePreset(node, name) {
+  if (!name || name === CUSTOM_SENTINEL) return;
+  try {
+    const res = await api.fetchApi(
+      `/rednode/workspace_presets?name=${encodeURIComponent(name)}`);
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    findWidget(node, "config").value = JSON.stringify(d.config || {});
+    node._rnCfg = readCfg(node);
+    node._rnWsPreset = name;
+    render(node);
+    node.graph?.change?.();
+  } catch (e) {
+    console.error("[RedNode Workspace] could not load preset:", e);
+    alert(`Could not load "${name}": ${e.message}`);
+  }
+}
+
+// the saved workspaces, asked for once and after every save or delete
+async function fetchPresetNames(node) {
+  try {
+    const r = await api.fetchApi("/rednode/workspace_presets");
+    const d = await r.json();
+    refreshPresetList(node, d?.presets || []);
+  } catch (e) { /* the list simply stays as it is */ }
 }
 
 function openCog(node, anchor) {
@@ -15791,25 +15823,10 @@ function openCog(node, anchor) {
     } catch (e) { note.textContent = `Could not save: ${e.message}`; }
   };
 
-  const del = document.createElement("button");
-  del.textContent = "Delete the selected preset";
-  del.onclick = async () => {
-    const pw = findWidget(node, "preset");
-    const name = pw?.value;
-    if (!name || name === CUSTOM_SENTINEL) { note.textContent = "Pick a preset on the node first"; return; }
-    try {
-      const res = await api.fetchApi("/rednode/workspace_presets", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", name }),
-      });
-      const d = await res.json();
-      refreshPresetList(node, d.presets || []);
-      if (pw) pw.value = CUSTOM_SENTINEL;
-      note.textContent = `Deleted "${name}"`;
-    } catch (e) { note.textContent = `Could not delete: ${e.message}`; }
-  };
-
-  m.append(h, inp, save, del, note);
+  const where = document.createElement("div");
+  where.className = "rn-ws-note";
+  where.textContent = "Loading and deleting live on the Advanced tab, under Workspace presets.";
+  m.append(h, inp, save, note, where);
   document.body.appendChild(m);
   const r = anchor.getBoundingClientRect();
   // the cog sits at the node's bottom edge, so the panel opens UPWARD — downward put it
@@ -15937,36 +15954,6 @@ function build(node) {
     prevRz?.apply(this, args);
     applyTuck(this);
   };
-
-  // picking a preset replaces the whole workspace, then drops back to "custom (live)" —
-  // the config is the truth and you are free to edit from there
-  const pw = findWidget(node, "preset");
-  if (pw && !pw._rnHooked) {
-    pw._rnHooked = true;
-    const prior = pw.callback;
-    pw.callback = async function (value) {
-      prior?.apply(this, arguments);
-      if (!value || value === CUSTOM_SENTINEL) return;
-      try {
-        const res = await api.fetchApi(`/rednode/workspace_presets?name=${encodeURIComponent(value)}`);
-        const d = await res.json();
-        if (d.error) throw new Error(d.error);
-        cfgW.value = JSON.stringify(d.config || {});
-        node._rnCfg = readCfg(node);
-        // Rebuild against the new object. Every control captured the config it was
-        // built with, so without this they keep writing into the one the preset just
-        // replaced: the edit lands on an orphan, writeCfg serialises the live config,
-        // and the change is silently lost. The Paint prompt showed it first, staying
-        // empty however much was typed into it.
-        render(node);
-        node.graph?.change?.();
-      } catch (e) {
-        console.error("[RedNode Workspace] could not load preset:", e);
-      }
-      pw.value = CUSTOM_SENTINEL;
-      render(node);
-    };
-  }
 
   render(node);
   pushStudioPreset(node);                            // also hides the studio's own dropdown

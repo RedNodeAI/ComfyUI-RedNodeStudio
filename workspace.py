@@ -2245,12 +2245,11 @@ class RedNodeStudioWorkspace:
                 "config": ("STRING", {"default": "{}", "multiline": True, "tooltip":
                            "the workspace state (galleries, selections, masks, dials) as JSON. "
                            "The panel above edits this."}),
-                # AFTER config: widget values restore by position, so the new widget must
-                # come last or every existing workspace would swap its values on load
-                "preset": ([CUSTOM_SENTINEL] + sorted(load_presets()),
-                           {"tooltip": "load a saved workspace (galleries, selections, masks, "
-                                       "dials). 'custom (live)' leaves it as it is. Presets "
-                                       "store filenames, so they are per-machine."}),
+                # the preset combo used to sit here, across the top of the node. The
+                # Advanced tab's Workspace presets row does the whole job now, so the
+                # widget is gone; it was the LAST of the two, so nothing a saved
+                # workflow stored shifts position. build() still accepts the argument
+                # for a queue saved before this.
             },
             "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT",
                        "extra_pnginfo": "EXTRA_PNGINFO"},

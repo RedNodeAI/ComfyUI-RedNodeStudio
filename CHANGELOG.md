@@ -365,6 +365,13 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The preset strip across the top of the node is gone. The Advanced tab's
+  Workspace presets row does the whole job: load, Save as and Delete, with the
+  name you loaded staying picked so Delete has something to act on. The node
+  carries one widget now, its config, and it was the last of the two so no
+  saved workflow shifts a value
+- The socket tuck sits on the tab row, at the right of the strip, rather than
+  on a row of its own above it
 - The Paint tab's Use last result works for a run that was never saved. It
   read only what a save had filed, so with Save switched off the button sat
   dead or offered an older picture. It reads the copy the Workspace keeps of
