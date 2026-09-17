@@ -6,13 +6,20 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.4.0** - 2026-09-17
 
-The Workspace grew a Run tab and now renders, details, grades and files on
-its own; a rig can be your own nodes; the VRAM limit is your card's size, with
-an estimate of what the run needs and an automatic hold; Swap works on any
-render; the Detailer grew four kinds of pass; the Post tab became a list
-beside one editor; a Draft switch makes a seed cheap to judge; and an Overview
-tab shows the whole run as it is set up and checks the packs and models it
-calls for. The 1.3.1 security fixes are in, and the pack as published makes no
+The panel is clearer to read. The big tabs are pages of sub-tabs, each with
+a light that says whether its section is on, over a status bar that sums the
+page up, and the Img2Img bar carries colour coded chips and an issues box. Two
+new views: an Overview tab that maps the whole run in the order it happens,
+green on, grey off, amber stood aside, red wants fixing, and a Run tab that
+watches the render with its stages, its picture and its memory. The Detailer,
+the Post FX and the save now run inside the node, so nothing needs wiring
+after it. Errors say what went wrong and where to fix it: nothing fails
+silently any more, the log links to where a missing pack or model comes from,
+and Check installs on the Overview names every pack and model your settings
+call for. Beyond that: a rig can be your own nodes, the VRAM limit is your
+card's size with an estimate and an automatic hold, Swap works on any render,
+the Detailer grew four kinds of pass, and a Draft switch makes a seed cheap to
+judge. The 1.3.1 security fixes are in, and the pack as published makes no
 network call, runs no program and reads no environment variable.
 
 ### Previews
