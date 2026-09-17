@@ -1617,6 +1617,21 @@ export const modelListsNow = () => MODEL_LISTS;
 export const fetchModelListsOnce = () => fetchModelLists();
 export const autoStatusNow = () => autoStatus;
 
+// A DIAL IS DOING SOMETHING when its value differs from the dial's own default.
+// The key merely being there says only that it was touched once, so a dial moved
+// and put back left BOOSTS lit and the Advanced tab's dot green with nothing
+// changed. Every dial carries a def, and the text one counts only with words in it.
+export const dialActive = (cfg, d) => {
+  const v = cfg?.dials?.[d.key];
+  if (v === undefined || v === null) return false;
+  if (d.text) return !!String(v).trim();
+  if (typeof d.def === "number") return Number(v) !== Number(d.def);
+  return v !== d.def;
+};
+// how many of a page's dials are actually doing something
+export const dialsOn = (cfg, tab) =>
+  !!cfg?.use_dials && DIALS.filter((d) => d.tab === tab && dialActive(cfg, d)).length;
+
 export function setupProblems(node, cfg) {
   const out = [];
   const M = cfg?.models;
@@ -13339,8 +13354,7 @@ function identityTabs(node, body) {
   const t = cfg.tabs[sub];
   const innerSubs = [
     ["gallery", "GALLERY", tabLit(cfg, sub)],
-    ["boosts", "BOOSTS", !!(t.on && cfg.use_dials && DIALS.some((dd) => dd.tab === sub
-                                                     && cfg.dials[dd.key] !== undefined))],
+    ["boosts", "BOOSTS", !!(t.on && dialsOn(cfg, sub))],
     ["auto", "AUTO PROMPT", !!(t.on && t.auto?.on)],
     ["converter", "CONVERTER", !!t.on && convActive(t.conv)],
   ];
@@ -13422,8 +13436,7 @@ function moodboardTabs(node, body) {
   const cfg = node._rnCfg;
   const props = (node.properties ||= {});
   const t = cfg.tabs.moodboard;
-  const dialsSet = !!(cfg.use_dials && DIALS.some((dd) => dd.tab === "moodboard"
-                                                  && cfg.dials[dd.key] !== undefined));
+  const dialsSet = !!dialsOn(cfg, "moodboard");
   const subs = [
     ["gallery", "GALLERY", tabLit(cfg, "moodboard")],
     ["boosts", "BOOSTS", !!(t.on && dialsSet)],
@@ -14936,9 +14949,9 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
   arr.textContent = open ? "▾" : "▸";
   const ttl = document.createElement("span");
   ttl.className = "ttl";
-  const touched = dials.filter((d) => cfg.dials[d.key] !== undefined).length;
+  const live = dials.filter((d) => dialActive(cfg, d)).length;
   ttl.textContent = `DIALS: ${dials.map((d) => d.label).join(", ")}`
-                  + (touched ? ` · ${touched} set` : "");
+                  + (live ? ` · ${live} set` : "");
   const on = document.createElement("button");
   on.className = "rn-ws-sw" + (cfg.use_dials ? " on" : "");
   on.title = cfg.use_dials
@@ -14952,7 +14965,7 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
     sect.classList.add("flat");
     ttl.textContent = (tabId === "subject" ? "BOOSTS, for every person"
                        : tabId === "moodboard" ? "BOOSTS, for every picture in the batch" : "BOOSTS")
-                    + (touched ? ` · ${touched} set` : "");
+                    + (live ? ` · ${live} set` : "");
   } else {
     head.onclick = (e) => {
       if (e.target === on) return;
@@ -14961,7 +14974,7 @@ function dialSection(node, body, tabId, { flat = false } = {}) {
     };
   }
   if (tabId === "advanced") ttl.textContent = "STUDIO SETTINGS" +
-    (touched ? `: ${touched} set` : ": all at defaults");
+    (live ? `: ${live} set` : ": all at defaults");
   sect.appendChild(head);
   if (flat && tabId === "subject") sect.appendChild(boostPresetRow(node, cfg));
   if (flat && tabId === "scene") {
@@ -15312,8 +15325,7 @@ export const tabLit = (cfg, id) =>
   : id === "run" ? runLit()
   : id === "detailer" ? !!(cfg.detailer_on
                            && (cfg.detailer?.stages || []).some((s) => s.on && s.type !== "title"))
-  : id === "advanced" ? cfg.use_dials &&
-      DIALS.some((d) => d.tab === "advanced" && cfg.dials[d.key] !== undefined)
+  : id === "advanced" ? !!dialsOn(cfg, "advanced")
   // IMG2IMG DOES NOT NEED A GALLERY IMAGE ( the dot stays
   // dark with the tab on and the canvas set to Wired image). Its canvas can be
   // the wired image_in or latent input, in which case the tab has no picture of

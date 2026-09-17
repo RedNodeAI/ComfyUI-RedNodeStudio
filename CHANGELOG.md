@@ -365,6 +365,10 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- BOOSTS only goes green when a dial is actually doing something. It used to
+  light as soon as a dial had been touched, so moving one and putting it back
+  left it green for good. The Advanced tab's dot and the DIALS fold's count
+  read the same way now: set means different from that dial's own default
 - Check installs covers the Post tab too. An effect that reads depth asks for
   comfyui_controlnet_aux and a Limit row set to the subject or the background
   asks for comfyui-rmbg, on the same terms the cards themselves use, and the
