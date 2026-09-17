@@ -1093,14 +1093,14 @@ const VRAM_TIER_FOR_GB = { 8: "low", 12: "low", 16: "low", 24: "medium", 32: "hi
 export const vramLimitName = (cfg) => (cfg?.vram_gb ? `${cfg.vram_gb} GB` : "free range");
 // IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only captioned, never
 // sent to the model, so they work on any rig (matching workspace.py)
-const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
+export const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
 const TEXT_TABS_META = {
   text_style: { label: "Style", hint: "Pictures whose look is described in words." },
   text_subject: { label: "Subject", hint: "Pictures whose person is described in words." },
   text_scene: { label: "Scene", hint: "Pictures whose place or situation is described in words." },
 };
 const MULTI_TAB_IDS = ["moodboard", ...TEXT_TAB_IDS];
-const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
+export const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
 const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", ...TEXT_TAB_IDS]);
 // Galleries are grouped into named COLLECTIONS ("red dress", "castle set"…). The legacy
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py

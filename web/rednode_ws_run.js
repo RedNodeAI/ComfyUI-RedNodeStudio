@@ -617,7 +617,7 @@ export function goTo(node, t) {
   render(node);
 }
 
-const autoPageOf = (tabName) => (
+export const autoPageOf = (tabName) => (
   tabName === "subject" || tabName === "scene" ? { tab: "identity", sub: tabName, inner: "auto" }
   : tabName === "moodboard" ? { tab: "moodboard", sub: "auto" }
   : tabName === "i2i" ? { tab: "i2i", sub: "auto", auto: "i2i" }
@@ -648,7 +648,7 @@ export function jumpForStage(key, cfg) {
   return null;
 }
 
-const CAPTION_TABS = [["Subject", "subject"], ["Scene", "scene"], ["Moodboard", "moodboard"],
+export const CAPTION_TABS = [["Subject", "subject"], ["Scene", "scene"], ["Moodboard", "moodboard"],
                       ["Img2Img", "i2i"], ["Image to text Style", "text_style"],
                       ["Image to text Subject", "text_subject"], ["Image to text Scene", "text_scene"]];
 

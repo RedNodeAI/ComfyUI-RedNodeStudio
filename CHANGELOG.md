@@ -365,6 +365,12 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The Overview's Auto prompt box named nothing and swept in every tab, so an
+  Image to text gallery (Style, Subject or Scene words), always on by design
+  and empty on almost every install, read as "on, no pictures" on workspaces
+  that never touched it. It now counts only the galleries that feed the
+  render, an Image to text one only once its words are wired to a prompt
+  row, and names which gallery it means in both the box and the attention line
 - Nothing rendered never fails silently again. The Run tab's log says why (no
   rig, no VAE, External sampler with nothing wired to it), the Models tab
   warns about External sampler whenever Save, the Detailer or Post FX expect

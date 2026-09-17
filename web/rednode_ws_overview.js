@@ -1,6 +1,15 @@
-import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive } from "./rednode_workspace.js";
-import { jumpForStage, goTo } from "./rednode_ws_run.js";
+import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive,
+         AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
+import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX } from "./rednode_ws_tables.js";
+
+const CAPTION_NAME = Object.fromEntries(CAPTION_TABS.map(([label, id]) => [id, label]));
+// an Image to text gallery (Style, Subject, Scene words) is always "on": its page
+// sits there whether or not it is used. Its emptiness only matters once its words
+// are actually wired into a prompt row; otherwise it is just an unused page, not
+// a stage feeding the render
+const captionInUse = (id, t) => !!(t?.on && t.auto?.on
+  && (!TEXT_TAB_IDS.includes(id) || t.auto.inject_row));
 
 // THE OVERVIEW TAB: the run as it is set up right now, in the order it happens,
 // as one box per stage. Green is on, grey is off, amber is on but stood aside
@@ -101,15 +110,18 @@ export function overviewBoxes(node, cfg) {
     note: cfg.paint?.on ? "Paint pass" : "Off",
     to: { tab: "paint" },
   });
-  const capOn = Object.values(tabs).filter((t) => t?.on && t.auto?.on);
-  const capPics = capOn.filter((t) => (t.images?.length || 0) > 0);
+  const capOn = AUTO_TAB_IDS.map((id) => [id, tabs[id]]).filter(([id, t]) => captionInUse(id, t));
+  const capPics = capOn.filter(([, t]) => (t.images?.length || 0) > 0);
+  const capEmpty = capOn.filter(([, t]) => !(t.images?.length));
+  const capNames = (list) => list.map(([id]) => CAPTION_NAME[id] || id).join(", ");
   feeds.push({
     key: "captions", label: "Auto prompt",
     state: capPics.length ? "on" : capOn.length ? "skip" : "off",
     note: capPics.length ? plural(capPics.length, "gallery", "galleries") + " described"
-      : capOn.length ? "On, no pictures" : "Off",
-    why: capOn.length && !capPics.length ? "Auto prompt is on where the gallery is empty, so there is nothing to describe." : "",
-    to: jumpForStage("captions", cfg),
+      : capOn.length ? `On for ${capNames(capOn)}, no pictures` : "Off",
+    why: capEmpty.length ? `Auto prompt is on for ${capNames(capEmpty)}, and the gallery is `
+                          + `empty, so there is nothing to describe.` : "",
+    to: capEmpty.length ? autoPageOf(capEmpty[0][0]) : jumpForStage("captions", cfg),
   });
 
   // THE RUN, IN ORDER
