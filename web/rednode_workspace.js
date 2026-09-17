@@ -11204,6 +11204,7 @@ function modelsBody(node, page) {
       if (!name) return;
       const values = Object.fromEntries(keys.map((k) => [k, rig[k]]));
       (node._rnSamplerProfiles ||= {})[name] = values;
+      render(node);                          // in the list at once; the server confirms after
       postProfiles({ name, values });
     };
     const wrap = document.createElement("div");
@@ -11219,6 +11220,7 @@ function modelsBody(node, page) {
       pdel.onclick = () => {
         const name = psel.value;
         delete node._rnSamplerProfiles[name];
+        render(node);
         postProfiles({ name, delete: true });
       };
       wrap.appendChild(pdel);
