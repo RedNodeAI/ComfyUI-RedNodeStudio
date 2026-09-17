@@ -407,6 +407,10 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- The INT8 marker in the Start here workflow carries its Comfy Registry id.
+  ComfyUI Manager's own list does not carry that repository, so it fell back to
+  a git URL install and refused it, wanting allow_git_url_install in its config.
+  Manager reads the registry id first, so it resolves in one step now
 - The RedNode Studio template needs two packs of its own, and now says so. Its
   Light & Color and Scene nodes come from Krea2-BBOX-Prompter and its Style
   browser from ComfyUI-Krea-Moodboards. Both join the Start here workflow, the

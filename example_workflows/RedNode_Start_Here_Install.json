@@ -136,7 +136,8 @@
       "outputs": [],
       "properties": {
         "Node name for S&R": "OTUNetLoaderW8A8",
-        "aux_id": "BobJohnson24/ComfyUI-INT8-Fast"
+        "aux_id": "BobJohnson24/ComfyUI-INT8-Fast",
+        "cnr_id": "int8-fast"
       },
       "title": "INT8 models (ComfyUI-INT8-Fast)",
       "widgets_values": []
