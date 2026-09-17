@@ -16194,10 +16194,14 @@ app.registerExtension({
                            type: p.type || "temp", rand: (Math.random() * 1e9) | 0,
                            prompt_id: String(e?.detail?.prompt_id || ""), before_post: true };
       }
-      // core's images, the paint pass's, or what the Workspace's own save filed
+      // core's images, the paint pass's, what the Workspace's own save filed, or,
+      // with Save switched off, the copy the Workspace keeps of the finished
+      // picture. Without that last one a run that was never written to disk left
+      // Use last result dead, which read as the button being broken.
       const imgs = e?.detail?.output?.images
         || e?.detail?.output?.rn_paint_images
-        || e?.detail?.output?.rn_run_images;
+        || e?.detail?.output?.rn_run_images
+        || e?.detail?.output?.rn_final_images;
       if (!Array.isArray(imgs) || !imgs.length) return;
       const im = imgs[imgs.length - 1];
       const finalNodeId = String(e?.detail?.node ?? "");

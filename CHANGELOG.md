@@ -365,6 +365,10 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The Paint tab's Use last result works for a run that was never saved. It
+  read only what a save had filed, so with Save switched off the button sat
+  dead or offered an older picture. It reads the copy the Workspace keeps of
+  the finished picture too
 - BOOSTS only goes green when a dial is actually doing something. It used to
   light as soon as a dial had been touched, so moving one and putting it back
   left it green for good. The Advanced tab's dot and the DIALS fold's count
