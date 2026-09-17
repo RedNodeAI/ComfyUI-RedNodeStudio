@@ -16,6 +16,7 @@ Standalone first; the panel is host-agnostic so the
 Workspace can mount it later.
 """
 import json
+from .overrides import env as _env
 import math
 import os
 
@@ -412,7 +413,7 @@ _SET_KEYS = ("camera", "subjects", "path", "stage_zoom", "lights")
 
 
 def _user_sets_path(make=False):
-    override = os.environ.get("KREA2RN_CAMERA_SETS")
+    override = _env("KREA2RN_CAMERA_SETS")
     if override:
         return override
     try:

@@ -86,10 +86,9 @@ def probe(path, exe):
 def play_filed(video_path, tmp_dir, loop):
     """A payload for a file that already exists, or None if there is nothing to play.
 
-    /view can only serve ComfyUI's own folders, and RedNode Save Video can be pointed
-    at any root at all, so a clip filed outside them is copied into temp to be reached.
-    Copying a video is not free, which is why it is the second choice rather than the
-    only one.
+    /view only serves ComfyUI's own folders, and this node only plays from the
+    output folder: the path is a node input, which a queued workflow can set to
+    anything, so a clip outside output is refused rather than copied into reach.
     """
     path = str(video_path or "").strip()
     if not path or not os.path.isfile(path):
@@ -109,14 +108,9 @@ def play_filed(video_path, tmp_dir, loop):
     if inside:
         sub = os.path.dirname(rel).replace(os.sep, "/")
     else:
-        kind = "temp"
-        name = f"rn_preview_{os.getpid()}_{int(time.time() * 1000)}.{ext}"
-        try:
-            shutil.copyfile(full, os.path.join(tmp_dir, name))
-        except OSError as e:
-            print(f"[RedNode Video Review] the clip is filed outside ComfyUI's folders "
-                  f"and could not be copied in to play ({e})", flush=True)
-            return None
+        print("[RedNode Video Review] the clip is filed outside ComfyUI's output folder, "
+              "so it is not played here; save it under output to see it", flush=True)
+        return None
 
     exe = _ffmpeg_exe()
     secs = probe(full, exe)

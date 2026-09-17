@@ -18,6 +18,7 @@ Nothing in here reads any file you already had. It writes.
 """
 
 import json
+from .overrides import env as _env
 import os
 import re
 import shutil
@@ -86,7 +87,7 @@ PRESET_KEYS = ("subfolder", "name", "numbering", "pad")
 
 
 def _presets_path(make=False):
-    override = os.environ.get("KREA2RN_SAVE_PRESETS")
+    override = _env("KREA2RN_SAVE_PRESETS")
     if override:
         return override
     try:
@@ -1013,7 +1014,7 @@ def _index_cap():
 
 
 def _index_path(make=False):
-    override = os.environ.get("KREA2RN_SAVE_INDEX")
+    override = _env("KREA2RN_SAVE_INDEX")
     if override:
         return override
     try:
@@ -1156,7 +1157,9 @@ def move_saved(path, root="", to_keepers=True):
     ends swapped, and a decision you cannot undo is not much of a decision.
     """
     out_dir = os.path.realpath(folder_paths.get_output_directory())
-    base = os.path.join(out_dir, *[p for p in str(root or "").split("/") if p])
+    base = os.path.realpath(os.path.join(out_dir, *[p for p in str(root or "").split("/") if p]))
+    if base != out_dir and not _inside(base, out_dir):
+        raise ValueError("that folder is outside the output folder")
     src_root = os.path.join(base, DRAFTS if to_keepers else KEEPERS)
     dst_root = os.path.join(base, KEEPERS if to_keepers else DRAFTS)
     src = os.path.realpath(path)
@@ -1225,6 +1228,11 @@ def open_folder(path, launcher=None):
     return target
 
 
+# what the delete route may remove: the pictures and clips this pack files, never
+# anything else that happens to sit in the output folder
+DELETABLE = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".gif"}
+
+
 def delete_saved(path):
     """Delete an image and its companions.
 
@@ -1237,6 +1245,8 @@ def delete_saved(path):
         raise ValueError("that file is outside the output folder")
     if not os.path.isfile(src):
         raise ValueError("that file is gone")
+    if os.path.splitext(src)[1].lower() not in DELETABLE:
+        raise ValueError("only saved pictures and clips can be deleted here")
     os.remove(src)
     for suffix in COMPANIONS:
         companion = os.path.splitext(src)[0] + suffix

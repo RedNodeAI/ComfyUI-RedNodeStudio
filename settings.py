@@ -13,6 +13,7 @@ imports it, and a cycle here would break the whole import.
 """
 
 import json
+from .overrides import env as _env
 import os
 
 DEFAULTS = {
@@ -33,7 +34,7 @@ CACHE_FILES = ("lora_type_cache.json", "lora_hash_cache.json",
 
 
 def _dir(make=False):
-    override = os.environ.get("KREA2RN_SETTINGS_DIR")
+    override = _env("KREA2RN_SETTINGS_DIR")
     if override:
         base = override
     else:

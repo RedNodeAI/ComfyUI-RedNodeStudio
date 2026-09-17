@@ -621,6 +621,16 @@ The SeedVR2 loaders also fetch their files on first use when the folder is empty
 above are for anyone who would rather place them by hand. The 3B model is smaller and its loader's
 default; the 7B is what the example workflow runs.
 
+### Ollama
+
+| What | Where from |
+|---|---|
+| [comfyui-ollama-describer](https://github.com/alisson-anjos/ComfyUI-Ollama-Describer), the pack | Manager; it installs the `ollama` client library the Ollama engine talks through |
+| Ollama itself | [ollama.com](https://ollama.com); set `OLLAMA_HOST` if it runs on another machine on your network |
+
+Without that library the Ollama engine, Rewrite, Auto sort and the People rewrite say so and
+step aside; Florence, WD14, JoyCaption, QwenVL and CLIP gen run in-process and need nothing.
+
 ### Live preview and depth
 
 | File | Goes in | Where from |

@@ -185,7 +185,7 @@ try:
         except Exception:
             return web.json_response({"error": "bad request"}, status=400)
         model = str(body.get("model") or "").strip()
-        url = str(body.get("url") or _ap.OLLAMA_URL)
+        url = _ap.OLLAMA_URL                        # the server's setting, not the caller's
         if not model:
             return web.json_response(
                 {"error": "no Ollama model chosen: pick one on the Auto Prompt "
@@ -207,7 +207,7 @@ try:
         except Exception:
             return web.json_response({"error": "bad request"}, status=400)
         model = str(body.get("model") or "").strip()
-        url = str(body.get("url") or _ap.OLLAMA_URL)
+        url = _ap.OLLAMA_URL                        # the server's setting, not the caller's
         if not model:
             return web.json_response(
                 {"error": "no Ollama model chosen: pick one on the Auto Prompt "

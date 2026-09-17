@@ -11,3 +11,9 @@ __pycache__/
 
 # the README screenshots: needed on GitHub, dead weight in a download
 images/
+
+# personal-only modules and credentials: never in a published archive, however it is built
+local/
+nai_token.txt
+**/nai_token.txt
+user_data/

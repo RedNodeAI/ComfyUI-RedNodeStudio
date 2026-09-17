@@ -23,6 +23,7 @@ The engine itself is web/rednode_rules.js, kept pure and tested without a browse
 """
 
 import json
+from .overrides import env as _env
 import os
 
 import folder_paths
@@ -31,7 +32,7 @@ KINDS = ("requires", "excludes", "follows", "only if")
 
 
 def _sets_path(make=False):
-    override = os.environ.get("KREA2RN_GROUP_RULES")
+    override = _env("KREA2RN_GROUP_RULES")
     if override:
         return override
     try:

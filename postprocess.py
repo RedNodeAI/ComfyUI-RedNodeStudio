@@ -57,6 +57,7 @@ here are written independently from the underlying optics, as above.
 Images are ComfyUI IMAGE tensors: [B, H, W, C] float in 0..1.
 """
 import base64
+from .overrides import env as _env
 import inspect
 import io as _io
 import json
@@ -1699,7 +1700,7 @@ THUMB_PX = 132
 
 
 def _presets_path(make=False):
-    override = os.environ.get("KREA2RN_POST_PRESETS")
+    override = _env("KREA2RN_POST_PRESETS")
     if override:
         return override
     try:
@@ -2408,8 +2409,9 @@ def workspaces_from_prompt(prompt):
 
 def file_reference(name, long_edge=1024):
     """A picture dropped onto the Match card, from the input folder, as an IMAGE
-    tensor; None, said once, when it is gone or unreadable. ComfyUI's own path
-    helper refuses a name that climbs out of the input folder."""
+    tensor; None, said once, when it is gone or unreadable. The path is checked
+    to sit inside the folder the name's annotation says (input by default), the
+    same way the Workspace checks its gallery entries."""
     name = str(name or "").strip()
     if not name:
         return None
@@ -2417,7 +2419,12 @@ def file_reference(name, long_edge=1024):
         import numpy as np
         import folder_paths
         from PIL import Image, ImageOps
+        bare, base = folder_paths.annotated_filepath(name)
+        base = os.path.realpath(base or folder_paths.get_input_directory())
         path = folder_paths.get_annotated_filepath(name)
+        real = os.path.realpath(path)
+        if not (real == base or real.startswith(base + os.sep)):
+            raise ValueError("the reference picture is outside ComfyUI's folders")
         with Image.open(path) as im:
             im = ImageOps.exif_transpose(im).convert("RGB")
             im.thumbnail((long_edge, long_edge))

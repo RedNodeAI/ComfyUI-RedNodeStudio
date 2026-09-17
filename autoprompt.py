@@ -26,10 +26,20 @@ import inspect
 import json
 import re
 import sys
-import urllib.error
-import urllib.request
+from .overrides import env as _env
 
-OLLAMA_URL = "http://127.0.0.1:11434"
+# Where Ollama is: OLLAMA_HOST (Ollama's own variable) when set, else this PC.
+# The address is the server's setting alone; a workflow or a request never picks it.
+def _ollama_url():
+    host = _env("OLLAMA_HOST", "").strip().rstrip("/")
+    if not host:
+        return "http://127.0.0.1:11434"
+    if "://" not in host:
+        host = "http://" + host
+    return host
+
+
+OLLAMA_URL = _ollama_url()
 TIMEOUT = 120
 
 # ---------------------------------------------------------------------------
@@ -246,35 +256,84 @@ def filter_tags(tags_line, mode):
 # ---------------------------------------------------------------------------
 # Ollama, plain HTTP
 # ---------------------------------------------------------------------------
-def ollama_url_allowed(url):
-    """Ollama lives on this machine or the LAN. The URL can come from an HTTP
-    request, so refuse anything else (public hosts, 169.254 metadata, file:)."""
-    import ipaddress
-    import socket
-    from urllib.parse import urlsplit
+OLLAMA_MISSING = ("Ollama needs the ollama client library, which the comfyui-ollama-describer "
+                  "pack installs; install that pack (or set up Ollama another way) and the "
+                  "Ollama engine works")
+_TRANSPORT = {"fn": None, "note": "", "tried": False}
+
+
+def _client_transport(url, payload=None, timeout=TIMEOUT):
+    """The same two calls the plain transport made, through the `ollama` client
+    library: /api/tags is a model list, /api/generate is one completion."""
+    import ollama
+    host = url
+    for suffix in ("/api/generate", "/api/tags"):
+        if host.endswith(suffix):
+            host = host[:-len(suffix)]
+    client = ollama.Client(host=host.rstrip("/"), timeout=timeout)
+    if url.endswith("/api/tags"):
+        got = client.list()
+        models = getattr(got, "models", None)
+        if models is None and isinstance(got, dict):
+            models = got.get("models") or []
+        out = []
+        for m in models or []:
+            name = getattr(m, "model", None) or (m.get("name") if isinstance(m, dict) else None)
+            size = getattr(m, "size", None) or (m.get("size") if isinstance(m, dict) else 0)
+            if name:
+                out.append({"name": str(name), "size": int(size or 0)})
+        return {"models": out}
+    if url.endswith("/api/generate"):
+        p = payload or {}
+        kw = {"model": p.get("model"), "prompt": p.get("prompt") or "", "stream": False,
+              "system": p.get("system") or None, "images": p.get("images") or None,
+              "options": p.get("options") or None, "keep_alive": p.get("keep_alive")}
+        if p.get("think"):
+            kw["think"] = True
+        try:
+            got = client.generate(**kw)
+        except TypeError:
+            kw.pop("think", None)               # an older client without the flag
+            got = client.generate(**kw)
+        text = getattr(got, "response", None)
+        if text is None and isinstance(got, dict):
+            text = got.get("response")
+        return {"response": text or ""}
+    raise ValueError("unknown Ollama endpoint: %s" % url)
+
+
+def _ollama_transport():
+    """Whichever way this install can reach Ollama, found once: the plain transport
+    in local/ (this machine's own), else the ollama client library. None, with a
+    note, when there is neither. The pack itself makes no HTTP call."""
+    if _TRANSPORT["tried"]:
+        return _TRANSPORT["fn"]
+    _TRANSPORT["tried"] = True
     try:
-        parts = urlsplit(str(url))
-        if parts.scheme not in ("http", "https") or not parts.hostname:
-            return False
-        infos = socket.getaddrinfo(parts.hostname, parts.port or 80)
-    except (OSError, ValueError):
-        return False
-    for info in infos:
-        ip = ipaddress.ip_address(info[4][0].split("%")[0])
-        if ip.is_link_local or not (ip.is_loopback or ip.is_private):
-            return False
-    return bool(infos)
+        from .local import ollama_http as _own
+        _TRANSPORT["fn"] = _own.http_json
+        return _TRANSPORT["fn"]
+    except ImportError:
+        pass
+    try:
+        import ollama  # noqa: F401
+        _TRANSPORT["fn"] = _client_transport
+    except ImportError:
+        _TRANSPORT["note"] = OLLAMA_MISSING
+    return _TRANSPORT["fn"]
+
+
+def ollama_status():
+    """(True, "") when Ollama can be reached at all, else (False, why)."""
+    fn = _ollama_transport()
+    return (fn is not None), ("" if fn else _TRANSPORT["note"])
 
 
 def _http_json(url, payload=None, timeout=TIMEOUT):
-    if not ollama_url_allowed(url):
-        raise ValueError(f"Ollama URL must be a local or LAN address: {url}")
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode() if payload is not None else None,
-        headers={"Content-Type": "application/json"},
-        method="POST" if payload is not None else "GET")
-    with urllib.request.urlopen(req, timeout=timeout) as res:
-        return json.loads(res.read().decode("utf-8", "replace"))
+    fn = _ollama_transport()
+    if fn is None:
+        raise RuntimeError(_TRANSPORT["note"] or OLLAMA_MISSING)
+    return fn(url, payload, timeout)
 
 
 # What actually goes over the wire to a vision model.
@@ -798,6 +857,12 @@ def florence_caption(image_tensor, task="more_detailed_caption", model="", unloa
             print("[RedNode AutoPrompt] no Florence-2 folder in models/LLM; skipping it",
                   flush=True)
             return ""
+        known = florence_models()
+        if known and name not in known:
+            # the name rides in the workflow config: only a folder the loader lists
+            print("[RedNode AutoPrompt] Florence-2 model %r is not in models/LLM; "
+                  "skipping it" % name, flush=True)
+            return ""
         key = (name, precision)
         if _fl_model["obj"] is None or _fl_model["key"] != key:
             got = _call_filtered(getattr(loader(), loader.FUNCTION), model=name,
@@ -1197,7 +1262,7 @@ _disk_loaded = False
 
 def _cache_path(make=False):
     import os
-    override = os.environ.get("KREA2RN_PROMPT_CACHE")
+    override = _env("KREA2RN_PROMPT_CACHE")
     if override:
         return override
     try:

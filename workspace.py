@@ -25,6 +25,7 @@ it, and it is hand-editable if the UI is ever unavailable.
 """
 
 import hashlib
+from .overrides import env as _env
 import random as _random
 import json
 import os
@@ -194,7 +195,13 @@ MANAGED_SUBFOLDER = "rednode"
 
 
 def _managed(entry):
-    return str(entry).replace("\\", "/").startswith(MANAGED_SUBFOLDER + "/")
+    """A panel upload: under the managed subfolder by name AND by where it resolves,
+    so "rednode/../x" is not one."""
+    if not str(entry).replace("\\", "/").startswith(MANAGED_SUBFOLDER + "/"):
+        return False
+    bare, base = _entry_base(entry)
+    return _inside_dir(os.path.join(base, MANAGED_SUBFOLDER), base) \
+        and _inside_dir(os.path.join(base, bare), os.path.join(base, MANAGED_SUBFOLDER))
 
 # every key the Settings dict carries, at the Settings node's own defaults — the studio
 # indexes some of these unconditionally, so the workspace must always send a full dict
@@ -320,7 +327,7 @@ def _instruction_pair(value):
 
 
 def _instructions_path(make=False):
-    override = os.environ.get("KREA2RN_CAPTION_INSTRUCTIONS")
+    override = _env("KREA2RN_CAPTION_INSTRUCTIONS")
     if override:
         return override
     try:
@@ -388,7 +395,7 @@ def delete_caption_instruction(name):
 
 
 def _vision_path(make=False):
-    override = os.environ.get("KREA2RN_VISION_PROMPTS")
+    override = _env("KREA2RN_VISION_PROMPTS")
     if override:
         return override
     try:
@@ -471,7 +478,7 @@ MULTI_TABS = ("moodboard",) + TEXT_TABS
 
 
 def _presets_path(make=False):
-    override = os.environ.get("KREA2RN_WORKSPACE_PRESETS")
+    override = _env("KREA2RN_WORKSPACE_PRESETS")
     if override:
         return override
     try:
@@ -1486,7 +1493,8 @@ def parse_config(config_json):
 
     auto = {
         "model": str(auto_in.get("model") or ""),
-        "url": str(auto_in.get("url") or autoprompt.OLLAMA_URL),
+        # the server's Ollama address (OLLAMA_HOST); never taken from the workflow
+        "url": autoprompt.OLLAMA_URL,
         "wd14_model": str(auto_in.get("wd14_model") or ""),
         "threshold": _num("threshold", 0.35, 0.0, 1.0),
         "character_threshold": _num("character_threshold", 0.85, 0.0, 1.0),
@@ -2060,6 +2068,16 @@ def resize_dims(w, h, target):
     return nw, nh
 
 
+def _inside_dir(path, root):
+    """True when a resolved path really sits inside `root` (or is it)."""
+    try:
+        root = os.path.realpath(root)
+        real = os.path.realpath(path)
+        return real == root or real.startswith(root + os.sep)
+    except Exception:
+        return False
+
+
 def _inside_input(path):
     """True when a resolved path really sits inside ComfyUI's input folder.
 
@@ -2068,18 +2086,27 @@ def _inside_input(path):
     "rednode/../../secrets.txt" starts with rednode/ too. Anything reached from an
     HTTP request gets resolved and checked against the folder itself.
     """
-    try:
-        root = os.path.realpath(folder_paths.get_input_directory())
-        real = os.path.realpath(path)
-        return real == root or real.startswith(root + os.sep)
-    except Exception:
-        return False
+    return _inside_dir(path, folder_paths.get_input_directory())
+
+
+def _entry_base(name):
+    """(bare name, the ComfyUI folder an entry's annotation names; input by default)."""
+    bare, base = folder_paths.annotated_filepath(str(name))
+    return bare, (base or folder_paths.get_input_directory())
 
 
 def _filepath(name):
-    """Resolve a gallery entry ("sub/f.png" or "f.png [input]") to a real path."""
-    path = folder_paths.get_annotated_filepath(str(name))
-    if not path or not os.path.isfile(path):
+    """Resolve a gallery entry ("sub/f.png" or "f.png [input]") to a real path.
+
+    The result has to sit inside the folder the entry names. ComfyUI's own helper
+    refuses a climbing name since v0.28.0; this pack runs on older cores too, and a
+    name can arrive over HTTP, so the check is made here as well."""
+    bare, base = _entry_base(name)
+    try:
+        path = folder_paths.get_annotated_filepath(str(name))
+    except ValueError:
+        path = None
+    if not path or not _inside_dir(path, base) or not os.path.isfile(path):
         raise ValueError(
             f"RedNode Workspace: the image {name!r} is not in the ComfyUI input folder any "
             "more. Re-add it on the panel (its gallery slot will show as missing).")
@@ -2323,7 +2350,7 @@ class RedNodeStudioWorkspace:
         for tab in cfg["tabs"].values():
             for name in list(tab["images"]) + ([tab["mask"]] if tab["mask"] else []):
                 try:
-                    h.update(str(os.path.getmtime(folder_paths.get_annotated_filepath(name))).encode())
+                    h.update(str(os.path.getmtime(_filepath(name))).encode())
                 except Exception:
                     h.update(b"missing")
         return h.hexdigest()
@@ -4503,11 +4530,13 @@ try:
 
     @PromptServer.instance.routes.get("/rednode/autoprompt_status")
     async def _rednode_autoprompt_status(request):
-        url = request.query.get("url") or autoprompt.OLLAMA_URL
+        url = autoprompt.OLLAMA_URL                 # the server's setting, not the caller's
         sizes = autoprompt.ollama_model_sizes(url)
         models = sorted(sizes)
+        _ok, _note = autoprompt.ollama_status()
         return web.json_response({
             "ollama": bool(models), "models": models,
+            "ollama_note": _note, "ollama_url": url,
             # for the panel's VRAM estimates
             "ollama_sizes": sizes,
             "engine_defaults": autoprompt.engine_defaults(),
@@ -4618,7 +4647,7 @@ try:
         import asyncio
         done = await asyncio.get_event_loop().run_in_executor(
             None, autoprompt.release_engines, str(data.get("model") or ""),
-            str(data.get("url") or autoprompt.OLLAMA_URL))
+            autoprompt.OLLAMA_URL)
         return web.json_response({"done": done})
 
     @PromptServer.instance.routes.get("/rednode/luts")

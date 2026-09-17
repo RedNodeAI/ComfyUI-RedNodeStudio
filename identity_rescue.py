@@ -20,6 +20,7 @@ touched layers ARE the base's; lower keeps more of the mix in them and trades
 identity fidelity back for look.
 """
 import json
+from .overrides import env as _env
 import struct
 
 import torch
@@ -38,7 +39,7 @@ _LORA_SUFFIXES = (".lora_a.weight", ".lora_b.weight", ".lora_down.weight",
 # (Comfy Development/tools/bake_rescue.py), which streams to disk instead.
 import os as _os
 try:
-    RESCUE_MAX_MB = int(_os.environ.get("RN_RESCUE_MAX_MB", "") or 2048)
+    RESCUE_MAX_MB = int(_env("RN_RESCUE_MAX_MB", "") or 2048)
 except ValueError:
     RESCUE_MAX_MB = 2048
 

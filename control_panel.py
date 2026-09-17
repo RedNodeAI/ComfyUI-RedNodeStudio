@@ -24,6 +24,7 @@ Nothing happens at execution time; all the behaviour is in web/rednode_control_p
 """
 
 import json
+from .overrides import env as _env
 import os
 
 import folder_paths
@@ -33,7 +34,7 @@ CUSTOM_SENTINEL = "custom (live)"
 
 
 def _scenes_path(make=False):
-    override = os.environ.get("KREA2RN_CONTROL_SCENES")
+    override = _env("KREA2RN_CONTROL_SCENES")
     if override:
         return override
     try:

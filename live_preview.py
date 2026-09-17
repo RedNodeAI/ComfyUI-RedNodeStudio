@@ -137,7 +137,7 @@ def our_previewer(model):
             try:
                 if name in getattr(lp, "VIDEO_TAES", []):
                     from comfy.sd import VAE
-                    tae = VAE(comfy.utils.load_torch_file(path))
+                    tae = VAE(comfy.utils.load_torch_file(path, safe_load=True))
                     tae.first_stage_model.show_progress_bar = False
                     prev = lp.TAEHVPreviewerImpl(tae)
                 else:

@@ -35,6 +35,7 @@ independent implementation.
 """
 
 import json
+from .overrides import env as _env
 import os
 import random
 
@@ -51,7 +52,7 @@ CUSTOM_SENTINEL = "custom (use stack)"
 
 def _presets_path(make=False):
     """LoRA-stack preset store; mirrors the RedNode Studio preset location."""
-    override = os.environ.get("KREA2RN_LORA_PRESETS")
+    override = _env("KREA2RN_LORA_PRESETS")
     if override:
         return override
     try:

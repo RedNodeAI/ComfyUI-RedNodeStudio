@@ -13,6 +13,7 @@ or during sampling — this module only serves an HTTP route for the frontend.
 """
 
 import asyncio
+from .overrides import env as _env
 import hashlib
 import re
 import shutil
@@ -35,7 +36,7 @@ _MEM = {}                        # in-process hash cache (path -> (sig, hash))
 
 
 def _cache_path(kind):
-    override = os.environ.get("KREA2RN_LORA_CACHE")
+    override = _env("KREA2RN_LORA_CACHE")
     if override:
         base, name = os.path.dirname(override), os.path.basename(override)
         return os.path.join(base, f"{kind}_{name}")
@@ -129,7 +130,7 @@ DOWNLOADS = False
 
 
 def _civitai_token():
-    tok = (os.environ.get("CIVITAI_API_TOKEN") or "").strip()
+    tok = (_env("CIVITAI_API_TOKEN") or "").strip()
     if tok:
         return tok
     try:
@@ -571,7 +572,10 @@ try:
         if not name or name == "None":
             return web.json_response({"error": "no LoRA selected"}, status=400)
         refresh = request.query.get("refresh") == "1"
-        vid = request.query.get("version_id")
+        try:
+            vid = int(request.query.get("version_id") or 0) or None   # a number, never text
+        except (TypeError, ValueError):
+            vid = None
         loop = asyncio.get_running_loop()
         # hashing is CPU/disk bound and files are large — keep it off the event loop
         data = await loop.run_in_executor(None, lookup, name, refresh)

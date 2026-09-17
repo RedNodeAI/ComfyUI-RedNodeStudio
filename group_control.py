@@ -13,6 +13,7 @@ Scenes are stored beside the other RedNode presets in the ComfyUI user directory
 """
 
 import json
+from .overrides import env as _env
 import os
 
 import folder_paths
@@ -22,7 +23,7 @@ CUSTOM_SENTINEL = "custom (live)"
 
 
 def _scenes_path(make=False):
-    override = os.environ.get("KREA2RN_GROUP_SCENES")
+    override = _env("KREA2RN_GROUP_SCENES")
     if override:
         return override
     try:

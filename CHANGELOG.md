@@ -365,6 +365,17 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Ollama is reached through the ollama client library, the one the
+  comfyui-ollama-describer pack installs, instead of the pack's own HTTP call;
+  without it the Ollama engine and the rewrites say so and step aside. The
+  address is the server's own, OLLAMA_HOST or this PC, and is no longer taken
+  from a workflow or a request
+- Security: every gallery path is checked to sit inside the ComfyUI folder its
+  name says, on older cores too (ComfyUI's own check arrived in 0.28); Keep and
+  Unkeep only move inside the output folder; the delete route only removes
+  pictures and clips; Video Review plays files from the output folder only;
+  the Civitai version id must be a number; the Florence model must be one the
+  loader lists; the small preview VAE loads with safe_load
 - The NovelAI rig is no longer part of the pack: it is a personal-only
   module again, as it was before 1.2.0
 - Civitai downloads are no longer part of the pack. The Comfy Registry's scan

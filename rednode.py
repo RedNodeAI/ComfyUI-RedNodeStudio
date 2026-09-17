@@ -12,6 +12,7 @@ remain available as advanced/legacy nodes.
 """
 
 import json
+from .overrides import env as _env
 import os
 
 SETTINGS_TYPE = "KREA2_SETTINGS"
@@ -25,7 +26,7 @@ CUSTOM_SENTINEL = "custom (use settings)"
 def _presets_path(make=False):
     """User-preset store. ComfyUI user dir when available (survives pack updates),
     pack-local fallback otherwise; KREA2RN_PRESETS env overrides (tests)."""
-    override = os.environ.get("KREA2RN_PRESETS")
+    override = _env("KREA2RN_PRESETS")
     if override:
         return override
     try:
@@ -327,7 +328,19 @@ class Krea2RedNode:
                                "box is the words."}),
                 "preset": ([CUSTOM_SENTINEL] + list(PRESETS)
                            + sorted(n for n in _load_user_presets() if n not in PRESETS), {"default": CUSTOM_SENTINEL,
-                           "tooltip": "balanced = identity + style fusion; max identity = strongest face lock; style only = pure vibe transfer; outfit transfer = put the clothes from moodboard_style onto the subject (style_strength 1.0; for strict garment construction ALSO feed the garment into scene_image and drop style_strength to 0.8); pose transfer = EXPERIMENTAL early pose emphasis: the ref drives composition early then drops out — describe the person in the instruction; some identity may still persist via the grounded conditioning; anime to real = convert an anime image (into scene_image) to a photorealistic shot, keeping the subject_image person's face — instruction like 'A photorealistic photograph of this character as a real person'. 'custom (use settings)' = hand control to the connected Settings node; any NAMED preset wins even when settings are connected. Your saved presets (RedNode Preset Save) appear in this list after a node-definition refresh."}),
+                           "tooltip": "balanced = identity + style fusion; max identity = strongest face lock; style "
+                                       "only = pure vibe transfer; outfit transfer = put the clothes from "
+                                       "moodboard_style onto the subject (style_strength 1.0; for strict garment "
+                                       "construction ALSO feed the garment into scene_image and drop style_strength to "
+                                       "0.8); pose transfer = EXPERIMENTAL early pose emphasis: the ref drives "
+                                       "composition early then drops out — describe the person in the instruction; "
+                                       "some identity may still persist via the grounded conditioning; anime to real = "
+                                       "convert an anime image (into scene_image) to a photorealistic shot, keeping "
+                                       "the subject_image person's face — instruction like 'A photorealistic "
+                                       "photograph of this character as a real person'. 'custom (use settings)' = hand "
+                                       "control to the connected Settings node; any NAMED preset wins even when "
+                                       "settings are connected. Your saved presets (RedNode Preset Save) appear in "
+                                       "this list after a node-definition refresh."}),
             },
             "optional": {
                 "negative_prompt": ("STRING", {"multiline": True, "default": "",

@@ -18,6 +18,7 @@ away and keeps the token structure. Ported from the authors' Forge Neo implement
 """
 
 import math
+from .overrides import env as _env
 import os
 
 import torch
@@ -108,7 +109,7 @@ def _build_preprocess_embed(_orig_unused):
 
 
 # Escape hatch for A/B against the historical (mispositioned) packed layout.
-_LEGACY_PACKED_POSITIONS = os.environ.get("KREA2MB_LEGACY_PACKED_POSITIONS", "") == "1"
+_LEGACY_PACKED_POSITIONS = _env("KREA2MB_LEGACY_PACKED_POSITIONS", "") == "1"
 
 
 def _build_build_image_inputs(_orig_unused):

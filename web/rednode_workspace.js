@@ -4430,7 +4430,9 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     };
 
     const avail = {
-      ollama: [autoStatus.ollama, "Ollama is not reachable. Start it and reopen the workflow."],
+      // the server says why when it has no way to reach Ollama at all (no client library)
+      ollama: [autoStatus.ollama, autoStatus.ollama_note
+        || "Ollama is not reachable. Start it and reopen the workflow."],
       wd14: [autoStatus.wd14, "comfyui-wd14-tagger is not installed."],
       joy: [autoStatus.joy, "ComfyUI-JoyCaption is not installed."],
       qwen: [autoStatus.qwen, "ComfyUI-QwenVL is not installed."],
