@@ -131,8 +131,11 @@ css.textContent = `
 /* The socket tuck rides its own thin row ABOVE the strip. It used to be the last
    item of the wrapping strip, so once the tabs filled the width it wrapped onto a
    stray line between the tabs and the box, the one place it must never be. */
-.rn-ws-tabrow{display:flex;align-items:flex-start;gap:6px;flex:none;padding-bottom:7px}
-.rn-ws-tabs{display:flex;gap:6px;flex:1 1 auto;flex-wrap:wrap;min-width:0}
+.rn-ws-tabrow{display:flex;align-items:flex-start;gap:6px;flex:none}
+/* the LoRA tab's SET strip carries this class too, so the rule stays what it was
+   and only the strip inside the tab row grows to push the plug to the right */
+.rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
+.rn-ws-tabrow > .rn-ws-tabs{flex:1 1 auto;min-width:0}
 .rn-ws-tab{background:#15171b;border:1px solid #2a2e35;border-radius:7px;
   color:#9aa0a8;cursor:pointer;font-size:12.5px;font-weight:600;padding:8px 15px;display:flex;
   align-items:center;justify-content:center;gap:7px;position:relative;overflow:hidden}
