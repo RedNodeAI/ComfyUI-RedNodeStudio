@@ -407,6 +407,12 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- A pass tap is decoded through the rig's VAE, so a photographed pass looks like
+  the picture rather than a posterised approximation of it. The taps used a tiny
+  preview decoder to avoid a decode per pass; on a model with no matching
+  approximation that meant wrong colours, and a pass you could not compare with
+  the finished frame. Where no VAE is to hand it still falls back, and says so by
+  marking that tap a preview
 - The two sampler modes say what they actually do. Built-in sampler claimed the
   node runs comfy core's KSampler, which is only true of a rig that loads files:
   on a Your own nodes rig it is YOUR sampler that works and the Workspace that

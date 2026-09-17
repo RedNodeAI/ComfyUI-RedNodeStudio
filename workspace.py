@@ -2545,9 +2545,24 @@ class RedNodeStudioWorkspace:
                 return
             try:
                 from . import stages as _stg
+                if img is None and latent is not None:
+                    # A PASS RESULT IS A LATENT. The rig's VAE draws it properly, which
+                    # is what a tap is for: the approximate decoder below posterises and
+                    # shifts the colours, and a pass photographed like that is not worth
+                    # comparing against the finished picture. A decode of one frame at
+                    # this size is a fraction of a second, and the tap is opt-in.
+                    _tv = vae if vae is not None else rig_vae
+                    if _tv is not None:
+                        try:
+                            img = vae_images(_tv.decode(latent["samples"][:1]))[:, :, :, :3]
+                        except Exception as _de:
+                            print("[RedNode Workspace] the %s tap could not decode (%s); "
+                                  "drawing it with the preview decoder instead"
+                                  % (label, _de), flush=True)
+                            img = None
                 if img is None and latent is not None and model_for is not None:
-                    # a pass result is a latent: the pack's small preview decoder
-                    # draws it, no full VAE decode per pass
+                    # no VAE to hand, or it refused: the pack's small preview decoder,
+                    # which approximates the picture rather than decoding it
                     from . import live_preview as _lpv
                     _prev, _how = _lpv.our_previewer(model_for)
                     if _prev is None:
@@ -2556,6 +2571,7 @@ class RedNodeStudioWorkspace:
                     _f, _pil, _m = _prev.decode_latent_to_preview_image("PNG", _x0)
                     _arr = np.asarray(_pil.convert("RGB")).astype(np.float32) / 255.0
                     img = torch.from_numpy(_arr)[None]
+                    label = "%s (preview)" % label
                 if img is not None:
                     _stg.record(img, label, prompt=prompt, source="workspace",
                                 px=_taps["px"])

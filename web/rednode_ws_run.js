@@ -542,7 +542,8 @@ function tapsCard(node) {
   card.appendChild(el("div", "rn-ws-note",
     (nTaps ? `${nTaps} Stage Tap node${nTaps === 1 ? "" : "s"} in the workflow also record. ` : "")
     + "Taps show after the next run. A RedNode Stage Tap node can photograph any other "
-    + "point of the graph."));
+    + "point of the graph. Each pass is decoded through the rig's VAE so it looks like "
+    + "the finished picture, which costs a fraction of a second per pass."));
   return card;
 }
 
