@@ -1,0 +1,297 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "RedNodeNote",
+      "pos": [
+        0,
+        -300
+      ],
+      "size": [
+        1500,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RedNodeNote",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "START HERE: install the packs RedNode Studio can use\n\nThis workflow renders nothing. It holds one node from each pack the Workspace can lean on, so\nComfyUI Manager finds them all at once instead of one at a time.\n\n1. Manager says some nodes are missing when this opens. Let it install them.\n2. Restart ComfyUI.\n3. Open RedNode Studio from the template browser and work from there. This file has done its job.\n\nNone of these are required. The Workspace renders without every one of them and says on the Run\ntab when a pass wanted one that is not here. Install what you want and skip the rest: the\nOverview tab's Check installs button says which ones your own settings actually call for."
+      ]
+    },
+    {
+      "id": 2,
+      "type": "SeedVR2VideoUpscaler",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SeedVR2VideoUpscaler",
+        "aux_id": "numz/ComfyUI-SeedVR2_VideoUpscaler"
+      },
+      "title": "SeedVR2 upscale (ComfyUI-SeedVR2_VideoUpscaler)",
+      "widgets_values": []
+    },
+    {
+      "id": 3,
+      "type": "UltimateSDUpscale",
+      "pos": [
+        300,
+        0
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "UltimateSDUpscale",
+        "aux_id": "ssitu/ComfyUI_UltimateSDUpscale"
+      },
+      "title": "Tiled upscale (ComfyUI_UltimateSDUpscale)",
+      "widgets_values": []
+    },
+    {
+      "id": 4,
+      "type": "easy sam3ModelLoader",
+      "pos": [
+        600,
+        0
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "easy sam3ModelLoader",
+        "aux_id": "yolain/ComfyUI-Easy-Sam3"
+      },
+      "title": "Segmenting (ComfyUI-Easy-Sam3)",
+      "widgets_values": []
+    },
+    {
+      "id": 5,
+      "type": "UnetLoaderGGUF",
+      "pos": [
+        900,
+        0
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "UnetLoaderGGUF",
+        "aux_id": "city96/ComfyUI-GGUF"
+      },
+      "title": "GGUF models (ComfyUI-GGUF)",
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "OTUNetLoaderW8A8",
+      "pos": [
+        1200,
+        0
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "OTUNetLoaderW8A8",
+        "aux_id": "BobJohnson24/ComfyUI-INT8-Fast"
+      },
+      "title": "INT8 models (ComfyUI-INT8-Fast)",
+      "widgets_values": []
+    },
+    {
+      "id": 7,
+      "type": "WD14Tagger|pysssss",
+      "pos": [
+        0,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "WD14Tagger|pysssss",
+        "aux_id": "pythongosssss/ComfyUI-WD14-Tagger"
+      },
+      "title": "WD14 tags (ComfyUI-WD14-Tagger)",
+      "widgets_values": []
+    },
+    {
+      "id": 8,
+      "type": "Florence2Run",
+      "pos": [
+        300,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Florence2Run",
+        "aux_id": "kijai/ComfyUI-Florence2"
+      },
+      "title": "Florence (ComfyUI-Florence2)",
+      "widgets_values": []
+    },
+    {
+      "id": 9,
+      "type": "JC_adv",
+      "pos": [
+        600,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "JC_adv",
+        "aux_id": "1038lab/ComfyUI-JoyCaption"
+      },
+      "title": "JoyCaption (ComfyUI-JoyCaption)",
+      "widgets_values": []
+    },
+    {
+      "id": 10,
+      "type": "AILab_QwenVL",
+      "pos": [
+        900,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "AILab_QwenVL",
+        "aux_id": "1038lab/ComfyUI-QwenVL"
+      },
+      "title": "QwenVL (ComfyUI-QwenVL)",
+      "widgets_values": []
+    },
+    {
+      "id": 11,
+      "type": "Seed (rgthree)",
+      "pos": [
+        1200,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Seed (rgthree)",
+        "aux_id": "rgthree/rgthree-comfy"
+      },
+      "title": "Seed node (rgthree-comfy)",
+      "widgets_values": []
+    },
+    {
+      "id": 12,
+      "type": "RedNodeNote",
+      "pos": [
+        0,
+        420
+      ],
+      "size": [
+        1500,
+        560
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RedNodeNote",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask.\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
+      ]
+    }
+  ],
+  "links": [],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [
+        120,
+        360
+      ]
+    }
+  },
+  "version": 0.4
+}

@@ -365,6 +365,15 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- A Start here workflow, `RedNode_Start_Here_Install.json`. It renders nothing:
+  it holds one node from each pack the Workspace can lean on, so ComfyUI
+  Manager finds them together and offers them in one pass, with a note saying
+  what each one is for and where it lives. Each marker carries the pack's
+  owner and repository, which is what Manager reads to match a missing node
+  to its pack, so the offer lands on the right one
+- The README lists the optional packs with what each adds and a link to each,
+  and no longer says Manager offers packs when the main template is opened,
+  which it does not
 - The Overview has a Check installs button. It says which node packs, caption
   engines and model files these settings actually call for, which of them are
   already here, and where to get the rest. It reads what ComfyUI has loaded

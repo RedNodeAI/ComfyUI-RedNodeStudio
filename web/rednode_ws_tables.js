@@ -44,7 +44,7 @@ export const EXTRA_PACKS = [
     url: "https://github.com/pythongosssss/ComfyUI-WD14-Tagger",
     nodes: ["WD14Tagger|pysssss"] },
   { id: "florence", name: "comfyui-florence2", what: "the Florence caption engine",
-    url: "https://github.com/kijai/ComfyUI-Florence2" },
+    url: "https://github.com/kijai/ComfyUI-Florence2", nodes: ["Florence2Run"] },
   { id: "joy", name: "ComfyUI-JoyCaption", what: "the JoyCaption caption engine",
     url: "https://github.com/1038lab/ComfyUI-JoyCaption", nodes: ["JC_adv"] },
   { id: "qwen", name: "ComfyUI-QwenVL", what: "the QwenVL caption engine",

@@ -29,11 +29,39 @@ Restart ComfyUI. Everything registers under the `krea2` and `RedNode` categories
 
 Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
 
+### Optional packs
+
+None of these are required. The Workspace renders without every one of them and says on the Run
+tab when a pass wanted one that is not installed. The Overview tab's **Check installs** button
+says which of them your own settings call for, and links to each.
+
+To install them in one pass, open `example_workflows/RedNode_Start_Here_Install.json` from the
+template browser. It renders nothing: it holds one node from each pack so ComfyUI Manager finds
+them together, and a note saying what each one is for. Let Manager install them, restart, then
+open the main template.
+
+| Pack | What it adds |
+| --- | --- |
+| [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) | A Detailer pass set to SeedVR2 upscale |
+| [ComfyUI_UltimateSDUpscale](https://github.com/ssitu/ComfyUI_UltimateSDUpscale) | A Detailer pass set to the tiled upscale |
+| [ComfyUI-Easy-Sam3](https://github.com/yolain/ComfyUI-Easy-Sam3) | Finding what a Detailer pass works on, and the Paint tab's auto mask |
+| [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | Loading a .gguf diffusion model on a rig |
+| [ComfyUI-INT8-Fast](https://github.com/BobJohnson24/ComfyUI-INT8-Fast) | Loading an INT8 W8A8 diffusion model on a rig |
+| [ComfyUI-WD14-Tagger](https://github.com/pythongosssss/ComfyUI-WD14-Tagger) | The WD14 tags caption engine |
+| [ComfyUI-Florence2](https://github.com/kijai/ComfyUI-Florence2) | The Florence caption engine |
+| [ComfyUI-JoyCaption](https://github.com/1038lab/ComfyUI-JoyCaption) | The JoyCaption caption engine |
+| [ComfyUI-QwenVL](https://github.com/1038lab/ComfyUI-QwenVL) | The QwenVL caption engine |
+| [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
+
+Ollama is a program of its own rather than a node pack. Install it from
+[ollama.com](https://ollama.com) and pull a vision model to use the Ollama caption engine.
+
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
 `example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and it reads
-left to right. It pulls in a few other packs, and ComfyUI Manager offers them when you open it.
+left to right. The optional packs above are not part of it; open the Start here workflow first if
+you want them all in one pass.
 
 If you would rather build it yourself, the graph is short:
 
