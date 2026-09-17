@@ -53,6 +53,8 @@ open the main template.
 | [ComfyUI-QwenVL](https://github.com/1038lab/ComfyUI-QwenVL) | The QwenVL caption engine |
 | [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | The depth Depth of field, Atmospheric haze and Relight read on the Post tab |
 | [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) | The subject mask a Post card's Limit row uses |
+| [Krea2-BBOX-Prompter](https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter) | The Light & Color and Scene nodes the RedNode Studio template runs on |
+| [ComfyUI-Krea-Moodboards](https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards) | The Style browser in the RedNode Studio template |
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
 
 ComfyUI-Easy-Sam3 installs without a checkpoint. Put one in `models/sam3` as well, from
@@ -67,8 +69,9 @@ Ollama is a program of its own rather than a node pack. Install it from
 
 Open the template browser and load **RedNode Studio**, or open
 `example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and it reads
-left to right. The optional packs above are not part of it; open the Start here workflow first if
-you want them all in one pass.
+left to right. It uses two of the packs above, Krea2-BBOX-Prompter for its Light & Color and
+Scene nodes and ComfyUI-Krea-Moodboards for its Style browser, so open the Start here workflow
+before it and let Manager install them.
 
 If you would rather build it yourself, the graph is short:
 

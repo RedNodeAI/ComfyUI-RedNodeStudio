@@ -407,6 +407,11 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- The RedNode Studio template needs two packs of its own, and now says so. Its
+  Light & Color and Scene nodes come from Krea2-BBOX-Prompter and its Style
+  browser from ComfyUI-Krea-Moodboards. Both join the Start here workflow, the
+  README's optional packs and the Quick start, so Manager offers them instead
+  of the template opening with missing nodes
 - A Start here workflow, `RedNode_Start_Here_Install.json`. It renders nothing:
   it holds one node from each pack the Workspace can lean on, so ComfyUI
   Manager finds them together and offers them in one pass, with a note saying
