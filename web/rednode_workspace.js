@@ -1642,6 +1642,17 @@ export function setupProblems(node, cfg) {
   const wired = (name) => socketWired(node, name);
   const imageUsed = (node?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length);
   if (M.sampler_mode !== "internal") {
+    // AN OWN-NODES RIG IS ONLY EVER CALLED BY THE BUILT-IN SAMPLER: the Workspace
+    // drives Rig Model, Rig Inputs and Rig Result itself, inside the render it does.
+    // On External sampler the whole chain sits there wired and idle, which reads as
+    // the rig being broken rather than as the wrong sampler mode.
+    const own = M.rigs?.[M.active];
+    if (own?.kind === "node") {
+      out.push(`The rig ${own.name || own.node || "in use"} is Your own nodes, and only the `
+             + "built-in sampler calls one. On External sampler its Rig Model, Rig Inputs and "
+             + "Rig Result never run, so nothing renders. Choose Built-in sampler on the "
+             + "Models tab.");
+    }
     // External sampler renders nothing itself; warn whenever something here
     // expects a picture from it, not only a wired image output, so the Run tab's
     // Generate (the built-in save, the Detailer, Post FX) never fails silently on

@@ -407,6 +407,11 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- A rig built from Your own nodes says so when the sampler mode contradicts it.
+  Only the built-in sampler calls such a rig, so on External sampler its Rig
+  Model, Rig Inputs and Rig Result sat wired and idle and nothing rendered,
+  which read as the rig being broken. The Models tab, the Run tab and the
+  Overview all name the rig and say which switch fixes it
 - The INT8 marker in the Start here workflow carries its Comfy Registry id.
   ComfyUI Manager's own list does not carry that repository, so it fell back to
   a git URL install and refused it, wanting allow_git_url_install in its config.
