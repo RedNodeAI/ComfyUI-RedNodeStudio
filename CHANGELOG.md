@@ -407,6 +407,12 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- The VRAM line stops calling its figure a peak. It is what the run would need
+  with nothing held, which is what Hold reads to decide whether to hold; once it
+  holds, the peak you actually see is far below it. Sitting beside the measured
+  peak on the chart, the old wording read as the estimate being wrong by tens of
+  gigabytes. It says "Needs about N GB unheld" now, and when the run will hold it
+  adds that the chart's peak is the one to read
 - A pass tap is decoded through the rig's VAE, so a photographed pass looks like
   the picture rather than a posterised approximation of it. The taps used a tiny
   preview decoder to avoid a decode per pass; on a model with no matching

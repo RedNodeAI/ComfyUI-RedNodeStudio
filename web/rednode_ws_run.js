@@ -310,7 +310,14 @@ export function estimateText(cfg, d) {
   const st = Array.isArray(e.stages) && e.stages.length > 1
     ? ` at its largest stage (${e.stages.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ")})`
     : "";
-  return `Estimated peak about ${e.peak.toFixed(1)} GB${st} (${parts}).${verdict} `
+  // NOT "estimated peak": this is what the run would need with nothing held, which
+  // is the number Hold reads to decide whether to hold at all. Once it holds, the
+  // peak you actually see is far below it. Calling both a peak, with the measured
+  // one on the chart beside it, read as the estimate having been wrong by tens of GB.
+  const held = lim && e.peak > lim && (cfg.vram_hold_mode || "auto") !== "off";
+  return `Needs about ${e.peak.toFixed(1)} GB unheld${st} (${parts}).${verdict} `
+         + (held ? "Holding keeps the peak well under that, so the measured peak on the "
+                 + "chart is the one to read. " : "")
          + "Captioners and the Detailer are not counted.";
 }
 
