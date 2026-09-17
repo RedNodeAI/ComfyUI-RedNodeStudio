@@ -2740,8 +2740,10 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] i2i canvas: the wired image input "
                       f"({image_in.shape[2]} x {image_in.shape[1]})", flush=True)
             else:
-                print("[RedNode Workspace] the i2i canvas is set to Wired image but "
-                      "nothing is wired into image_in; using the gallery", flush=True)
+                _wmsg = ("The Img2Img canvas is set to Wired image, but nothing is wired "
+                         "into image_in, so the gallery is used instead.")
+                print("[RedNode Workspace] %s" % _wmsg, flush=True)
+                _run.note(_wmsg, "warn")
         if it["on"] and not it["prompt_only"] and it["canvas"] == "latent":
             if latent_in is not None:
                 latent = latent_in
@@ -2749,8 +2751,10 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] i2i canvas: the wired latent, denoise "
                       "%.2f" % denoise_out, flush=True)
             else:
-                print("[RedNode Workspace] the i2i canvas is set to Wired latent "
-                      "but nothing is wired into latent", flush=True)
+                _wmsg = ("The Img2Img canvas is set to Wired latent, but nothing is wired "
+                         "into the latent socket.")
+                print("[RedNode Workspace] %s" % _wmsg, flush=True)
+                _run.note(_wmsg, "warn")
         if scene is not None:
             _tap("refs", "Scene reference", scene)
         if it["on"] and not it["prompt_only"] and i2i_img is not None:
@@ -3000,9 +3004,10 @@ class RedNodeStudioWorkspace:
                           f"({sm.shape[3] * 8} x {sm.shape[2] * 8}, batch {sm.shape[0]})",
                           flush=True)
             else:
-                print("[RedNode Workspace] the Latent tab is set to the wired input but "
-                      "nothing is wired into the latent socket; building the canvas "
-                      "here instead", flush=True)
+                _wmsg = ("The Latent tab is set to the wired input, but nothing is wired "
+                         "into the latent socket, so the canvas is built here instead.")
+                print("[RedNode Workspace] %s" % _wmsg, flush=True)
+                _run.note(_wmsg, "warn")
 
         if latent is None and cfg["latent"]["on"]:
             lc = cfg["latent"]

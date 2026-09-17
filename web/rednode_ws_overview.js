@@ -1,5 +1,5 @@
 import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive,
-         AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
+         socketWired, AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX } from "./rednode_ws_tables.js";
 
@@ -54,6 +54,10 @@ export function overviewBoxes(node, cfg) {
   const internal = M.sampler_mode === "internal";
   const i2iRun = i2iRuns(I);
   const probs = setupProblems(node, cfg);
+  const i2iProbs = i2iIssues(cfg, node);
+  // the wire the canvas names, when it is not there: the same sentence the Img2Img
+  // page uses, so the box's hover and the attention line never disagree
+  const wireWhy = i2iProbs.find((x) => x.sub === "source" && /wired into/.test(x.text))?.text;
   const rigProbs = probs.filter((p) => !p.startsWith("No prompt"));
   const promptProbs = probs.filter((p) => p.startsWith("No prompt"));
   const rows = (cfg.prompts?.rows || []).filter((r) => String(r.text || "").trim());
@@ -129,18 +133,26 @@ export function overviewBoxes(node, cfg) {
   if (i2iRun) {
     run.push({
       key: "source", label: "Source",
-      state: "on",
-      note: I.canvas === "image" ? "Wired image" : I.canvas === "latent" ? "Wired latent"
+      state: wireWhy ? "warn" : "on",
+      note: I.canvas === "image" ? (wireWhy ? "Wired image, no wire" : "Wired image")
+        : I.canvas === "latent" ? (wireWhy ? "Wired latent, no wire" : "Wired latent")
         : plural(I.images.length, "picture"),
+      why: wireWhy || "",
       to: { tab: "i2i", sub: "source" },
     });
   } else if (L.on) {
     const eff = (v) => Math.floor(Number(v) * (L.scale || 1) / 8) * 8;
+    // the Latent tab names a wire of its own, and it can be just as absent
+    const latWhy = L.source === "input" && !socketWired(node, "latent")
+      ? "The Latent tab is set to the wired input, but nothing is wired into the latent "
+        + "socket, so the canvas is built here instead." : "";
     run.push({
       key: "canvas", label: "Canvas",
-      state: "on",
-      note: L.source === "input" ? "Wired latent" : L.random ? "Random size" : `${eff(L.w)} × ${eff(L.h)}`
+      state: latWhy ? "warn" : "on",
+      note: L.source === "input" ? (latWhy ? "Wired latent, no wire" : "Wired latent")
+        : L.random ? "Random size" : `${eff(L.w)} × ${eff(L.h)}`
         + (I.on && I.prompt_only ? ", prompt from Img2Img" : ""),
+      why: latWhy,
       to: { tab: "latent", sub: "canvas" },
     });
   } else {
@@ -253,9 +265,12 @@ export function overviewBoxes(node, cfg) {
   };
   for (const p of rigProbs) add(p, { tab: "models" });
   for (const p of promptProbs) add(p, { tab: "prompts" });
-  for (const it of i2iIssues(cfg)) add(it.text, { tab: "i2i", sub: it.sub });
+  for (const it of i2iProbs) add(it.text, { tab: "i2i", sub: it.sub });
   for (const b of [...feeds, ...run]) {
-    if ((b.state === "skip" || b.state === "warn") && b.why) add(b.label + ": " + b.why, b.to);
+    if ((b.state === "skip" || b.state === "warn") && b.why
+        && !attention.some((a) => a.text.includes(b.why))) {
+      add(b.label + ": " + b.why, b.to);
+    }
   }
   if (I.on && convActive(I.conv) && !I.auto?.on) {
     add("The Img2Img converter is on with its auto prompt off, so it has nothing to rework", { tab: "i2i", sub: "converter" });

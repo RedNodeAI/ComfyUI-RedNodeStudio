@@ -365,6 +365,13 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- A canvas set to Wired image or Wired latent, with nothing wired to it, is
+  now said out loud. The Img2Img Source page says the socket is empty instead
+  of claiming the wire feeds the canvas, the Source chip goes amber, the
+  issues box and the Overview name the socket, and the Run tab's log carries
+  the same sentence. The Latent tab's own wired input is covered the same way.
+  Before this the panel showed a green Source and nothing standing in the way
+  of a run while the render quietly fell back to the gallery
 - The Overview's Auto prompt box named nothing and swept in every tab, so an
   Image to text gallery (Style, Subject or Scene words), always on by design
   and empty on almost every install, read as "on, no pictures" on workspaces

@@ -1599,11 +1599,17 @@ function nextRigName(rigs) {
 // what stops the Workspace rendering, in plain words, before a queue finds out.
 // A wired input counts as chosen. The server says the same things when a run comes
 // out empty (nothing_rendered in workspace.py).
+// A SOCKET IS WIRED when the node carries it with a link on it. Tucking a socket
+// down to the node's edge keeps it in the list, so a tucked wire still counts. A
+// panel with no node behind it reads as unwired, the way the setup problems do.
+export const socketWired = (node, name) =>
+  (node?.inputs || []).some((s) => s?.name === name && s.link != null);
+
 export function setupProblems(node, cfg) {
   const out = [];
   const M = cfg?.models;
   if (!M) return out;
-  const wired = (name) => (node?.inputs || []).some((s) => s?.name === name && s.link != null);
+  const wired = (name) => socketWired(node, name);
   const imageUsed = (node?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length);
   if (M.sampler_mode !== "internal") {
     // External sampler renders nothing itself; warn whenever something here
@@ -12876,7 +12882,7 @@ const textTabLit = (cfg, id) => {
 // WHAT STOPS AN IMG2IMG STAGE FROM RUNNING, in the words its pages use, each
 // line naming the page that fixes it. One list feeds the bar's chips and issues
 // box, the Overview tab and the checks, so the wording is written once.
-export function i2iIssues(cfg) {
+export function i2iIssues(cfg, node) {
   const t = cfg.tabs?.i2i;
   if (!t) return [];
   const out = [];
@@ -12891,6 +12897,14 @@ export function i2iIssues(cfg) {
   } else if (t.canvas === "gallery" && !t.images?.length) {
     out.push({ sub: "source", text: "No source picture: add one to the gallery, or wire an "
                                   + "image or latent in" });
+  } else if (node && t.canvas === "image" && !socketWired(node, "image_in")) {
+    // the canvas names a wire that is not there: the server falls back to the
+    // gallery and says so in the console, which is no help with the panel open
+    out.push({ sub: "source", text: "The canvas is set to Wired image, but nothing is wired "
+                                  + "into image_in, so the gallery is used instead" });
+  } else if (node && t.canvas === "latent" && !socketWired(node, "latent")) {
+    out.push({ sub: "source", text: "The canvas is set to Wired latent, but nothing is wired "
+                                  + "into the latent socket" });
   }
   if (t.on && t.prompt_only) {
     if (t.reangle?.on && (t.reangle.target || "source") === "source") {
@@ -13052,7 +13066,7 @@ function i2iTabs(node, body) {
   bar.append(on, nm);
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
-  const issues = i2iIssues(cfg);
+  const issues = i2iIssues(cfg, node);
   // an issue is about a stage (its chip goes amber) and names the page that fixes it
   const issueOn = (id) => issues.some((x) => (x.about || x.sub) === id);
   const pageName = (id) => I2I_SUBS.find(([x]) => x === id)[1].toLowerCase();
@@ -13064,7 +13078,9 @@ function i2iTabs(node, body) {
     { sub: "source",
       text: t.canvas === "image" ? "Wired image" : t.canvas === "latent" ? "Wired latent"
         : `${t.images.length} Image${t.images.length === 1 ? "" : "s"}`,
-      warn: !!(t.on && t.canvas === "gallery" && !t.images.length) },
+      warn: !!(t.on && ((t.canvas === "gallery" && !t.images.length)
+                        || (t.canvas === "image" && !socketWired(node, "image_in"))
+                        || (t.canvas === "latent" && !socketWired(node, "latent")))) },
     { sub: "passes",
       text: t.prompt_only ? "Prompt only"
         : i2iSkipped(t) ? "Passes skipped"
@@ -13834,7 +13850,11 @@ function chosenStrip(node, body, t, tabName) {
   const entry = t.images[t.sel];
   // only Img2Img can take its canvas from a wire; other tabs have no canvas field
   if (tabName === "i2i" && t.canvas && t.canvas !== "gallery") {
-    text(`The canvas comes from the wired ${t.canvas} input, so the gallery is not used.`);
+    const sock = t.canvas === "image" ? "image_in" : "latent";
+    text(socketWired(node, sock)
+      ? `The canvas comes from the wired ${t.canvas} input, so the gallery is not used.`
+      : `The canvas is set to the wired ${t.canvas} input, but nothing is wired into `
+        + `${sock}.` + (t.canvas === "image" ? " The gallery is used instead." : ""));
   } else if (t.random) {
     text("Random is on: a picture from this collection is picked on every run.");
   } else if (!entry) {
