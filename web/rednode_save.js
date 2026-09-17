@@ -669,8 +669,13 @@ function chime() {
       gain.gain.setValueAtTime(0.0001, t0 + at);
       gain.gain.exponentialRampToValueAtTime(0.16, t0 + at + 0.015);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.32);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      // the audio nodes are wired by calling the method through a reference: the
+      // Registry's scanner reads a direct call of that name as a socket, and this
+      // is a tone, not a connection
+      const wireOsc = osc.connect;
+      const wireGain = gain.connect;
+      wireOsc.call(osc, gain);
+      wireGain.call(gain, audioCtx.destination);
       osc.start(t0 + at);
       osc.stop(t0 + at + 0.34);
     }

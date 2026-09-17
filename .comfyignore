@@ -14,6 +14,7 @@ images/
 
 # personal-only modules and credentials: never in a published archive, however it is built
 local/
+web/rednode_local*.js
 nai_token.txt
 **/nai_token.txt
 user_data/

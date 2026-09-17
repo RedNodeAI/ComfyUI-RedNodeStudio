@@ -671,8 +671,6 @@ from .custom_rig import RedNodeRigModel, RedNodeRigInputs, RedNodeRigResult  # n
 from .paint_render import RedNodePaintRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
-from .save_video import RedNodeSaveVideo  # noqa: E402
-from .video_review import RedNodeVideoReview  # noqa: E402
 from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
 from .vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
 from . import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
@@ -725,8 +723,6 @@ NODE_CLASS_MAPPINGS = {
     "RedNodePaintOut": RedNodePaintOut,
     "RedNodePaintIn": RedNodePaintIn,
     "RedNodeSave": RedNodeSave,
-    "RedNodeSaveVideo": RedNodeSaveVideo,
-    "RedNodeVideoReview": RedNodeVideoReview,
     "RedNodeGroupRules": RedNodeGroupRules,
     "RedNodeSubgraphSend": RedNodeSubgraphSend,
     "RedNodeSubgraphReceive": RedNodeSubgraphReceive,
@@ -779,8 +775,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePaintOut": "RedNode Paint Out (to any renderer)",
     "RedNodePaintIn": "RedNode Paint In (composite back)",
     "RedNodeSave": "RedNode Save",
-    "RedNodeSaveVideo": "RedNode Save Video",
-    "RedNodeVideoReview": "RedNode Video Review",
     "RedNodeGroupRules": "RedNode Group Rules",
     # SENDER and GRABBER, not "Channel Out" and "Channel In". The old pair read
     # backwards at a glance: the one named "Out" is the one you wire values INTO,
@@ -865,7 +859,10 @@ if _os.path.isdir(_local_dir):
         if _ln.startswith("_"):
             continue
         try:
-            _importlib.import_module(f".local.{_ln}", __name__)
+            _lm = _importlib.import_module(f".local.{_ln}", __name__)
+            # a local module may bring nodes of its own
+            NODE_CLASS_MAPPINGS.update(getattr(_lm, "NODE_CLASS_MAPPINGS", {}) or {})
+            NODE_DISPLAY_NAME_MAPPINGS.update(getattr(_lm, "NODE_DISPLAY_NAME_MAPPINGS", {}) or {})
             print(f"[RedNode Krea2] local extension loaded: {_ln}", flush=True)
         except Exception as _le:
             print(f"[RedNode Krea2] local extension {_ln} failed: {_le}",

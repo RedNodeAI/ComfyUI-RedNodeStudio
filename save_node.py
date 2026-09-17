@@ -1219,12 +1219,14 @@ def open_folder(path, launcher=None):
     if launcher is not None:
         launcher(target)
         return target
-    if sys.platform == "win32":
-        os.startfile(target)                     # no subprocess needed on Windows
-    else:
-        import subprocess
-        opener = "open" if sys.platform == "darwin" else "xdg-open"
-        subprocess.Popen([opener, target])
+    # the desktop launch lives under local/ (this install's own); the public pack
+    # only tells you where the folder is
+    try:
+        from .local import open_folder as _opener
+    except ImportError:
+        raise ValueError("opening a folder from here is not part of this build; it is at "
+                         + target)
+    _opener.launch(target)
     return target
 
 

@@ -1,0 +1,963 @@
+{
+  "last_node_id": 10,
+  "last_link_id": 16,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "RedNodeNote",
+      "pos": [
+        0,
+        -20
+      ],
+      "size": [
+        1260,
+        200
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RedNodeNote",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "A rig built from your own nodes\n\n1. Your loaders go into Rig Model. Wire its model into your sampler. The Workspace adds this rig's LoRAs and camera LoRAs to it for you.\n2. Rig Inputs hands your sampler the prompts, latent, seed, steps, CFG, sampler, scheduler and denoise from the Workspace.\n3. Your sampler's latent goes into Rig Result.\n\nOn the Workspace, the Models tab has a rig named My rig of kind Your own nodes. Type your prompt on the Prompts tab and queue. There are no wires to the Workspace: the three rig nodes find it by the rig name. Swap the KSampler for any sampler you like."
+      ]
+    },
+    {
+      "id": 2,
+      "type": "UNETLoader",
+      "pos": [
+        0,
+        260
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "krea2TurboOfficialComfy_krea2TurboFp8.safetensors",
+        "default"
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CLIPLoader",
+      "pos": [
+        0,
+        390
+      ],
+      "size": [
+        330,
+        110
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3VLInstruct4bHeretic_v10.safetensors",
+        "krea2",
+        "default"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "VAELoader",
+      "pos": [
+        0,
+        540
+      ],
+      "size": [
+        330,
+        60
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "wan_2.1_vae_fp32.safetensors"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "RedNodeRigModel",
+      "pos": [
+        380,
+        260
+      ],
+      "size": [
+        300,
+        120
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            4
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "links": [],
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RedNodeRigModel",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "My rig"
+      ],
+      "title": "Rig Model: My rig"
+    },
+    {
+      "id": 6,
+      "type": "RedNodeRigInputs",
+      "pos": [
+        380,
+        460
+      ],
+      "size": [
+        300,
+        300
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            5
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [
+            6
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "links": [
+            7
+          ],
+          "slot_index": 2
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "links": [
+            8
+          ],
+          "slot_index": 3
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "links": [
+            9
+          ],
+          "slot_index": 4
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "links": [
+            10
+          ],
+          "slot_index": 5
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "links": [
+            11
+          ],
+          "slot_index": 6
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "links": [
+            12
+          ],
+          "slot_index": 7
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "links": [
+            13
+          ],
+          "slot_index": 8
+        },
+        {
+          "name": "start_step",
+          "type": "INT",
+          "links": [],
+          "slot_index": 9
+        },
+        {
+          "name": "end_step",
+          "type": "INT",
+          "links": [],
+          "slot_index": 10
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RedNodeRigInputs",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "My rig"
+      ],
+      "title": "Rig Inputs: My rig"
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "pos": [
+        740,
+        260
+      ],
+      "size": [
+        300,
+        480
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 5
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 6
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 7
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 8,
+          "widget": {
+            "name": "seed"
+          }
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": 9,
+          "widget": {
+            "name": "steps"
+          }
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": 10,
+          "widget": {
+            "name": "cfg"
+          }
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": 11,
+          "widget": {
+            "name": "sampler_name"
+          }
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": 12,
+          "widget": {
+            "name": "scheduler"
+          }
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": 13,
+          "widget": {
+            "name": "denoise"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            14
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        0,
+        "randomize",
+        20,
+        8.0,
+        "euler",
+        "simple",
+        1.0
+      ]
+    },
+    {
+      "id": 8,
+      "type": "RedNodeRigResult",
+      "pos": [
+        1080,
+        260
+      ],
+      "size": [
+        180,
+        100
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 14
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RedNodeRigResult",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "My rig"
+      ],
+      "title": "Rig Result: My rig"
+    },
+    {
+      "id": 9,
+      "type": "RedNodeStudioWorkspace",
+      "pos": [
+        1360,
+        -20
+      ],
+      "size": [
+        820,
+        1100
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": null
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": null
+        },
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "name": "subject_caption_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "scene_caption_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "mood_caption_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "i2i_caption_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "boost_mask_in",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "edit_mask_in",
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "style_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "subject_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "surroundings_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "light_and_colour_in",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "image_in",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "workspace",
+          "type": "KREA2_WORKSPACE",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "subject_image",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "scene_image",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "moodboard_style",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "extra_subjects",
+          "type": "KREA2_SOURCES",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "subject_boost_mask",
+          "type": "MASK",
+          "links": [],
+          "slot_index": 5
+        },
+        {
+          "name": "edit_mask",
+          "type": "MASK",
+          "links": [],
+          "slot_index": 6
+        },
+        {
+          "name": "settings",
+          "type": "KREA2_SETTINGS",
+          "links": [],
+          "slot_index": 7
+        },
+        {
+          "name": "output_latent",
+          "type": "LATENT",
+          "links": [],
+          "slot_index": 8
+        },
+        {
+          "name": "style_strength",
+          "type": "FLOAT",
+          "links": [],
+          "slot_index": 9
+        },
+        {
+          "name": "studio_preset",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 10
+        },
+        {
+          "name": "subject_prompt",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 11
+        },
+        {
+          "name": "scene_prompt",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 12
+        },
+        {
+          "name": "moodboard_prompt",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 13
+        },
+        {
+          "name": "i2i_image",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 14
+        },
+        {
+          "name": "i2i_prompt",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 15
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "links": [],
+          "slot_index": 16
+        },
+        {
+          "name": "post_process",
+          "type": "KREA2_POST",
+          "links": [],
+          "slot_index": 17
+        },
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [],
+          "slot_index": 18
+        },
+        {
+          "name": "lora_keywords",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 19
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "links": [],
+          "slot_index": 20
+        },
+        {
+          "name": "paint_prompt",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 21
+        },
+        {
+          "name": "paint_model",
+          "type": "MODEL",
+          "links": [],
+          "slot_index": 22
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "links": [],
+          "slot_index": 23
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "links": [],
+          "slot_index": 24
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "links": [],
+          "slot_index": 25
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "links": [],
+          "slot_index": 26
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "links": [],
+          "slot_index": 27
+        },
+        {
+          "name": "detailer_steps",
+          "type": "INT",
+          "links": [],
+          "slot_index": 28
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [],
+          "slot_index": 29
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": [],
+          "slot_index": 30
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            15
+          ],
+          "slot_index": 31
+        },
+        {
+          "name": "result_latent",
+          "type": "LATENT",
+          "links": [],
+          "slot_index": 32
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "links": [
+            16
+          ],
+          "slot_index": 33
+        },
+        {
+          "name": "prompt_text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 34
+        },
+        {
+          "name": "negative_text",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 35
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RedNodeStudioWorkspace",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "{\"models\": {\"sampler_mode\": \"internal\", \"active\": 0, \"seed\": 0, \"seed_random\": true, \"rigs\": [{\"name\": \"My rig\", \"kind\": \"node\", \"node\": \"My rig\", \"clip_type\": \"krea2\", \"steps\": 8, \"cfg\": 1.0, \"sampler\": \"euler\", \"scheduler\": \"simple\"}]}, \"prompts\": {\"rows\": [{\"name\": \"Prompt 1\", \"rig\": \"My rig\", \"rigs\": [\"My rig\"], \"kind\": \"plain\", \"text\": \"Portrait photograph of a young woman with short black hair in a red wool coat on a snowy city street at dusk, street lights, realistic photography.\", \"negative\": \"\"}]}, \"latent\": {\"on\": true, \"aspect\": \"1:1\", \"w\": 1024, \"h\": 1024, \"scale\": 1, \"batch\": 1}}",
+        "custom (live)"
+      ]
+    },
+    {
+      "id": 10,
+      "type": "RedNodeSave",
+      "pos": [
+        2240,
+        -20
+      ],
+      "size": [
+        420,
+        620
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RedNodeSave",
+        "cnr_id": "rednode-studio"
+      },
+      "widgets_values": [
+        "{\"root\": \"\", \"subfolder\": \"%date%/%preset%\", \"name\": \"%date%_%time%\", \"numbering\": \"counter\", \"pad\": 4, \"split_drafts\": true, \"keep\": false, \"write_text\": true, \"write_json\": false, \"embed_png\": true, \"prompts_folder\": \"\", \"format\": \"png\", \"quality\": 90, \"compress\": 4, \"civitai\": true}"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      5,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      3,
+      0,
+      5,
+      1,
+      "CLIP"
+    ],
+    [
+      3,
+      4,
+      0,
+      5,
+      2,
+      "VAE"
+    ],
+    [
+      4,
+      5,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      6,
+      6,
+      1,
+      7,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      7,
+      6,
+      2,
+      7,
+      3,
+      "LATENT"
+    ],
+    [
+      8,
+      6,
+      3,
+      7,
+      4,
+      "INT"
+    ],
+    [
+      9,
+      6,
+      4,
+      7,
+      5,
+      "INT"
+    ],
+    [
+      10,
+      6,
+      5,
+      7,
+      6,
+      "FLOAT"
+    ],
+    [
+      11,
+      6,
+      6,
+      7,
+      7,
+      "COMBO"
+    ],
+    [
+      12,
+      6,
+      7,
+      7,
+      8,
+      "COMBO"
+    ],
+    [
+      13,
+      6,
+      8,
+      7,
+      9,
+      "FLOAT"
+    ],
+    [
+      14,
+      7,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      15,
+      9,
+      31,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      9,
+      33,
+      10,
+      1,
+      "INT"
+    ]
+  ],
+  "groups": [
+    {
+      "title": "My rig: your own nodes",
+      "bounding": [
+        -20,
+        200,
+        1300,
+        700
+      ],
+      "color": "#a1309b",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.6,
+      "offset": [
+        80,
+        40
+      ]
+    }
+  },
+  "version": 0.4
+}

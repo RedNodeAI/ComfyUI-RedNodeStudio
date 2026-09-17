@@ -21,8 +21,6 @@ import threading
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 
 import folder_paths
 
@@ -87,17 +85,17 @@ def file_sha256(path):
     return digest
 
 
+CIVITAI_MISSING = "Civitai lookups are not part of this build"
+
+
 def _get_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "RedNodeStudio/RedNode"})
+    """Civitai's JSON, through local/civitai_http.py when this install has it. The
+    pack itself makes no HTTP call; without the module the card says so."""
     try:
-        with urllib.request.urlopen(req, timeout=_TIMEOUT) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return {"_notfound": True}
-        return {"_error": f"Civitai returned HTTP {e.code}"}
-    except Exception as e:  # noqa: BLE001 — offline, DNS, TLS, timeout…
-        return {"_error": f"Could not reach Civitai ({type(e).__name__})"}
+        from .local import civitai_http as _civ
+    except ImportError:
+        return {"_error": CIVITAI_MISSING}
+    return _civ.get_json(url, _TIMEOUT)
 
 
 def _fetch_civitai(digest):

@@ -1707,10 +1707,10 @@ api.addEventListener("rednode.lora_rolled", (e) => {
 // this file, so newly-added LoRA files never appeared. Piggyback on it.
 if (app.refreshComboInNodes && !app._rnLoraRefreshHooked) {
   app._rnLoraRefreshHooked = true;
-  const origRefresh = app.refreshComboInNodes.bind(app);
+  const origRefresh = app.refreshComboInNodes;
   app.refreshComboInNodes = async function (...args) {
     namesCache = null; namesPending = null; typesCache = null;
-    const out = await origRefresh(...args);
+    const out = await origRefresh.apply(app, args);
     await Promise.all([loraNames(), loraTypes(true)]);
     // allNodes walks subgraphs, and the Workspace's LoRAs tab hosts this same
     // list, so the refresh reaches every holder of the panel, wherever it sits

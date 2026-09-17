@@ -8,7 +8,7 @@ the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
-**62 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**60 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -473,13 +473,11 @@ what they did. Treat them as legacy.
 | Node | What it does |
 |---|---|
 | RedNode Save | Files images by date, preset and seed, and splits drafts from keepers. |
-| RedNode Save Video | Files a batch of frames as mp4, webm, gif or animated webp, into the same tree, tokens and drafts or keepers split RedNode Save uses. |
 | RedNode Paint Render | Renders only the region you painted, then composites it back. |
 | RedNode Paint Out / Paint In | Hand the painted region to any other renderer, then composite the result back. |
 | RedNode Refine Crop / Refine Paste | Cut a masked region out for refinement by any sampler, then put it back. |
 | RedNode Image Review | A preview that remembers, with a browsable strip of previous runs. Double-click the picture for a full screen view where the wheel zooms and a drag pans. A run that made several pictures shows them in a column beside the big one; click to view any of them. |
 | RedNode Live Preview | Shows the picture forming step by step while the node wired into it renders, then the finished frame. The workspace and the Detailer decode every step with the small VAE (lighttaew2_1 in models/vae_approx for Krea 2) and stream it here, whatever ComfyUI's own preview setting is. |
-| RedNode Video Review | The same for a sequence: it plays in the node, with sound, and the last few runs stay in the strip. Wire frames to preview them, or the path from RedNode Save Video to play the file that was actually filed. |
 | RedNode Rig Model | Your own loaders as a Workspace rig. Wire in a model, CLIP and VAE; out come the same with the Workspace's LoRAs for that rig applied, ready for your sampler. Give it the rig's name, and pick Your own nodes for that rig on the Models tab. Nothing is wired to the Workspace. |
 | RedNode Rig Inputs | What the Workspace hands your sampler for the rig named on it: positive, negative, latent, seed, steps, CFG, sampler, scheduler, denoise, start step and end step. The prompts carry the cameras, and on a Krea 2 rig the Subject (every person picked) and Scene references. |
 | RedNode Rig Result | The end of your rig: wire in the finished latent or picture. The main render, every Latent and Img2Img pass, the paint pass and every Detailer pass on that rig sample through your nodes, each with its own values, and the result carries on to the Detailer, Post FX and Save. |
