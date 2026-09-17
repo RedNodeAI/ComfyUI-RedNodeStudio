@@ -11478,14 +11478,20 @@ function modelsBody(node, page) {
   smRow.className = "rn-ws-row";
   const smSeg = document.createElement("div");
   smSeg.className = "rn-ws-seg";
+  const ownRig = (M.rigs || [])[M.active]?.kind === "node";
   for (const [value, label, tip] of [
-    ["external", "External sampler", "Wire your own KSampler: model, clip and the "
-                                     + "five settings above come out as sockets. A camera "
-                                     + "path renders its shots only with the built-in "
-                                     + "sampler; here it is shot 1."],
-    ["internal", "Built-in sampler", "The node runs comfy core's KSampler and the "
-                                     + "VAE decode itself: positive, negative and "
-                                     + "the finished image come out as sockets."],
+    ["external", "External sampler", "The Workspace renders NOTHING and hands the parts out "
+                                     + "instead: model, clip, the conditioning, the latent and "
+                                     + "the five settings above, for a KSampler you wire "
+                                     + "yourself. A rig of Your own nodes never runs in this "
+                                     + "mode, and neither does a camera path beyond shot 1."],
+    ["internal", "Built-in sampler", "The Workspace does the render, and the picture comes out "
+                                     + "of its image socket. It samples through comfy core's "
+                                     + "KSampler, or through YOUR OWN NODES when the rig is one "
+                                     + "of those: Rig Inputs hands them the prompts, the latent, "
+                                     + "the seed and the settings above, and the result comes "
+                                     + "back through Rig Result. It also drives the passes, the "
+                                     + "Detailer, Post FX and the save."],
   ]) {
     const b = document.createElement("button");
     b.textContent = label;
@@ -11496,6 +11502,19 @@ function modelsBody(node, page) {
   }
   smRow.appendChild(smSeg);
   body.appendChild(smRow);
+  if (ownRig) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note rn-ws-ownrignote";
+    n.textContent = M.sampler_mode === "internal"
+      ? "This rig samples through your own nodes, and Built-in sampler is what calls them. "
+        + "Your sampler does the work; the Workspace hands it the settings above through Rig "
+        + "Inputs and takes the picture back from Rig Result."
+      : "This rig samples through your own nodes, which only Built-in sampler calls. On "
+        + "External sampler the Workspace renders nothing, so Rig Model, Rig Inputs and Rig "
+        + "Result never run. Built-in sampler does not replace your sampler: it is what hands "
+        + "yours the settings above and takes the picture back.";
+    body.appendChild(n);
+  }
   if (body._dials) body.appendChild(body._dials);       // the fold sits under the switch
   if (M.sampler_mode === "internal") {
     body = mkBox("Seed", "", "", "", "The run seed lives here.");

@@ -407,6 +407,13 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- The two sampler modes say what they actually do. Built-in sampler claimed the
+  node runs comfy core's KSampler, which is only true of a rig that loads files:
+  on a Your own nodes rig it is YOUR sampler that works and the Workspace that
+  drives it. That reading sent people to External sampler, where the Workspace
+  renders nothing and the rig never runs at all. Both tips are rewritten, and a
+  rig of your own nodes carries a line under the switch saying which mode calls
+  it and that Built-in does not replace your sampler
 - A rig built from Your own nodes says so when the sampler mode contradicts it.
   Only the built-in sampler calls such a rig, so on External sampler its Rig
   Model, Rig Inputs and Rig Result sat wired and idle and nothing rendered,
