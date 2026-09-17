@@ -365,6 +365,14 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- An Img2Img that is switched off now names only what is actually on. One
+  line said its auto prompt, Re-angle, a source Swap and the converter did
+  nothing whenever any one of them was on, so a workspace with just the
+  converter on read as though three other things were being thrown away. It
+  is a line each, naming the one thing, opening the page that owns it. A
+  Re-angle set to the new render is never called idle, since it runs anyway
+- The page note under a switched-off tab no longer lists the auto prompt, the
+  boosts and the converter whatever page it is sitting on
 - The preset strip across the top of the node is gone. The Advanced tab's
   Workspace presets row does the whole job: load, Save as and Delete, with the
   name you loaded staying picked so Delete has something to act on. The node

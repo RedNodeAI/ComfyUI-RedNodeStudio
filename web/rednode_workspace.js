@@ -12884,8 +12884,10 @@ export function skippedBy(t) {
 function tabOffNote(name) {
   const n = document.createElement("div");
   n.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-offnote";
-  n.textContent = `${name} is off, so nothing on this page is used: no auto prompt, no `
-                + "boosts, no converter. Turn it on with the switch on the bar above.";
+  // it used to name the auto prompt, the boosts and the converter whatever page it
+  // sat on, which read oddly on the Re-angle and Swap pages
+  n.textContent = `${name} is off, so nothing set on this page is used. Turn it on with `
+                + "the switch on the bar above.";
   return n;
 }
 
@@ -12974,9 +12976,17 @@ export function i2iIssues(cfg, node) {
   const target = t.swap?.target || "source";
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).length;
   if (!t.on) {
-    if (t.auto?.on || t.reangle?.on || (swapOn && target === "source") || convActive(t.conv)) {
-      out.push({ sub: "source", text: "Img2Img is off, so its auto prompt, Re-angle, a source "
-                                    + "Swap and the converter do nothing" });
+    // a stage that works on the finished render runs with the tab off, so only the
+    // ones that read the source are idle here
+    const idle = [];
+    if (t.auto?.on) idle.push({ page: "auto", name: "its auto prompt" });
+    if (t.reangle?.on && (t.reangle.target || "source") === "source") {
+      idle.push({ page: "reangle", name: "Re-angle" });
+    }
+    if (swapOn && target === "source") idle.push({ page: "swap", name: "a source Swap" });
+    if (convActive(t.conv)) idle.push({ page: "converter", name: "the converter" });
+    for (const it of idle) {
+      out.push({ sub: it.page, text: `Img2Img is off, so ${it.name} does nothing` });
     }
   } else if (t.canvas === "gallery" && !t.images?.length) {
     out.push({ sub: "source", text: "No source picture: add one to the gallery, or wire an "
