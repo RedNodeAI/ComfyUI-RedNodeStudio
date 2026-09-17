@@ -11145,6 +11145,16 @@ function modelsBody(node, page) {
   // rig's five numbers in one pick
   {
     const psel = document.createElement("select");
+    const keys = ["steps", "cfg", "sampler", "scheduler", "detailer_steps"];
+    // the name shows as picked while the rig still carries that preset's numbers;
+    // a hand edit to any of them drops the list back to Default
+    const same = (pr) => !!pr && keys.every((k) => pr[k] === undefined || pr[k] === null
+                                                  || String(pr[k]) === String(rig[k]));
+    const current = (profiles) => {
+      const want = rig.sampler_preset;
+      if (want && same(profiles?.[want])) return want;
+      return Object.keys(profiles || {}).find((nm) => same(profiles[nm])) || "";
+    };
     const fill = (profiles) => {
       psel.replaceChildren();
       const o0 = document.createElement("option");
@@ -11157,6 +11167,7 @@ function modelsBody(node, page) {
         o.textContent = nm;
         psel.appendChild(o);
       });
+      psel.value = current(profiles);
     };
     fill(node._rnSamplerProfiles);
     if (!node._rnSamplerProfiles) {
@@ -11171,15 +11182,14 @@ function modelsBody(node, page) {
     psel.onchange = () => {
       const pr = node._rnSamplerProfiles?.[psel.value];
       if (!pr) return;
-      for (const k of ["steps", "cfg", "sampler", "scheduler",
-                       "detailer_steps"]) {
+      for (const k of keys) {
         if (pr[k] !== undefined && pr[k] !== null) rig[k] = pr[k];
       }
+      rig.sampler_preset = psel.value;
       writeCfg(node); render(node);
     };
     // SAVE AND DELETE, so the list can grow from here: the rig's five numbers
     // under a name, kept with the Sampler Config node's own presets
-    const keys = ["steps", "cfg", "sampler", "scheduler", "detailer_steps"];
     const postProfiles = async (body) => {
       try {
         const r = await api.fetchApi("/rednode/sampler_profiles", {
@@ -11205,6 +11215,8 @@ function modelsBody(node, page) {
       if (!name) return;
       const values = Object.fromEntries(keys.map((k) => [k, rig[k]]));
       (node._rnSamplerProfiles ||= {})[name] = values;
+      rig.sampler_preset = name;
+      writeCfg(node);
       render(node);                          // in the list at once; the server confirms after
       postProfiles({ name, values });
     };
