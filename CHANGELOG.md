@@ -774,11 +774,6 @@ makes no network call, runs no program and reads no environment variable.
   Open it first, restart, then open the template
 - RedNode_Studio_Simple_Angles: the camera stage in a plain graph
 
-**1.3.2** - 2026-09-17
-
-The 1.3.1 security fixes, published again for the Comfy Registry. No other
-changes: same code as 1.3.1 under a new version number.
-
 **1.3.1** - 2026-09-16
 
 A security fix. Please update.
