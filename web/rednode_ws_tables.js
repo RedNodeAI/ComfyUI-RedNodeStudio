@@ -12,6 +12,8 @@
 // so the strip's colour underlines read as bands - model tabs, then canvas
 // tabs, then mood, edit, post, settings - instead of interleaving.
 export const TAB_ORDER = [
+  // the run as it is set up, one box per stage (rednode_ws_overview.js)
+  { id: "overview", label: "Overview", group: "view" },
   { id: "models", label: "Models", group: "model" },
   { id: "prompts", label: "Prompts", group: "model" },
   { id: "camera", label: "Camera", group: "model" },

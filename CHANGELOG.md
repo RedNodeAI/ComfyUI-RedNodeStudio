@@ -365,6 +365,17 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- An Overview tab in front of the others: the run as it is set up, one box
+  per stage in the order it happens, green on, grey off, amber stood aside
+  with the reason on hover, red wanting a fix. A click on a box opens the page
+  that decides it, and a Needs attention list collects every reason a stage
+  will not run
+- The Img2Img bar's chips carry the colour of the page they report on, and the
+  sub tabs wear the same colours; a click on a chip opens its page, and a chip
+  for a stage that will not run turns amber. An issues box at the bar's right
+  end says why, one line per reason, each a link to the page that fixes it
+- A Swap on the render runs under Prompt only too, and the tab lights, the
+  Swap page and the Run plan now say so
 - Sampler presets on the Models tab save and delete again: Save beside the
   list keeps this rig's steps, cfg, sampler, scheduler and detailer steps
   under a name, Delete removes the picked one. They are the Sampler Config

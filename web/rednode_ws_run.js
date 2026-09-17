@@ -558,8 +558,10 @@ export function plannedStages(node, cfg) {
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
     out.push(["decode", "Decode"]);
   }
+  // a swap on the render runs whatever the pass mode (workspace.py swaps the
+  // finished render), so Prompt only does not stand it down
   const SW = tabs.i2i?.swap || {};
-  if (SW.on && SW.target === "render" && !tabs.i2i?.prompt_only) {
+  if (SW.on && SW.target === "render") {
     out.push(["swap", "Swap"]);
     if (SW.polish !== false && internal) out.push(["swap_polish", "Swap polish"]);
   }
@@ -576,7 +578,7 @@ export function plannedStages(node, cfg) {
 // A pipeline box or a log line opens the page of the workspace that decides it:
 // the encode is the Prompts tab, a pass is the Passes page, a caption is that
 // tab's Auto prompt, a rig is the Models tab.
-function goTo(node, t) {
+export function goTo(node, t) {
   if (!t) return;
   const p = (node.properties ||= {});
   node._rnTab = t.tab;

@@ -12,6 +12,7 @@ import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
+import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -809,6 +810,31 @@ css.textContent = `
 .rn-ws-subt .lt{width:9px;height:9px;border-radius:50%;background:#4a5058;flex:none}
 .rn-ws-subt .lt.on{background:#22c55e;box-shadow:0 0 6px #22c55e}
 .rn-ws-subt .lt.skip{background:#e0a84a;box-shadow:0 0 6px #e0a84a}
+/* PAGE COLOURS: the Img2Img sub tabs and the bar's chips share one colour per
+   page, as a thin bar along the bottom edge, so a chip reads as its page */
+.s-source{--rn-s:#22c55e}
+.s-passes{--rn-s:#e0435a}
+.s-auto{--rn-s:#4a8fe0}
+.s-reangle{--rn-s:#f0c58a}
+.s-swap{--rn-s:#e08fb0}
+.s-converter{--rn-s:#22a39f}
+.rn-ws-subt.tint{position:relative;overflow:hidden}
+.rn-ws-subt.tint::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
+  border-radius:2px 2px 0 0;background:var(--rn-s,#4a5058);opacity:.75}
+.rn-ws-subt.tint.cur::after{opacity:1}
+.rn-ws-i2ichip{position:relative;cursor:pointer;font-family:inherit;padding-bottom:5px;
+  overflow:hidden}
+.rn-ws-i2ichip::after{content:"";position:absolute;left:6px;right:6px;bottom:0;height:2px;
+  border-radius:2px 2px 0 0;background:var(--rn-s,#4a5058)}
+.rn-ws-i2ichip:hover{border-color:#3d434c;color:#e8ecf1}
+.rn-ws-i2ichip.warn{border-color:#8a6a2a;color:#f3d9a4}
+.rn-ws-i2ichip.warn::before,.rn-ws-issue::before,.rn-ov-issue::before{content:"\\26a0  "}
+/* THE ISSUES BOX: every reason a stage will not run, at the bar's right end */
+.rn-ws-i2iissues{margin-left:auto;display:flex;flex-direction:column;gap:3px;
+  align-items:flex-end;max-width:100%}
+.rn-ws-issue{background:none;border:1px solid #6b5326;border-radius:5px;color:#f3d9a4;
+  font-size:11px;font-family:inherit;padding:2px 8px;cursor:pointer;text-align:left}
+.rn-ws-issue:hover{border-color:#e0a84a;color:#fff}
 .rn-ws-sub.inner .rn-ws-subt{padding:5px 10px;font-size:11px;background:#1b1e23}
 .rn-ws-sub.inner .rn-ws-subt.cur{background:#233247;border-color:#4a8fe0;color:#fff}
 .rn-ws-peoplewarn{color:#f0c58a}
@@ -1001,7 +1027,7 @@ function injectStyle() {
   if (styled || !document.head) return;
   // the Run tab's rules join here, at runtime: the two files import each other,
   // so its string is not safe to read while this file is still loading
-  css.textContent += RUN_CSS;
+  css.textContent += RUN_CSS + OVERVIEW_CSS;
   listenRun();
   document.head.appendChild(css);
   styled = true;
@@ -12772,14 +12798,14 @@ const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PRO
 
 const capFirst = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
 
-function convActive(c) {
+export function convActive(c) {
   return !!(c && c.on !== false && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
 }
 
 // Re-angle's "skip the pass": the re-shot picture is the image output, so the
 // source's own encode and every pass stand aside
-function i2iSkipped(t) {
+export function i2iSkipped(t) {
   return !!(t.reangle?.on && t.reangle?.skip_pass && !t.prompt_only);
 }
 
@@ -12801,7 +12827,8 @@ function i2iSubLit(cfg, id) {
   if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
   if (id === "reangle") return !!(t.on && t.reangle?.on && !t.prompt_only);
   if (id === "swap") {
-    return !!(t.swap?.on && !t.prompt_only && (t.on || t.swap.target === "render"));
+    // a swap on the render runs whatever the pass mode; a source swap needs the pass
+    return !!(t.swap?.on && (t.swap.target === "render" || (t.on && !t.prompt_only)));
   }
   if (id === "converter") return !!t.on && convActive(t.conv);
   return false;
@@ -12811,6 +12838,46 @@ const textTabLit = (cfg, id) => {
   const t = cfg.tabs[id];
   return !!(t?.on && t.sel?.length);
 };
+
+// WHAT STOPS AN IMG2IMG STAGE FROM RUNNING, in the words its pages use, each
+// line naming the page that fixes it. One list feeds the bar's chips and issues
+// box, the Overview tab and the checks, so the wording is written once.
+export function i2iIssues(cfg) {
+  const t = cfg.tabs?.i2i;
+  if (!t) return [];
+  const out = [];
+  const swapOn = !!t.swap?.on;
+  const target = t.swap?.target || "source";
+  const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).length;
+  if (!t.on) {
+    if (t.auto?.on || t.reangle?.on || (swapOn && target === "source") || convActive(t.conv)) {
+      out.push({ sub: "source", text: "Img2Img is off, so its auto prompt, Re-angle, a source "
+                                    + "Swap and the converter do nothing" });
+    }
+  } else if (t.canvas === "gallery" && !t.images?.length) {
+    out.push({ sub: "source", text: "No source picture: add one to the gallery, or wire an "
+                                  + "image or latent in" });
+  }
+  if (t.on && t.prompt_only) {
+    if (t.reangle?.on) {
+      out.push({ sub: "passes", about: "reangle", text: "Prompt only is on, so Re-angle is skipped" });
+    }
+    if (swapOn && target === "source") {
+      out.push({ sub: "passes", about: "swap", text: "Prompt only is on, so the source Swap is skipped" });
+    }
+  }
+  if (t.on && i2iSkipped(t)) {
+    out.push({ sub: "reangle", about: "passes", text: "Re-angle skips the pass, so none of the passes run" });
+  }
+  if (t.on && t.auto?.on && !engines) {
+    out.push({ sub: "auto", text: "Auto prompt is on with no engine picked" });
+  }
+  if (swapOn && t.swap.reference === "own" && !cfg.tabs.swap_ref?.images?.length) {
+    out.push({ sub: "swap", text: "Own picture is picked and the Swap gallery is empty, so the "
+                                + "swap is skipped" });
+  }
+  return out;
+}
 
 function i2iAutoPage(node, body) {
   const cfg = node._rnCfg;
@@ -12915,7 +12982,7 @@ function i2iTabs(node, body) {
   strip.className = "rn-ws-sub";
   for (const [id, label] of I2I_SUBS) {
     const b = document.createElement("button");
-    b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
+    b.className = "rn-ws-subt tint s-" + id + (id === sub ? " cur" : "");
     b.dataset.sub = id;
     const lt = document.createElement("span");
     const lit = i2iSubLit(cfg, id);
@@ -12948,18 +13015,61 @@ function i2iTabs(node, body) {
   bar.append(on, nm);
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
-  for (const text of [
-    t.canvas === "image" ? "Wired image" : t.canvas === "latent" ? "Wired latent"
-      : `${t.images.length} Image${t.images.length === 1 ? "" : "s"}`,
-    t.prompt_only ? "Prompt only"
-      : i2iSkipped(t) ? "Passes skipped"
-      : npass > 1 ? `${npass} Passes` : `Denoise ${Number(t.denoise).toFixed(2)}`,
-    !t.auto?.on ? "Auto prompt off" : engines.length ? engines.join(", ") : "No engine on",
-  ]) {
-    const c = document.createElement("span");
-    c.className = "rn-ws-chip";
-    c.textContent = text;
+  const issues = i2iIssues(cfg);
+  const issueOn = (id) => issues.some((x) => x.sub === id);
+  const pageName = (id) => I2I_SUBS.find(([x]) => x === id)[1].toLowerCase();
+  const openPage = (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; render(node); };
+  // ONE CHIP PER PAGE with something to say, in that page's colour; a click opens
+  // the page, and a stage that will not run goes amber with the reason on hover
+  const swapLive = i2iSubLit(cfg, "swap") && !issueOn("swap");
+  const chips = [
+    { sub: "source",
+      text: t.canvas === "image" ? "Wired image" : t.canvas === "latent" ? "Wired latent"
+        : `${t.images.length} Image${t.images.length === 1 ? "" : "s"}`,
+      warn: !!(t.on && t.canvas === "gallery" && !t.images.length) },
+    { sub: "passes",
+      text: t.prompt_only ? "Prompt only"
+        : i2iSkipped(t) ? "Passes skipped"
+        : npass > 1 ? `${npass} Passes` : `Denoise ${Number(t.denoise).toFixed(2)}`,
+      warn: !!(t.on && !t.prompt_only && i2iSkipped(t)) },
+    { sub: "auto",
+      text: !t.auto?.on ? "Auto prompt off" : engines.length ? engines.join(", ") : "No engine on",
+      warn: !!(t.on && t.auto?.on && !engines.length) },
+  ];
+  if (t.reangle?.on) {
+    const live = i2iSubLit(cfg, "reangle");
+    chips.push({ sub: "reangle", warn: !live,
+                 text: !live ? "Re-angle skipped" : t.reangle.skip_pass ? "Re-angle skips the pass" : "Re-angle" });
+  }
+  if (t.swap?.on) {
+    chips.push({ sub: "swap", warn: !swapLive,
+                 text: !swapLive ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render" : "Swap on the source" });
+  }
+  if (convActive(t.conv)) chips.push({ sub: "converter", text: "Converter", warn: !t.on });
+  for (const ch of chips) {
+    const c = document.createElement("button");
+    c.className = "rn-ws-chip rn-ws-i2ichip s-" + ch.sub + (ch.warn ? " warn" : "");
+    c.dataset.sub = ch.sub;
+    c.textContent = ch.text;
+    const why = issues.filter((x) => (x.about || x.sub) === ch.sub).map((x) => x.text);
+    c.title = (why.length ? why.join("\n") + "\n" : "") + "Opens the " + pageName(ch.sub) + " page.";
+    c.onclick = () => openPage(ch.sub);
     bar.appendChild(c);
+  }
+  // THE ISSUES BOX: every reason a stage will not run, at the bar's right end,
+  // one line each, each a link to the page that fixes it
+  if (issues.length) {
+    const ibox = document.createElement("div");
+    ibox.className = "rn-ws-i2iissues";
+    for (const it of issues) {
+      const line = document.createElement("button");
+      line.className = "rn-ws-issue";
+      line.textContent = it.text;
+      line.title = "Opens the " + pageName(it.sub) + " page.";
+      line.onclick = () => openPage(it.sub);
+      ibox.appendChild(line);
+    }
+    bar.appendChild(ibox);
   }
   body.appendChild(bar);
 
@@ -12986,7 +13096,8 @@ function i2iTabs(node, body) {
     if (t.prompt_only) onlyNote("Re-angle");
     else reangleSection(node, body, "i2i", { flat: true });
   } else if (sub === "swap") {
-    if (t.prompt_only) onlyNote("Swap");
+    // a swap on the render runs under Prompt only too, so its page stays
+    if (t.prompt_only && (t.swap?.target || "source") !== "render") onlyNote("Swap");
     else swapSection(node, body, "i2i", { flat: true });
   } else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
 }
@@ -14063,7 +14174,7 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
 function swapSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
-  if (t.prompt_only) return;
+  if (t.prompt_only && (t.swap?.target || "source") !== "render") return;
   const S = t.swap;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
@@ -15017,8 +15128,9 @@ function applyTuck(node) {
 // then the look, then the edit-node inputs (subject, people, scene, masks), then
 // the studio settings. The group field colours the strip so the purposes read.
 
-const tabLit = (cfg, id) =>
-  id === "identity" ? IDENTITY_SUBS.some((s) => tabLit(cfg, s.id))
+export const tabLit = (cfg, id) =>
+  id === "overview" ? false                        // a view of the run, never a stage
+  : id === "identity" ? IDENTITY_SUBS.some((s) => tabLit(cfg, s.id))
   : id === "people" ? (cfg.tabs.subject2.on && cfg.tabs.subject2.images.length) ||
                     (cfg.tabs.subject3.on && cfg.tabs.subject3.images.length)
   // ON is enough to light the tab: a wired boost_mask_in counts even before anything
@@ -15053,8 +15165,7 @@ const tabLit = (cfg, id) =>
                        && (cfg.tabs.i2i.images.length
                            || cfg.tabs.i2i.canvas !== "gallery"
                            || cfg.tabs.i2i.prompt_only))
-                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render"
-                          && !cfg.tabs.i2i.prompt_only))
+                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render"))
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the
@@ -15242,6 +15353,7 @@ export function render(node) {
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
+  else if (cur === "overview") overviewBody(node, body);
   else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
   else if (cur === "moodboard") moodboardTabs(node, body);
   else if (cur === "run") runTabBody(node, body);
@@ -15250,7 +15362,7 @@ export function render(node) {
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (!["i2i", "identity", "moodboard", "run", "detailer"].includes(cur)) {
+  if (!["overview", "i2i", "identity", "moodboard", "run", "detailer"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

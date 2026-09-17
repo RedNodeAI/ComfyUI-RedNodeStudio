@@ -52,10 +52,17 @@ built-in one existed.
 
 ## The Workspace
 
-Thirteen tabs, in four groups. The strip sits on the panel and the panel sits on the node; press
+Fourteen tabs, in four groups, with an Overview in front of them. The strip sits on the panel and the panel sits on the node; press
 the full screen button and the same panel takes the whole window. The socket tuck, the plug on the
 row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
 forty sockets is no taller than its panel.
+
+**Overview.** The run as it is set up, one box per stage in the order it happens: what feeds the
+render (the rig, the prompts, the camera, LoRAs, the Moodboard, the identity galleries, Paint, the
+auto prompt), then the run itself (the canvas or source, Re-angle, Swap, the encode, every pass,
+the decode, the Detailer, Post FX, Save). Green is on, grey is off, amber is on but stood aside
+with the reason on hover, red wants fixing. A click on a box opens the page that decides it, and a
+Needs attention list under the map collects every reason a stage will not run, each line a link.
 
 ![The Models tab: two rigs, the sampler numbers, the built-in sampler chosen](images/workspace-models.webp)
 
