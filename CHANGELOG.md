@@ -365,6 +365,10 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- On the Models tab a picked file clears back to None with the x beside it,
+  and the picker's None entry sits at the top of the list instead of under
+  every file. The Loader choices read By file name, Standard, GGUF and INT8
+  W8A8; a loader whose pack is missing is dimmed and says so on hover
 - Not in this release: RedNode Save Video and RedNode Video Review (they run
   ffmpeg) and the LoRA panel's Civitai lookup. The Save panel's Browse and Open
   buttons and its folder-opening menu entries are gone for good: a route that

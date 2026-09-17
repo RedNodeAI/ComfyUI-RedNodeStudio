@@ -140,7 +140,9 @@ export function makePicker(input, items, onPick, opts = {}) {
       out = [{ value: typed, hint: "new channel", make: true }, ...out];
     }
     if (opts.emptyLabel && !q) {
-      out = [...out, { value: "", label: opts.emptyLabel, empty: true }];
+      // first, where it can be found: at the end of a long file list nobody saw it,
+      // so a picked file looked impossible to clear
+      out = [{ value: "", label: opts.emptyLabel, empty: true }, ...out];
     }
     // Recently used float up, newest first, and say so. Only while the list is
     // unfiltered: once you are typing, the ranking you want is the one you asked for.

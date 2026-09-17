@@ -333,6 +333,8 @@ css.textContent = `
   overflow:hidden;text-overflow:ellipsis}
 .rn-ws-segb:hover{color:#fff}
 .rn-ws-segb.on{background:#b8283c;color:#fff;font-weight:600}
+.rn-ws-segb.dim{opacity:.45}
+.rn-ws-fileclear{width:auto;padding:0 9px;flex:none;font-size:15px;line-height:1}
 .rn-ws-switch .rn-ws-segb{padding:4px 10px;font-size:12px}
 /* Swap's quick phrases: each in its own box, the segment look one at a time */
 .rn-ws-swapquick{gap:6px}
@@ -10866,7 +10868,17 @@ function modelsBody(node, page) {
     browse.textContent = "📁 Local files";
     browse.title = "Browse and search the installed files.";
     browse.onclick = () => { input.focus(); input.click(); };
-    row.append(lab, input, browse);
+    row.append(lab, input);
+    if (rig[key]) {
+      // a picked file can be put back to none in one click
+      const clear = document.createElement("button");
+      clear.className = "rn-ws-btn rn-ws-fileclear";
+      clear.textContent = "\u00d7";
+      clear.title = "Clear: back to None.";
+      clear.onclick = () => { rig[key] = ""; writeCfg(node); render(node); };
+      row.appendChild(clear);
+    }
+    row.appendChild(browse);
     body.appendChild(row);
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
@@ -10995,17 +11007,18 @@ function modelsBody(node, page) {
     // WHICH LOADER the file goes through. By file name sends a .gguf through
     // ComfyUI-GGUF and anything else through core; an INT8 W8A8 file is a
     // .safetensors, so that loader has to be named here.
-    const absent = (list) => (MODEL_LISTS && !(list || []).length ? " (pack not installed)" : "");
+    const absent = (list) => !!(MODEL_LISTS && !(list || []).length);
     const ltip = "The loader the diffusion model goes through. By file name: a .gguf "
                + "through ComfyUI-GGUF, anything else through the standard loader. "
                + "INT8 W8A8 files look like any .safetensors, so pick that loader "
-               + "for one (ComfyUI-INT8-Fast). A pack that is not installed says so "
-               + "in the console when the rig loads.";
+               + "for one (ComfyUI-INT8-Fast). A dimmed loader is a pack that is not "
+               + "installed.";
     const seg = segSwitch([
       ["", "By file name", "A .gguf through ComfyUI-GGUF, anything else through the standard loader."],
       ["core", "Standard", "ComfyUI's own diffusion model loader."],
-      ["gguf", "GGUF" + absent(L.ggufs), "ComfyUI-GGUF's loader."],
-      ["int8", "INT8 W8A8" + absent(L.int8s), "ComfyUI-INT8-Fast's loader; INT8 files look like any .safetensors."],
+      ["gguf", "GGUF", "ComfyUI-GGUF's loader." + (absent(L.ggufs) ? " Not installed: install ComfyUI-GGUF in Manager." : ""), absent(L.ggufs)],
+      ["int8", "INT8 W8A8", "ComfyUI-INT8-Fast's loader; INT8 files look like any .safetensors."
+        + (absent(L.int8s) ? " Not installed: install ComfyUI-INT8-Fast in Manager." : ""), absent(L.int8s)],
     ], rig.unet_loader || "", (v) => { rig.unet_loader = v; writeCfg(node); render(node); }, ltip);
     seg.dataset.choice = "unet_loader";
     const lrow = document.createElement("div");
@@ -11485,9 +11498,9 @@ function segSwitch(options, current, onPick, title) {
   const seg = document.createElement("div");
   seg.className = "rn-ws-seg rn-ws-switch";
   if (title) seg.title = title;
-  for (const [value, label, tip] of options) {
+  for (const [value, label, tip, dim] of options) {
     const b = document.createElement("button");
-    b.className = "rn-ws-segb" + (current === value ? " on" : "");
+    b.className = "rn-ws-segb" + (current === value ? " on" : "") + (dim ? " dim" : "");
     b.textContent = label;
     if (tip) b.title = tip;
     b.onclick = () => { if (current !== value) onPick(value); };
