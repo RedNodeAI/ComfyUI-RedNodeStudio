@@ -68,7 +68,7 @@ Ollama is a program of its own rather than a node pack. Install it from
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
-`example_workflows/RedNodeStudio_V1.3.json` directly. It is the whole rig wired up, and it reads
+`example_workflows/RedNodeStudio_V1.4.json` directly. It is the whole rig wired up, and it reads
 left to right. It uses two of the packs above, Krea2-BBOX-Prompter for its Light & Color and
 Scene nodes and ComfyUI-Krea-Moodboards for its Style browser, so open the Start here workflow
 before it and let Manager install them.
@@ -595,20 +595,15 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_V1.3.json` is the full rig and the one to start with: a single
-  workspace panel drives the models, the prompts and the sampler, with painting, identity
-  edit, the Detailer's passes and its SeedVR2 upscale, and the grading chain around it. The rigs
-  and the Prompts tab are options rather than requirements, so a graph wired the old way keeps
-  working. It pulls in a few other packs and ComfyUI Manager offers them when you open it:
-  SeedVR2 Video Upscaler, pysssss custom-scripts, easy-use, comfyui-krea-moodboards and
-  Krea2-BBOX-Prompter. Manager installs packs but not models, so the upscaler's two files are
-  yours to fetch: `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` and
-  `ema_vae_fp16.safetensors`.
-- `RedNode_Studio_Pro_Grade.json` is the V1.3 graph with the settings of a heavy Krea 2 grading
-  flow set on the pack's own controls: 10 steps on the beta57 schedule with Detail Daemon and a
-  densified tail, i2i at 0.97, a face and eyes detailer group, a tiled pass at 0.25 with Tone lock,
-  then SeedVR2 to 2K with the VRAM freed first. Pick a 1x skin model on the tiled card when you
-  have one; it ships resize-only.
+- `RedNodeStudio_V1.4.json` is the full rig and the one to start with. One Workspace panel
+  drives the models, the prompts and the sampler, and runs the Detailer passes, the grading
+  chain and the save itself, so none of that needs wiring any more. Three rigs sit on its
+  Models tab: one that loads its files there, and two built from their own nodes on the
+  canvas, which is how you plug your own sampler in. A note inside the workflow lists every
+  model file it loads and where to get each one.
+- `RedNode_Start_Here_Install.json` renders nothing. It holds one node from each pack the
+  Workspace can use so ComfyUI Manager finds them in one pass. Open it first, let Manager
+  install, restart, then open the rig above.
 - `RedNode_MultiAngle.json` re-shoots an existing photo from another viewpoint:
   the Camera Studio's geometry becomes a Multiple-Angles prompt for Qwen-Image-Edit-2511, and
   Krea 2 finishes the frame.
