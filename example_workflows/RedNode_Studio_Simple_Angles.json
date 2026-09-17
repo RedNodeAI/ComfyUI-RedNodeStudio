@@ -867,10 +867,10 @@
       },
       "widgets_values": [
         "custom (use stack)",
-        "{\"ui\": {\"loaded_from\": \"Default_RedNode\", \"filter\": \"Krea 2\"}, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}]}",
+        "{\"ui\":{\"filter\":\"Krea 2\"},\"slots\":[]}",
         473911826915638,
         "randomize",
-        "{\"ui\": {\"loaded_from\": \"Default_RedNode\", \"filter\": \"Krea 2\"}, \"slots\": [{\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Styles\", \"color\": \"#14514f\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Detailer\", \"color\": \"#1e5233\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}, {\"type\": \"title\", \"text\": \"Needed\", \"color\": \"#7f2230\", \"text_color\": null}]}"
+        "{\"ui\":{\"filter\":\"Krea 2\"},\"slots\":[]}"
       ],
       "color": "#222",
       "bgcolor": "#000"
