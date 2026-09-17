@@ -388,6 +388,9 @@ fixes are in.
   light as soon as a dial had been touched, so moving one and putting it back
   left it green for good. The Advanced tab's dot and the DIALS fold's count
   read the same way now: set means different from that dial's own default
+- The SAM3 checkpoint row links to a model. ComfyUI-Easy-Sam3 installs without
+  one, so the row said where to put a file without saying where to get it. The
+  Start here workflow's note and the README carry the same link
 - Check installs covers the Post tab too. An effect that reads depth asks for
   comfyui_controlnet_aux and a Limit row set to the subject or the background
   asks for comfyui-rmbg, on the same terms the cards themselves use, and the

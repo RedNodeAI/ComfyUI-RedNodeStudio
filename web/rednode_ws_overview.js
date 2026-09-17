@@ -319,8 +319,10 @@ export function runNeeds(node, cfg) {
       if (packInstalled(packBy("sam3")) === true) {
         out.push({ kind: "file", ok: (modelListsNow()?.sam3 || []).length > 0,
                    label: "A SAM3 checkpoint", what: "what ComfyUI-Easy-Sam3 segments with",
-                   how: "Put one in models/sam3. The pack installs without it, and a "
-                      + "Detailer pass then says the file is not found.",
+                   how: "Put one in models/sam3, then pick it as the SAM file on a Detailer "
+                      + "pass. The pack installs without it, and a pass then says the file "
+                      + "is not found. This one is Meta's SAM3 packed for the node:",
+                   url: "https://huggingface.co/yolain/sam3-safetensors",
                    to: { tab: "detailer" } });
       }
     }

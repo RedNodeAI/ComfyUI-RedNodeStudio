@@ -55,6 +55,11 @@ open the main template.
 | [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) | The subject mask a Post card's Limit row uses |
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
 
+ComfyUI-Easy-Sam3 installs without a checkpoint. Put one in `models/sam3` as well, from
+[yolain/sam3-safetensors](https://huggingface.co/yolain/sam3-safetensors) or Meta's own
+[facebook/sam3](https://huggingface.co/facebook/sam3), and pick it as the SAM file on a
+Detailer pass.
+
 Ollama is a program of its own rather than a node pack. Install it from
 [ollama.com](https://ollama.com) and pull a vision model to use the Ollama caption engine.
 
