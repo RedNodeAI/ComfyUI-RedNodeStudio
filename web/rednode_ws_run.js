@@ -1,7 +1,8 @@
 import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
-import { writeCfg, render, setupProblems } from "./rednode_workspace.js";
+import { writeCfg, render, setupProblems, packInstalled } from "./rednode_workspace.js";
+import { EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
          openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
@@ -1167,7 +1168,22 @@ function refresh(view) {
   if (!S.log.length) refs.log.appendChild(el("div", "rn-ws-note", "Press Generate to start a run."));
   for (const l of S.log) {
     const row = el("div", `rn-run-line ${l.level}`);
-    row.append(el("span", "tm", clock(l.t)), el("i", "dot"), el("span", "tx", l.text));
+    const tx = el("span", "tx", l.text);
+    // A LINE NAMING A PACK THAT IS NOT HERE says where to find it. The link only
+    // opens the page; installing stays with ComfyUI Manager.
+    const miss = EXTRA_PACKS.find((p) => l.text.includes(p.name) && !packInstalled(p));
+    if (miss) {
+      const a = document.createElement("a");
+      a.href = packLink(miss);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.className = "rn-run-getlink";
+      a.textContent = "Where to get it";
+      a.title = `${miss.name}: ${packLink(miss)}`;
+      a.onclick = (e) => e.stopPropagation();   // the row's own jump stays put
+      tx.append(el("span", "", " "), a);
+    }
+    row.append(el("span", "tm", clock(l.t)), el("i", "dot"), tx);
     const target = jumpForLine(l.text, node._rnCfg);
     if (target) {
       row.classList.add("link");
@@ -1349,6 +1365,7 @@ export const RUN_CSS = `
 .rn-run-box.link,.rn-run-line.link{cursor:pointer}
 .rn-run-box.link:hover{border-color:#8fa8c8}
 .rn-run-line.link:hover .tx{color:#fff;text-decoration:underline}
+.rn-run-getlink{color:#8fc0ff;white-space:nowrap}
 .rn-run-piclabel{font-size:12px;color:#cfe0f5;text-align:center}
 .rn-run-chart{width:100%;height:260px;background:#0f1114;border-radius:6px;display:block}
 .rn-run-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#9aa0a8}

@@ -63,6 +63,10 @@ auto prompt), then the run itself (the canvas or source, Re-angle, Swap, the enc
 the decode, the Detailer, Post FX, Save). Green is on, grey is off, amber is on but stood aside
 with the reason on hover, red wants fixing. A click on a box opens the page that decides it, and a
 Needs attention list under the map collects every reason a stage will not run, each line a link.
+Under that, Check installs says which node packs, caption engines and model files these settings
+actually call for, which of them are already here, and where to get the rest. It reads what
+ComfyUI has loaded and the file lists it already hands the panel. It downloads and installs
+nothing: ComfyUI Manager does the installing, where you can see what it is doing.
 
 ![The Models tab: two rigs, the sampler numbers, the built-in sampler chosen](images/workspace-models.webp)
 

@@ -11,6 +11,35 @@
 // GROUPED ORDER: each group runs contiguously
 // so the strip's colour underlines read as bands - model tabs, then canvas
 // tabs, then mood, edit, post, settings - instead of interleaving.
+// PACKS THE WORKSPACE CAN LEAN ON, for the Overview's install check and for the
+// run log's links. `nodes` are the node types that prove the pack is installed
+// (the same names the server looks up in NODE_CLASS_MAPPINGS). `url` is filled
+// only where it is known for certain: a guessed address is worse than none, so
+// the rest are looked up by name instead.
+export const EXTRA_PACKS = [
+  { id: "seedvr2", name: "ComfyUI-SeedVR2_VideoUpscaler",
+    what: "the SeedVR2 upscale on a Detailer pass",
+    nodes: ["SeedVR2LoadDiTModel", "SeedVR2LoadVAEModel", "SeedVR2VideoUpscaler"] },
+  { id: "usdu", name: "ComfyUI_UltimateSDUpscale",
+    what: "the tiled upscale on a Detailer pass",
+    url: "https://github.com/ssitu/ComfyUI_UltimateSDUpscale",
+    nodes: ["UltimateSDUpscale", "UltimateSDUpscaleNoUpscale"] },
+  { id: "sam3", name: "ComfyUI-Easy-Sam3",
+    what: "finding what a Detailer pass works on, and the Paint tab's auto mask",
+    url: "https://github.com/yolain/ComfyUI-Easy-Sam3",
+    nodes: ["easy sam3ModelLoader", "easy sam3ImageSegmentation"] },
+  { id: "gguf", name: "ComfyUI-GGUF",
+    what: "loading a .gguf diffusion model",
+    nodes: ["UnetLoaderGGUF"] },
+  { id: "int8", name: "ComfyUI-INT8-Fast",
+    what: "loading an INT8 W8A8 diffusion model",
+    nodes: ["OTUNetLoaderW8A8"] },
+];
+// where to read about a pack that is not installed. Manager is the way in; the
+// link only helps you find it, and nothing here downloads anything.
+export const packLink = (p) => p.url
+  || `https://github.com/search?q=${encodeURIComponent(p.name)}`;
+
 export const TAB_ORDER = [
   // the run as it is set up, one box per stage (rednode_ws_overview.js)
   { id: "overview", label: "Overview", group: "view" },

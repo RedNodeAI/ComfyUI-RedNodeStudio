@@ -1,7 +1,8 @@
 import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive,
-         socketWired, AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
+         socketWired, packInstalled, modelListsNow, fetchModelListsOnce, autoStatusNow,
+         AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
-import { POST_FX } from "./rednode_ws_tables.js";
+import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 
 const CAPTION_NAME = Object.fromEntries(CAPTION_TABS.map(([label, id]) => [id, label]));
 // an Image to text gallery (Style, Subject, Scene words) is always "on": its page
@@ -278,6 +279,102 @@ export function overviewBoxes(node, cfg) {
   return { feeds, run, attention };
 }
 
+// ---- WHAT THIS RUN NEEDS ---------------------------------------------------------
+// Only what the settings actually call for, so it is a short list rather than
+// every optional pack the Workspace can use. Nothing here installs or downloads
+// anything: it reads the node types ComfyUI already loaded and the model file
+// lists ComfyUI already hands the panel, and then says where to get what is
+// missing. Installing stays with ComfyUI Manager, where you can see what it does.
+const CAPTION_ENGINES = [
+  ["wd14", "comfyui-wd14-tagger", "WD14 tags"],
+  ["florence", "comfyui-florence2", "Florence"],
+  ["joy", "ComfyUI-JoyCaption", "JoyCaption"],
+  ["qwen", "ComfyUI-QwenVL", "QwenVL"],
+];
+const packBy = (id) => EXTRA_PACKS.find((p) => p.id === id);
+
+// {ok, label, what, how, url, to} for everything this setup leans on
+export function runNeeds(node, cfg) {
+  const out = [];
+  const tabs = cfg.tabs || {};
+  const I = tabs.i2i || {};
+  const seen = new Set();
+  const wantPack = (id, why, to) => {
+    const p = packBy(id);
+    if (!p || seen.has(id)) return;
+    seen.add(id);
+    out.push({ kind: "pack", ok: packInstalled(p), label: p.name, what: why || p.what,
+               how: `Install it in ComfyUI Manager: search for ${p.name}.`,
+               url: packLink(p), to });
+  };
+  // the Detailer's passes, each by what it runs through
+  const stages = (cfg.detailer?.stages || []).filter((s) => s.on && s.type !== "title");
+  if (cfg.detailer_on) {
+    if (stages.some((s) => s.type === "upscale")) wantPack("seedvr2", null, { tab: "detailer" });
+    if (stages.some((s) => s.type === "usdu")) wantPack("usdu", null, { tab: "detailer" });
+    if (stages.some((s) => s.type === "detailer")) {
+      wantPack("sam3", "finding what a Detailer pass works on", { tab: "detailer" });
+    }
+  }
+  if (cfg.paint?.on) wantPack("sam3", "the Paint tab's auto mask", { tab: "paint" });
+  // the rig's loader, when it names one that is not core's
+  const rig = cfg.models?.rigs?.[cfg.models?.active];
+  if (cfg.models?.sampler_mode === "internal" && rig) {
+    const byName = /\.gguf$/i.test(String(rig.unet || ""));
+    if (rig.unet_loader === "gguf" || (!rig.unet_loader && byName)) {
+      wantPack("gguf", "loading this rig's .gguf model", { tab: "models" });
+    }
+    if (rig.unet_loader === "int8") wantPack("int8", "loading this rig's INT8 model", { tab: "models" });
+  }
+  // the caption engines that are switched on somewhere
+  const status = autoStatusNow() || {};
+  // an engine is only wanted where a gallery that is genuinely in use has pictures
+  // for it: an Image to text page sits there switched on whether or not it is used,
+  // and an empty gallery loads no engine at all
+  const engineOn = (key) => AUTO_TAB_IDS.some((id) => captionInUse(id, tabs[id])
+    && (tabs[id].images?.length || 0) > 0 && tabs[id].auto[key]);
+  for (const [key, name, label] of CAPTION_ENGINES) {
+    if (!engineOn(key)) continue;
+    out.push({ kind: "pack", ok: !!status[key], label: name,
+               what: `the ${label} caption engine`,
+               how: `Install it in ComfyUI Manager: search for ${name}.`,
+               url: `https://github.com/search?q=${encodeURIComponent(name)}`,
+               to: { tab: "i2i", sub: "auto" } });
+  }
+  if (engineOn("ollama")) {
+    out.push({ kind: "service", ok: !!status.ollama, label: "Ollama",
+               what: "the Ollama caption engine",
+               how: "Ollama is a program of its own, not a node pack. Start it, then pull a "
+                  + "vision model such as llava or qwen2.5vl.",
+               url: "https://ollama.com", to: { tab: "i2i", sub: "auto" } });
+  }
+  // THE MODEL FILES the edit stages load, when those stages will run
+  const L = modelListsNow();
+  const fileRow = (label, name, list, where, to) => {
+    if (!name || !L) return;
+    out.push({ kind: "file", ok: (list || []).includes(name), label: name,
+               what: label, how: `Put it in ${where}.`, to });
+  };
+  const editFiles = (X, what, to) => {
+    fileRow(`${what}: the edit model`, X.unet, L.unets, "models/diffusion_models", to);
+    fileRow(`${what}: the text encoder`, X.clip, L.clips, "models/text_encoders", to);
+    fileRow(`${what}: the VAE`, X.vae, L.vaes, "models/vae", to);
+    for (const k of ["lora_angles", "lora_swap", "lora_light"]) {
+      if (X[k] && X[k] !== "None") fileRow(`${what}: a LoRA`, X[k], L.loras, "models/loras", to);
+    }
+  };
+  const R = I.reangle || {};
+  const S = I.swap || {};
+  const i2iRun = i2iRuns(I);
+  if (R.on && (R.target === "render" || i2iRun)) {
+    editFiles(R, "Re-angle", { tab: "i2i", sub: "reangle" });
+  }
+  if (S.on && (S.target === "render" || i2iRun)) {
+    editFiles(S, "Swap", { tab: "i2i", sub: "swap" });
+  }
+  return out;
+}
+
 // ---- the page -------------------------------------------------------------------
 export function overviewBody(node, body) {
   const cfg = node._rnCfg;
@@ -321,6 +418,65 @@ export function overviewBody(node, body) {
     }
   }
   wrap.appendChild(att);
+
+  // WHAT THIS RUN NEEDS, behind a button: the packs, engines and model files the
+  // settings call for, each said to be here or not, with where to get it
+  const needs = el("div", "rn-ws-card rn-ov-card rn-ov-needs");
+  const nhead = el("div", "rn-ov-needhead");
+  nhead.appendChild(el("div", "ch", "WHAT THIS RUN NEEDS"));
+  const btn = el("button", "rn-ws-btn rn-ov-check", node._rnNeeds ? "Check again" : "Check installs");
+  btn.title = "Look at what this setup calls for and say what is already installed here. "
+            + "It reads what ComfyUI has loaded; it never downloads or installs anything.";
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try { await fetchModelListsOnce(); } catch (e) { /* the file rows simply sit out */ }
+    node._rnNeeds = true;
+    render(node);
+  };
+  nhead.appendChild(btn);
+  needs.appendChild(nhead);
+  if (!node._rnNeeds) {
+    needs.appendChild(el("div", "rn-ws-note", "Press Check installs to see the node packs, "
+      + "caption engines and model files these settings call for, and which of them are "
+      + "already here."));
+  } else {
+    const rows = runNeeds(node, cfg);
+    if (!rows.length) {
+      needs.appendChild(el("div", "rn-ws-note rn-ov-clear",
+        "These settings need nothing beyond the pack itself."));
+    }
+    for (const r of rows) {
+      const line = el("div", "rn-ov-need" + (r.ok ? " ok" : " missing"));
+      const top = el("div", "t");
+      top.appendChild(el("span", "mark", r.ok ? "\u2713" : "\u2717"));
+      const nm = el("button", "nm", r.label);
+      nm.title = r.to ? "Open where this is set." : "";
+      if (r.to) nm.onclick = () => goTo(node, r.to);
+      else nm.disabled = true;
+      top.append(nm, el("span", "for", r.what));
+      line.appendChild(top);
+      if (!r.ok) {
+        const how = el("div", "how");
+        how.appendChild(el("span", "", r.how + " "));
+        if (r.url) {
+          const a = document.createElement("a");
+          a.href = r.url;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.textContent = r.url;
+          a.className = "lnk";
+          how.appendChild(a);
+        }
+        line.appendChild(how);
+      }
+      needs.appendChild(line);
+    }
+    const foot = el("div", "rn-ws-note rn-ov-needfoot",
+      "Nothing is downloaded or installed from here. The links only show you where a pack "
+      + "lives; ComfyUI Manager does the installing, where you can see what it is doing.");
+    needs.appendChild(foot);
+  }
+  wrap.appendChild(needs);
   body.appendChild(wrap);
 }
 
@@ -346,6 +502,23 @@ export const OVERVIEW_CSS = `
   font-size:12px;padding:5px 10px;cursor:pointer;text-align:left;font-family:inherit}
 .rn-ov-issue:hover{border-color:#e0a84a;color:#fff}
 .rn-ov-clear{color:#9fe0b4}
+.rn-ov-needhead{display:flex;align-items:center;gap:10px}
+.rn-ov-needhead .ch{flex:1}
+.rn-ov-check{width:auto;padding:0 12px;flex:none}
+.rn-ov-need{display:flex;flex-direction:column;gap:2px;padding:5px 0;
+  border-top:1px solid #23262c}
+.rn-ov-need .t{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.rn-ov-need .mark{flex:none;font-weight:700}
+.rn-ov-need.ok .mark{color:#4ade80}
+.rn-ov-need.missing .mark{color:#f3b0ba}
+.rn-ov-need .nm{background:none;border:0;padding:0;font:inherit;font-weight:600;
+  font-size:12.5px;color:#e8ecf1;cursor:pointer;text-align:left}
+.rn-ov-need .nm:disabled{cursor:default}
+.rn-ov-need .nm:hover:not(:disabled){text-decoration:underline}
+.rn-ov-need .for{font-size:11.5px;color:#8a919b}
+.rn-ov-need .how{font-size:11.5px;color:#f3d9a4;padding-left:18px}
+.rn-ov-need .lnk{color:#8fc0ff}
+.rn-ov-needfoot{padding-top:6px}
 `;
 
 export const _OVERVIEW_FOR_TESTS = { i2iRuns, render };

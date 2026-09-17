@@ -365,6 +365,13 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The Overview has a Check installs button. It says which node packs, caption
+  engines and model files these settings actually call for, which of them are
+  already here, and where to get the rest. It reads what ComfyUI has loaded
+  and the file lists it already hands the panel; it downloads and installs
+  nothing, and ComfyUI Manager still does the installing
+- A run log line naming a pack that is not installed carries a link to where
+  that pack lives, beside the line that names it
 - A canvas set to Wired image or Wired latent, with nothing wired to it, is
   now said out loud. The Img2Img Source page says the socket is empty instead
   of claiming the wire feeds the canvas, the Source chip goes amber, the

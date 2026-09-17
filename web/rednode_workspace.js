@@ -1605,6 +1605,17 @@ function nextRigName(rigs) {
 export const socketWired = (node, name) =>
   (node?.inputs || []).some((s) => s?.name === name && s.link != null);
 
+// IS A PACK INSTALLED: are its node types registered with the frontend. No
+// network, no install, no shelling out: it reads what ComfyUI already loaded.
+export const packInstalled = (p) => {
+  const reg = globalThis.LiteGraph?.registered_node_types || {};
+  return (p?.nodes || []).every((n) => !!reg[n]);
+};
+// the model file lists and the caption engine status, for the install check
+export const modelListsNow = () => MODEL_LISTS;
+export const fetchModelListsOnce = () => fetchModelLists();
+export const autoStatusNow = () => autoStatus;
+
 export function setupProblems(node, cfg) {
   const out = [];
   const M = cfg?.models;
