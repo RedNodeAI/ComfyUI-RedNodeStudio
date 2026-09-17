@@ -178,6 +178,7 @@ css.textContent = `
   background:#101216;border:1px solid #2f333a;border-radius:8px;
   padding:6px 12px;box-sizing:border-box}
 .rn-ws-pill>.k{font-size:12px;color:#8a919b;flex:none}
+.rn-ws-pill.wide{grid-column:1 / -1}
 .rn-ws-pill input,.rn-ws-pill select{flex:1;min-width:0;background:transparent;
   border:none;outline:none;color:#e8ecf1;font-size:13px;font-weight:600;
   text-align:right;padding:0}
@@ -11225,7 +11226,8 @@ function modelsBody(node, page) {
       };
       wrap.appendChild(pdel);
     }
-    pill(body, "Sampler presets", wrap, psel.title);
+    // the whole width of the group: a list beside Save and Delete does not fit half a cell
+    pill(body, "Sampler presets", wrap, psel.title).classList.add("wide");
   }
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";
