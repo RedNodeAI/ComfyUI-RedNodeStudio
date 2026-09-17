@@ -8,7 +8,7 @@ the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
-**60 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**62 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
