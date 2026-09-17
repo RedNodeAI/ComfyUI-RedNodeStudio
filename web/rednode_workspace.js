@@ -1407,7 +1407,14 @@ export function readCfg(node) {
     // the i2i pair: "" means the pair above, which is every rig saved before it
     if (typeof r.i2i_sampler !== "string") r.i2i_sampler = "";
     if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
-    if (r.kind !== "external" && r.kind !== "node") r.kind = "";
+    // THE KIND SURVIVES A LOAD. This used to clear anything but external/node, so a
+    // rig on a kind a local/ module registers (the NovelAI one) lost it on load and
+    // the next writeCfg persisted the loss, quietly turning it into a files rig. The
+    // picker offers window.rnRigKinds and workspace.py accepts RIG_KIND_HANDLERS, so
+    // the same extra kinds are honoured here. An unknown one is left alone rather
+    // than wiped: the server maps a kind it has no handler for to "files" anyway, so
+    // nothing bad reaches a render, and the kind comes back when its module does.
+    if (typeof r.kind !== "string") r.kind = "";
     if (typeof r.node !== "string") r.node = "";          // a "node" rig's rig-node name
     if (typeof r.denoise !== "number") r.denoise = 1.0;
     // the LoRAs-tab SET this rig renders with; "" = Main

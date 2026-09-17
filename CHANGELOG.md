@@ -407,6 +407,12 @@ fixes are in.
   installs without one, and a Detailer pass then failed on the missing file
   while the check said the pack was fine
 - The Start here workflow's notes are ComfyUI's own Note nodes
+- A rig keeps the kind a local module registered. The panel cleared anything but
+  External renderer and Your own nodes when a workflow loaded, and the next write
+  persisted the loss, so a rig on a kind added by a private module quietly became
+  a plain files rig. The picker and the server both accept those kinds; the config
+  reader does now too, and it leaves a kind it does not recognise alone rather
+  than wiping it
 - The VRAM line stops calling its figure a peak. It is what the run would need
   with nothing held, which is what Hold reads to decide whether to hold; once it
   holds, the peak you actually see is far below it. Sitting beside the measured
