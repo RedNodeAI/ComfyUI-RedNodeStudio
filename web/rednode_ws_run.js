@@ -550,7 +550,8 @@ export function plannedStages(node, cfg) {
   const I = tabs.i2i || {};
   const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
   // the edit stages on the source run before the encode
-  if (i2iRun && I.reangle?.on) out.push(["reangle", "Re-angle"]);
+  const RA = I.reangle || {};
+  if (i2iRun && RA.on && (RA.target || "source") === "source") out.push(["reangle", "Re-angle"]);
   if (i2iRun && I.swap?.on && I.swap.target !== "render") out.push(["swap", "Swap"]);
   if (internal) {
     out.push(["encode", "Encode"]);
@@ -560,6 +561,10 @@ export function plannedStages(node, cfg) {
   }
   // a swap on the render runs whatever the pass mode (workspace.py swaps the
   // finished render), so Prompt only does not stand it down
+  if (RA.on && RA.target === "render") {
+    out.push(["reangle", "Re-angle"]);
+    if (RA.polish !== false && internal) out.push(["reangle_polish", "Re-angle polish"]);
+  }
   const SW = tabs.i2i?.swap || {};
   if (SW.on && SW.target === "render") {
     out.push(["swap", "Swap"]);
@@ -623,7 +628,7 @@ export function jumpForStage(key, cfg) {
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
   if (key === "decode" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
-  if (key === "reangle") return { tab: "i2i", sub: "reangle" };
+  if (key === "reangle" || key === "reangle_polish") return { tab: "i2i", sub: "reangle" };
   if (key === "paint") return { tab: "paint" };
   if (key === "detailer") return { tab: "detailer" };
   if (key === "post") return { tab: "post" };

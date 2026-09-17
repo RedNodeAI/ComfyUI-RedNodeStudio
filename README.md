@@ -145,15 +145,17 @@ how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same s
 
 ![The Img2Img tab: source, pass, RE-ANGLE, SWAP and the auto prompt](images/img2img.webp)
 
-**Img2Img.** A source picture, the pass over it, and two stages that run before the pass.
-Denoise is a full-width bar, and with several passes each one can have its own denoise and its
-own scale. RE-ANGLE re-shoots the source from another viewpoint with the multi-angle edit model,
-from three bands or from the Camera tab's studio, and a switch stops after the re-shot so the rig
-never enters VRAM beside the edit model. SWAP puts a face, head or whole person onto the picture: the Subject's, another picked person's,
-or a picture from Swap's own gallery. It works on the source before the pass, or on the new
-render, a Latent tab render too, with a polish pass by the rig afterwards; a Fast switch runs it
-on the Lightning LoRA, quick phrase buttons build its prompt, and both stages show their steps on
-the Run tab and run the edit model on PyTorch attention, so SageAttention does not break them. Its Auto prompt page also holds IMAGE TO TEXT: Style,
+**Img2Img.** A source picture, the pass over it, and two edit stages of one shape. Denoise is a
+full-width bar, and with several passes each one can have its own denoise and its own scale.
+RE-ANGLE re-shoots the picture from another viewpoint with the multi-angle edit model, from three
+bands or from the Camera tab's studio. SWAP puts a face, head or whole person onto the picture:
+the Subject's, another picked person's, or a picture from Swap's own gallery. Both work on the
+Img2Img source before its pass, or on the new render, a Latent tab render too with Img2Img off
+if you like, where a polish pass by the rig follows the edit; on the source, both carry Skip the
+i2i pass, which sends the edited picture straight to the image output so the rig never enters
+VRAM beside the edit model. Swap has a Fast switch for the Lightning LoRA and quick phrase
+buttons for its prompt. Both stages show their steps on the Run tab and run the edit model on
+PyTorch attention, so SageAttention does not break them. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
 

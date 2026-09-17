@@ -685,14 +685,17 @@ def _edit_stage(cfg, render_px, render_batch, i2i_run):
     Re-angle will run, else None. It loads after or before the render, so the
     run's peak is the larger of the two stages, not their sum."""
     it = cfg["tabs"]["i2i"]
-    if it.get("prompt_only"):
-        return None
     sw = it.get("swap") or {}
     ra = it.get("reangle") or {}
     src_px = float(cfg["resize"] or 1024) ** 2 * 0.75
     jobs = []
-    if i2i_run and ra.get("on"):
-        jobs.append(("Re-angle", ra, src_px, 1, 1))
+    # a stage on the render runs whatever the pass mode; a source stage needs the
+    # pass (i2i_run already says no under Prompt only)
+    if ra.get("on"):
+        if ra.get("target") == "render":
+            jobs.append(("Re-angle", ra, render_px, render_batch, 1))
+        elif i2i_run:
+            jobs.append(("Re-angle", ra, src_px, 1, 1))
     if sw.get("on"):
         if sw.get("target") == "render":
             jobs.append(("Swap", sw, render_px, render_batch, 2))
@@ -2746,34 +2749,45 @@ class RedNodeStudioWorkspace:
         # canvas each). The result IS the i2i source from here on: encode,
         # denoise, passes, the i2i_image output, all unchanged.
         _rg = it.get("reangle") or {}
-        # RE-ANGLE ONLY: set once the re-shot has landed, and only where the
-        # built-in sampler would have run the pass. It skips the encode and the
-        # sampler below, so the rig stays in RAM and the image output is the
-        # re-shot picture itself. An external sampler runs whatever is wired.
+
+        def _reangle_cams():
+            # the cameras the re-shot takes: none for the bands set on the page, or
+            # the Camera tab's Img2Img studio (its own state); an empty one falls
+            # back to the active prompt row's studio camera
+            _cams = []
+            if _rg["camera"] == "studio" and not camera_on(cfg):
+                print("[RedNode Workspace] re-angle: the Camera tab is off, "
+                      "so the bands are used instead of its studio", flush=True)
+            if _rg["camera"] == "studio" and camera_on(cfg):
+                # the Camera tab's Img2Img studio (its own state); an empty
+                # one falls back to the active prompt row's studio camera
+                _cj = _rg.get("studio") or ""
+                if not (isinstance(_cj, str) and _cj.strip()):
+                    _rrow = prompt_row_for(cfg["models"], cfg["prompts"])
+                    _cj = ((_rrow or {}).get("frame") or {}).get("camera")
+                if isinstance(_cj, str) and _cj.strip():
+                    from .camera_studio import parse_state as _cs_ps
+                    from . import camera_translate as _ct_re
+                    _cst = _cs_ps(_cj)
+                    for _c in _ct_re.camera_path(_cst["camera"], _cst["subjects"], _cst["path"]):
+                        _cams.append(json.dumps({"camera": _c, "subjects": _cst["subjects"]}))
+                else:
+                    print("[RedNode Workspace] re-angle: camera from studio asked, but the "
+                          "active prompt row has no studio camera; using the bands", flush=True)
+            return _cams
+
+        # EDIT ONLY: set once a source edit (Re-angle or Swap) with Skip the pass
+        # has landed, and only where the built-in sampler would have run the pass.
+        # It skips the encode and the sampler below, so the rig stays in RAM and
+        # the image output is the edited picture itself. An external sampler runs
+        # whatever is wired.
         _stage_only = False
-        if it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None:
+        _stage_only_by = ""
+        if (it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None
+                and _rg.get("target", "source") == "source"):
             try:
                 from . import reangle as _re
-                _cams = []
-                if _rg["camera"] == "studio" and not camera_on(cfg):
-                    print("[RedNode Workspace] re-angle: the Camera tab is off, "
-                          "so the bands are used instead of its studio", flush=True)
-                if _rg["camera"] == "studio" and camera_on(cfg):
-                    # the Camera tab's Img2Img studio (its own state); an empty
-                    # one falls back to the active prompt row's studio camera
-                    _cj = _rg.get("studio") or ""
-                    if not (isinstance(_cj, str) and _cj.strip()):
-                        _rrow = prompt_row_for(cfg["models"], cfg["prompts"])
-                        _cj = ((_rrow or {}).get("frame") or {}).get("camera")
-                    if isinstance(_cj, str) and _cj.strip():
-                        from .camera_studio import parse_state as _cs_ps
-                        from . import camera_translate as _ct_re
-                        _cst = _cs_ps(_cj)
-                        for _c in _ct_re.camera_path(_cst["camera"], _cst["subjects"], _cst["path"]):
-                            _cams.append(json.dumps({"camera": _c, "subjects": _cst["subjects"]}))
-                    else:
-                        print("[RedNode Workspace] re-angle: camera from studio asked, but the "
-                              "active prompt row has no studio camera; using the bands", flush=True)
+                _cams = _reangle_cams()
                 _prompts = _re.prompts_for(_rg, _cams)
                 _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
                 _before = tuple(i2i_img.shape)
@@ -2788,6 +2802,7 @@ class RedNodeStudioWorkspace:
                 if _rg.get("skip_pass"):
                     if cfg["models"]["sampler_mode"] == "internal":
                         _stage_only = True
+                        _stage_only_by = "re-angle"
                     else:
                         print("[RedNode Workspace] re-angle: Skip the i2i pass only "
                               "applies to the built-in sampler; the external one runs "
@@ -2833,6 +2848,14 @@ class RedNodeStudioWorkspace:
                           "the i2i source (%d x %d)" % (i2i_img.shape[0], _sw["mode"],
                                                         _sw["reference"], i2i_img.shape[2],
                                                         i2i_img.shape[1]), flush=True)
+                    if _sw.get("skip_pass"):
+                        if cfg["models"]["sampler_mode"] == "internal":
+                            _stage_only = True
+                            _stage_only_by = "swap"
+                        else:
+                            print("[RedNode Workspace] swap: Skip the i2i pass only applies "
+                                  "to the built-in sampler; the external one runs as wired, "
+                                  "with the swapped picture on i2i_image", flush=True)
                 except Exception as exc:
                     _run.end("swap", "Swap", "error", error=str(exc)[:200])
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
@@ -2848,7 +2871,8 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 print("[RedNode Workspace] could not move the edit model off the card: %s"
                       % exc, flush=True)
-        if not (_sw.get("on") and _sw.get("target") == "render"):
+        if not ((_sw.get("on") and _sw.get("target") == "render")
+                or (_rg.get("on") and _rg.get("target") == "render")):
             _edit_off()
         real_i2i = it["on"] and i2i_img is not None and not it["prompt_only"]
         # THE I2I PAIR takes over from here on: the built-in sampler, the paint
@@ -3788,8 +3812,8 @@ class RedNodeStudioWorkspace:
             # the re-shot picture is the render: nothing below runs, so the rig is
             # never asked for VRAM while the edit model holds it
             rig_image = i2i_img
-            print("[RedNode Workspace] re-angle only: the re-shot picture is the image "
-                  "output; no encode, no i2i pass", flush=True)
+            print("[RedNode Workspace] %s only: the edited picture is the image "
+                  "output; no encode, no i2i pass" % (_stage_only_by or "re-angle"), flush=True)
         if (_mode == "internal" and not _prt and not _stage_only
                 and _hk in RIG_KIND_HANDLERS):
             # THE CAMERA PATH ON AN ENGINE RIG: the same one-render-per-shot the
@@ -4213,6 +4237,75 @@ class RedNodeStudioWorkspace:
                       flush=True)
                 _run.fail_active(exc)
 
+        def _polish(key, label, pic, dn):
+            # THE POLISH PASS: the rig runs once more over an edited render at a
+            # low denoise, the pass a source edit gets from the Img2Img pass, so
+            # the new face or viewpoint sits in the render's light and grain.
+            # Built-in sampler only; the edited picture is kept as it is otherwise.
+            nonlocal rig_image, result_latent_out
+            _pv = vae if vae is not None else rig_vae
+            if _mode != "internal" or model is None or positive is None or _pv is None:
+                _run.skip(key, label, "needs the built-in sampler")
+                return
+            try:
+                from . import live_preview as _live
+                from . import rig_chain as _rigc
+                _run.begin(key, label, steps=int(rig_steps), denoise=round(dn, 2),
+                           rig=rig_name or "", batch=int(pic.shape[0]),
+                           size=[int(pic.shape[2]), int(pic.shape[1])])
+                _plat = {"samples": _pv.encode(pic)}
+                with _rigc.using(_rigc.rig_for(_ar), prompt,
+                                 clip=lora_clip if lora_clip is not None else clip,
+                                 vae=_pv):
+                    _pout = _live.sampled(unique_id, _dials.sample_with_dials,
+                                          label=label.lower())(
+                        model, int(run_seed) + 1, rig_steps, rig_cfg, rig_sampler,
+                        rig_scheduler, positive, negative, _plat,
+                        denoise=dn, dials=_ar.get("dials") or {})
+                rig_image = vae_images(_pv.decode(_pout["samples"]))[:, :, :, :3]
+                result_latent_out = _pout
+                _run.end(key, label)
+                print("[RedNode Workspace] %s: %d steps at denoise %.2f"
+                      % (label.lower(), int(rig_steps), dn), flush=True)
+            except Exception as exc:
+                _run.end(key, label, "error", error=str(exc)[:200])
+                print("[RedNode Workspace] %s failed: %s; the edited picture is kept"
+                      % (label.lower(), exc), flush=True)
+
+        # RE-ANGLE ON THE RENDER: the finished picture (a Latent tab render as much
+        # as an Img2Img one) is re-shot from the camera on the page, then the rig
+        # polishes it. Before the swap, so a swapped face lands on the final
+        # viewpoint, the order the source stages run in
+        if (_rg.get("on") and _rg.get("target") == "render" and rig_image is not None
+                and not _prt and not _stage_only):
+            _reshot = None
+            try:
+                from . import reangle as _re
+                _prompts = _re.prompts_for(_rg, _reangle_cams())
+                _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
+                _run.begin("reangle", "Re-angle", steps=int(_rg["steps"]),
+                           batch=len(_prompts) * int(rig_image.shape[0]))
+                # the engine re-shoots one picture at a time: every render gets its views
+                _views = [_re.render(_rg, rig_image[i:i + 1], _prompts, _rseed,
+                                     node_id=unique_id)[:, :, :, :3]
+                          for i in range(int(rig_image.shape[0]))]
+                _vh = min(int(v.shape[1]) for v in _views)
+                _vw = min(int(v.shape[2]) for v in _views)
+                _reshot = torch.cat([v[:, :_vh, :_vw, :] for v in _views], dim=0)
+                _run.end("reangle", "Re-angle")
+                _tap("reangle", "Re-angle result", _reshot)
+                print("[RedNode Workspace] re-angle: %d view(s) on the render (%d x %d)"
+                      % (_reshot.shape[0], _reshot.shape[2], _reshot.shape[1]), flush=True)
+                rig_image = _reshot
+            except Exception as exc:
+                _run.end("reangle", "Re-angle", "error", error=str(exc)[:200])
+                print("[RedNode Workspace] re-angle failed: %s; the render is kept as it is"
+                      % exc, flush=True)
+            if not (_sw.get("on") and _sw.get("target") == "render"):
+                _edit_off()
+            if _reshot is not None and _rg["polish"]:
+                _polish("reangle_polish", "Re-angle polish", _reshot, float(_rg["polish_denoise"]))
+
         # SWAP ON THE RENDER: the finished picture (a Latent tab render as much as
         # an Img2Img one) gets the person, then the rig polishes it at a low
         # denoise, the pass a source swap gets from the Img2Img pass
@@ -4243,37 +4336,8 @@ class RedNodeStudioWorkspace:
                     print("[RedNode Workspace] swap failed: %s; the render is kept as it is"
                           % exc, flush=True)
                 _edit_off()
-                _pv = vae if vae is not None else rig_vae
                 if _swapped is not None and _sw["polish"]:
-                    if _mode != "internal" or model is None or positive is None or _pv is None:
-                        _run.skip("swap_polish", "Swap polish", "needs the built-in sampler")
-                    else:
-                        try:
-                            from . import live_preview as _live
-                            from . import rig_chain as _rigc
-                            _pdn = float(_sw["polish_denoise"])
-                            _run.begin("swap_polish", "Swap polish", steps=int(rig_steps),
-                                       denoise=round(_pdn, 2), rig=rig_name or "",
-                                       batch=int(_swapped.shape[0]),
-                                       size=[int(_swapped.shape[2]), int(_swapped.shape[1])])
-                            _plat = {"samples": _pv.encode(_swapped)}
-                            with _rigc.using(_rigc.rig_for(_ar), prompt,
-                                             clip=lora_clip if lora_clip is not None else clip,
-                                             vae=_pv):
-                                _pout = _live.sampled(unique_id, _dials.sample_with_dials,
-                                                      label="swap polish")(
-                                    model, int(run_seed) + 1, rig_steps, rig_cfg, rig_sampler,
-                                    rig_scheduler, positive, negative, _plat,
-                                    denoise=_pdn, dials=_ar.get("dials") or {})
-                            rig_image = vae_images(_pv.decode(_pout["samples"]))[:, :, :, :3]
-                            result_latent_out = _pout
-                            _run.end("swap_polish", "Swap polish")
-                            print("[RedNode Workspace] swap polish: %d steps at denoise %.2f"
-                                  % (int(rig_steps), _pdn), flush=True)
-                        except Exception as exc:
-                            _run.end("swap_polish", "Swap polish", "error", error=str(exc)[:200])
-                            print("[RedNode Workspace] swap polish failed: %s; the swapped "
-                                  "picture is kept" % exc, flush=True)
+                    _polish("swap_polish", "Swap polish", _swapped, float(_sw["polish_denoise"]))
 
         if rig_image is not None:
             _tap("final", "Workspace result", rig_image)

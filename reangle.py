@@ -91,6 +91,12 @@ def parse(raw):
         # output as it is, no encode and no i2i pass, so the rig never enters
         # VRAM beside the edit model. Off by default; the pass is the normal run.
         "skip_pass": bool(r.get("skip_pass", False)),
+        # WHAT IT WORKS ON: the Img2Img source before its pass, or the finished
+        # render (a Latent tab render too), then a polish pass of the rig over
+        # the re-shot picture, the pass a source re-angle gets from the i2i pass
+        "target": pick("target", ("source", "render"), "source"),
+        "polish": bool(r.get("polish", True)),
+        "polish_denoise": num("polish_denoise", 0.3, 0.05, 1.0),
     }
 
 

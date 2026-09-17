@@ -365,6 +365,12 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Re-angle and Swap share one shape. Both work on the Img2Img source before
+  its pass or on the new render, a Latent tab render too with Img2Img off if
+  you like; an edit on the render is followed by a Polish pass by the rig, on
+  by default at denoise 0.30. On the source both carry Skip the i2i pass, so
+  the edited picture goes straight to the image output. The lights, the chips,
+  the Run plan, the VRAM estimate and the Overview follow both stages
 - An Overview tab in front of the others: the run as it is set up, one box
   per stage in the order it happens, green on, grey off, amber stood aside
   with the reason on hover, red wanting a fix. A click on a box opens the page

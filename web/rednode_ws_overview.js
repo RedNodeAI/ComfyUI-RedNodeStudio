@@ -1,4 +1,4 @@
-import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, convActive } from "./rednode_workspace.js";
+import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive } from "./rednode_workspace.js";
 import { jumpForStage, goTo } from "./rednode_ws_run.js";
 import { POST_FX } from "./rednode_ws_tables.js";
 
@@ -141,43 +141,43 @@ export function overviewBoxes(node, cfg) {
     });
   }
   const R = I.reangle || {};
+  const S = I.swap || {};
   const offWhy = !I.on ? "Img2Img is off." : I.prompt_only ? "Prompt only is on, so the source only donates its prompt."
     : "Img2Img has no picture.";
-  run.push({
-    key: "reangle", label: "Re-angle",
-    state: !R.on ? "off" : i2iRun ? "on" : "skip",
-    note: !R.on ? "Off" : !i2iRun ? "Skipped" : R.skip_pass ? "Re-shot, skips the pass" : "Re-shot first",
-    why: R.on && !i2iRun ? offWhy : "",
-    to: { tab: "i2i", sub: "reangle" },
-  });
-  const S = I.swap || {};
-  const swapTarget = S.target || "source";
   const refName = (r) => r === "subject" ? "Main subject" : r === "own" ? "Own picture"
     : "Person " + String(r || "").replace("subject", "");
   const ownEmpty = S.reference === "own" && !(tabs.swap_ref?.images?.length);
-  const swapBox = (onRender) => {
-    const blocked = ownEmpty ? "Own picture is picked and the Swap gallery is empty."
-      : (!onRender && !i2iRun) ? offWhy : "";
+  // ONE SHAPE FOR BOTH EDIT STAGES: on the source before its pass, or on the render
+  const editBox = (key, label, X, onRender, blockedExtra, note) => {
+    const blocked = blockedExtra || ((!onRender && !i2iRun) ? offWhy : "");
     return {
-      key: onRender ? "swap_render" : "swap", label: onRender ? "Swap on the render" : "Swap",
-      state: !S.on ? "off" : blocked ? "skip" : "on",
-      note: !S.on ? "Off" : blocked ? "Skipped" : capFirst(S.mode || "face") + " from " + refName(S.reference || "subject"),
-      why: S.on ? blocked : "",
-      to: { tab: "i2i", sub: "swap" },
+      key: onRender ? key + "_render" : key,
+      label: onRender ? label + " on the render" : label,
+      state: !X.on ? "off" : blocked ? "skip" : "on",
+      note: !X.on ? "Off" : blocked ? "Skipped" : note + (!onRender && X.skip_pass ? ", skips the pass" : ""),
+      why: X.on ? blocked : "",
+      to: { tab: "i2i", sub: key },
     };
   };
-  if (!S.on || swapTarget !== "render") run.push(swapBox(false));
+  const raTarget = R.target || "source";
+  const raNote = R.camera === "studio" ? "Camera from the Camera tab" : "From the bands";
+  const swapTarget = S.target || "source";
+  const swNote = capFirst(S.mode || "face") + " from " + refName(S.reference || "subject");
+  const swBlocked = ownEmpty ? "Own picture is picked and the Swap gallery is empty." : "";
+  if (!R.on || raTarget !== "render") run.push(editBox("reangle", "Re-angle", R, false, "", raNote));
+  if (!S.on || swapTarget !== "render") run.push(editBox("swap", "Swap", S, false, swBlocked, swNote));
   if (internal) {
     run.push({ key: "encode", label: "Encode", state: "on",
                note: rows.length ? plural(rows.length, "prompt") : "No prompt", to: { tab: "prompts" } });
     const n = Math.max(1, Math.round(Number(i2iRun ? I.passes : L.passes) || 1));
     const skipped = i2iRun && i2iSkipped(I);
+    const who = skippedBy(I);
     for (let i = 1; i <= n; i++) {
       run.push({
         key: `pass${i}`, label: `Pass ${i}`,
         state: skipped ? "skip" : "on",
         note: skipped ? "Skipped" : i > 1 ? "Refine" : i2iRun ? "Img2Img" : "Generate",
-        why: skipped ? "Re-angle skips the pass: the re-shot picture is the image output." : "",
+        why: skipped ? `${who} skips the pass: the edited picture is the image output.` : "",
         to: jumpForStage(`pass${i}`, cfg),
       });
     }
@@ -189,8 +189,16 @@ export function overviewBoxes(node, cfg) {
       to: { tab: "models" },
     });
   }
+  if (R.on && raTarget === "render") {
+    const box = editBox("reangle", "Re-angle", R, true, "", raNote);
+    run.push(box);
+    if (box.state === "on" && R.polish !== false && internal) {
+      run.push({ key: "reangle_polish", label: "Re-angle polish", state: "on", note: "Low denoise on the rig",
+                 to: { tab: "i2i", sub: "reangle" } });
+    }
+  }
   if (S.on && swapTarget === "render") {
-    const box = swapBox(true);
+    const box = editBox("swap", "Swap", S, true, swBlocked, swNote);
     run.push(box);
     if (box.state === "on" && S.polish !== false && internal) {
       run.push({ key: "swap_polish", label: "Swap polish", state: "on", note: "Low denoise on the rig",

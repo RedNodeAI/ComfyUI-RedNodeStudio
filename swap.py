@@ -82,6 +82,9 @@ def parse(raw):
         "order": pick("order", ORDERS, "auto"),
         "prompt": str(r.get("prompt") or "")[:2000],
         "keep_size": bool(r.get("keep_size", False)),
+        # STOP AFTER THE SWAP on the source: the swapped picture is the image
+        # output as it is, no encode and no i2i pass (Re-angle's switch, here)
+        "skip_pass": bool(r.get("skip_pass", False)),
         # source: the Img2Img source before its pass. render: the finished render
         # (a Latent tab render too), then a polish pass of the rig over the result
         "target": pick("target", ("source", "render"), "source"),

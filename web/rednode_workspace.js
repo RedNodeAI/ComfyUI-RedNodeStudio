@@ -1221,6 +1221,12 @@ export function readCfg(node) {
       if (!Object.hasOwn(EDIT_ATTN, R.attention)) R.attention = "pytorch";
       if (typeof R.seed !== "number") R.seed = 0;
       if (typeof R.seed_random !== "boolean") R.seed_random = true;
+      // the same shape Swap has: the source before its pass or the new render
+      if (!Object.hasOwn(SW_TARGETS, R.target)) R.target = "source";
+      if (typeof R.skip_pass !== "boolean") R.skip_pass = false;
+      if (typeof R.polish !== "boolean") R.polish = true;
+      if (typeof R.polish_denoise !== "number") R.polish_denoise = 0.3;
+      R.polish_denoise = Math.max(0.05, Math.min(1, R.polish_denoise));
       // SWAP, the character stage after re-angle, before the i2i pass (server: swap.py)
       if (!t.swap || typeof t.swap !== "object") t.swap = {};
       const S = t.swap;
@@ -1230,6 +1236,7 @@ export function readCfg(node) {
       if (!["auto", "body_first", "face_first"].includes(S.order)) S.order = "auto";
       if (typeof S.prompt !== "string") S.prompt = "";
       if (typeof S.keep_size !== "boolean") S.keep_size = false;
+      if (typeof S.skip_pass !== "boolean") S.skip_pass = false;
       if (!Object.hasOwn(SW_TARGETS, S.target)) S.target = "source";
       if (typeof S.polish !== "boolean") S.polish = true;
       if (typeof S.polish_denoise !== "number") S.polish_denoise = 0.3;
@@ -12806,7 +12813,18 @@ export function convActive(c) {
 // Re-angle's "skip the pass": the re-shot picture is the image output, so the
 // source's own encode and every pass stand aside
 export function i2iSkipped(t) {
-  return !!(t.reangle?.on && t.reangle?.skip_pass && !t.prompt_only);
+  return !!skippedBy(t);
+}
+
+// the source stage whose Skip the pass is on, "Re-angle", "Swap" or "": both edit
+// the source, so either can hand its picture straight to the image output
+export function skippedBy(t) {
+  if (!t || t.prompt_only) return "";
+  const R = t.reangle || {};
+  const S = t.swap || {};
+  if (R.on && (R.target || "source") === "source" && R.skip_pass) return "Re-angle";
+  if (S.on && (S.target || "source") === "source" && S.skip_pass) return "Swap";
+  return "";
 }
 
 // true (lit), false (dark), or "skip" (amber: stood aside for Re-angle's skip)
@@ -12825,7 +12843,10 @@ function i2iSubLit(cfg, id) {
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
   if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
-  if (id === "reangle") return !!(t.on && t.reangle?.on && !t.prompt_only);
+  if (id === "reangle") {
+    // a re-shot of the render runs whatever the pass mode; on the source it needs the pass
+    return !!(t.reangle?.on && (t.reangle.target === "render" || (t.on && !t.prompt_only)));
+  }
   if (id === "swap") {
     // a swap on the render runs whatever the pass mode; a source swap needs the pass
     return !!(t.swap?.on && (t.swap.target === "render" || (t.on && !t.prompt_only)));
@@ -12859,15 +12880,17 @@ export function i2iIssues(cfg) {
                                   + "image or latent in" });
   }
   if (t.on && t.prompt_only) {
-    if (t.reangle?.on) {
-      out.push({ sub: "passes", about: "reangle", text: "Prompt only is on, so Re-angle is skipped" });
+    if (t.reangle?.on && (t.reangle.target || "source") === "source") {
+      out.push({ sub: "passes", about: "reangle", text: "Prompt only is on, so the source Re-angle is skipped" });
     }
     if (swapOn && target === "source") {
       out.push({ sub: "passes", about: "swap", text: "Prompt only is on, so the source Swap is skipped" });
     }
   }
-  if (t.on && i2iSkipped(t)) {
-    out.push({ sub: "reangle", about: "passes", text: "Re-angle skips the pass, so none of the passes run" });
+  const who = skippedBy(t);
+  if (t.on && who) {
+    out.push({ sub: who === "Swap" ? "swap" : "reangle", about: "passes",
+               text: `${who} skips the pass, so none of the passes run` });
   }
   if (t.on && t.auto?.on && !engines) {
     out.push({ sub: "auto", text: "Auto prompt is on with no engine picked" });
@@ -12988,11 +13011,12 @@ function i2iTabs(node, body) {
     const lit = i2iSubLit(cfg, id);
     lt.className = "lt" + (lit === "skip" ? " skip" : lit ? " on" : "");
     if (lit === "skip") {
+      const who = skippedBy(t);
       b.title = id === "source"
-        ? "Re-angle skips the pass: the source is re-shot and that picture goes "
+        ? `${who} skips the pass: the source is edited and that picture goes `
           + "straight to the image output, with no encode of its own."
-        : "Re-angle skips the pass: none of these passes run. Switch Skip the pass "
-          + "off on the Re-angle tab to run them on the re-shot picture.";
+        : `${who} skips the pass: none of these passes run. Switch Skip the pass `
+          + `off on the ${who} tab to run them on the edited picture.`;
     }
     const tx = document.createElement("span");
     tx.textContent = label;
@@ -13016,7 +13040,8 @@ function i2iTabs(node, body) {
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
   const issues = i2iIssues(cfg);
-  const issueOn = (id) => issues.some((x) => x.sub === id);
+  // an issue is about a stage (its chip goes amber) and names the page that fixes it
+  const issueOn = (id) => issues.some((x) => (x.about || x.sub) === id);
   const pageName = (id) => I2I_SUBS.find(([x]) => x === id)[1].toLowerCase();
   const openPage = (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; render(node); };
   // ONE CHIP PER PAGE with something to say, in that page's colour; a click opens
@@ -13039,11 +13064,13 @@ function i2iTabs(node, body) {
   if (t.reangle?.on) {
     const live = i2iSubLit(cfg, "reangle");
     chips.push({ sub: "reangle", warn: !live,
-                 text: !live ? "Re-angle skipped" : t.reangle.skip_pass ? "Re-angle skips the pass" : "Re-angle" });
+                 text: !live ? "Re-angle skipped" : t.reangle.target === "render" ? "Re-angle on the render"
+                   : t.reangle.skip_pass ? "Re-angle skips the pass" : "Re-angle on the source" });
   }
   if (t.swap?.on) {
     chips.push({ sub: "swap", warn: !swapLive,
-                 text: !swapLive ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render" : "Swap on the source" });
+                 text: !swapLive ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render"
+                   : t.swap.skip_pass ? "Swap skips the pass" : "Swap on the source" });
   }
   if (convActive(t.conv)) chips.push({ sub: "converter", text: "Converter", warn: !t.on });
   for (const ch of chips) {
@@ -13088,12 +13115,14 @@ function i2iTabs(node, body) {
   // Image to text works with Img2Img off, so the auto page says so on its own tab
   // a swap on the render works with Img2Img off too
   if (!t.on && sub !== "source" && sub !== "auto"
-      && !(sub === "swap" && t.swap?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
+      && !(sub === "swap" && t.swap?.target === "render")
+      && !(sub === "reangle" && t.reangle?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
   else if (sub === "passes") passesTab(node, body);
   else if (sub === "auto") i2iAutoPage(node, body);
   else if (sub === "reangle") {
-    if (t.prompt_only) onlyNote("Re-angle");
+    // a re-shot of the render runs under Prompt only too, so its page stays
+    if (t.prompt_only && (t.reangle?.target || "source") !== "render") onlyNote("Re-angle");
     else reangleSection(node, body, "i2i", { flat: true });
   } else if (sub === "swap") {
     // a swap on the render runs under Prompt only too, so its page stays
@@ -13645,7 +13674,7 @@ function passesTab(node, body, kind = "i2i") {
   if (!isLat && i2iSkipped(t)) {
     const n = document.createElement("div");
     n.className = "rn-ws-card rn-ws-note rn-ws-skipnote";
-    n.textContent = "Skipped: Re-angle's Skip the pass is on, so the re-shot picture "
+    n.textContent = `Skipped: ${skippedBy(t)}'s Skip the pass is on, so the edited picture `
                   + "goes straight to the image output and none of these passes run. "
                   + "The settings are kept for when it is switched off.";
     right.appendChild(n);
@@ -13959,55 +13988,129 @@ const SW_PROMPT_HINT = {
 const RA_DEFAULT = { unet: "qwen_image_edit_2511_fp8mixed.safetensors", clip: "qwen_2.5_vl_7b_fp8_scaled.safetensors",
                      vae: "qwen_image_vae.safetensors", lora_angles: "qwen-image-edit-2511-multiple-angles-lora.safetensors",
                      lora_light: "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors" };
+// WORKS ON, shared by Re-angle and Swap: the Img2Img source before its pass, or
+// the finished render with a polish pass by the rig after the edit
+function editTargetRow(node, card, X, tag, tips) {
+  const trow = document.createElement("div");
+  trow.className = "rn-ws-row";
+  const tl = document.createElement("span");
+  tl.className = "rn-ws-note";
+  tl.textContent = "Works on";
+  const tseg = document.createElement("div");
+  tseg.className = "rn-ws-seg rn-ws-" + tag + "target";
+  for (const [v, label, tip] of [["source", "Img2Img source", tips.source],
+                                 ["render", "New render", tips.render]]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + (X.target === v ? " on" : "");
+    b.textContent = label;
+    b.title = tip;
+    b.onclick = () => { X.target = v; writeCfg(node); render(node); };
+    tseg.appendChild(b);
+  }
+  trow.append(tl, tseg);
+  if (X.target === "render") {
+    const psw = document.createElement("div");
+    psw.className = "rn-ws-sw rn-ws-" + tag + "polish" + (X.polish ? " on" : "");
+    psw.title = tips.polish;
+    psw.onclick = () => { X.polish = !X.polish; writeCfg(node); render(node); };
+    const pl2 = document.createElement("span");
+    pl2.className = "rn-ws-note";
+    pl2.textContent = "Polish pass";
+    trow.append(psw, pl2);
+    if (X.polish) {
+      const dn = document.createElement("input");
+      dn.type = "number";
+      dn.className = "rn-ws-" + tag + "denoise";
+      dn.min = "0.05"; dn.max = "1"; dn.step = "0.05";
+      dn.value = String(X.polish_denoise);
+      dn.title = tips.denoise;
+      dn.style.cssText = "width:70px;background:#101216;border:1px solid #2a2e34;border-radius:4px;"
+                       + "color:#e2e5ea;font-size:12px;padding:3px 6px";
+      dn.onchange = () => {
+        const v = Number(dn.value);
+        if (Number.isFinite(v)) X.polish_denoise = Math.max(0.05, Math.min(1, v));
+        writeCfg(node);
+        render(node);
+      };
+      dn.addEventListener("wheel", () => dn.blur(), { passive: true });
+      const dl = document.createElement("span");
+      dl.className = "rn-ws-note";
+      dl.textContent = "Denoise";
+      trow.append(dl, dn);
+    }
+  }
+  card.appendChild(trow);
+}
+
+// SKIP THE PASS, shared too: the edited picture is the image output as it is. The
+// point is memory: with the pass on, the rig and the edit model both want the
+// card in one run.
+function editSkipRow(node, card, X, tag, what) {
+  const srow = document.createElement("div");
+  srow.className = "rn-ws-row";
+  const ssw = document.createElement("div");
+  ssw.className = "rn-ws-sw rn-ws-" + tag + "skip" + (X.skip_pass ? " on" : "");
+  ssw.title = X.skip_pass
+    ? `On: the ${what} picture is the image output as it is. No encode and no i2i `
+      + "pass, so the rig never enters VRAM beside the edit model. Polish it in a "
+      + "Detailer pass afterwards if you want the Krea look. Built-in sampler only."
+    : `Off: the i2i pass runs on the ${what} picture at the denoise above, the `
+      + "normal run. Switch on to stop after the edit and keep the rig out of "
+      + "VRAM while the edit model works.";
+  ssw.onclick = () => { X.skip_pass = !X.skip_pass; writeCfg(node); render(node); };
+  const sl = document.createElement("span");
+  sl.className = "rn-ws-note";
+  sl.textContent = "Skip the i2i pass";
+  srow.append(ssw, sl);
+  card.appendChild(srow);
+}
+
 function reangleSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
-  if (t.prompt_only) return;
+  if (t.prompt_only && (t.reangle?.target || "source") !== "render") return;
   const R = t.reangle;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
   const open = (node._rnReangleOpen ||= { engine: false });
   const card = sectionCard("RE-ANGLE", "#f0c58a",
     !R.on ? "off"
-          : (R.camera === "studio" ? "camera from the Camera tab" : R.azimuth + " · " + R.elevation + " · " + R.distance),
+          : (R.camera === "studio" ? "camera from the Camera tab" : R.azimuth + " · " + R.elevation + " · " + R.distance)
+            + (R.target === "render" ? " · on the render" : ""),
     flat ? null : { node, key: "i2i_reangle", open: !!R.on });
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
   sw.className = "rn-ws-sw" + (R.on ? " on" : "");
-  sw.title = "On: before the image to image pass, the source is re-shot from another "
-           + "viewpoint by the multi-angle edit model, and THAT picture is the i2i source. "
-           + "Off: the source is used as it is.";
+  sw.title = "On: the picture is re-shot from another viewpoint by the multi-angle edit "
+           + "model. On the Img2Img source that re-shot is the i2i source; on the new render "
+           + "it is the finished picture, polished by the rig. Off: nothing re-shot.";
   sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
-  lab.textContent = R.on
-    ? (R.skip_pass
+  lab.textContent = !R.on
+    ? "Image to image from a different angle: re-shoot the picture, then paint over it."
+    : R.target === "render"
+      ? "The finished render is re-shot from the camera below"
+        + (R.polish ? ", then the rig polishes it." : ".")
+      : R.skip_pass
         ? "The source is re-shot from the camera below and goes straight to the image output."
-        : "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above.")
-    : "Image to image from a different angle: re-shoot the source first, then paint over it.";
+        : "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above.";
   row0.append(sw, lab);
   card.appendChild(row0);
   if (R.on) {
-    // SKIP THE PASS: the re-shot picture as it is. The point is memory: with the
-    // pass on, the rig and the edit model both want the card in one run.
-    const srow = document.createElement("div");
-    srow.className = "rn-ws-row";
-    const ssw = document.createElement("div");
-    ssw.className = "rn-ws-sw" + (R.skip_pass ? " on" : "");
-    ssw.title = R.skip_pass
-      ? "On: the re-shot picture is the image output as it is. No encode and no i2i "
-        + "pass, so the rig never enters VRAM beside the edit model. Polish it in a "
-        + "Detailer pass afterwards if you want the Krea look. Built-in sampler only."
-      : "Off: the i2i pass runs on the re-shot picture at the denoise above, the "
-        + "normal run. Switch on to stop after the re-shot and keep the rig out of "
-        + "VRAM while the edit model works.";
-    ssw.onclick = () => { R.skip_pass = !R.skip_pass; writeCfg(node); render(node); };
-    const sl = document.createElement("span");
-    sl.className = "rn-ws-note";
-    sl.textContent = "Skip the i2i pass";
-    srow.append(ssw, sl);
-    card.appendChild(srow);
+    // WHAT IT WORKS ON and the polish pass: the rows Swap has, shared
+    editTargetRow(node, card, R, "reangle", {
+      source: "The Img2Img source picture, before its pass. The pass then finishes the "
+            + "re-shot picture at its denoise.",
+      render: "The finished render, a Latent tab render as much as an Img2Img one, re-shot "
+            + "from the camera below. Img2Img does not need to be on.",
+      polish: "On: after the re-shot the rig runs once more over the picture at the denoise "
+            + "beside it, so the new viewpoint sits in the render's light and grain. Off: "
+            + "the re-shot picture as the edit model left it.",
+      denoise: "The polish pass's denoise. 0.2 to 0.35 keeps the viewpoint and blends it in.",
+    });
+    if (R.target !== "render") editSkipRow(node, card, R, "reangle", "re-shot");
     // camera source
     const crow = document.createElement("div");
     crow.className = "rn-ws-row";
@@ -14200,66 +14303,24 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
     : S.target === "render"
       ? refName(S.reference) + " goes onto the finished render"
         + (S.polish ? ", then the rig polishes it." : ".")
-      : refName(S.reference) + " goes onto the Img2Img source first, then the i2i pass runs on it.";
+      : refName(S.reference) + " goes onto the Img2Img source first, "
+        + (S.skip_pass ? "and that picture goes straight to the image output."
+                       : "then the i2i pass runs on it.");
   row0.append(sw, lab);
   card.appendChild(row0);
   if (S.on) {
-    // WHAT IT WORKS ON: the Img2Img source before its pass, or the finished render
-    const trow = document.createElement("div");
-    trow.className = "rn-ws-row";
-    const tl = document.createElement("span");
-    tl.className = "rn-ws-note";
-    tl.textContent = "Works on";
-    const tseg = document.createElement("div");
-    tseg.className = "rn-ws-seg rn-ws-swaptarget";
-    for (const [v, label, tip] of [
-      ["source", "Img2Img source", "The Img2Img source picture, before its pass. The pass "
-                                   + "then finishes the swapped picture at its denoise."],
-      ["render", "New render", "The finished render, a Latent tab render as much as an "
-                               + "Img2Img one. Img2Img does not need to be on."],
-    ]) {
-      const b = document.createElement("button");
-      b.className = "rn-ws-segb" + (S.target === v ? " on" : "");
-      b.textContent = label;
-      b.title = tip;
-      b.onclick = () => { S.target = v; writeCfg(node); render(node); };
-      tseg.appendChild(b);
-    }
-    trow.append(tl, tseg);
-    if (S.target === "render") {
-      const psw = document.createElement("div");
-      psw.className = "rn-ws-sw rn-ws-swappolish" + (S.polish ? " on" : "");
-      psw.title = "On: after the swap the rig runs once more over the picture at the denoise "
-                + "beside it, so the new face sits in the render's light and grain. Off: the "
-                + "swapped picture as the edit model left it.";
-      psw.onclick = () => { S.polish = !S.polish; writeCfg(node); render(node); };
-      const pl2 = document.createElement("span");
-      pl2.className = "rn-ws-note";
-      pl2.textContent = "Polish pass";
-      trow.append(psw, pl2);
-      if (S.polish) {
-        const dn = document.createElement("input");
-        dn.type = "number";
-        dn.className = "rn-ws-swapdenoise";
-        dn.min = "0.05"; dn.max = "1"; dn.step = "0.05";
-        dn.value = String(S.polish_denoise);
-        dn.title = "The polish pass's denoise. 0.2 to 0.35 blends the face in and keeps it.";
-        dn.style.cssText = "width:70px;background:#101216;border:1px solid #2a2e34;border-radius:4px;"
-                         + "color:#e2e5ea;font-size:12px;padding:3px 6px";
-        dn.onchange = () => {
-          const v = Number(dn.value);
-          if (Number.isFinite(v)) S.polish_denoise = Math.max(0.05, Math.min(1, v));
-          writeCfg(node);
-          render(node);
-        };
-        dn.addEventListener("wheel", () => dn.blur(), { passive: true });
-        const dl = document.createElement("span");
-        dl.className = "rn-ws-note";
-        dl.textContent = "Denoise";
-        trow.append(dl, dn);
-      }
-    }
-    card.appendChild(trow);
+    // WHAT IT WORKS ON and the polish pass, shared with Re-angle
+    editTargetRow(node, card, S, "swap", {
+      source: "The Img2Img source picture, before its pass. The pass then finishes the "
+            + "swapped picture at its denoise.",
+      render: "The finished render, a Latent tab render as much as an Img2Img one. Img2Img "
+            + "does not need to be on.",
+      polish: "On: after the swap the rig runs once more over the picture at the denoise "
+            + "beside it, so the new face sits in the render's light and grain. Off: the "
+            + "swapped picture as the edit model left it.",
+      denoise: "The polish pass's denoise. 0.2 to 0.35 blends the face in and keeps it.",
+    });
+    if (S.target !== "render") editSkipRow(node, card, S, "swap", "swapped");
     // FAST: the speed LoRA and its numbers in one switch
     const frow = document.createElement("div");
     frow.className = "rn-ws-row";
@@ -15165,7 +15226,8 @@ export const tabLit = (cfg, id) =>
                        && (cfg.tabs.i2i.images.length
                            || cfg.tabs.i2i.canvas !== "gallery"
                            || cfg.tabs.i2i.prompt_only))
-                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render"))
+                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render")
+                      || (cfg.tabs.i2i.reangle?.on && cfg.tabs.i2i.reangle.target === "render"))
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the
