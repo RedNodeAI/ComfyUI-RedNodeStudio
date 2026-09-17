@@ -11176,7 +11176,54 @@ function modelsBody(node, page) {
       }
       writeCfg(node); render(node);
     };
-    pill(body, "Sampler presets", psel, psel.title);
+    // SAVE AND DELETE, so the list can grow from here: the rig's five numbers
+    // under a name, kept with the Sampler Config node's own presets
+    const keys = ["steps", "cfg", "sampler", "scheduler", "detailer_steps"];
+    const postProfiles = async (body) => {
+      try {
+        const r = await api.fetchApi("/rednode/sampler_profiles", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (d?.error) throw new Error(d.error);
+        if (d?.profiles) node._rnSamplerProfiles = d.profiles;
+      } catch (e) {
+        alert("Could not save the sampler preset: " + e.message);
+      }
+      render(node);
+    };
+    const psave = document.createElement("button");
+    psave.className = "rn-ws-btn rn-ws-compact rn-ws-presetsave";
+    psave.style.cssText = "width:auto;padding:0 10px;flex:none";
+    psave.textContent = "Save";
+    psave.title = "Save this rig's steps, cfg, sampler, scheduler and detailer steps as a "
+                + "preset, under a name, for every workflow.";
+    psave.onclick = () => {
+      const name = (window.prompt("Name this sampler preset", psel.value || "") || "").trim();
+      if (!name) return;
+      const values = Object.fromEntries(keys.map((k) => [k, rig[k]]));
+      (node._rnSamplerProfiles ||= {})[name] = values;
+      postProfiles({ name, values });
+    };
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:6px;align-items:center;flex:1 1 auto;min-width:0";
+    psel.style.flex = "1 1 auto";
+    wrap.append(psel, psave);
+    if (psel.value && node._rnSamplerProfiles?.[psel.value]) {
+      const pdel = document.createElement("button");
+      pdel.className = "rn-ws-btn rn-ws-compact rn-ws-presetdel";
+      pdel.style.cssText = "width:auto;padding:0 10px;flex:none";
+      pdel.textContent = "Delete";
+      pdel.title = "Delete the preset picked here.";
+      pdel.onclick = () => {
+        const name = psel.value;
+        delete node._rnSamplerProfiles[name];
+        postProfiles({ name, delete: true });
+      };
+      wrap.appendChild(pdel);
+    }
+    pill(body, "Sampler presets", wrap, psel.title);
   }
   const sh = document.createElement("div");
   sh.className = "rn-ws-note";

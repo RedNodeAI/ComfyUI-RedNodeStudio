@@ -365,6 +365,10 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Sampler presets on the Models tab save and delete again: Save beside the
+  list keeps this rig's steps, cfg, sampler, scheduler and detailer steps
+  under a name, Delete removes the picked one. They are the Sampler Config
+  node's presets, shared with it
 - On the Models tab the file picker's None entry sits at the top of the list
   instead of under every file, and the Local files buttons are gone: the box
   itself is the picker. The Loader choices read By file name, Standard, GGUF and INT8
