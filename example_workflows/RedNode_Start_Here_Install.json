@@ -4,27 +4,27 @@
   "nodes": [
     {
       "id": 1,
-      "type": "RedNodeNote",
+      "type": "Note",
       "pos": [
         0,
-        -300
+        -330
       ],
       "size": [
-        1500,
-        260
+        1180,
+        290
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "properties": {
-        "Node name for S&R": "RedNodeNote",
-        "cnr_id": "rednode-studio"
-      },
+      "title": "Note",
+      "properties": {},
       "widgets_values": [
         "START HERE: install the packs RedNode Studio can use\n\nThis workflow renders nothing. It holds one node from each pack the Workspace can lean on, so\nComfyUI Manager finds them all at once instead of one at a time.\n\n1. Manager says some nodes are missing when this opens. Let it install them.\n2. Restart ComfyUI.\n3. Open RedNode Studio from the template browser and work from there. This file has done its job.\n\nNone of these are required. The Workspace renders without every one of them and says on the Run\ntab when a pass wanted one that is not here. Install what you want and skip the rest: the\nOverview tab's Check installs button says which ones your own settings actually call for."
-      ]
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
     },
     {
       "id": 2,
@@ -258,27 +258,27 @@
     },
     {
       "id": 12,
-      "type": "RedNodeNote",
+      "type": "Note",
       "pos": [
         0,
         420
       ],
       "size": [
-        1500,
-        560
+        1180,
+        620
       ],
       "flags": {},
       "order": 11,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "properties": {
-        "Node name for S&R": "RedNodeNote",
-        "cnr_id": "rednode-studio"
-      },
+      "title": "Note",
+      "properties": {},
       "widgets_values": [
-        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask.\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
-      ]
+        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. Put a checkpoint in models/sam3 as well: the pack installs without one.\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
     }
   ],
   "links": [],
@@ -289,7 +289,7 @@
       "scale": 0.7,
       "offset": [
         120,
-        360
+        380
       ]
     }
   },

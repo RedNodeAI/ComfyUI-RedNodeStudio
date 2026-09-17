@@ -365,6 +365,17 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- The Post tab's effect list kept jumping back to the top on every click, and
+  so did the Order view's cards. The hook a tab sets while building its body
+  was being cleared after the tab had built it, so it never ran
+- Krea 2 Identity says what it needs. The likeness rides a Krea 2 edit LoRA,
+  so the Overview says when none is switched on, when the rig is not the
+  official Krea 2 Turbo the LoRA was trained on, and when a Detailer pass runs
+  with the LoRA stack switched off and can undo the likeness
+- Check installs asks for a SAM3 checkpoint as well as the pack. ComfyUI-Easy-Sam3
+  installs without one, and a Detailer pass then failed on the missing file
+  while the check said the pack was fine
+- The Start here workflow's notes are ComfyUI's own Note nodes
 - A Start here workflow, `RedNode_Start_Here_Install.json`. It renders nothing:
   it holds one node from each pack the Workspace can lean on, so ComfyUI
   Manager finds them together and offers them in one pass, with a note saying

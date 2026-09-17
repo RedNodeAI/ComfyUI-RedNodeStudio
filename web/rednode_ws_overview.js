@@ -1,6 +1,6 @@
-import { render, tabLit, setupProblems, i2iIssues, i2iSkipped, skippedBy, convActive,
-         socketWired, packInstalled, modelListsNow, fetchModelListsOnce, autoStatusNow,
-         AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
+import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, skippedBy,
+         convActive, socketWired, packInstalled, modelListsNow, fetchModelListsOnce,
+         autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 
@@ -103,10 +103,12 @@ export function overviewBoxes(node, cfg) {
   if (tabs.subject?.on && tabs.subject.images?.length) idParts.push("Subject " + tabs.subject.images.length);
   if (tabs.scene?.on && tabs.scene.images?.length) idParts.push("Scene " + tabs.scene.images.length);
   if (tabs.boost_mask?.on) idParts.push("Masks");
+  const idProbs = identityIssues(cfg);
   feeds.push({
     key: "identity", label: "Krea 2 Identity",
-    state: idParts.length ? "on" : "off",
+    state: !idParts.length ? "off" : idProbs.length ? "skip" : "on",
     note: idParts.length ? idParts.join(" · ") : "Off",
+    why: idProbs.map((p) => p.text + ".").join("\n"),
     to: { tab: "identity", sub: "subject" },
   });
   feeds.push({
@@ -267,6 +269,7 @@ export function overviewBoxes(node, cfg) {
   for (const p of rigProbs) add(p, { tab: "models" });
   for (const p of promptProbs) add(p, { tab: "prompts" });
   for (const it of i2iProbs) add(it.text, { tab: "i2i", sub: it.sub });
+  for (const it of idProbs) add(it.text, { tab: it.tab, sub: it.tab === "identity" ? it.sub : undefined });
   for (const b of [...feeds, ...run]) {
     if ((b.state === "skip" || b.state === "warn") && b.why
         && !attention.some((a) => a.text.includes(b.why))) {
@@ -310,6 +313,15 @@ export function runNeeds(node, cfg) {
     if (stages.some((s) => s.type === "usdu")) wantPack("usdu", null, { tab: "detailer" });
     if (stages.some((s) => s.type === "detailer")) {
       wantPack("sam3", "finding what a Detailer pass works on", { tab: "detailer" });
+      // the pack installs without its checkpoints, and the pass then fails on the
+      // file rather than the pack, which read as the pack being fine
+      if (packInstalled(packBy("sam3")) === true) {
+        out.push({ kind: "file", ok: (modelListsNow()?.sam3 || []).length > 0,
+                   label: "A SAM3 checkpoint", what: "what ComfyUI-Easy-Sam3 segments with",
+                   how: "Put one in models/sam3. The pack installs without it, and a "
+                      + "Detailer pass then says the file is not found.",
+                   to: { tab: "detailer" } });
+      }
     }
   }
   if (cfg.paint?.on) wantPack("sam3", "the Paint tab's auto mask", { tab: "paint" });

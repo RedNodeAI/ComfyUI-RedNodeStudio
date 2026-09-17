@@ -10557,6 +10557,9 @@ async function fetchModelLists() {
     clips: await pull("CLIPLoader", "clip_name"),
     clip_types: await pull("CLIPLoader", "type"),
     vaes: await pull("VAELoader", "vae_name"),
+    // the segmenter's own checkpoints (models/sam3): the pack installs without
+    // them, and a Detailer pass then fails on the file rather than the pack
+    sam3: await pull("easy sam3ModelLoader", "model"),
     loras: await pull("LoraLoader", "lora_name"),
     samplers: await pull("KSampler", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
@@ -12890,6 +12893,57 @@ const textTabLit = (cfg, id) => {
   const t = cfg.tabs[id];
   return !!(t?.on && t.sel?.length);
 };
+
+// A KREA 2 EDIT LORA by its file name. The identity conditioning is the plumbing;
+// the likeness lives in the LoRA (krea2_identity_edit_v1 and its kin), so without
+// one on the model the whole system reads as doing nothing.
+export const isIdentityLora = (name) => {
+  const n = String(name || "").toLowerCase();
+  return /identity/.test(n) || (/krea\s*2?/.test(n) && /edit/.test(n));
+};
+
+// WHAT KREA 2 IDENTITY NEEDS that the rest of the panel cannot see: the edit LoRA
+// somewhere on the model, and the official Turbo under it. Same shape as i2iIssues.
+export function identityIssues(cfg) {
+  const out = [];
+  const tabs = cfg?.tabs || {};
+  const lit = (t) => !!(t?.on && t.images?.length);
+  const on = lit(tabs.subject) || lit(tabs.scene) || !!tabs.boost_mask?.on;
+  if (!on) return out;
+  // the LoRA stack the render runs through, and the Detailer passes that share it
+  const L = cfg.loras || {};
+  const slots = (L.slots || []).filter((s) => s && s.enabled !== false
+    && s.name && s.name !== "None");
+  const hasLora = !!L.on && slots.some((s) => isIdentityLora(s.name));
+  if (!hasLora) {
+    out.push({ sub: "subject", tab: "loras",
+               text: (L.on && slots.length)
+                 ? "Krea 2 Identity works through a Krea 2 edit LoRA, and none of the LoRAs "
+                   + "switched on is one. The references steer nothing without it"
+                 : "Krea 2 Identity works through a Krea 2 edit LoRA, and the LoRAs tab has "
+                   + "none switched on. The references steer nothing without it" });
+  }
+  const M = cfg.models || {};
+  const rig = M.rigs?.[M.active];
+  if (rig && rig.clip_type === "krea2" && !rigOfficial(rig)) {
+    out.push({ sub: "subject", tab: "models",
+               text: `The rig ${rig.name || "in use"} is not marked as the official Krea 2 `
+                   + "Turbo. The edit LoRA was trained on it, so likeness varies on a "
+                   + "community mix" });
+  }
+  // a Detailer pass with its LoRAs switched off never sees the edit LoRA
+  if (hasLora && cfg.detailer_on) {
+    const bare = (cfg.detailer?.stages || [])
+      .filter((s) => s.on && s.type !== "title" && s.loras === false).length;
+    if (bare) {
+      out.push({ sub: "subject", tab: "detailer",
+                 text: `${bare} Detailer pass${bare === 1 ? "" : "es"} run with the LoRA stack `
+                     + "switched off, so the edit LoRA does not reach them and they can undo "
+                     + "the likeness" });
+    }
+  }
+  return out;
+}
 
 // WHAT STOPS AN IMG2IMG STAGE FROM RUNNING, in the words its pages use, each
 // line naming the page that fixes it. One list feeds the bar's chips and issues
@@ -15422,6 +15476,10 @@ export function render(node) {
   const body = document.createElement("div");
   body.className = "rn-ws-body"
     + (["paint", "prompts", "latent"].includes(cur) ? " full" : "");
+  // BEFORE the tab builds, never after: a tab sets this while building (the Post
+  // list's scroll, the Order view's cards) and clearing it further down wiped the
+  // hook before it could run, which put both lists back to the top on every click
+  node._rnAfterMount = null;
   if (cur === "identity") identityTabs(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
@@ -15476,7 +15534,6 @@ export function render(node) {
     }
     converterSection(node, body, cur);             // the built-in Prompt Converter
   }
-  node._rnAfterMount = null;
   host.appendChild(body);
   // a tab that needs its own scroll back (the Post list) sets this while building;
   // it runs now, with the body in the page and nothing painted yet
