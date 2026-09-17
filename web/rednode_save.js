@@ -446,21 +446,6 @@ function currentPreset(cfg) {
   return "";
 }
 
-// The browser cannot open a folder, but the machine running ComfyUI can, so the
-// server does it. Only useful when that is the same machine you are sitting at.
-async function openFolder(path) {
-  try {
-    const res = await api.fetchApi("/rednode/open_folder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: path || "" }),
-    });
-    const d = await res.json();
-    if (d.error) throw new Error(d.error);
-  } catch (e) {
-    alert(`Could not open it: ${e.message}`);
-  }
-}
-
 // where the current settings put things, without the filename on the end
 function folderFor(cfg, keep) {
   const sample = SAMPLES;
@@ -524,20 +509,6 @@ function textRow(node, cfg, key, placeholder, withPicker) {
   input.placeholder = placeholder;
   input.oninput = () => { cfg[key] = input.value; writeCfg(node); paint(node); };
   row.appendChild(input);
-  if (withPicker) {
-    const pick = document.createElement("button");
-    pick.className = "rn-sv-btn";
-    pick.textContent = "Browse";
-    pick.title = "Folders that already exist under ComfyUI's output directory. "
-               + "You can also just type one; it is made if it is not there.";
-    pick.onclick = async () => {
-      if (!folders.length) await loadFolders();
-      popup(pick, folders, (v) => {
-        cfg[key] = v; writeCfg(node); render(node);
-      });
-    };
-    row.appendChild(pick);
-  }
   return { row, input };
 }
 
@@ -826,13 +797,6 @@ function render(node) {
 
   const where = section("Where");
   const root = textRow(node, cfg, "root", "output root (blank = straight into output)", true);
-  const openBtn = document.createElement("button");
-  openBtn.className = "rn-sv-btn";
-  openBtn.textContent = "Open";
-  openBtn.title = "Open this folder in the file browser, on the machine running "
-                + "ComfyUI. Right-clicking the node has the same options.";
-  openBtn.onclick = () => openFolder(folderFor(cfg, cfg.keep));
-  root.row.appendChild(openBtn);
   where.appendChild(root.row);
   const sub = textRow(node, cfg, "subfolder", "subfolder, slashes make levels", false);
   where.appendChild(sub.row);
@@ -1449,13 +1413,6 @@ app.registerExtension({
             cursor = 0;
             refresh();
           } },
-        { content: "Open the drafts folder",
-          callback: () => openFolder(folderFor(cfg, false)) },
-        { content: "Open the keepers folder",
-          callback: () => openFolder(folderFor(cfg, true)) },
-        { content: last ? "Open the folder of the last save"
-                        : "Open the output folder",
-          callback: () => openFolder(last ? last.path : "") },
       );
       return options;
     };

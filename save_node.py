@@ -1198,38 +1198,6 @@ def demote(path, root=""):
     return move_saved(path, root, to_keepers=False)
 
 
-def open_folder(path, launcher=None):
-    """Open a folder in the desktop's own file browser.
-
-    Only ever inside the output directory, and only a folder. This is an HTTP route
-    that starts a program, so it gets the narrowest job that is still useful: given
-    a file, it opens the folder containing it.
-
-    `launcher` exists so the tests can check the guards without a window appearing.
-    Returns the folder that was opened.
-    """
-    out_dir = folder_paths.get_output_directory()
-    target = os.path.realpath(path or out_dir)
-    if os.path.isfile(target):
-        target = os.path.dirname(target)
-    if not _inside(target, out_dir):
-        raise ValueError("that folder is outside the output folder")
-    if not os.path.isdir(target):
-        raise ValueError("that folder does not exist yet; save something first")
-    if launcher is not None:
-        launcher(target)
-        return target
-    # the desktop launch lives under local/ (this install's own); the public pack
-    # only tells you where the folder is
-    try:
-        from .local import open_folder as _opener
-    except ImportError:
-        raise ValueError("opening a folder from here is not part of this build; it is at "
-                         + target)
-    _opener.launch(target)
-    return target
-
-
 # what the delete route may remove: the pictures and clips this pack files, never
 # anything else that happens to sit in the output folder
 DELETABLE = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm", ".gif"}
@@ -1650,22 +1618,6 @@ try:
                                   "title": TITLES.get(os.path.realpath(entry["path"]), ""),
                                   "kept": bool(entry.get("kept")),
                                   "missing": not os.path.isfile(entry["path"])})
-
-    @PromptServer.instance.routes.post("/rednode/open_folder")
-    async def _rednode_open_folder(request):
-        """Opens a folder on the machine ComfyUI is running on, not the browser's."""
-        try:
-            data = await request.json()
-        except Exception:
-            data = {}
-        try:
-            opened = open_folder(str(data.get("path") or ""))
-        except ValueError as e:
-            return web.json_response({"error": str(e)}, status=400)
-        except Exception as e:
-            return web.json_response(
-                {"error": f"could not open a file browser here ({e})"}, status=500)
-        return web.json_response({"opened": opened})
 
     @PromptServer.instance.routes.post("/rednode/clear_saved")
     async def _rednode_clear_saved(request):

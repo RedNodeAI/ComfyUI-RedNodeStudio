@@ -366,8 +366,9 @@ fixes are in.
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
 - Not in this release: RedNode Save Video and RedNode Video Review (they run
-  ffmpeg), the LoRA panel's Civitai lookup, and the Save browser's Open folder
-  button (it tells you the folder's path instead). The Comfy Registry's scanner
+  ffmpeg) and the LoRA panel's Civitai lookup. The Save panel's Browse and Open
+  buttons and its folder-opening menu entries are gone for good: a route that
+  launches a program on the machine is not worth keeping. The Comfy Registry's scanner
   flags every subprocess and network call in a pack, whatever it is for, and a
   flagged version never reaches a Registry install; these come back once that
   is settled. The pack reads no environment variable either
