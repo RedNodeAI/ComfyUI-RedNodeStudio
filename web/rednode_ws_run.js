@@ -1171,7 +1171,8 @@ function refresh(view) {
     const tx = el("span", "tx", l.text);
     // A LINE NAMING A PACK THAT IS NOT HERE says where to find it. The link only
     // opens the page; installing stays with ComfyUI Manager.
-    const miss = EXTRA_PACKS.find((p) => l.text.includes(p.name) && !packInstalled(p));
+    const miss = EXTRA_PACKS.find((p) => l.text.includes(p.name)
+      && (/not installed/.test(l.text) || packInstalled(p) === false));
     if (miss) {
       const a = document.createElement("a");
       a.href = packLink(miss);

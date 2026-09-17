@@ -371,7 +371,9 @@ fixes are in.
   and the file lists it already hands the panel; it downloads and installs
   nothing, and ComfyUI Manager still does the installing
 - A run log line naming a pack that is not installed carries a link to where
-  that pack lives, beside the line that names it
+  that pack lives, beside the line that names it. Every address goes straight
+  to the pack that owns the node types the Workspace looks up, checked one by
+  one, rather than to a search page of forks to pick from
 - A canvas set to Wired image or Wired latent, with nothing wired to it, is
   now said out loud. The Img2Img Source page says the socket is empty instead
   of claiming the wire feeds the canvas, the Source chip goes amber, the

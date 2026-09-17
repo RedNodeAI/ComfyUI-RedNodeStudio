@@ -1608,8 +1608,9 @@ export const socketWired = (node, name) =>
 // IS A PACK INSTALLED: are its node types registered with the frontend. No
 // network, no install, no shelling out: it reads what ComfyUI already loaded.
 export const packInstalled = (p) => {
+  if (!p?.nodes?.length) return null;              // nothing to test it by
   const reg = globalThis.LiteGraph?.registered_node_types || {};
-  return (p?.nodes || []).every((n) => !!reg[n]);
+  return p.nodes.every((n) => !!reg[n]);
 };
 // the model file lists and the caption engine status, for the install check
 export const modelListsNow = () => MODEL_LISTS;

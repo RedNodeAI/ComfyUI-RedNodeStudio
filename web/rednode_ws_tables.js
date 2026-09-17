@@ -12,13 +12,14 @@
 // so the strip's colour underlines read as bands - model tabs, then canvas
 // tabs, then mood, edit, post, settings - instead of interleaving.
 // PACKS THE WORKSPACE CAN LEAN ON, for the Overview's install check and for the
-// run log's links. `nodes` are the node types that prove the pack is installed
-// (the same names the server looks up in NODE_CLASS_MAPPINGS). `url` is filled
-// only where it is known for certain: a guessed address is worse than none, so
-// the rest are looked up by name instead.
+// run log's links. `nodes` are the node types that prove the pack is installed,
+// the same names the server looks up in NODE_CLASS_MAPPINGS. Every address here
+// was checked against the pack that really owns those node types: a search page
+// full of forks made people pick, and a guess would send them somewhere wrong.
 export const EXTRA_PACKS = [
   { id: "seedvr2", name: "ComfyUI-SeedVR2_VideoUpscaler",
     what: "the SeedVR2 upscale on a Detailer pass",
+    url: "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler",
     nodes: ["SeedVR2LoadDiTModel", "SeedVR2LoadVAEModel", "SeedVR2VideoUpscaler"] },
   { id: "usdu", name: "ComfyUI_UltimateSDUpscale",
     what: "the tiled upscale on a Detailer pass",
@@ -30,15 +31,30 @@ export const EXTRA_PACKS = [
     nodes: ["easy sam3ModelLoader", "easy sam3ImageSegmentation"] },
   { id: "gguf", name: "ComfyUI-GGUF",
     what: "loading a .gguf diffusion model",
+    url: "https://github.com/city96/ComfyUI-GGUF",
     nodes: ["UnetLoaderGGUF"] },
   { id: "int8", name: "ComfyUI-INT8-Fast",
     what: "loading an INT8 W8A8 diffusion model",
+    url: "https://github.com/BobJohnson24/ComfyUI-INT8-Fast",
     nodes: ["OTUNetLoaderW8A8"] },
+  // the caption engines. The server says whether each one is there
+  // (autoprompt_status), so these carry node types only where the name is
+  // certain, and the run log matches them by name.
+  { id: "wd14", name: "comfyui-wd14-tagger", what: "the WD14 tags caption engine",
+    url: "https://github.com/pythongosssss/ComfyUI-WD14-Tagger",
+    nodes: ["WD14Tagger|pysssss"] },
+  { id: "florence", name: "comfyui-florence2", what: "the Florence caption engine",
+    url: "https://github.com/kijai/ComfyUI-Florence2" },
+  { id: "joy", name: "ComfyUI-JoyCaption", what: "the JoyCaption caption engine",
+    url: "https://github.com/1038lab/ComfyUI-JoyCaption", nodes: ["JC_adv"] },
+  { id: "qwen", name: "ComfyUI-QwenVL", what: "the QwenVL caption engine",
+    url: "https://github.com/1038lab/ComfyUI-QwenVL", nodes: ["AILab_QwenVL"] },
 ];
 // where to read about a pack that is not installed. Manager is the way in; the
-// link only helps you find it, and nothing here downloads anything.
+// link only helps you find it, and nothing here downloads anything. The search
+// is a fallback for an entry with no checked address, which today is none.
 export const packLink = (p) => p.url
-  || `https://github.com/search?q=${encodeURIComponent(p.name)}`;
+  || `https://github.com/search?q=${encodeURIComponent(p.name)}&type=repositories&s=stars&o=desc`;
 
 export const TAB_ORDER = [
   // the run as it is set up, one box per stage (rednode_ws_overview.js)

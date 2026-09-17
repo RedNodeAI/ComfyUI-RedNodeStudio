@@ -285,12 +285,8 @@ export function overviewBoxes(node, cfg) {
 // anything: it reads the node types ComfyUI already loaded and the model file
 // lists ComfyUI already hands the panel, and then says where to get what is
 // missing. Installing stays with ComfyUI Manager, where you can see what it does.
-const CAPTION_ENGINES = [
-  ["wd14", "comfyui-wd14-tagger", "WD14 tags"],
-  ["florence", "comfyui-florence2", "Florence"],
-  ["joy", "ComfyUI-JoyCaption", "JoyCaption"],
-  ["qwen", "ComfyUI-QwenVL", "QwenVL"],
-];
+const CAPTION_ENGINES = [["wd14", "WD14 tags"], ["florence", "Florence"],
+                         ["joy", "JoyCaption"], ["qwen", "QwenVL"]];
 const packBy = (id) => EXTRA_PACKS.find((p) => p.id === id);
 
 // {ok, label, what, how, url, to} for everything this setup leans on
@@ -333,13 +329,13 @@ export function runNeeds(node, cfg) {
   // and an empty gallery loads no engine at all
   const engineOn = (key) => AUTO_TAB_IDS.some((id) => captionInUse(id, tabs[id])
     && (tabs[id].images?.length || 0) > 0 && tabs[id].auto[key]);
-  for (const [key, name, label] of CAPTION_ENGINES) {
-    if (!engineOn(key)) continue;
-    out.push({ kind: "pack", ok: !!status[key], label: name,
+  for (const [key, label] of CAPTION_ENGINES) {
+    const p = packBy(key);
+    if (!p || !engineOn(key)) continue;
+    out.push({ kind: "pack", ok: !!status[key], label: p.name,
                what: `the ${label} caption engine`,
-               how: `Install it in ComfyUI Manager: search for ${name}.`,
-               url: `https://github.com/search?q=${encodeURIComponent(name)}`,
-               to: { tab: "i2i", sub: "auto" } });
+               how: `Install it in ComfyUI Manager: search for ${p.name}.`,
+               url: packLink(p), to: { tab: "i2i", sub: "auto" } });
   }
   if (engineOn("ollama")) {
     out.push({ kind: "service", ok: !!status.ollama, label: "Ollama",
