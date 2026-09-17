@@ -4,14 +4,16 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
-**1.4.0** - 2026-09-14
+**1.4.0** - 2026-09-17
 
 The Workspace grew a Run tab and now renders, details, grades and files on
 its own; a rig can be your own nodes; the VRAM limit is your card's size, with
-an estimated peak and an automatic hold; Swap works on any render; the
-Detailer grew four kinds of pass; the Post tab became a list beside one
-editor; and a Draft switch makes a seed cheap to judge. The 1.3.1 security
-fixes are in.
+an estimate of what the run needs and an automatic hold; Swap works on any
+render; the Detailer grew four kinds of pass; the Post tab became a list
+beside one editor; a Draft switch makes a seed cheap to judge; and an Overview
+tab shows the whole run as it is set up and checks the packs and models it
+calls for. The 1.3.1 security fixes are in, and the pack as published makes no
+network call, runs no program and reads no environment variable.
 
 ### Previews
 
@@ -753,9 +755,15 @@ fixes are in.
 
 ### Examples
 
+- RedNodeStudio_V1.4 replaces the V1.3 template: one Workspace with three
+  rigs on its Models tab, one loading its files there and two built from
+  their own nodes on the canvas, with the Detailer, the grading and the save
+  running inside the node. A note inside lists every model and LoRA file it
+  loads and where to get each one
+- RedNode_Start_Here_Install renders nothing: one node from each pack the
+  Workspace can use, so ComfyUI Manager finds and installs them in one pass.
+  Open it first, restart, then open the template
 - RedNode_Studio_Simple_Angles: the camera stage in a plain graph
-- RedNode_Studio_Pro_Grade: the V1.3 graph with a heavy grading flow's
-  settings on the pack's own controls
 
 **1.3.1** - 2026-09-16
 
