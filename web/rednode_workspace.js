@@ -334,7 +334,6 @@ css.textContent = `
 .rn-ws-segb:hover{color:#fff}
 .rn-ws-segb.on{background:#b8283c;color:#fff;font-weight:600}
 .rn-ws-segb.dim{opacity:.45}
-.rn-ws-fileclear{width:auto;padding:0 9px;flex:none;font-size:15px;line-height:1}
 .rn-ws-switch .rn-ws-segb{padding:4px 10px;font-size:12px}
 /* Swap's quick phrases: each in its own box, the segment look one at a time */
 .rn-ws-swapquick{gap:6px}
@@ -10853,8 +10852,7 @@ function modelsBody(node, page) {
       rig[key] = v;
       writeCfg(node); render(node);
     }, { current: () => rig[key], emptyLabel: "none", recent: recentKey });
-    // the mock's file pill: icon, label over the value, Local files button
-    // the label on the left, the file in its own box, the picker button after it
+    // the label on the left, the file in its own box; the box is the picker
     const row = document.createElement("div");
     row.className = "rn-ws-filerow";
     if (hint) row.title = hint;
@@ -10862,23 +10860,9 @@ function modelsBody(node, page) {
     lab.className = "k";
     lab.textContent = label;
     input.className = "rn-ws-filebox";
-    const browse = document.createElement("button");
-    browse.className = "rn-ws-btn";
-    browse.style.cssText = "width:auto;padding:0 12px;flex:none";
-    browse.textContent = "📁 Local files";
-    browse.title = "Browse and search the installed files.";
-    browse.onclick = () => { input.focus(); input.click(); };
+    // the box is the picker: click it to search the installed files, and the list
+    // starts with None, so the row needs nothing else
     row.append(lab, input);
-    if (rig[key]) {
-      // a picked file can be put back to none in one click
-      const clear = document.createElement("button");
-      clear.className = "rn-ws-btn rn-ws-fileclear";
-      clear.textContent = "\u00d7";
-      clear.title = "Clear: back to None.";
-      clear.onclick = () => { rig[key] = ""; writeCfg(node); render(node); };
-      row.appendChild(clear);
-    }
-    row.appendChild(browse);
     body.appendChild(row);
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
