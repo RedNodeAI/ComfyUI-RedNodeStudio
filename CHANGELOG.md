@@ -365,6 +365,11 @@ fixes are in.
   the Image Review's room over the tab's result history. Wheel zooms, drag
   moves, left and right walk the results, Esc closes, and the right-click
   menu there gives Copy image, Copy prompt, Open in a new tab and Rerun
+- Check installs covers the Post tab too. An effect that reads depth asks for
+  comfyui_controlnet_aux and a Limit row set to the subject or the background
+  asks for comfyui-rmbg, on the same terms the cards themselves use, and the
+  server's own report answers whether each is here. Both join the Start here
+  workflow and the README list
 - The Post tab's effect list kept jumping back to the top on every click, and
   so did the Order view's cards. The hook a tab sets while building its body
   was being cleared after the tab had built it, so it never ran

@@ -1,5 +1,5 @@
 {
-  "last_node_id": 12,
+  "last_node_id": 14,
   "last_link_id": 0,
   "nodes": [
     {
@@ -122,8 +122,8 @@
       "id": 6,
       "type": "OTUNetLoaderW8A8",
       "pos": [
-        1200,
-        0
+        0,
+        190
       ],
       "size": [
         270,
@@ -145,7 +145,7 @@
       "id": 7,
       "type": "WD14Tagger|pysssss",
       "pos": [
-        0,
+        300,
         190
       ],
       "size": [
@@ -168,7 +168,7 @@
       "id": 8,
       "type": "Florence2Run",
       "pos": [
-        300,
+        600,
         190
       ],
       "size": [
@@ -191,7 +191,7 @@
       "id": 9,
       "type": "JC_adv",
       "pos": [
-        600,
+        900,
         190
       ],
       "size": [
@@ -214,8 +214,8 @@
       "id": 10,
       "type": "AILab_QwenVL",
       "pos": [
-        900,
-        190
+        0,
+        380
       ],
       "size": [
         270,
@@ -235,10 +235,10 @@
     },
     {
       "id": 11,
-      "type": "Seed (rgthree)",
+      "type": "DepthAnythingV2Preprocessor",
       "pos": [
-        1200,
-        190
+        300,
+        380
       ],
       "size": [
         270,
@@ -250,6 +250,52 @@
       "inputs": [],
       "outputs": [],
       "properties": {
+        "Node name for S&R": "DepthAnythingV2Preprocessor",
+        "aux_id": "Fannovel16/comfyui_controlnet_aux"
+      },
+      "title": "Depth (comfyui_controlnet_aux)",
+      "widgets_values": []
+    },
+    {
+      "id": 12,
+      "type": "RMBG",
+      "pos": [
+        600,
+        380
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RMBG",
+        "aux_id": "1038lab/ComfyUI-RMBG"
+      },
+      "title": "Subject mask (ComfyUI-RMBG)",
+      "widgets_values": []
+    },
+    {
+      "id": 13,
+      "type": "Seed (rgthree)",
+      "pos": [
+        900,
+        380
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
         "Node name for S&R": "Seed (rgthree)",
         "aux_id": "rgthree/rgthree-comfy"
       },
@@ -257,7 +303,7 @@
       "widgets_values": []
     },
     {
-      "id": 12,
+      "id": 14,
       "type": "Note",
       "pos": [
         0,
@@ -268,14 +314,14 @@
         620
       ],
       "flags": {},
-      "order": 11,
+      "order": 13,
       "mode": 0,
       "inputs": [],
       "outputs": [],
       "title": "Note",
       "properties": {},
       "widgets_values": [
-        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. Put a checkpoint in models/sam3 as well: the pack installs without one.\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
+        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. Put a checkpoint in models/sam3 as well: the pack installs without one.\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nDepth\n    The depth that Depth of field, Atmospheric haze and Relight read on the Post tab. Its estimators fetch their own weights the first time they run.\n    https://github.com/Fannovel16/comfyui_controlnet_aux\n\nSubject mask\n    The subject mask a Post card's Limit row uses to work on the subject or the background alone.\n    https://github.com/1038lab/ComfyUI-RMBG\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
       ],
       "color": "#432",
       "bgcolor": "#653"

@@ -40,6 +40,14 @@ export const EXTRA_PACKS = [
   // the caption engines. The server says whether each one is there
   // (autoprompt_status), so these carry node types only where the name is
   // certain, and the run log matches them by name.
+  { id: "depthaux", name: "comfyui_controlnet_aux",
+    what: "the depth Depth of field, Atmospheric haze and Relight read",
+    url: "https://github.com/Fannovel16/comfyui_controlnet_aux",
+    nodes: ["DepthAnythingV2Preprocessor"] },
+  { id: "rmbg", name: "comfyui-rmbg",
+    what: "the subject mask a card's Limit row uses",
+    url: "https://github.com/1038lab/ComfyUI-RMBG",
+    nodes: ["RMBG"] },
   { id: "wd14", name: "comfyui-wd14-tagger", what: "the WD14 tags caption engine",
     url: "https://github.com/pythongosssss/ComfyUI-WD14-Tagger",
     nodes: ["WD14Tagger|pysssss"] },

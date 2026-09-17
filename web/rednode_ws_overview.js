@@ -3,6 +3,7 @@ import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, s
          autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
+import { postStatusNow, refreshPostStatus } from "./rednode_ws_post.js";
 
 const CAPTION_NAME = Object.fromEntries(CAPTION_TABS.map(([label, id]) => [id, label]));
 // an Image to text gallery (Style, Subject, Scene words) is always "on": its page
@@ -325,6 +326,36 @@ export function runNeeds(node, cfg) {
     }
   }
   if (cfg.paint?.on) wantPack("sam3", "the Paint tab's auto mask", { tab: "paint" });
+  // THE POST CARDS, on the same terms the cards themselves use: an effect that
+  // reads depth, and a Limit row that needs the subject picked out. The server's
+  // own report answers whether each is here, since it knows every estimator and
+  // segmenter name rather than the one node type this table carries.
+  const ps = postStatusNow() || {};
+  const ready = (kind, id) => (typeof ps?.[kind]?.ready === "boolean"
+    ? ps[kind].ready : packInstalled(packBy(id)) === true);
+  if (cfg.post_on !== false) {
+    const live = (cfg.post?.chain || []).filter((b) => b && b.on);
+    const fxOf = (b) => POST_FX.find((f) => f.id === (b.fx || b.id));
+    const depthers = live.filter((b) => fxOf(b)?.depth).map((b) => fxOf(b).label);
+    if (depthers.length) {
+      const p = packBy("depthaux");
+      out.push({ kind: "pack", ok: ready("depth", "depthaux"), label: p.name,
+                 what: `the depth ${depthers.join(", ")} read`,
+                 how: `Install it in ComfyUI Manager: search for ${p.name}. Its estimators `
+                    + "fetch their own weights the first time they run.",
+                 url: packLink(p), to: { tab: "post" } });
+    }
+    const limited = live.filter((b) => b.limit === "subject" || b.limit === "background");
+    if (limited.length) {
+      const p = packBy("rmbg");
+      out.push({ kind: "pack", ok: ready("mask", "rmbg"), label: p.name,
+                 what: `the subject mask ${limited.length} Limit row`
+                     + `${limited.length === 1 ? "" : "s"} need`,
+                 how: `Install it in ComfyUI Manager: search for ${p.name}. RMBG-2.0 is the `
+                    + "one to have for this.",
+                 url: packLink(p), to: { tab: "post" } });
+    }
+  }
   // the rig's loader, when it names one that is not core's
   const rig = cfg.models?.rigs?.[cfg.models?.active];
   if (cfg.models?.sampler_mode === "internal" && rig) {
@@ -438,6 +469,7 @@ export function overviewBody(node, body) {
   btn.onclick = async () => {
     btn.disabled = true;
     try { await fetchModelListsOnce(); } catch (e) { /* the file rows simply sit out */ }
+    try { await refreshPostStatus(); } catch (e) { /* the Post rows fall back to node types */ }
     node._rnNeeds = true;
     render(node);
   };

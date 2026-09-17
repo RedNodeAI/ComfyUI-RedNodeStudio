@@ -38,6 +38,8 @@ export async function refreshPostStatus(node) {
   } catch (e) { postStatus = {}; }
   if (node) postRender(node);
 }
+// what the install check reads, so it and the cards never disagree
+export const postStatusNow = () => postStatus;
 const depthMissing = () => postStatus?.depth && postStatus.depth.ready === false;
 const maskMissing = () => postStatus?.mask && postStatus.mask.ready === false;
 

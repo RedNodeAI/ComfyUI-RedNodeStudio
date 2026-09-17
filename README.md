@@ -51,6 +51,8 @@ open the main template.
 | [ComfyUI-Florence2](https://github.com/kijai/ComfyUI-Florence2) | The Florence caption engine |
 | [ComfyUI-JoyCaption](https://github.com/1038lab/ComfyUI-JoyCaption) | The JoyCaption caption engine |
 | [ComfyUI-QwenVL](https://github.com/1038lab/ComfyUI-QwenVL) | The QwenVL caption engine |
+| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | The depth Depth of field, Atmospheric haze and Relight read on the Post tab |
+| [ComfyUI-RMBG](https://github.com/1038lab/ComfyUI-RMBG) | The subject mask a Post card's Limit row uses |
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
 
 Ollama is a program of its own rather than a node pack. Install it from
