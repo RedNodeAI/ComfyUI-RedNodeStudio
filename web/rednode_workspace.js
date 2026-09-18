@@ -174,6 +174,7 @@ css.textContent = `
 .rn-ws-filerow .rn-ws-seg{flex:1 1 auto}
 .rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
+.rn-ws-pbar-btn{width:auto;padding:0 16px;align-self:stretch;min-height:34px}
 .rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
 .rn-ws-pdel{margin-left:auto;align-self:flex-end;width:28px;height:28px;padding:0;flex:none;
   background:#111316;border:1px solid #3a2a2e;color:#e0405a;font-size:13px;line-height:1;
@@ -11749,15 +11750,30 @@ function promptsBody(node, body) {
         bar.appendChild(chip);
       });
       const addP = document.createElement("button");
-      addP.className = "rn-ws-btn";
-      addP.style.cssText = "width:auto;padding:0 14px";
-      addP.textContent = "\uFF0B New Prompt";
+      addP.className = "rn-ws-btn rn-ws-pbar-btn";
+      addP.textContent = "\uFF0B Add prompt";
       addP.onclick = () => {
         R.push({ name: "", rig: "", rigs: [], kind: "krea2", text: "", negative: "" });
         node._rnPromptSel = R.length - 1;
         writeCfg(node); render(node);
       };
       bar.appendChild(addP);
+      // IMPORT: the prompt, and the settings where the picture carries them,
+      // out of a PNG's metadata, read here in the browser
+      const impP = document.createElement("button");
+      impP.className = "rn-ws-btn rn-ws-pbar-btn";
+      impP.textContent = "\u2913 Import prompt";
+      impP.title = "Read the prompt out of a PNG's metadata: a picture this pack saved brings its "
+                 + "prompt row or its whole setup; any picture with an A1111 parameters chunk "
+                 + "brings its words and settings.";
+      const pick = document.createElement("input");
+      pick.type = "file"; pick.accept = ".png,image/png"; pick.style.display = "none";
+      pick.onchange = async () => {
+        const f = pick.files?.[0]; pick.value = "";
+        if (f) await importPromptFromPng(node, cfg, R, f);
+      };
+      impP.onclick = () => pick.click();
+      bar.append(impP, pick);
       body.appendChild(bar);
     }
   }
@@ -15882,6 +15898,235 @@ function refreshPresetList(node, names) {
 // was built with, so the panel is rebuilt against the new object: without that
 // they keep writing into the one the preset just replaced, the edit lands on an
 // orphan, and the change is silently lost.
+
+// ---------------------------------------------------------------- Import a prompt
+// THE PICTURE CARRIES ITS PROMPT. A PNG this pack saved holds the A1111
+// "parameters" text (prompt, negative, the settings line) and, with the embed
+// switch on, ComfyUI's "workflow" and "prompt" chunks, where the Workspace's
+// whole config sits as its widget value. Any other PNG with a parameters chunk
+// gives at least the prompt. All of it is read here in the browser, off the
+// file the user picks; nothing goes to the server.
+function pngTextChunks(buf) {
+  const out = {};
+  try {
+    const u8 = new Uint8Array(buf);
+    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+    if (u8.length < 8 || sig.some((b, i) => u8[i] !== b)) return out;
+    const dv = new DataView(buf);
+    const latin = (a, b) => { let s = ""; for (let i = a; i < b; i++) s += String.fromCharCode(u8[i]); return s; };
+    const utf8 = new TextDecoder("utf-8");
+    let p = 8;
+    while (p + 8 <= u8.length) {
+      const len = dv.getUint32(p);
+      const type = latin(p + 4, p + 8);
+      const a = p + 8, b = a + len;
+      if (b > u8.length) break;
+      if (type === "tEXt") {
+        const z = u8.indexOf(0, a);
+        if (z > 0 && z < b) out[latin(a, z)] = latin(z + 1, b);
+      } else if (type === "iTXt") {
+        const z = u8.indexOf(0, a);
+        if (z > 0 && z < b) {
+          const key = latin(a, z);
+          const comp = u8[z + 1];
+          // language tag and translated keyword, each zero-ended
+          let q = z + 3;
+          q = u8.indexOf(0, q) + 1;
+          q = u8.indexOf(0, q) + 1;
+          if (comp === 0 && q > 0 && q <= b) out[key] = utf8.decode(u8.subarray(q, b));
+        }
+      } else if (type === "IEND") break;
+      p = b + 4;
+    }
+  } catch (e) { /* not a png we can read */ }
+  return out;
+}
+
+// the A1111 parameters text: the prompt, "Negative prompt: ...", then one
+// settings line. Keys are picked out one by one, since the line also carries
+// JSON with commas of its own.
+function parseParameters(text) {
+  const t = String(text || "").replace(/\r/g, "");
+  if (!t.trim()) return null;
+  const lines = t.split("\n");
+  let settingsAt = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^Steps: \d+|^Seed: \d+|, Seed: \d+|^Size: \d+x\d+/.test(lines[i])) { settingsAt = i; break; }
+  }
+  const bodyLines = settingsAt >= 0 ? lines.slice(0, settingsAt) : lines;
+  const settingsLine = settingsAt >= 0 ? lines[settingsAt] : "";
+  const body = bodyLines.join("\n");
+  const negAt = body.indexOf("Negative prompt:");
+  const positive = (negAt >= 0 ? body.slice(0, negAt) : body).trim();
+  const negative = negAt >= 0 ? body.slice(negAt + "Negative prompt:".length).trim() : "";
+  const grab = (re) => { const m = settingsLine.match(re); return m ? m[1].trim() : ""; };
+  const num = (v) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  const size = settingsLine.match(/Size: (\d+)x(\d+)/);
+  return {
+    positive, negative,
+    settings: {
+      steps: num(grab(/Steps: ([\d.]+)/)),
+      sampler: grab(/Sampler: ([^,]+)/),
+      scheduler: grab(/Schedule type: ([^,]+)/),
+      cfg: num(grab(/CFG scale: ([\d.]+)/)),
+      seed: num(grab(/Seed: (\d+)/)),
+      width: size ? Number(size[1]) : null,
+      height: size ? Number(size[2]) : null,
+      denoise: num(grab(/Denoising strength: ([\d.]+)/)),
+      model: grab(/(?:^|, )Model: ([^,]+)/),
+    },
+  };
+}
+
+// the Workspace's own config out of the embedded graph, if the picture has one
+function workspaceConfigIn(chunks) {
+  const parse = (s) => { try { return JSON.parse(s); } catch (e) { return null; } };
+  const wf = parse(chunks.workflow);
+  for (const n of (wf?.nodes || [])) {
+    if (n?.type === "RedNodeStudioWorkspace") {
+      const c = parse(n.widgets_values?.[0]);
+      if (c && typeof c === "object") return c;
+    }
+  }
+  const pr = parse(chunks.prompt);
+  for (const v of Object.values(pr || {})) {
+    if (v?.class_type === "RedNodeStudioWorkspace") {
+      const c = parse(v.inputs?.config);
+      if (c && typeof c === "object") return c;
+    }
+  }
+  return null;
+}
+
+// one small dialog: what was found, and the ways to bring it in
+function importChoice(title, summary, choices) {
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10cc;"
+    + "display:flex;align-items:center;justify-content:center";
+  const panel = document.createElement("div");
+  panel.style.cssText = "width:min(640px,94vw);max-height:80vh;overflow:auto;background:#16181c;"
+    + "border:1px solid #3a3f47;border-radius:8px;padding:16px 18px;color:#e2e5ea;"
+    + "font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:10px";
+  const h = document.createElement("div");
+  h.style.cssText = "font-weight:700;font-size:14px";
+  h.textContent = title;
+  const s = document.createElement("div");
+  s.className = "rn-ws-note";
+  s.style.whiteSpace = "pre-wrap";
+  s.textContent = summary;
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px";
+  const close = () => ov.remove();
+  for (const c of choices) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-btn";
+    b.style.cssText = "width:auto;padding:0 14px";
+    b.textContent = c.label;
+    if (c.tip) b.title = c.tip;
+    b.onclick = () => { close(); c.run?.(); };
+    row.appendChild(b);
+  }
+  const cancel = document.createElement("button");
+  cancel.className = "rn-ws-btn";
+  cancel.style.cssText = "width:auto;padding:0 14px";
+  cancel.textContent = "Cancel";
+  cancel.onclick = close;
+  row.appendChild(cancel);
+  panel.append(h, s, row);
+  ov.appendChild(panel);
+  ov.addEventListener("pointerdown", (e) => { if (e.target === ov) close(); });
+  document.body.appendChild(ov);
+}
+
+async function importPromptFromPng(node, cfg, rows, file) {
+  let chunks = {};
+  try { chunks = pngTextChunks(await file.arrayBuffer()); } catch (e) { chunks = {}; }
+  const config = workspaceConfigIn(chunks);
+  const params = parseParameters(chunks.parameters);
+  const clip = (t, n = 320) => (t.length > n ? t.slice(0, n) + "\u2026" : t);
+  const addRow = (row) => {
+    rows.push(row);
+    node._rnPromptSel = rows.length - 1;
+    writeCfg(node); render(node);
+  };
+  if (config) {
+    // THE PACK'S OWN PICTURE: its prompt row comes over whole (frame boxes and
+    // all), or the entire setup replaces this Workspace's, on a second question
+    const crow = (() => {
+      const rs = Array.isArray(config.prompts?.rows) ? config.prompts.rows : [];
+      const rigs = Array.isArray(config.models?.rigs) ? config.models.rigs : [];
+      const an = rigs[config.models?.active || 0]?.name || "";
+      return rs.find((r) => (r?.rigs || []).includes(an)) || rs[0] || null;
+    })();
+    const words = crow ? String(crow.text || "").trim() : "";
+    const summary = (words ? "Prompt: " + clip(words) + "\n\n" : "No prompt row in it.\n\n")
+      + "This picture was saved by RedNode Studio and carries its whole Workspace setup: "
+      + "rigs, LoRAs, latent, Img2Img, Detailer and Post FX settings.";
+    const choices = [];
+    if (crow) {
+      choices.push({ label: "Add its prompt",
+        tip: "A new prompt row with the picture's words, frame boxes included, linked to no rig.",
+        run: () => addRow({ ...JSON.parse(JSON.stringify(crow)),
+                            name: (crow.name || "Imported") + (crow.name ? " (imported)" : ""),
+                            rig: "", rigs: [] }) });
+    }
+    choices.push({ label: "Load the whole setup",
+      tip: "Replace every setting of this Workspace with the picture's. The rigs it names must exist here.",
+      run: () => {
+        if (!window.confirm("Replace every setting of this Workspace with the picture's setup?")) return;
+        findWidget(node, "config").value = JSON.stringify(config);
+        node._rnCfg = readCfg(node);
+        render(node);
+        node.graph?.change?.();
+      } });
+    importChoice("Import from " + file.name, summary, choices);
+    return;
+  }
+  if (params && (params.positive || params.negative)) {
+    // ANY PICTURE WITH A PARAMETERS CHUNK: the words as a plain row, and the
+    // settings line onto the active rig and the canvas when asked
+    const st = params.settings;
+    const applies = [];
+    if (st.steps != null) applies.push(`steps ${st.steps}`);
+    if (st.cfg != null) applies.push(`CFG ${st.cfg}`);
+    if (st.sampler) applies.push(`sampler ${st.sampler}`);
+    if (st.scheduler) applies.push(`scheduler ${st.scheduler}`);
+    if (st.width && st.height) applies.push(`size ${st.width}\u00d7${st.height}`);
+    if (st.seed != null) applies.push(`seed ${st.seed}, fixed`);
+    if (st.denoise != null) applies.push(`denoise ${st.denoise}`);
+    const summary = "Prompt: " + clip(params.positive)
+      + (params.negative ? "\nNegative: " + clip(params.negative, 160) : "")
+      + (st.model ? "\nModel named in the file: " + st.model + " (not changed here)" : "")
+      + (applies.length ? "\n\nSettings in the file: " + applies.join(", ") + "." : "\n\nNo settings line in the file.");
+    const plainRow = () => ({ name: "Imported", rig: "", rigs: [], kind: "plain",
+                              text: params.positive, negative: params.negative });
+    const choices = [{ label: "Add as a prompt", tip: "A new plain prompt row with these words.",
+                       run: () => addRow(plainRow()) }];
+    if (applies.length) {
+      choices.push({ label: "Add and apply settings",
+        tip: "The prompt row, plus the steps, CFG, sampler, scheduler, size, seed and denoise from the file onto the active rig and the canvas.",
+        run: () => {
+          const rig = cfg.models.rigs[cfg.models.active] || null;
+          if (rig) {
+            if (st.steps != null) rig.steps = st.steps;
+            if (st.cfg != null) rig.cfg = st.cfg;
+            if (st.sampler) rig.sampler = st.sampler;
+            if (st.scheduler) rig.scheduler = st.scheduler;
+            if (st.denoise != null) rig.denoise = st.denoise;
+          }
+          if (st.width && st.height) { cfg.latent.w = st.width; cfg.latent.h = st.height; }
+          if (st.seed != null) { cfg.models.seed = st.seed; cfg.models.seed_random = false; }
+          addRow(plainRow());
+        } });
+    }
+    importChoice("Import from " + file.name, summary, choices);
+    return;
+  }
+  importChoice("Import from " + file.name,
+    "No prompt in this file. It reads the A1111 parameters text a gallery writes, and the "
+    + "workflow RedNode Studio embeds; this picture carries neither, or it is not a PNG.", []);
+}
+
 async function loadWorkspacePreset(node, name) {
   if (!name || name === CUSTOM_SENTINEL) return;
   try {
