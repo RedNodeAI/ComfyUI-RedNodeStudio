@@ -105,6 +105,12 @@ css.textContent = `
 .rn-adv .add button{flex:1;font-weight:600}
 .rn-adv .hint{font-size:11px;color:#7f8792}
 .rn-adv .card.run{border-color:#b8283c;box-shadow:inset 0 0 0 1px #b8283c}
+.rn-adv.simple .x-adv{display:none!important}
+.rn-adv .seg{display:inline-flex;flex:none;border:1px solid #3a3d44;border-radius:6px;overflow:hidden}
+.rn-adv .seg button{border:0;border-radius:0;margin:0;padding:0 12px;min-height:26px}
+.rn-adv .seg button.on{background:#b8283c;color:#fff;font-weight:600}
+.rn-adv .more{flex:none;font-size:11px;color:#f3d9a4;background:#26200f;border:1px solid #6b5420;
+  border-radius:10px;padding:1px 9px;cursor:pointer}
 .rn-adv .tog{flex:none}
 .rn-adv .tog.on{background:#b8283c;border-color:#b8283c;color:#fff;font-weight:600}
 .rn-adv .card.run .chip{background:#b8283c;color:#fff}
@@ -488,9 +494,15 @@ function buildPanel(node, hostEl = null) {
     el.textContent = t;
     return el;
   };
+  // THE SIMPLE VIEW hides what is marked here. A view only: nothing is reset, so a
+  // render is the same in either view, and a card says when a hidden setting is set.
+  const A = (...els) => { for (const e of els) e.classList.add("x-adv"); return els; };
+  const isSimple = () => (node.properties?.rn_adv_mode || "advanced") === "simple";
+  const setMode = (m) => { (node.properties ||= {}).rn_adv_mode = m; node._rnAdvRender?.(); };
 
   const render = () => {
     const d = readCfg(node);
+    if (isSimple()) wrap.classList.add("simple"); else wrap.classList.remove("simple");
     const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [],
                          samPrecisions: [], ditModels: [], vaeModels: [],
                          attention: [], offloads: [], colorFixes: [],
@@ -552,7 +564,22 @@ function buildPanel(node, hostEl = null) {
         if (!err) { node._rnAdvPreset = nm; node._rnAdvPresetName = ""; }
         render();
       };
-      prow.append(lab("Preset"), psel, nameInp, saveB);
+      // SIMPLE | ADVANCED, first on the row: the same passes, fewer dials showing
+      const seg = document.createElement("span");
+      seg.className = "seg";
+      for (const [m, label, tip] of [
+        ["simple", "Simple", "The dials most passes need: the rig, the target, the size, the "
+                           + "strength bars and the references. Nothing is reset; a card says "
+                           + "when a hidden setting is in use."],
+        ["advanced", "Advanced", "Every setting of every pass."]]) {
+        const b = document.createElement("button");
+        b.className = (isSimple() ? "simple" : "advanced") === m ? "on" : "";
+        b.textContent = label;
+        b.title = tip;
+        b.onclick = () => setMode(m);
+        seg.appendChild(b);
+      }
+      prow.append(seg, lab("Preset"), psel, nameInp, saveB);
 
       const cur = node._rnAdvPreset || "";
       if (cur && !cur.startsWith("★ ") && (SAVED || {})[cur]) {
@@ -576,7 +603,7 @@ function buildPanel(node, hostEl = null) {
     {
       const srow = document.createElement("div");
       srow.className = "line";
-      srow.append(
+      srow.append(...A(
         lab("SAM file"),
         sel(L.samModels, d.sam_model,
             L.samModels.length
@@ -590,7 +617,7 @@ function buildPanel(node, hostEl = null) {
         sel(L.samPrecisions, d.sam_precision,
             "The precision SAM3 loads at. fp16 or bf16 halves its memory on the "
             + "card; (loader default) is the pack's own choice, fp32 today.",
-            (v) => { d.sam_precision = v; writeCfg(node, d); }, "(loader default)"));
+            (v) => { d.sam_precision = v; writeCfg(node, d); }, "(loader default)")));
       // TAPS: record the input, every pass and the output into the RedNode
       // Stage View strip - a chain read step by step, no tap nodes wired.
       // Off by default (the house rule); the strip is the Stage View node.
@@ -665,6 +692,37 @@ function buildPanel(node, hostEl = null) {
       });
       box.append(r, val);
       return box;
+    };
+    // WHAT A SIMPLE CARD IS HIDING that is not at its default, by name. Hidden is
+    // not off: these still run, so the card has to say so.
+    const hiddenSet = (s) => {
+      const out = [];
+      const has = (name, cond) => { if (cond) out.push(name); };
+      if (s.type === "upscale") {
+        has("DiT", !!s.dit_model); has("VAE", !!s.vae_model); has("Attention", !!s.attention);
+        has("Blocks to swap", (s.blocks_to_swap ?? 36) !== 36);
+        has("Offload", (s.offload || "cpu") !== "cpu"); has("Cache model", !!s.cache_model);
+        has("Colour fix", (s.color_fix || "lab") !== "lab"); has("Max edge", !!s.max_edge);
+        has("Tiled VAE off", s.tiled === false); has("Tile", (s.tile ?? 1024) !== 1024);
+        has("Overlap", (s.tile_overlap ?? 128) !== 128);
+        has("Input noise", !!s.input_noise); has("Latent noise", !!s.latent_noise);
+        return out;
+      }
+      has("Steps", !!s.steps); has("Start", !!s.start_step); has("End", !!s.end_step);
+      has("CFG", !!s.cfg); has("Sampler", !!s.sampler); has("Scheduler", !!s.scheduler);
+      has("Res", !!s.crop_res); has("Repeat", (Number(s.repeat) || 1) > 1);
+      has("Tone lock", !!s.tone_lock);
+      if (s.type === "detailer") {
+        has("SAM", !!s.sam_model); has("Feather", (s.feather ?? 8) !== 8);
+      }
+      if (s.type === "usdu") {
+        has("Tile", (s.usdu_tile ?? 1024) !== 1024); has("Padding", (s.usdu_padding ?? 128) !== 128);
+        has("Blur", (s.usdu_blur ?? 8) !== 8); has("Order", (s.usdu_mode || "Linear") !== "Linear");
+        has("Seam fix", (s.seam_mode || "None") !== "None"); has("Tiled decode", !!s.tiled_decode);
+      }
+      has("LoRA set", !!s.lora_set); has("Pass LoRA", !!(s.lora && s.lora !== "None"));
+      has("Prompt row", !!s.prompt_row); has("Prompt", !!String(s.prompt || "").trim());
+      return out;
     };
     // One value per repeat round, the Img2Img PASS rule. With nothing stored
     // the list opens on the dial; a stored list repeats its last value when the
@@ -930,7 +988,7 @@ function buildPanel(node, hostEl = null) {
                                                     : [s.target, ...TARGETS],
                          s.target, "What SAM3 segments and this pass redraws.",
                          (v) => { s.target = v; writeCfg(node, d); }));
-          top.append(lab("SAM"),
+          top.append(...A(lab("SAM"),
                      sel(L.samModels, s.sam_model,
                          L.samModels.length
                            ? "A SAM checkpoint for this pass only. (node's) "
@@ -939,8 +997,8 @@ function buildPanel(node, hostEl = null) {
                              + "nothing to pick; this pass will say so and pass "
                              + "the image through.",
                          (v) => { s.sam_model = v; writeCfg(node, d); },
-                         "(node's)"));
-          top.append(lab("Res"),
+                         "(node's)")));
+          top.append(...A(lab("Res"),
                      sel(["512", "768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",
                          "The working resolution for the crop: its long edge "
@@ -952,9 +1010,9 @@ function buildPanel(node, hostEl = null) {
                          (v) => {
                            s.crop_res = v ? parseInt(v, 10) : 0;
                            writeCfg(node, d);
-                         }, "(crop)"));
+                         }, "(crop)")));
         } else if (s.type === "sampler") {
-          top.append(lab("Res"),
+          top.append(...A(lab("Res"),
                      sel(["768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",
                          "A working size for the whole frame: its long edge is "
@@ -965,7 +1023,7 @@ function buildPanel(node, hostEl = null) {
                          (v) => {
                            s.crop_res = v ? parseInt(v, 10) : 0;
                            writeCfg(node, d);
-                         }, "(frame)"));
+                         }, "(frame)")));
         }
       }
       const spacer = document.createElement("span");
@@ -996,7 +1054,18 @@ function buildPanel(node, hostEl = null) {
         "Unload every model ComfyUI is holding before this pass runs, so its "
         + "model never overlaps the one before it. They reload on demand: the "
         + "cost is one load, not the run. Runs on every queue.");
-      top.append(spacer, freeT, dup, del);
+      top.append(spacer);
+      const hid = isSimple() && s.type !== "title" ? hiddenSet(s) : [];
+      if (hid.length) {
+        const more = document.createElement("button");
+        more.className = "more";
+        more.textContent = `+${hid.length} in Advanced`;
+        more.title = "Set on this pass and hidden in Simple, still in use: " + hid.join(", ")
+                   + ". Click to show every setting.";
+        more.onclick = () => setMode("advanced");
+        top.append(more);
+      }
+      top.append(freeT, dup, del);
       card.appendChild(top);
 
       if (!isFolded && s.type === "upscale") {
@@ -1030,6 +1099,7 @@ function buildPanel(node, hostEl = null) {
           tog("Cache model", "cache_model", false,
               "Keep the SeedVR2 models loaded between queues on the offload device. "
               + "Faster runs, RAM held between them."));
+        A(mdl.box);
         card.appendChild(mdl.box);
 
         // OUTPUT: what comes back and how the VAE is tiled to fit
@@ -1063,6 +1133,7 @@ function buildPanel(node, hostEl = null) {
           num(s.latent_noise ?? 0, 0.01, "Noise added in the latent during diffusion, 0 to 1. "
               + "0 off; softens detail if input noise did not help.",
               (v) => { s.latent_noise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }));
+        A(outg.box);
         card.appendChild(outg.box);
         if (LISTS && !L.seedvr) {
           const warn = document.createElement("div");
@@ -1097,6 +1168,7 @@ function buildPanel(node, hostEl = null) {
           lab("Sched"),
           sel(L.schedulers, s.scheduler, "Scheduler for this pass; (rig) inherits.",
               (v) => { s.scheduler = v; writeCfg(node, d); }, "(rig)"));
+        A(smp.box);
         card.appendChild(smp.box);
 
         // STRENGTH: the two dials ridden while tuning, both bars so the card
@@ -1146,12 +1218,12 @@ function buildPanel(node, hostEl = null) {
                 + "was. Tune it against Denoise: 0.3 to 0.5 denoise with a blend "
                 + "under 1 repaints harder and still keeps the face's own skin.",
                 "#c9a24a", (v) => { s.blend = v; writeCfg(node, d); }),
-            lab("Feather"),
+            ...A(lab("Feather"),
             num(s.feather ?? 8, 1,
                 "The mask's soft edge in pixels, 0 to 64. 8 to 12 hides the seam "
                 + "on a face; more for hair against a busy background.",
                 (v) => { s.feather = Math.max(0, Math.min(64, Math.round(v)));
-                         writeCfg(node, d); }, "46px"));
+                         writeCfg(node, d); }, "46px")));
         }
         const rrow = document.createElement("div");
         rrow.className = "line";
@@ -1233,7 +1305,7 @@ function buildPanel(node, hostEl = null) {
           rrow.append(den.sw, scl.sw);
           extra.push(...den.rows, ...scl.rows);
         }
-        str.box.append(rrow, ...extra);
+        str.box.append(...A(rrow, ...extra));
         card.appendChild(str.box);
 
         if (isUsdu) {
@@ -1247,7 +1319,8 @@ function buildPanel(node, hostEl = null) {
                 "The upscale model that grows the frame before the tiles are redrawn: "
                 + "a 4x ESRGAN file, or a 1x skin model at Upscale by 1.00 for a skin "
                 + "pass. (resize only) grows it by plain resampling.",
-                (v) => { s.usdu_model = v; writeCfg(node, d); }, "(resize only)"),
+                (v) => { s.usdu_model = v; writeCfg(node, d); }, "(resize only)"));
+          tl.line.append(...A(
             lab("Tile"),
             num(s.usdu_tile ?? 1024, 64, "Tile size in pixels, both axes. 1024 is a "
                 + "Krea 2 sized tile; smaller fits a small card and costs more tiles.",
@@ -1271,16 +1344,16 @@ function buildPanel(node, hostEl = null) {
                 s.seam_mode || "None",
                 "A second pass over the seams. None or Band Pass; Half Tile and the "
                 + "intersections double the chance of a tile inventing something.",
-                (v) => { s.seam_mode = v; writeAndRender(); }));
+                (v) => { s.seam_mode = v; writeAndRender(); })));
           if ((s.seam_mode || "None") !== "None") {
-            tl.line.append(
+            tl.line.append(...A(
               lab("Seam denoise"),
               num(s.seam_denoise ?? 0.35, 0.05, "Denoise for the seam pass.",
-                  (v) => { s.seam_denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }, "46px"));
+                  (v) => { s.seam_denoise = Math.max(0, Math.min(1, v)); writeCfg(node, d); }, "46px")));
           }
-          tl.line.append(tog("Tiled decode", "tiled_decode", false,
+          tl.line.append(...A(tog("Tiled decode", "tiled_decode", false,
             "Decode each tile through the VAE in tiles too, for a small card. Off is "
-            + "faster when memory allows."));
+            + "faster when memory allows.")));
           card.appendChild(tl.box);
           if (LISTS && !L.usdu) {
             const warn = document.createElement("div");
@@ -1317,7 +1390,7 @@ function buildPanel(node, hostEl = null) {
           ssel.title = "Which LoRAs-tab set this pass runs with. (rig's set) follows the "
                      + "Models tab; Main is the first tab there.";
           ssel.onchange = () => { s.lora_set = ssel.value; writeCfg(node, d); render(); };
-          bottom.append(lab("Set"), ssel);
+          bottom.append(...A(lab("Set"), ssel));
         }
         bottom.append(
           tog("Subject", "use_subject", false,
@@ -1348,11 +1421,11 @@ function buildPanel(node, hostEl = null) {
           s.lora = v; writeCfg(node, d); render();
         }, { current: () => (s.lora && s.lora !== "None" ? s.lora : ""),
              emptyLabel: "(none)", recent: "detailer-lora" });
-        bottom.append(lab("LoRA"), lp);
+        bottom.append(...A(lab("LoRA"), lp));
         if (s.lora && s.lora !== "None") {
-          bottom.append(num(s.lora_strength ?? 1.0, 0.05, "Strength of the pass LoRA.",
+          bottom.append(...A(num(s.lora_strength ?? 1.0, 0.05, "Strength of the pass LoRA.",
                             (v) => { s.lora_strength = Math.max(0, Math.min(2, v)); writeCfg(node, d); },
-                            "52px"));
+                            "52px")));
         }
         // WHICH PROMPT: a Prompts-tab row for this pass. (rig's prompt) is the
         // row linked to the pass's rig, the same text the main render used, so
@@ -1373,7 +1446,7 @@ function buildPanel(node, hostEl = null) {
                    + "empty. (rig's prompt) is the row linked to the pass's rig, the "
                    + "text the main render used. Typed text still wins.";
         rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
-        bottom.append(lab("Prompt"), rsel);
+        bottom.append(...A(lab("Prompt"), rsel));
         const pr = document.createElement("input");
         pr.type = "text";
         pr.placeholder = "Prompt: empty uses the row picked";
@@ -1381,7 +1454,7 @@ function buildPanel(node, hostEl = null) {
                  + "run's seed. Typed text wins.";
         pr.value = s.prompt || "";
         pr.onchange = () => { s.prompt = pr.value; writeCfg(node, d); };
-        bottom.appendChild(pr);
+        bottom.appendChild(A(pr)[0]);
         card.appendChild(prm.box);
       }
       wrap.appendChild(card);
@@ -1421,7 +1494,12 @@ function buildPanel(node, hostEl = null) {
     wrap.appendChild(add);
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = d.stages.length
+    hint.textContent = d.stages.length && isSimple()
+      ? "Top to bottom is the run order. Simple shows the dials most passes need; the "
+        + "sampling, tiling, model and prompt settings are under Advanced, and a card "
+        + "says when one of them is in use. ⧉ copies a pass; right-click a card for "
+        + "colours and groups."
+      : d.stages.length
       ? "Top to bottom is the run order. Sampling boxes left empty inherit the "
         + "rig's own settings from the Models tab. \u29c9 copies a pass; right-click "
         + "a card for colours and groups."
