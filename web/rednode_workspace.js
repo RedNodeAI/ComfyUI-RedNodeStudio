@@ -175,6 +175,7 @@ css.textContent = `
 .rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
 .rn-ws-pbar-btn{width:auto;padding:0 16px;align-self:stretch;min-height:34px}
+.rn-ws-body.rn-ws-dropping{outline:2px dashed #b8283c;outline-offset:-4px;background:#1d1518}
 .rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
 .rn-ws-pdel{margin-left:auto;align-self:flex-end;width:28px;height:28px;padding:0;flex:none;
   background:#111316;border:1px solid #3a2a2e;color:#e0405a;font-size:13px;line-height:1;
@@ -11690,6 +11691,25 @@ function promptsBody(node, body) {
   const cfg = node._rnCfg;
   const R = cfg.prompts.rows;
   const M = cfg.models;
+  // DROP A PICTURE ANYWHERE ON THIS PAGE to import its prompt, the same road
+  // as the Import button. Stopped here so ComfyUI's canvas, which loads a
+  // dropped PNG as a workflow, never sees it.
+  body.addEventListener("dragover", (e) => {
+    if (![...(e.dataTransfer?.types || [])].includes("Files")) return;
+    e.preventDefault(); e.stopPropagation();
+    body.classList.add("rn-ws-dropping");
+  });
+  body.addEventListener("dragleave", (e) => {
+    if (e.target === body || !body.contains(e.relatedTarget)) body.classList.remove("rn-ws-dropping");
+  });
+  body.addEventListener("drop", async (e) => {
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    e.preventDefault(); e.stopPropagation();
+    body.classList.remove("rn-ws-dropping");
+    const png = files.find((f) => /\.png$/i.test(f.name) || f.type === "image/png") || files[0];
+    await importPromptFromPng(node, cfg, R, png);
+  });
 
   // the mock's masthead: title, subtitle, and the RIG bar so the prompt you
   // are writing is visibly the active rig's
