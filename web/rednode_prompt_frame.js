@@ -855,8 +855,16 @@ export function buildFrameEditor(wrap, F) {
   modeSeg.appendChild(simpleBtn);
   modeSeg.appendChild(studioBtn);
   const studioState = el("span", "hint2", "");
+  // A HOST WITH A CAMERA TAB: Advanced no longer jumps there. It sets the
+  // studio as the camera's driver and leaves you on this page; this link,
+  // shown only while Advanced is on, is the way over.
+  const camLink = el("button", "rn-pf-btn rn-pf-camlink", "Open the Camera tab");
+  camLink.title = "The Camera Studio, on the Camera tab, drives this prompt's camera. Open it there.";
+  camLink.style.display = "none";
+  camLink.addEventListener("click", () => F.openCameraTab?.());
   studioBar.appendChild(modeSeg);
   studioBar.appendChild(studioState);
+  studioBar.appendChild(camLink);
   // CAMERA WORDS OFF: the Off state of the segment. The chips and their
   // sliders grey out; the segment itself stays live so Simple or Advanced can
   // bring the camera back with every setting as it was.
@@ -950,8 +958,8 @@ export function buildFrameEditor(wrap, F) {
     if (!studioGet()) seedStudioFromChips();
     // A HOST WITH A CAMERA TAB (the workspace): the studio lives there, not
     // under the frame. Advanced here means "the studio drives the camera";
-    // editing it is one click away.
-    if (F.openCameraTab) { F.openCameraTab(); return; }
+    // the link beside the segment opens it.
+    if (F.openCameraTab) return;
     studio = buildStudio(studioHost, {
       get: () => studioGet() || {},
       set: (state) => studioSet(state),
@@ -969,11 +977,11 @@ export function buildFrameEditor(wrap, F) {
   };
   const openStudio = () => {
     // Advanced: seed the studio from the chips if it is not live yet, then
-    // show it (standalone) or jump to the Camera tab (workspace)
+    // show it (standalone) or, in the workspace, leave it to the Camera tab
+    // and show the link there
     if (!studioGet()) { seedStudioFromChips(); }
     showStudio(true);
     changed();
-    if (F.openCameraTab) F.openCameraTab();
   };
   const goSimple = () => {
     // Simple: the studio stops driving the camera; the chips write it again
@@ -1014,6 +1022,7 @@ export function buildFrameEditor(wrap, F) {
         : "";
     studioBtn.classList.toggle("on", live && !off);
     simpleBtn.classList.toggle("on", !live && !off);
+    camLink.style.display = live && !off && F.openCameraTab ? "" : "none";
     applyCamSw();
   };
   syncSimpleRef = syncSimple;
