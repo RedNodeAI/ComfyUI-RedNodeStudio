@@ -1351,6 +1351,11 @@ class RedNodeSave:
                     png_meta.add_text("civitaiResources",
                                       json.dumps(civitai_meta.civitai_resources(civ_res)))
                     png_meta.add_text("hashes", json.dumps(civitai_meta.hashes(civ_res)))
+                    if isinstance(words, dict) and str(words.get("positive") or "").strip():
+                        # these words are the Workspace's own, not a trace: before
+                        # 1.4.2 a trace could name another chain's Prompt Box, so
+                        # Import prompt only believes a parameters text marked here
+                        png_meta.add_text("rednode_words", "queued")
                 # PNG has no quality: it is lossless, and every level below produces
                 # the identical image. What changes is the file size and how long the
                 # save takes, which is worth a control but not a "quality" one.

@@ -16026,8 +16026,10 @@ async function importPromptFromPng(node, cfg, rows, file) {
     const crow = chosenRow(config);
     const words = crow ? String(crow.text || "").trim() : "";
     // the words the picture was made with, sockets and wildcards resolved, when
-    // the file has them and they say more than the row does
-    const sent = String(params?.positive || "").trim();
+    // the file has them and they say more than the row does. Only a save that
+    // marks them as the Workspace's own is believed: an older picture's
+    // parameters text could be another chain's Prompt Box, and its row is right
+    const sent = chunks.rednode_words === "queued" ? String(params?.positive || "").trim() : "";
     const differs = sent && sent !== words;
     const summary = (words ? "Prompt row" + (crow.name ? " “" + crow.name + "”" : "") + ": " + clip(words) + "\n\n"
                            : "No prompt row in it.\n\n")
