@@ -11938,6 +11938,40 @@ function promptsBody(node, body) {
         // the Auto sort button borrows the Auto Prompt's Ollama choice
         F.sortModel = () => cfg.auto?.model || "";
         F.sortUrl = () => cfg.auto?.url || "";
+        // WHAT THE SOCKETS ADD. The frame sockets (style_in, subject_in,
+        // surroundings_in, light_and_colour_in) join after the row's own words
+        // at queue time, and the caption sockets ride the caption layer. The
+        // preview reads the upstream text when it is a widget (a Prompt Box, a
+        // Note, a primitive) so the words match the run; a computed upstream
+        // is named only.
+        F.wired = () => {
+          const BOXES = { style_in: "Style", subject_in: "Subject", surroundings_in: "Surroundings",
+                          light_and_colour_in: "Light and colour" };
+          const CAPS = { subject_caption_in: "Subject caption", scene_caption_in: "Scene caption",
+                         mood_caption_in: "Moodboard caption", i2i_caption_in: "Img2Img caption" };
+          const outw = { lines: [] };
+          const g = node.graph || app.graph;
+          const textOf = (src) => {
+            const ws = src?.widgets || [];
+            const w = ws.find((x) => x?.type === "customtext")
+                   || ws.find((x) => { const t = String(x?.type || ""); return t === "text" || t === "string"; })
+                   || (String(src?.type || "") === "PrimitiveNode" ? ws[0] : null);
+            const v = w?.value;
+            return typeof v === "string" ? v.trim() : "";
+          };
+          for (const inp of (node.inputs || [])) {
+            const name = String(inp?.name || "");
+            const box = BOXES[name] || CAPS[name];
+            if (!box || inp.link == null) continue;
+            const link = g?.links?.get?.(inp.link) ?? g?.links?.[inp.link];
+            const src = link ? (g?.getNodeById?.(link.origin_id) || nodeById(link.origin_id)) : null;
+            const from = src?.title || src?.type || "a node";
+            const text = BOXES[name] && src ? textOf(src) : "";
+            if (text) outw[name] = text;
+            outw.lines.push({ box, node: from, read: !!text });
+          }
+          return outw;
+        };
         // the studio's own live paragraph, for the panel's CAMERA PROMPT card
         F.studioPreview = async (state) => {
           const r = await fetch("/rednode/camera_studio_preview", {

@@ -131,6 +131,8 @@ const STYLE = `
 }
 .rn-pf-note.on { border-left-color: #e0a35a; }
 .rn-pf-note.ok { color: #7f8792; }
+.rn-pf-wired { color: #9fa7b2; border-left-color: #b8283c; }
+.rn-pf-wired b { color: #c9ced6; font-weight: 600; }
 .rn-pf-out {
   min-height: 90px; max-height: 260px; overflow: auto;
   font-size: 12px; line-height: 1.45; color: #9fa7b2;
@@ -1078,7 +1080,12 @@ export function buildFrameEditor(wrap, F) {
     document.body.appendChild(ov);
   });
   outBar.appendChild(copyB); outBar.appendChild(bigB);
-  outWrap.appendChild(note); outWrap.appendChild(out); outWrap.appendChild(outBar);
+  // the wired line sits under the words, only where a host has sockets
+  const wiredLine = F.wired ? el("div", "rn-pf-note rn-pf-wired") : null;
+  if (wiredLine) wiredLine.style.display = "none";
+  outWrap.appendChild(note); outWrap.appendChild(out);
+  if (wiredLine) outWrap.appendChild(wiredLine);
+  outWrap.appendChild(outBar);
   if (F.previewHost) F.previewHost.appendChild(outWrap);
   else if (colP) {
     const pvBox = el("div", "rn-pf-box rn-pf-pvbox");
@@ -1155,6 +1162,17 @@ export function buildFrameEditor(wrap, F) {
       // a host may keep wildcards unresolved (the Prompts tab does: the queue
       // rolls them with the run seed, so the stored text must keep the tokens)
       if (F.resolveWildcards === false) body.resolve_wildcards = false;
+      // WIRED TEXT. The host (the Workspace) reads what sits on its frame and
+      // caption sockets. Text it could read off a widget upstream rides the
+      // request and comes back joined into the words, the way the run joins
+      // it; a computed upstream is only named, since its text exists at queue
+      // time and not before.
+      const wired = F.wired ? (F.wired() || null) : null;
+      if (wired) {
+        for (const k of ["style_in", "subject_in", "surroundings_in", "light_and_colour_in"]) {
+          if (wired[k]) body[k] = wired[k];
+        }
+      }
       const r = await fetch("/rednode/prompt_frame_preview", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1168,6 +1186,17 @@ export function buildFrameEditor(wrap, F) {
         .replace(/(?<![A-Za-z0-9_])@[A-Za-z0-9_]+/g, (m) => `<span class="rn-pf-kw">${m}</span>`);
       if (j.notice) { note.textContent = j.notice; note.className = "rn-pf-note on"; }
       else { note.textContent = `${j.words} words`; note.className = "rn-pf-note ok"; }
+      if (wiredLine) {
+        const lines = (wired?.lines || []);
+        wiredLine.style.display = lines.length ? "" : "none";
+        wiredLine.replaceChildren();
+        if (lines.length) {
+          wiredLine.appendChild(el("b", null, "Wired in: "));
+          wiredLine.appendChild(el("span", null, lines.map((l) =>
+            `${l.box} from ${l.node}` + (l.read ? " (in the words above)" : " (made when queued, not shown)")
+          ).join("; ") + "."));
+        }
+      }
       F.onPreview?.(j.prompt || "", j.notice || "");
     } catch (e) { /* server not up */ }
   }

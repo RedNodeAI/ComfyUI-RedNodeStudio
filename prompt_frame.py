@@ -802,7 +802,14 @@ try:
                 camera_height=data.get("camera_height", "Eye level"),
                 camera=data.get("camera", ""),
                 camera_off=bool(data.get("camera_off")),
-                extra=data.get("extra", ""))
+                extra=data.get("extra", ""),
+                # text wired into the Workspace's frame sockets, when the panel
+                # could read it off the upstream node: joined after each box's
+                # own words, exactly as the run joins it
+                style_in=str(data.get("style_in") or ""),
+                subject_in=str(data.get("subject_in") or ""),
+                surroundings_in=str(data.get("surroundings_in") or ""),
+                light_and_colour_in=str(data.get("light_and_colour_in") or ""))
         except Exception as exc:
             return web.json_response({"error": str(exc)}, status=400)
         return web.json_response({"prompt": prompt, "notice": notice,
