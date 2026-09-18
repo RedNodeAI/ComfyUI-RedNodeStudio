@@ -387,7 +387,7 @@ function fetchEstimate(node, line) {
   const cfgStr = JSON.stringify(node._rnCfg || {});
   const key = cfgStr + JSON.stringify(files);
   if (_estCache.key === key && _estCache.data) {
-    line.textContent = estimateText(node._rnCfg, _estCache.data);
+    renderEstimate(node._rnCfg, _estCache.data, line);
     return;
   }
   clearTimeout(_estTimer);
@@ -400,9 +400,71 @@ function fetchEstimate(node, line) {
       const d = await res.json();
       _estCache.key = key;
       _estCache.data = d;
-      line.textContent = estimateText(node._rnCfg, d);
-    } catch (e) { /* the line stays empty: an estimate is a nicety */ }
+      renderEstimate(node._rnCfg, d, line);
+    } catch (e) { /* the card stays empty: an estimate is a nicety */ }
   }, 150);
+}
+
+// THE ESTIMATE AS A CARD under the pipeline: one big number, what the run needs
+// with nothing held; a bar against the card with the limit marked on it; a
+// verdict chip; the parts as chips; and the stage line and the caveat as a
+// note. The sentence estimateText builds stays as the card's title, so a
+// hover reads the whole story in one line.
+export function renderEstimate(cfg, d, host) {
+  if (!host) return;
+  host.replaceChildren();
+  host.title = estimateText(cfg, d);
+  if (!d || d.error) return;
+  const e = d.estimate;
+  const lim = cfg.vram_gb ? cfg.vram_gb - HEADROOM_GB : null;
+  const card = Number(d.card) || 0;
+  if (!e) {
+    host.appendChild(el("div", "rn-ws-note", lim
+      ? `Limit ${lim} GB. No estimate: the Workspace is not rendering with its own sampler.`
+      : "No estimate: the Workspace is not rendering with its own sampler."));
+    return;
+  }
+  const mode = cfg.vram_hold_mode || "auto";
+  const over = lim ? e.peak > lim : false;
+  const tone = !lim ? "plain" : over ? (mode === "off" ? "red" : "amber") : "green";
+  const verdict = !lim ? ""
+    : over ? (mode === "off" ? `Over the ${lim} GB limit, Hold is Off: it may run out`
+                              : `Over the ${lim} GB limit: it will hold, slower, near the line`)
+    : (mode === "on" ? `Under the ${lim} GB limit; Hold is On, so it holds anyway`
+                     : `Under the ${lim} GB limit: full speed`);
+  const big = el("div", "rn-run-estbig");
+  big.appendChild(el("span", "num", `${e.peak.toFixed(1)} GB`));
+  big.appendChild(el("span", "lbl", "needed with nothing held"));
+  if (verdict) big.appendChild(el("span", `rn-run-estchip ${tone}`, verdict));
+  host.appendChild(big);
+  // the bar: the card is the width, the limit a mark on it, the need the fill
+  const scale = Math.max(card || 0, e.peak, lim || 0) || 1;
+  const bar = el("div", `rn-run-estbar ${tone}`);
+  const fill = el("i", "fill");
+  fill.style.width = `${Math.min(100, (e.peak / scale) * 100).toFixed(1)}%`;
+  bar.appendChild(fill);
+  if (lim) {
+    const mark = el("i", "mark");
+    mark.style.left = `${Math.min(100, (lim / scale) * 100).toFixed(1)}%`;
+    mark.title = `Limit ${lim} GB`;
+    bar.appendChild(mark);
+  }
+  host.appendChild(bar);
+  const sc = el("div", "rn-run-estscale");
+  sc.appendChild(el("span", null, "0"));
+  sc.appendChild(el("span", null, lim ? `Limit ${lim} GB` : ""));
+  sc.appendChild(el("span", null, card ? `Card ${card.toFixed(1)} GB` : ""));
+  host.appendChild(sc);
+  const parts = el("div", "rn-run-estparts");
+  for (const [n, g] of (e.parts || [])) parts.appendChild(el("span", "rn-ws-chip", `${n} ${Number(g).toFixed(1)} GB`));
+  host.appendChild(parts);
+  const notes = [];
+  if (Array.isArray(e.stages) && e.stages.length > 1) {
+    notes.push("Peaks at its largest stage: " + e.stages.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ") + ".");
+  }
+  if (over && mode !== "off") notes.push("Holding keeps the peak well under that, so the measured peak on the chart is the one to read.");
+  notes.push("Captioners and the Detailer are not counted.");
+  host.appendChild(el("div", "rn-ws-note", notes.join(" ")));
 }
 
 // ---- the finished picture ------------------------------------------------------
@@ -877,11 +939,6 @@ function runPage(node, body) {
   view.refs.facts = facts;
   top.append(gen, mode, tierWrap, facts);
   root.appendChild(top);
-  const estLine = el("div", "rn-ws-note rn-run-est");
-  estLine.dataset.est = "1";
-  top.appendChild(estLine);
-  view.refs.est = estLine;
-  fetchEstimate(node, estLine);
   const banner = el("div", "rn-ws-card rn-run-past");
   const bannerText = el("span", "tx");
   const liveBtn = el("button", "rn-ws-btn rn-run-live", "Back to live");
@@ -903,6 +960,12 @@ function runPage(node, body) {
   pipe.appendChild(el("div", "ch", "PIPELINE"));
   const boxes = el("div", "rn-run-boxes");
   pipe.appendChild(boxes);
+  // VRAM, under the stages it belongs to: what the run needs, against the card
+  const estCard = el("div", "rn-run-estcard");
+  estCard.dataset.est = "1";
+  pipe.appendChild(estCard);
+  view.refs.est = estCard;
+  fetchEstimate(node, estCard);
   view.refs.boxes = boxes;
   root.appendChild(pipe);
 
@@ -1354,7 +1417,21 @@ export const RUN_CSS = `
 .rn-run-go:hover{background:#cf2f45}
 .rn-run-go:disabled{opacity:.6;cursor:wait}
 .rn-run-tier{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.rn-run-est{flex:1 1 100%;font-size:11.5px}
+.rn-run-estcard{margin-top:10px;padding-top:10px;border-top:1px solid #2a2e34;display:flex;flex-direction:column;gap:6px}
+.rn-run-estbig{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rn-run-estbig .num{font-size:22px;font-weight:700;color:#e8ecf1;letter-spacing:.01em}
+.rn-run-estbig .lbl{font-size:12px;color:#8f97a3}
+.rn-run-estchip{margin-left:auto;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:10px;border:1px solid}
+.rn-run-estchip.green{background:#15301f;border-color:#2b6b41;color:#a7f3c0}
+.rn-run-estchip.amber{background:#3a2a10;border-color:#8a6a1e;color:#ffd48a}
+.rn-run-estchip.red{background:#3a1418;border-color:#b8283c;color:#ffb3bd}
+.rn-run-estbar{position:relative;height:10px;border-radius:5px;background:#111316;border:1px solid #2a2e34;overflow:visible}
+.rn-run-estbar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:#3c9a5f}
+.rn-run-estbar.amber .fill{background:#c9922e}
+.rn-run-estbar.red .fill{background:#b8283c}
+.rn-run-estbar .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:#e8ecf1;border-radius:1px}
+.rn-run-estscale{display:flex;justify-content:space-between;font-size:10.5px;color:#7f8792}
+.rn-run-estparts{display:flex;gap:6px;flex-wrap:wrap}
 .rn-run-facts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
 .rn-run-status.running{border-color:#4a8fe0;color:#cfe0f5}
 .rn-run-status.done{border-color:#2e7d4f;color:#9fe0b4}
