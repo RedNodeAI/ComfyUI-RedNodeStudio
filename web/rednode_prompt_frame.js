@@ -441,12 +441,14 @@ export function buildFrameEditor(wrap, F) {
   grpTools.appendChild(el("span", "rn-pf-headcap", "Rewrite as"));
   grpTools.appendChild(rwStyle);
   grpTools.appendChild(rwBtn);
-  // CLEAR: every box empty and the two presets back to None in one press, with
-  // one question first, because there is no undo for a cleared prompt
+  // CLEAR: a blank prompt in one press: every box empty, the two presets back
+  // to None, the camera words off and the brightness neutral, with one question
+  // first, because there is no undo for a cleared prompt
   const clearBtn = el("button", "rn-pf-btn", "Clear");
   clearBtn.title = "Empty every box of this frame (style wording, subject, surroundings, "
-                 + "placement, light and colour) and set Style and Lighting back to None. "
-                 + "The camera, framing and brightness stay as they are.";
+                 + "placement, light and colour, anything else), set Style and Lighting "
+                 + "back to None, switch the camera words off and put the brightness at "
+                 + "neutral, so the prompt is completely blank.";
   clearBtn.addEventListener("click", () => {
     if (!window.confirm("Clear every box of this prompt?")) return;
     styleSel.value = (F.opts.style || [])[0] ?? "None";
@@ -457,9 +459,11 @@ export function buildFrameEditor(wrap, F) {
     extra.value = "";
     lightSel.value = (F.opts.lighting || [])[0] ?? "None";
     lac.value = "";
-    for (const ta of [styleExtra, subject, surroundings, placement, lac]) ta._rnCount?.();
+    brightRange.value = "0";
+    for (const ta of [styleExtra, subject, surroundings, placement, lac, extra]) ta._rnCount?.();
     pushToWidgets();
     changed();
+    setCameraOff(true);
   });
   grpTools.appendChild(clearBtn);
 
