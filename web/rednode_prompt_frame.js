@@ -382,7 +382,8 @@ export function buildFrameEditor(wrap, F) {
   const rwStyle = document.createElement("select");
   rwStyle.style.maxWidth = "190px";
   for (const [v, t] of [["keep", "Keep the style as written"], ["photoreal", "As a photograph"],
-                        ["cinematic", "As a film still"], ["illustration", "As an illustration"]]) {
+                        ["cinematic", "As a film still"], ["illustration", "As an illustration"],
+                        ["variation", "A fresh variation"]]) {
     const o = document.createElement("option");
     o.value = v; o.textContent = t;
     rwStyle.appendChild(o);

@@ -49,7 +49,7 @@ Rules:
 
 # REWRITE: the same boxes, the same model, a writer this time. Every fact stays;
 # the wording gets concrete, and a style tag says what kind of picture it is for.
-REWRITE_STYLES = ("keep", "photoreal", "cinematic", "illustration")
+REWRITE_STYLES = ("keep", "photoreal", "cinematic", "illustration", "variation")
 
 _STYLE_NOTES = {
     "keep": "Keep the medium and style exactly as written.",
@@ -59,6 +59,7 @@ _STYLE_NOTES = {
                  "in the terms a cinematographer uses.",
     "illustration": "Write it as an illustration: the medium, line, brush and palette, "
                     "in the terms an illustrator uses.",
+    "variation": "Keep the medium and style exactly as written.",
 }
 
 REWRITE_SYSTEM = """You rewrite an image prompt so it reads well for a text to image model, box by box. You are a writer, not an inventor.
@@ -74,6 +75,74 @@ Rules:
 5. Answer with ONLY a JSON object with keys: subject, surroundings, style_extra, light_and_colour, placement. Strings only. No commentary, no markdown fences."""
 
 
+# VARIATION: the user's own instruction (2026-09-18). Same boxes in and out, but
+# the model is asked for a fresh take on the same situation rather than a
+# faithful rewrite: pose, gesture, clothing detail, props, framing and light may
+# move, the concept may not. Runs warmer than a rewrite for that reason.
+VARIATION_SYSTEM = """You rewrite an image prompt box by box into a polished text-to-image prompt, while creating a fresh variation of the same overall situation.
+
+Boxes: subject, surroundings, style_extra, light_and_colour, placement. Return the same boxes in the same structure.
+
+An "extra" line in the input is unsorted text. Interpret every useful detail from it and fold it into the most appropriate box.
+
+Your goal is not to reproduce the input exactly. Use the input as visual direction and create a new image that feels clearly related: the same general subject, mood, setting, activity, and visual idea, but with creatively varied details.
+
+Rules:
+
+1. Preserve the core concept.
+   Keep the important identity of the scene: who or what the image is about, the general activity, setting, mood, clothing category, visual style, and major visual features.
+
+2. Create a variation, not a copy.
+   You may naturally change secondary details such as pose, gesture, expression, clothing design or materials, nearby objects, background details, environmental features, camera framing, composition, lighting direction, and colour balance.
+
+3. Do not change the scene into a different concept.
+   A woman relaxing on a tropical beach should remain a woman in a beach-related situation, but she could be walking beside the water, sitting beneath a parasol, leaning against a beach bar, or standing near the shoreline instead of repeating the original pose exactly.
+
+4. Be creatively specific.
+   Replace vague wording with concrete visual information. Prefer specific actions, materials, surfaces, environmental details, camera relationships, and observable lighting.
+
+5. Improve the writing.
+   Each box should read naturally for a text-to-image model. Use one or two coherent sentences per box. Avoid filler, excessive adjective stacking, keyword spam, and words such as "stunning", "beautiful", "masterpiece", or "best quality".
+
+6. Subject controls the main person or object.
+   Describe appearance, clothing, pose, expression, action, and relevant physical details here. You may reinterpret secondary details while keeping the same general character concept.
+
+7. Surroundings controls the environment.
+   Describe the location, architecture, landscape, furniture, props, weather, atmosphere, and background activity. Expand sparse environments with plausible details that support the original situation without changing its theme.
+
+8. style_extra controls visual treatment.
+
+%s
+Follow the style note when provided. Style words belong here rather than being scattered unnecessarily through other boxes.
+
+9. light_and_colour controls illumination and palette.
+Describe light source, direction, softness or hardness, time-of-day qualities, reflections, shadows, and dominant colour relationships. Preserve the general mood of the input while allowing a visually interesting variation.
+
+10. placement controls composition and camera relationship.
+Describe where the subject appears in the frame, camera height, viewing angle, shot distance, orientation, foreground/background relationship, and important spatial arrangement. You may improve or vary the composition rather than reproducing it exactly.
+
+11. Treat the input as inspiration rather than immutable instructions.
+When several possible interpretations exist, choose the version that creates the clearest, most visually interesting image while remaining recognisably connected to the original prompt.
+
+12. Do not introduce unrelated concepts.
+Creative additions must logically belong to the existing scene. Do not add new characters, major objects, fantasy elements, text, logos, animals, vehicles, or other dominant elements unless they are already suggested by the input.
+
+13. An empty box stays empty unless:
+- information from "extra" clearly belongs there, or
+- the style note specifically requires style information in style_extra.
+
+14. Do not mention that you changed, interpreted, expanded, or rewrote anything.
+
+15. Output ONLY a valid JSON object with exactly these keys:
+"subject"
+"surroundings"
+"style_extra"
+"light_and_colour"
+"placement"
+
+Every value must be a JSON string. No commentary, markdown, headings, explanations, or additional keys."""
+
+
 def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=None,
                    generate=None):
     """fields: the frame's text boxes -> the same boxes rewritten, or None.
@@ -86,10 +155,12 @@ def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=No
     if not lump.strip():
         print("[RedNode Prompt Rewrite] nothing to rewrite", flush=True)
         return None
+    vary = style == "variation"
     gen = generate or (lambda m, s, p: _ap.ollama_generate(
-        m, s, p, url=url, options={"temperature": 0.4, "num_predict": 700},
+        m, s, p, url=url, options={"temperature": 0.8 if vary else 0.4, "num_predict": 900 if vary else 700},
         keep_alive=0, **({"transport": transport} if transport else {})))
-    reply = gen(model, REWRITE_SYSTEM % _STYLE_NOTES[style],
+    system = (VARIATION_SYSTEM if vary else REWRITE_SYSTEM) % _STYLE_NOTES[style]
+    reply = gen(model, system,
                 "Input boxes:\n\n" + lump + "\n\nReturn the JSON.")
     if not reply:
         print("[RedNode Prompt Rewrite] the model returned nothing", flush=True)
