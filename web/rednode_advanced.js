@@ -121,7 +121,11 @@ css.textContent = `
 .rn-adv .rep.on{border-color:#b8283c;background:#1d1418;color:#fff}
 .rn-adv .tcard{display:flex;align-items:center;gap:6px;background:#212429;
   border:1px solid #2a2e34;border-radius:6px;padding:5px 6px}
-.rn-adv .card input.pname{flex:0 1 auto;min-width:90px;max-width:260px;background:transparent;
+/* the name yields space before anything else: it is the only elastic thing on a
+   detailer header, and at 90px it pushed Free VRAM, copy and delete onto a second
+   line as soon as SAM and Res were showing too */
+.rn-adv .card input.pname{flex:0 1 auto;min-width:52px;max-width:260px;
+  background:transparent;text-overflow:ellipsis;
   border:1px solid transparent;border-radius:4px;font-size:13px;font-weight:700;color:#eef1f5;
   padding:1px 5px}
 .rn-adv .card input.pname.auto{font-weight:600;color:#c3c8cf}
@@ -978,7 +982,7 @@ function buildPanel(node, hostEl = null) {
       nameP.type = "text";
       nameP.className = "pname" + (s.name ? "" : " auto");
       nameP.value = shown[i];
-      nameP.size = Math.max(10, Math.min(30, shown[i].length + 1));
+      nameP.size = Math.max(9, Math.min(22, shown[i].length + 1));
       nameP.title = "Name this pass. The run log and the Stage View use it. Clear it to "
                   + "go back to the automatic name.";
       nameP.onchange = () => {
