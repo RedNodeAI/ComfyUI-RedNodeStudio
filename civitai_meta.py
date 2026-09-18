@@ -167,14 +167,20 @@ def hashes(res):
 
 
 def civitai_resources(res):
-    """The `Civitai resources` list. The version id when the cache has it, the
-    hash otherwise; Civitai matches either."""
+    """The `Civitai resources` list: ONLY resources whose Civitai version id is known.
+
+    Civitai's reader (@civitai/generation-metadata) validates every entry against
+    `modelVersionId: number`, and one entry without it fails the whole schema, so the
+    site then shows nothing at all: no prompt, no steps, no seed. A resource known
+    only by its hash is already in `Model hash`, `Lora hashes` and `Hashes`, which is
+    where Civitai matches hashes; listing it here as well is what broke the upload."""
     out = []
     for r in res:
+        vid = r.get("modelVersionId")
+        if isinstance(vid, bool) or not isinstance(vid, int) or vid <= 0:
+            continue
         entry = {"type": r["type"], "weight": r.get("weight", 1.0),
-                 "modelName": _stem(r["name"])}
-        if r.get("modelVersionId"):
-            entry["modelVersionId"] = r["modelVersionId"]
+                 "modelName": _stem(r["name"]), "modelVersionId": vid}
         if r.get("hash"):
             entry["hash"] = r["hash"]
         out.append(entry)
