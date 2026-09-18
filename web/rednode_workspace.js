@@ -176,7 +176,8 @@ css.textContent = `
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
 .rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
 .rn-ws-pdel{margin-left:auto;align-self:flex-end;width:28px;height:28px;padding:0;flex:none;
-  background:#111316;border:1px solid #3a2a2e;color:#e0405a;font-size:13px;line-height:26px}
+  background:#111316;border:1px solid #3a2a2e;color:#e0405a;font-size:13px;line-height:1;
+  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
 .rn-ws-pdel:hover{background:#2a1418;border-color:#b8283c;color:#ff6b7f}
 .rn-ws-pfield{display:flex;flex-direction:column;gap:3px}
 .rn-ws-negrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
