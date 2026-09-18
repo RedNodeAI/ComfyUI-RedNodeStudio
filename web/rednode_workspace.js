@@ -16004,15 +16004,17 @@ function importChoice(title, summary, choices) {
   ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10cc;"
     + "display:flex;align-items:center;justify-content:center";
   const panel = document.createElement("div");
-  panel.style.cssText = "width:min(640px,94vw);max-height:80vh;overflow:auto;background:#16181c;"
-    + "border:1px solid #3a3f47;border-radius:8px;padding:16px 18px;color:#e2e5ea;"
-    + "font-size:13px;line-height:1.5;display:flex;flex-direction:column;gap:10px";
+  // READABLE AT A GLANCE: this dialog is read once and acted on, so it is set
+  // large, the words at 15 px with the prompt in a box of its own that scrolls
+  panel.style.cssText = "width:min(820px,94vw);max-height:84vh;overflow:auto;background:#16181c;"
+    + "border:1px solid #3a3f47;border-radius:10px;padding:20px 24px;color:#e2e5ea;"
+    + "font-size:15px;line-height:1.55;display:flex;flex-direction:column;gap:14px";
   const h = document.createElement("div");
-  h.style.cssText = "font-weight:700;font-size:14px";
+  h.style.cssText = "font-weight:700;font-size:17px";
   h.textContent = title;
   const s = document.createElement("div");
-  s.className = "rn-ws-note";
-  s.style.whiteSpace = "pre-wrap";
+  s.style.cssText = "white-space:pre-wrap;font-size:15px;color:#d6d9de;max-height:48vh;overflow:auto;"
+    + "background:#111316;border:1px solid #2a2e34;border-radius:6px;padding:12px 14px";
   s.textContent = summary;
   const row = document.createElement("div");
   row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:4px";
@@ -16020,7 +16022,7 @@ function importChoice(title, summary, choices) {
   for (const c of choices) {
     const b = document.createElement("button");
     b.className = "rn-ws-btn";
-    b.style.cssText = "width:auto;padding:0 14px";
+    b.style.cssText = "width:auto;padding:0 18px;min-height:36px;font-size:14px";
     b.textContent = c.label;
     if (c.tip) b.title = c.tip;
     b.onclick = () => { close(); c.run?.(); };
@@ -16028,7 +16030,7 @@ function importChoice(title, summary, choices) {
   }
   const cancel = document.createElement("button");
   cancel.className = "rn-ws-btn";
-  cancel.style.cssText = "width:auto;padding:0 14px";
+  cancel.style.cssText = "width:auto;padding:0 18px;min-height:36px;font-size:14px";
   cancel.textContent = "Cancel";
   cancel.onclick = close;
   row.appendChild(cancel);
@@ -16043,7 +16045,7 @@ async function importPromptFromPng(node, cfg, rows, file) {
   try { chunks = pngTextChunks(await file.arrayBuffer()); } catch (e) { chunks = {}; }
   const config = workspaceConfigIn(chunks);
   const params = parseParameters(chunks.parameters);
-  const clip = (t, n = 320) => (t.length > n ? t.slice(0, n) + "\u2026" : t);
+  const clip = (t, n = 2000) => (t.length > n ? t.slice(0, n) + "\u2026" : t);
   const addRow = (row) => {
     rows.push(row);
     node._rnPromptSel = rows.length - 1;
