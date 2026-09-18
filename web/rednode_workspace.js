@@ -131,6 +131,7 @@ css.textContent = `
 /* The socket tuck rides its own thin row ABOVE the strip. It used to be the last
    item of the wrapping strip, so once the tabs filled the width it wrapped onto a
    stray line between the tabs and the box, the one place it must never be. */
+.rn-ws-postbar .rn-ws-cog{margin-left:auto}
 .rn-ws-tabrow{display:flex;align-items:flex-start;gap:6px;flex:none}
 /* the LoRA tab's SET strip carries this class too, so the rule stays what it was
    and only the strip inside the tab row grows to push the plug to the right */
@@ -15579,7 +15580,7 @@ export function render(node) {
                        + "below keep their settings for when it is back on.";
       body.appendChild(note);
     }
-    postBody(node, body);
+    postBody(node, body, { cogHost: bar });
   }
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "loras") lorasBody(node, body);

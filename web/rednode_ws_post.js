@@ -1317,7 +1317,7 @@ function matchRefBox(node, b) {
   return box;
 }
 
-export function postBody(node, body) {
+export function postBody(node, body, opts = {}) {
   const cfg = node._rnCfg;
   const byId = Object.fromEntries(POST_FX.map((fx) => [fx.id, fx]));
   const chain = normalisePostChain(cfg);
@@ -1354,20 +1354,27 @@ export function postBody(node, body) {
       dragId = null;
     });
   };
-  const bar = document.createElement("div");
-  bar.className = "rn-ws-row";
   const cog = document.createElement("button");
   cog.className = "rn-ws-cog";
   cog.textContent = "⚙";
   cog.title = "Settings for this tab: slider precision and the explanations.";
   cog.onclick = () => openPostCog(node, cog);
-  bar.appendChild(cog);
-  const note = document.createElement("span");
-  note.className = "rn-ws-note";
-  note.textContent = "The eye switches an effect on; click its name to edit it. The list "
-                   + "is the order the chain runs in.";
-  bar.appendChild(note);
-  body.appendChild(bar);
+  if (opts.cogHost) {
+    // INSIDE THE WORKSPACE the cog sits at the right end of the Post FX switch
+    // bar. A row of its own under that bar read as a stray box; the hint it
+    // carried lives in the Effects tip below instead.
+    opts.cogHost.appendChild(cog);
+  } else {
+    const bar = document.createElement("div");
+    bar.className = "rn-ws-row";
+    bar.appendChild(cog);
+    const note = document.createElement("span");
+    note.className = "rn-ws-note";
+    note.textContent = "The eye switches an effect on; click its name to edit it. The list "
+                     + "is the order the chain runs in.";
+    bar.appendChild(note);
+    body.appendChild(bar);
+  }
   looksSection(node, body);
 
   // TWO VIEWS on one chain. Effects: the list of what is on, beside one editor,
@@ -1390,7 +1397,9 @@ export function postBody(node, body) {
     sbar.className = "rn-ws-row";
     const seg = document.createElement("div");
     seg.className = "rn-ws-seg";
-    for (const [v, l, tip] of [["effects", "Effects", "Switch effects on, pick one and set its dials."],
+    for (const [v, l, tip] of [["effects", "Effects", "Switch effects on, pick one and set its dials. The eye switches "
+                                           + "an effect on; click its name to edit it. The list is "
+                                           + "the order the chain runs in."],
                                ["order", "Order", "The chain as tiles in the order it runs. Drag to rearrange; double or remove an effect."]]) {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (sub === v ? " on" : "");
