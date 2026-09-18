@@ -548,6 +548,17 @@ class RedNodePaintRender:
         painting feel instant, and that speed is the point of painting.
         """
         wcfg = _workspace_cfg(prompt)
+        # REFERENCES ARE KREA 2 CONDITIONING, the same rule the Detailer follows. The
+        # panel greys these toggles out on a rig that cannot carry them, and a greyed
+        # button has no handler, so the stored switch could not be turned off either:
+        # without this the patch was still built through the Krea 2 encoder on a model
+        # the panel had already said could not use it.
+        _rig = _paint_rig(wcfg)
+        if _rig is not None and _rig.get("clip_type") != "krea2":
+            _say("references are Krea 2 conditioning and the Model choice %r is not a "
+                 "Krea 2 rig, so this patch is painted with the prompt alone"
+                 % (_rig.get("name") or "that rig"))
+            return None
         refs = {}
         if pc.get("use_subject"):
             refs["subject_image"] = _tab_image(wcfg, "subject")
@@ -927,6 +938,22 @@ def _workspace_cfg(prompt):
             if isinstance(cfg, dict):
                 return cfg
     return {}
+
+
+def _paint_rig(cfg):
+    """The Models-tab rig the Paint tab's Model choice names, or None.
+
+    A render node or a bridge paints with whatever model is wired into it, which
+    nothing here can see, so only a choice that names a rig can be judged.
+    """
+    pick = str(((cfg.get("paint") or {}).get("renderer") or ""))
+    if not pick.startswith("rig:"):
+        return None
+    want = pick[4:]
+    for i, rig in enumerate((cfg.get("models") or {}).get("rigs") or []):
+        if isinstance(rig, dict) and (rig.get("name") or "Rig %d" % (i + 1)) == want:
+            return rig
+    return None
 
 
 def _tab_image(cfg, name, target=1024):

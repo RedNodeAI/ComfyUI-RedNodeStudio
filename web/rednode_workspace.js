@@ -10175,26 +10175,23 @@ function paintBody(node, body) {
   rlab.style.cssText = "flex:none;width:96px";
   rlab.textContent = "Use as reference";
   refRow.appendChild(rlab);
-  // THE MODEL DECIDES whether these are offered, your rule since the Models
-  // tab exists: references are Krea 2 conditioning, so a rig whose CLIP type is
-  // krea2 can carry them and any other model cannot, wherever the render runs. A
-  // graph with no rigs configured keeps the old renderer-kind rule (internal Paint
-  // Render yes, external chain no, "Krea2 Workspace" by exact name yes), so nothing
-  // unmigrated changes.
+  // THE MODEL DECIDES whether these are offered: references are Krea 2 conditioning,
+  // so a rig whose CLIP type is krea2 can carry them and any other model cannot,
+  // wherever the render runs. Only a choice that NAMES a rig can be judged here,
+  // which is the rule the server follows too.
   const refT = allPaintChoices(cfg)
     .find((x) => String(x.node.id) === String(P.renderer ?? ""));
-  const refName = String(refT ? rendererName(refT) : P.renderer_name || "")
-    .trim().toLowerCase();
-  // THE MODEL CHOICE DECIDES, not the Models tab's active rig: a built-in choice
-  // names its rig, and Generate renders on that rig, so its CLIP type is the one
-  // that matters. A node choice with no model wired fills from the active rig.
   const activeRig = (cfg.models?.rigs || [])[cfg.models?.active || 0];
   const refRig = refT?.kind === "rig"
     ? (cfg.models?.rigs || []).find((r, i) => (r.name || `Rig ${i + 1}`) === refT.rigName) || activeRig
     : activeRig;
-  const refsLive = refRig
-    ? refRig.clip_type === "krea2"
-    : ((refT ? refT.kind === "render" : true) || refName === "krea2 workspace");
+  // ONLY A NAMED RIG DECIDES. A render node or a bridge paints with whatever model is
+  // wired into IT, which this panel cannot see, so judging by the Models tab's active
+  // rig greyed the buttons out on setups that were perfectly fine, and a greyed button
+  // has no handler, so they could not be switched off either. The server refuses the
+  // references on a named non-Krea 2 rig and says so in the log: the same rule, one place.
+  const namedRig = refT?.kind === "rig" ? refRig : null;
+  const refsLive = !namedRig || namedRig.clip_type === "krea2";
   for (const [key, label, tip] of [
     ["use_subject", "Subject",
      "Paint with the Subject tab's image as the identity reference, so a repainted "
@@ -10215,18 +10212,9 @@ function paintBody(node, body) {
       b.onclick = () => { P[key] = !P[key]; writeCfg(node); render(node); };
     } else {
       b.disabled = true;
-      b.title = refRig
-        ? "References are Krea 2 conditioning, and " + (refT?.kind === "rig"
-            ? `the model choice (${refRig.name || "this rig"}) is not a Krea 2 model `
-              + "(its CLIP type is not krea2). Pick a Krea 2 rig in Model choice and "
-              + "they come back."
-            : "the active rig, which fills this node's model, is not a Krea 2 model "
-              + "(its CLIP type is not krea2). Switch the active rig on the Models "
-              + "tab and they come back.")
-        : "References cannot ride this chain: its sampler takes plain text "
-          + "conditioning, so these toggles would change nothing. Pick the "
-          + "Krea2 Workspace chain, or the internal Paint Render, and they "
-          + "come back.";
+      b.title = "References are Krea 2 conditioning, and the model choice "
+              + `(${namedRig.name || "this rig"}) is not a Krea 2 model (its CLIP type `
+              + "is not krea2). Pick a Krea 2 rig in Model choice and they come back.";
     }
     refRow.appendChild(b);
   }
