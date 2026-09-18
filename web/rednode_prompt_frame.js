@@ -180,8 +180,17 @@ const STYLE = `
   align-items: center; gap: 6px; }
 .rn-pf-live::before { content: ""; width: 8px; height: 8px; border-radius: 50%;
   background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+/* THE PREVIEW IS OUTPUT, NOT A BOX TO TYPE IN. Under the Anything else box it
+   read as one more textarea, so it is lifted instead of sunk: a lighter card
+   than the inputs, the pack's red down its left edge like the notice above it,
+   and the text at full brightness. The drag corner stays, since a long prompt
+   still wants pulling taller. */
+.rn-pf-pvbox { background: #1a1d22; border-color: #343a44; }
 .rn-pf-pvbox .rn-pf-out { min-height: 220px; max-height: none; font-size: 13px;
-  line-height: 1.55; color: #d6d9de; }
+  line-height: 1.55; color: #e6e9ee;
+  background: #21262e; border: 1px solid #3c4450; border-left: 3px solid #b8283c;
+  border-radius: 6px; padding: 10px 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); }
 .rn-pf-pvbox .rn-pf-note.on { border: 1px solid #b8283c; border-left-width: 3px;
   background: #26161a; border-radius: 6px; padding: 8px 10px; color: #f3b0ba;
   font-weight: 600; }
