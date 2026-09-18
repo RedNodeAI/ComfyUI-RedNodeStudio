@@ -601,6 +601,13 @@ css.textContent = `
 .rn-ws-swlabel{font-size:12px;color:#8a919b;display:flex;align-items:center;gap:6px}
 .rn-ws-bigbtn{height:30px!important;padding:0 14px!important;font-size:13px!important;
   width:auto!important}
+.rn-ws-wspcard{border-color:#8fb4ff66!important;background:linear-gradient(#8fb4ff12,#8fb4ff06)!important;
+  display:flex;flex-direction:column;gap:7px}
+.rn-ws-wspcard .ch{color:#a9c6ff}
+.rn-ws-wsprow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rn-ws-wsprow .rn-ws-wspreset{flex:1 1 240px;min-width:200px;max-width:460px;height:34px;
+  font-size:14px;font-weight:600}
+.rn-ws-wsprow .rn-ws-bigbtn{height:34px!important}
 .rn-ws-warn{font-size:10.5px;color:#f0c58a;line-height:1.45}
 .rn-ws-foot{display:flex;gap:7px;align-items:center;flex:none;padding-top:2px}
 .rn-ws-res{background:#15171b;border:1px solid #33373d;border-radius:5px;color:#ddd;font-size:11px;
@@ -6160,8 +6167,8 @@ function paintLorasBody(node, body) {
 
 // A row at the top of Advanced for things that ACT rather than configure.
 // THE WORKSPACE CARD on Advanced: the settings for the whole node that used to crowd
-// the footer. Resize and the studio preset change renders; the workspace presets save
-// and load the whole panel.
+// the footer. Resize and the studio preset change renders. The workspace presets live
+// on the Overview (workspacePresetCard); this card only points there.
 function workspaceCard(node, body) {
   const cfg = node._rnCfg;
   const card = document.createElement("div");
@@ -6235,8 +6242,31 @@ function workspaceCard(node, body) {
   line("Studio preset", [psel],
        "Hands the studio node a preset through the bundle. Node's own leaves its widget in "
        + "charge; custom (use settings) hands control to the dials.");
-  // THE WORKSPACE PRESETS, the whole of them: this is where they live now, the
-  // node's own combo across the top of the panel having gone
+  // the workspace presets moved to the Overview, where the whole setup shows;
+  // a pointer stays for anyone who looks here first
+  const toOv = document.createElement("button");
+  toOv.className = "rn-ws-btn rn-ws-bigbtn";
+  toOv.textContent = "Open the Overview";
+  toOv.onclick = () => {
+    node._rnTab = "overview";
+    (node.properties ||= {}).rn_tab = "overview";
+    render(node);
+  };
+  line("Workspace presets", [toOv],
+       "Saving and loading the whole panel is at the top of the Overview tab now.");
+  body.appendChild(card);
+}
+
+// THE WORKSPACE PRESETS, the whole of them, as the card that heads the Overview:
+// the page that shows the whole setup is where a setup is loaded and saved
+export function workspacePresetCard(node) {
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-wspcard";
+  const ch = document.createElement("div");
+  ch.className = "ch";
+  ch.textContent = "WORKSPACE PRESET";
+  const row = document.createElement("div");
+  row.className = "rn-ws-wsprow";
   if (node._rnWsPresets === undefined) { node._rnWsPresets = []; fetchPresetNames(node); }
   const picked = node._rnWsPreset || CUSTOM_SENTINEL;
   const wsel = document.createElement("select");
@@ -6244,12 +6274,12 @@ function workspaceCard(node, body) {
   for (const v of [CUSTOM_SENTINEL, ...(node._rnWsPresets || [])]) {
     const o = document.createElement("option");
     o.value = v;
-    o.textContent = v === CUSTOM_SENTINEL ? "Custom (live)" : v;
+    o.textContent = v === CUSTOM_SENTINEL ? "Current" : v;
     o.selected = picked === v;
     wsel.appendChild(o);
   }
   wsel.title = "Load a saved workspace: galleries, selections, masks and dials. Loading "
-             + "replaces the whole panel. Custom (live) is whatever is in the panel now, "
+             + "replaces the whole panel. Current is whatever is in the panel now, "
              + "which is what an edit after a load leaves you with.";
   wsel.onchange = () => {
     if (wsel.value === CUSTOM_SENTINEL) { node._rnWsPreset = CUSTOM_SENTINEL; render(node); return; }
@@ -6293,10 +6323,13 @@ function workspaceCard(node, body) {
       render(node);
     } catch (e) { alert(`Could not delete: ${e.message}`); }
   };
-  line("Workspace presets", [wsel, saveAs, del],
-       "Save and load the whole panel. Presets store file names, so they belong to this "
-       + "machine.");
-  body.appendChild(card);
+  row.append(wsel, saveAs, del);
+  const help = document.createElement("div");
+  help.className = "rn-ws-note";
+  help.textContent = "Save and load the whole panel. Presets store file names, so they "
+                   + "belong to this machine.";
+  card.append(ch, row, help);
+  return card;
 }
 
 function advancedTools(node, body) {
@@ -16175,7 +16208,7 @@ function openCog(node, anchor) {
 
   const where = document.createElement("div");
   where.className = "rn-ws-note";
-  where.textContent = "Loading and deleting live on the Advanced tab, under Workspace presets.";
+  where.textContent = "Loading and deleting live at the top of the Overview tab, under Workspace preset.";
   m.append(h, inp, save, note, where);
   document.body.appendChild(m);
   const r = anchor.getBoundingClientRect();

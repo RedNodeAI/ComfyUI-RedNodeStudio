@@ -1,6 +1,7 @@
 import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, skippedBy,
          convActive, socketWired, packInstalled, modelListsNow, fetchModelListsOnce,
-         autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS } from "./rednode_workspace.js";
+         autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS,
+         workspacePresetCard } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 import { postStatusNow, refreshPostStatus } from "./rednode_ws_post.js";
@@ -443,6 +444,8 @@ export function overviewBody(node, body) {
     card.appendChild(row);
     wrap.appendChild(card);
   };
+  // the whole setup is loaded and saved on the page that shows the whole setup
+  wrap.appendChild(workspacePresetCard(node));
   rowCard("WHAT FEEDS THE RENDER", feeds, false);
   rowCard("THE RUN, IN ORDER", run, true);
 

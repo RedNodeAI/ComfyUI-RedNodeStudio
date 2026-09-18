@@ -2382,7 +2382,7 @@ class RedNodeStudioWorkspace:
                            "the workspace state (galleries, selections, masks, dials) as JSON. "
                            "The panel above edits this."}),
                 # the preset combo used to sit here, across the top of the node. The
-                # Advanced tab's Workspace presets row does the whole job now, so the
+                # Overview tab's Workspace preset card does the whole job now, so the
                 # widget is gone; it was the LAST of the two, so nothing a saved
                 # workflow stored shifts position. build() still accepts the argument
                 # for a queue saved before this.
