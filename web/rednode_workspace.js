@@ -11938,6 +11938,15 @@ function promptsBody(node, body) {
         // the Auto sort button borrows the Auto Prompt's Ollama choice
         F.sortModel = () => cfg.auto?.model || "";
         F.sortUrl = () => cfg.auto?.url || "";
+        // THE WORDS AS QUEUED, from the last run, for this row: the run names
+        // the row by index and by name, and the record rides node.properties
+        F.lastRun = () => {
+          const rec = node.properties?.rn_last_prompt;
+          if (!rec || typeof rec !== "object") return null;
+          const mine = rec.index === i || (rec.index < 0 && String(rec.row || "") === String(row.name || ""));
+          return mine ? rec : null;
+        };
+        node._rnLastPromptChanged = () => { try { F.refreshLastRun?.(); } catch (e) { /* not mounted */ } };
         // WHAT THE SOCKETS ADD. The frame sockets (style_in, subject_in,
         // surroundings_in, light_and_colour_in) join after the row's own words
         // at queue time, and the caption sockets ride the caption layer. The

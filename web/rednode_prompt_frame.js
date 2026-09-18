@@ -133,6 +133,15 @@ const STYLE = `
 .rn-pf-note.ok { color: #7f8792; }
 .rn-pf-wired { color: #9fa7b2; border-left-color: #b8283c; }
 .rn-pf-wired b { color: #c9ced6; font-weight: 600; }
+.rn-pf-lastbox { margin-top: 6px; border: 1px solid #2f3a33; border-left: 3px solid #3c9a5f;
+  border-radius: 6px; background: #171d19; padding: 8px 10px; }
+.rn-pf-lasthead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.rn-pf-lasthead b { color: #b9e3c6; font-weight: 600; font-size: 12px; }
+.rn-pf-lasthead .hint2 { flex: 1; }
+.rn-pf-lasthead button { background: #111316; border: 1px solid #33373d; border-radius: 5px;
+  color: #c2c7cd; cursor: pointer; font-size: 11.5px; padding: 3px 8px; }
+.rn-pf-lasttext { font-size: var(--rn-pf-font, 13px); line-height: 1.5; color: #d6d9de;
+  white-space: pre-wrap; max-height: 200px; overflow: auto; }
 .rn-pf-out {
   min-height: 90px; max-height: 260px; overflow: auto;
   font-size: 12px; line-height: 1.45; color: #9fa7b2;
@@ -1095,6 +1104,39 @@ export function buildFrameEditor(wrap, F) {
   outWrap.appendChild(note); outWrap.appendChild(out);
   if (wiredLine) outWrap.appendChild(wiredLine);
   outWrap.appendChild(outBar);
+  // AS QUEUED LAST RUN: the words the model actually got, with every socket,
+  // caption and wildcard resolved, which the live preview above cannot see
+  // for a computed upstream. The host hands over the record; empty means
+  // no run yet for this row.
+  let lastBox = null, lastText = null, lastWhen = null;
+  if (F.lastRun) {
+    lastBox = el("div", "rn-pf-lastbox");
+    const lh = el("div", "rn-pf-lasthead");
+    lh.appendChild(el("b", null, "As queued last run"));
+    lastWhen = el("span", "hint2", "");
+    lh.appendChild(lastWhen);
+    const lcopy = el("button", null, "\u29C9 Copy");
+    lcopy.title = "Copy the words the last run used.";
+    lcopy.addEventListener("click", () => { navigator.clipboard?.writeText(lastText?.textContent || ""); });
+    lh.appendChild(lcopy);
+    lastText = el("div", "rn-pf-lasttext", "");
+    lastBox.appendChild(lh); lastBox.appendChild(lastText);
+    lastBox.style.display = "none";
+    outWrap.appendChild(lastBox);
+  }
+  const refreshLast = () => {
+    if (!lastBox) return;
+    const rec = F.lastRun() || null;
+    const has = !!(rec && String(rec.text || "").trim());
+    lastBox.style.display = has ? "" : "none";
+    if (!has) return;
+    lastText.textContent = String(rec.text || "");
+    const d = rec.at ? new Date(rec.at) : null;
+    const hh = d ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
+    lastWhen.textContent = [hh, rec.seed != null ? `seed ${rec.seed}` : ""].filter(Boolean).join(" \u00b7 ");
+  };
+  refreshLast();
+  F.refreshLastRun = refreshLast;
   if (F.previewHost) F.previewHost.appendChild(outWrap);
   else if (colP) {
     const pvBox = el("div", "rn-pf-box rn-pf-pvbox");

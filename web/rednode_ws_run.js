@@ -167,6 +167,20 @@ export function onRunEvent(d) {
     if (d.info?.seed != null) RUN.seed = d.info.seed;
     if (d.info?.rig) RUN.rig = d.info.rig;
     if (d.info?.paint) RUN.paint = true;
+    if (d.info?.prompt != null) {
+      // the words as queued: kept on the node for the Prompts tab's box
+      RUN.prompt = String(d.info.prompt || "");
+      const ws = workspaceNodes();
+      const wsn = ws.find((n) => String(n.id) === String(d.node ?? RUN.node)) || ws[0];
+      if (wsn) {
+        (wsn.properties ||= {}).rn_last_prompt = {
+          text: RUN.prompt, negative: String(d.info.negative || ""),
+          row: String(d.info.prompt_row || ""), index: Number(d.info.prompt_index ?? -1),
+          seed: RUN.seed, at: Date.now(),
+        };
+        wsn._rnLastPromptChanged?.();
+      }
+    }
   } else if (d.kind === "stage") {
     const s = RUN.stages.get(d.key) || { label: d.label };
     if (d.label && d.label !== d.key) s.label = d.label;

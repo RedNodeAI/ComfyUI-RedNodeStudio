@@ -3834,6 +3834,16 @@ class RedNodeStudioWorkspace:
                 prompt_text_out = _pf_expand0(prompt_text_out, run_seed, True)
             except Exception:
                 pass
+            # THE WORDS AS QUEUED, for the Prompts tab: every socket, caption and
+            # wildcard resolved, which the live preview cannot see. The row is
+            # named by index and name so the panel shows it under the right one.
+            try:
+                _rows0 = cfg["prompts"].get("rows") or []
+                _run.info(prompt=prompt_text_out, negative=negative_text_out,
+                          prompt_row=str(_prow0.get("name") or ""),
+                          prompt_index=next((_i for _i, _r in enumerate(_rows0) if _r is _prow0), -1))
+            except Exception:
+                pass
 
         _prt = str(cfg["paint"].get("run_token") or "")
         # A HANDLED RIG KIND renders here: the registered handler (a personal
