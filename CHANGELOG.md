@@ -4,6 +4,68 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.4.2** - 2026-09-18
+
+Fixes for two things 1.4.1 got wrong, and a round of panel work on the Overview,
+the Detailer and the Paint tab. The workflows and templates are unchanged.
+
+### Fixes
+
+- A saved picture could carry the wrong prompt. The saved record traced the
+  prompt back from the first sampler in the workflow, so a second chain with
+  its own Prompt Box put that box's words on a picture the Workspace rendered.
+  The Workspace now hands Save the words it queued, and those win. Pictures
+  saved before this keep the words they were saved with
+- Import prompt took the first row linked to the rig instead of the row that
+  rendered. It reads the chosen row now, the same rule the full screen data
+  card uses, shows the words as rendered when they differ from the row, and
+  offers them as a row of their own. A picture from before this fix imports
+  from its embedded setup rather than from its saved text
+- Auto hold was holding runs that fit. 1.4.1 started counting the Detailer's
+  passes, and a pass on a second rig added its model, text encoder, SAM3 and
+  working memory as if all of it sat on the card at once, which read tens of
+  GB over the real peak. The estimate now also works out what the sampler
+  itself needs. When that fits and the limit is the card, ComfyUI drops the
+  rest by itself and the run keeps its speed; a limit set below the card still
+  holds. The Run tab's card says which case it is
+- The Run log called the VAE unloaded and loaded again on every tile of a
+  tiled upscale. It never left: the log looks once a second and caught it
+  mid-swap. A model back within three seconds is no longer announced
+
+### Overview
+
+- Workspace presets moved here from the Advanced tab, as a card of their own
+  at the top, above What feeds the render. The entry for the panel as it
+  stands reads Current instead of Custom (live). Advanced keeps a button that
+  opens the Overview
+- Right-click a box to turn its stage on or off: LoRAs, Camera, Moodboard,
+  Paint, Img2Img, Latent, Re-angle, Swap and their polish, Detailer, Post FX
+  and Save. Krea 2 Identity lists Subject, Scene and Masks; Auto prompt lists
+  the galleries it is on for. It flips the same switch the stage's own page
+  does. A left click still opens the page
+
+### Detailer
+
+- A Simple view beside Advanced, at the start of the top row. Simple keeps
+  what most passes need: the rig, the target, the size and region, the
+  strength bars, the upscale model, the LoRAs switch and the references.
+  Nothing is reset, so a render is the same in either view, and a card shows
+  a chip naming any hidden setting that is in use. Advanced is the default,
+  and the choice is saved with the workflow
+- Every pass has a name in front of its kind. Left alone it names itself,
+  Tiled upscale, Tiled upscale 2, Face detailer, and follows the pass's type
+  and target; type your own and it is kept, and the run log uses it
+- The kinds read TILE UPSCALE and VR2 UPSCALE instead of USDU and UPSCALE
+- The fold, eye, duplicate and delete buttons sat off centre in their boxes
+
+### Paint
+
+- Blank canvas, beside Open image: a white sheet at the Latent tab's size to
+  paint on from nothing. A right-click offers mid grey or black
+- Clear canvas, beside Clear paint: takes the picture off as well as the
+  mask, the colours and the strokes. It asks first when there is painted work
+  to lose. Clear paint still keeps the picture
+
 **1.4.1** - 2026-09-18
 
 A day of Prompts tab work after 1.4.0 went live, plus two things the Overview and
