@@ -332,7 +332,7 @@ export function estimateText(cfg, d) {
   return `Needs about ${e.peak.toFixed(1)} GB unheld${st} (${parts}).${verdict} `
          + (held ? "Holding keeps the peak well under that, so the measured peak on the "
                  + "chart is the one to read. " : "")
-         + "Captioners and the Detailer are not counted.";
+         + "Captioners are not counted.";
 }
 
 // "Your own nodes" rigs name their files in the loaders wired into a RedNode Rig
@@ -476,7 +476,7 @@ export function renderEstimate(cfg, d, host) {
     notes.push("Peaks at its largest stage: " + e.stages.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ") + ".");
   }
   if (over && mode !== "off") notes.push("Holding keeps the peak well under that, so the measured peak on the chart is the one to read.");
-  notes.push("Captioners and the Detailer are not counted.");
+  notes.push("Captioners are not counted.");
   host.appendChild(el("div", "rn-ws-note", notes.join(" ")));
 }
 

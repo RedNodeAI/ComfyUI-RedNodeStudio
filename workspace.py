@@ -810,14 +810,111 @@ def estimate_vram(cfg, rig_files=None):
     render_work = sum(g for n, g in parts if "Working memory" in n or "boost matrix" in n)
     out = {"peak": render, "parts": parts, "work": round(render_work, 1),
            "stages": [["Render", render]]}
-    edit = _edit_stage(cfg, px, batch, i2i_run)
-    if edit:
-        name, eparts, etotal, ework = edit
-        out["parts"] = parts + eparts
+
+    def rig_cost(name):
+        # (model, text encoder, VAE) in GB for a rig named on a Detailer pass
+        r = next((x for x in rigs if x.get("name") == name), None)
+        if not r:
+            return (0.0, 0.0, 0.0)
+        f = files(r)
+        return (model_gb(r),
+                sum(_file_gb(("text_encoders", "clip", "clip_gguf"), c) for c in f["clips"]),
+                _file_gb(("vae",), f["vae"]))
+    # the stages after the render, each its own peak: the edit engine for a
+    # Swap or Re-angle, and the Detailer's passes with their own loads
+    later = [_edit_stage(cfg, px, batch, i2i_run),
+             _detailer_stage(cfg, (mg[0] or 0.0) + te + vae, px, rig_cost)]
+    for st in later:
+        if not st:
+            continue
+        name, eparts, etotal, ework = st
+        out["parts"] = out["parts"] + eparts
         out["stages"].append([name, round(etotal, 1)])
-        out["peak"] = round(max(render, etotal), 1)
-        out["work"] = round(max(render_work, ework), 1)
+        out["peak"] = round(max(out["peak"], etotal), 1)
+        out["work"] = round(max(out["work"], ework), 1)
     return out
+
+
+def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
+    """(name, parts, total GB, working GB) for the Detailer's passes when the
+    Workspace runs them, else None. Each pass is costed on its own and the
+    heaviest wins, since they run one after another. A pass keeps the rig's
+    model, text encoder and VAE on the card (base_gb) unless it frees VRAM
+    first; on top of that a detailer pass loads the SAM3 checkpoint, a tiled
+    pass its upscale model, and a SeedVR2 pass its DiT and VAE plus working
+    memory at the size it writes, which is where a 4K pass becomes the run's
+    real peak. A pass on ANOTHER rig loads that rig's files as well, on top of
+    the main rig still on the card, which is how two models end up resident at
+    once; rig_cost(name) gives (model, text encoder, VAE) in GB for a rig."""
+    if not cfg.get("detailer_on"):
+        return None
+    raw = cfg.get("detailer") if isinstance(cfg.get("detailer"), dict) else {}
+    stages = [s for s in (raw.get("stages") or []) if isinstance(s, dict)
+              and s.get("on", True) and s.get("type") in ("sampler", "detailer", "upscale", "usdu")]
+    if not stages:
+        return None
+    from .refine_pipeline import UPSCALE_SIZES
+    best = None
+    for i, s in enumerate(stages):
+        kind = s.get("type")
+        label = {"sampler": "Sampler pass", "detailer": "Detailer pass",
+                 "upscale": "SeedVR2 pass", "usdu": "Tiled upscale"}[kind]
+        parts = []
+        if not s.get("free_vram"):
+            parts.append(["Rig on the card (%s %d)" % (label, i + 1), round(base_gb, 1)])
+        other = str(s.get("rig") or "").strip()
+        active_name = str((cfg["models"].get("rigs") or [{}])[min(cfg["models"].get("active", 0),
+                          max(0, len(cfg["models"].get("rigs") or []) - 1))].get("name") or "")
+        if other and other != active_name and rig_cost and kind != "upscale":
+            om, ot, ov = rig_cost(other)
+            if om:
+                parts.append(["Model (%s, %s %d)" % (other, label, i + 1), round(om, 1)])
+            if ot:
+                parts.append(["Text encoder (%s, %s %d)" % (other, label, i + 1), round(ot, 1)])
+            if ov:
+                parts.append(["VAE (%s, %s %d)" % (other, label, i + 1), round(ov, 1)])
+        if kind == "detailer":
+            g = _file_gb(("sam3",), str(s.get("sam_model") or "sam3.pt"))
+            if g:
+                parts.append(["SAM3 (%s %d)" % (label, i + 1), round(g, 1)])
+        if kind == "usdu":
+            g = _file_gb(("upscale_models",), str(s.get("usdu_model") or ""))
+            if g:
+                parts.append(["Upscale model (%s %d)" % (label, i + 1), round(g, 1)])
+        if kind == "upscale":
+            g = _file_gb(("seedvr2",), str(s.get("dit_model") or ""))
+            if g:
+                parts.append(["SeedVR2 model (%s %d)" % (label, i + 1), round(g, 1)])
+            g = _file_gb(("seedvr2",), str(s.get("vae_model") or ""))
+            if g:
+                parts.append(["SeedVR2 VAE (%s %d)" % (label, i + 1), round(g, 1)])
+        # the size the pass works at: SeedVR2 writes its target size; a tiled
+        # pass one tile at a time; a sampler or detailer pass its crop or the
+        # picture as it arrives, grown by the pass's scale
+        if kind == "upscale":
+            px = float(UPSCALE_SIZES.get(str(s.get("size") or "1080p"), UPSCALE_SIZES["1080p"]))
+        elif kind == "usdu":
+            try:
+                tile = max(256, min(2048, int(s.get("usdu_tile", 1024))))
+            except (TypeError, ValueError):
+                tile = 1024
+            px = float(tile * tile)
+        else:
+            try:
+                crop = int(s.get("crop_res") or 0)
+            except (TypeError, ValueError):
+                crop = 0
+            try:
+                scale = max(0.25, min(4.0, float(s.get("scale") or 1.0)))
+            except (TypeError, ValueError):
+                scale = 1.0
+            px = float(crop * crop) if crop else float(render_px) * scale * scale
+        work = WORK_GB_PER_MP * (px / 1e6)
+        parts.append(["Working memory (%s %d, %.1f MP)" % (label, i + 1, px / 1e6), round(work, 1)])
+        total = sum(g for _n, g in parts)
+        if best is None or total > best[2]:
+            best = ("Detailer", parts, total, work)
+    return best
 
 
 def _normalise_taps(raw):
