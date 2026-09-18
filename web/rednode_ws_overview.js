@@ -1,7 +1,7 @@
 import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, skippedBy,
          convActive, socketWired, packInstalled, modelListsNow, fetchModelListsOnce,
          autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS,
-         workspacePresetCard } from "./rednode_workspace.js";
+         workspacePresetCard, writeCfg, setPaintOn } from "./rednode_workspace.js";
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 import { postStatusNow, refreshPostStatus } from "./rednode_ws_post.js";
@@ -284,6 +284,85 @@ export function overviewBoxes(node, cfg) {
   return { feeds, run, attention };
 }
 
+// ---- the switches behind a box ----------------------------------------------------
+// RIGHT-CLICK TURNS A STAGE ON OR OFF from here. Each entry is the SAME config key
+// the stage's own page flips, never a second rule: [{ name, on, set(on) }]. A box
+// with no single switch (Models, Prompts, Encode, a Pass, Decode) has none, and
+// its menu only opens the page.
+export function boxSwitches(node, cfg, key) {
+  const tabs = cfg.tabs || {};
+  const I = tabs.i2i || {};
+  const flag = (name, obj, k, dflt = false) => !obj ? [] : [{
+    name, on: obj[k] === undefined ? dflt : !!obj[k], set: (v) => { obj[k] = !!v; } }];
+  const base = String(key).replace(/_render$/, "");
+  if (base === "camera") return flag("Camera", cfg.camera, "on", true);
+  if (base === "loras") return flag("LoRAs", cfg.loras, "on");
+  if (base === "moodboard") return flag("Moodboard", tabs.moodboard, "on");
+  if (base === "identity") {
+    return [...flag("Subject", tabs.subject, "on"), ...flag("Scene", tabs.scene, "on"),
+            ...flag("Masks", tabs.boost_mask, "on")];
+  }
+  if (base === "paint") {
+    return [{ name: "Paint", on: !!cfg.paint?.on, set: (v) => setPaintOn(node, v), self: true }];
+  }
+  if (base === "captions") {
+    // only the galleries whose auto prompt is on: this menu switches things off and
+    // back, it does not pick which gallery to describe
+    return AUTO_TAB_IDS.filter((id) => tabs[id]?.auto?.on).flatMap((id) =>
+      flag("Auto prompt for " + (CAPTION_NAME[id] || capFirst(id)), tabs[id].auto, "on"));
+  }
+  if (base === "source") return flag("Img2Img", I, "on");
+  // Img2Img too: turning it off on the Source box leaves this box in its place,
+  // and the way back has to be here
+  if (base === "canvas") return [...flag("Latent", cfg.latent, "on"), ...flag("Img2Img", I, "on")];
+  if (base === "reangle") return flag("Re-angle", I.reangle, "on");
+  if (base === "swap") return flag("Swap", I.swap, "on");
+  if (base === "reangle_polish") return flag("Re-angle polish", I.reangle, "polish", true);
+  if (base === "swap_polish") return flag("Swap polish", I.swap, "polish", true);
+  if (base === "detailer") return flag("Detailer", cfg, "detailer_on");
+  if (base === "post") return flag("Post FX", cfg, "post_on", true);
+  if (base === "save") return flag("Save", cfg, "save_on");
+  return [];
+}
+
+// the menu itself: DOM at the cursor, closed by any outside press (UI_CONVENTIONS)
+function openBoxMenu(node, b, ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  document.querySelector(".rn-ws-menu")?.remove();
+  const m = el("div", "rn-ws-menu rn-ov-menu");
+  for (const t of ["pointerdown", "click", "contextmenu"]) {
+    m.addEventListener(t, (e) => e.stopPropagation());
+  }
+  m.appendChild(el("div", "note", b.label));
+  const item = (label, fn) => {
+    const bt = el("button", "", label);
+    bt.onclick = () => { m.remove(); fn(); };
+    m.appendChild(bt);
+  };
+  const sws = boxSwitches(node, node._rnCfg, b.key);
+  for (const s of sws) {
+    item((s.on ? "Turn off " : "Turn on ") + s.name, () => {
+      s.set(!s.on);
+      if (!s.self) { writeCfg(node); render(node); }
+    });
+  }
+  if (!sws.length) m.appendChild(el("div", "note", "No single switch. It is set on its page."));
+  m.appendChild(el("div", "sep"));
+  item("Open " + pageOf(b.to), () => goTo(node, b.to));
+  document.body.appendChild(m);
+  const mw = 230, mh = m.getBoundingClientRect?.().height || 120;
+  m.style.left = Math.max(6, Math.min(ev.clientX || 0, (window.innerWidth || 1920) - mw - 6)) + "px";
+  m.style.top = Math.max(6, Math.min(ev.clientY || 0, (window.innerHeight || 1080) - mh - 6)) + "px";
+  const close = (e) => {
+    if (!m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener("pointerdown", close, true);
+    }
+  };
+  document.addEventListener("pointerdown", close, true);
+}
+
 // ---- WHAT THIS RUN NEEDS ---------------------------------------------------------
 // Only what the settings actually call for, so it is a short list rather than
 // every optional pack the Workspace can use. Nothing here installs or downloads
@@ -425,7 +504,7 @@ export function overviewBody(node, body) {
   wrap.appendChild(el("div", "rn-ws-card rn-ws-note rn-ov-intro",
     "The run as it is set up right now, in the order it happens. Green is on, grey is off, "
     + "amber is on but stood aside, red wants fixing; hover a box for the reason. Click a box "
-    + "to open the page that decides it."));
+    + "to open the page that decides it, right-click to turn it on or off."));
 
   const rowCard = (title, boxes, arrows) => {
     const card = el("div", "rn-ws-card rn-ov-card");
@@ -437,8 +516,10 @@ export function overviewBody(node, body) {
       bx.dataset.key = b.key;
       bx.dataset.state = b.state;
       bx.append(el("span", "t", b.label), el("span", "st", b.note));
-      bx.title = (b.why ? b.why + "\n" : "") + "Opens " + pageOf(b.to) + ".";
+      bx.title = (b.why ? b.why + "\n" : "") + "Opens " + pageOf(b.to) + "."
+               + (boxSwitches(node, cfg, b.key).length ? " Right-click to turn it on or off." : "");
       bx.onclick = () => goTo(node, b.to);
+      bx.addEventListener("contextmenu", (e) => openBoxMenu(node, b, e));
       row.appendChild(bx);
     });
     card.appendChild(row);

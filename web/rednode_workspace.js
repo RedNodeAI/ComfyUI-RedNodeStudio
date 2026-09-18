@@ -1904,6 +1904,35 @@ function sendToTab(node, target, entry) {
   writeCfg(node); render(node);
 }
 
+// THE PAINT SWITCH, for the Paint tab and the Overview's right-click alike.
+// SWITCHING OFF IS SAYING YOU ARE DONE, so the model the paint pass loaded is
+// dead weight from here: the renderer-switch free never fires because there was
+// no switch, and the idle watcher is off by default, so without this the
+// checkpoint sits there until something else needs the room. Only on the ON to
+// OFF edge, never on OFF to ON, where you are about to want it back.
+//
+// Fire and forget: the server declines while the queue is busy, and a failure
+// here costs nothing but the memory staying put, which is where it already was.
+export function setPaintOn(node, on) {
+  const P = node._rnCfg.paint;
+  const wasOn = !!P.on;
+  P.on = !!on;
+  writeCfg(node);
+  render(node);
+  if (wasOn && !P.on) {
+    api.fetchApi("/rednode/free_models", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    }).then((r) => r.json()).then((d) => {
+      if (d?.count) {
+        console.log(`[RedNode Workspace] Paint switched off, freed ${d.count} `
+                  + `model(s), about ${Math.round((d.freed || 0) / 1048576)} MB`);
+      }
+    }).catch((e) => {
+      console.debug?.("[RedNode Workspace] could not free on Paint off:", e);
+    });
+  }
+}
+
 /** The Sizes menu: one dial per REGION of the paint tab, behind one button, because
  *  three sliders on the header row would be the clutter the header just lost. Top bar,
  *  right side, and in the big room the left rail. Every key is stripped by the server
@@ -7655,32 +7684,7 @@ function paintBody(node, body) {
       + "VRAM, since you are done with it."
     : "Off: this tab changes nothing and the other tabs keep their claim on "
       + "output_latent.";
-  on.onclick = () => {
-    const wasOn = P.on;
-    P.on = !P.on;
-    writeCfg(node);
-    render(node);
-    // SWITCHING OFF IS SAYING YOU ARE DONE, so the model the paint pass loaded is
-    // dead weight from here: the renderer-switch free never fires because there was
-    // no switch, and the idle watcher is off by default, so without this the
-    // checkpoint sits there until something else needs the room. Only on the ON to
-    // OFF edge, never on OFF to ON, where you are about to want it back.
-    //
-    // Fire and forget: the server declines while the queue is busy, and a failure
-    // here costs nothing but the memory staying put, which is where it already was.
-    if (wasOn) {
-      api.fetchApi("/rednode/free_models", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
-      }).then((r) => r.json()).then((d) => {
-        if (d?.count) {
-          console.log(`[RedNode Workspace] Paint switched off, freed ${d.count} `
-                    + `model(s), about ${Math.round((d.freed || 0) / 1048576)} MB`);
-        }
-      }).catch((e) => {
-        console.debug?.("[RedNode Workspace] could not free on Paint off:", e);
-      });
-    }
-  };
+  on.onclick = () => setPaintOn(node, !P.on);
   const hint = document.createElement("span");
   hint.className = "hint";
   hint.textContent = "Paint what you want changed, set the denoise, queue. It runs on "
