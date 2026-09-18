@@ -432,11 +432,24 @@ export function renderEstimate(cfg, d, host) {
                               : `Over the ${lim} GB limit: it will hold, slower, near the line`)
     : (mode === "on" ? `Under the ${lim} GB limit; Hold is On, so it holds anyway`
                      : `Under the ${lim} GB limit: full speed`);
+  // FOLDED: one line, the number and the verdict, and a Show. Open: the bar,
+  // the parts and the note under it, and a Hide. The choice rides the config.
+  const folded = !!cfg.vram_est_folded;
   const big = el("div", "rn-run-estbig");
   big.appendChild(el("span", "num", `${e.peak.toFixed(1)} GB`));
-  big.appendChild(el("span", "lbl", "needed with nothing held"));
+  big.appendChild(el("span", "lbl", "needed, nothing held"));
   if (verdict) big.appendChild(el("span", `rn-run-estchip ${tone}`, verdict));
+  const fold = el("button", "rn-run-estfold", folded ? "Show" : "Hide");
+  fold.title = folded ? "Show the bar, the parts and the note." : "Fold the estimate to this one line.";
+  fold.onclick = (ev) => {
+    ev.stopPropagation();
+    cfg.vram_est_folded = !folded;
+    host._rnWrite?.();
+    renderEstimate(cfg, d, host);
+  };
+  big.appendChild(fold);
   host.appendChild(big);
+  if (folded) return;
   // the bar: the card is the width, the limit a mark on it, the need the fill
   const scale = Math.max(card || 0, e.peak, lim || 0) || 1;
   const bar = el("div", `rn-run-estbar ${tone}`);
@@ -963,6 +976,7 @@ function runPage(node, body) {
   // VRAM, under the stages it belongs to: what the run needs, against the card
   const estCard = el("div", "rn-run-estcard");
   estCard.dataset.est = "1";
+  estCard._rnWrite = () => writeCfg(node);   // the fold choice is saved with the config
   pipe.appendChild(estCard);
   view.refs.est = estCard;
   fetchEstimate(node, estCard);
@@ -1417,21 +1431,25 @@ export const RUN_CSS = `
 .rn-run-go:hover{background:#cf2f45}
 .rn-run-go:disabled{opacity:.6;cursor:wait}
 .rn-run-tier{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.rn-run-estcard{margin-top:10px;padding-top:10px;border-top:1px solid #2a2e34;display:flex;flex-direction:column;gap:6px}
-.rn-run-estbig{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.rn-run-estbig .num{font-size:22px;font-weight:700;color:#e8ecf1;letter-spacing:.01em}
-.rn-run-estbig .lbl{font-size:12px;color:#8f97a3}
-.rn-run-estchip{margin-left:auto;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:10px;border:1px solid}
+.rn-run-estcard{margin-top:8px;padding-top:8px;border-top:1px solid #2a2e34;display:flex;flex-direction:column;gap:4px}
+.rn-run-estbig{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rn-run-estbig .num{font-size:15px;font-weight:700;color:#e8ecf1}
+.rn-run-estbig .lbl{font-size:11px;color:#8f97a3}
+.rn-run-estchip{margin-left:auto;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;border:1px solid}
+.rn-run-estfold{background:#111316;border:1px solid #33373d;border-radius:5px;color:#9aa0a8;cursor:pointer;font-size:10.5px;padding:2px 8px}
+.rn-run-estfold:hover{border-color:#b8283c;color:#fff}
 .rn-run-estchip.green{background:#15301f;border-color:#2b6b41;color:#a7f3c0}
 .rn-run-estchip.amber{background:#3a2a10;border-color:#8a6a1e;color:#ffd48a}
 .rn-run-estchip.red{background:#3a1418;border-color:#b8283c;color:#ffb3bd}
-.rn-run-estbar{position:relative;height:10px;border-radius:5px;background:#111316;border:1px solid #2a2e34;overflow:visible}
+.rn-run-estbar{position:relative;height:7px;border-radius:4px;background:#111316;border:1px solid #2a2e34;overflow:visible}
 .rn-run-estbar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:#3c9a5f}
 .rn-run-estbar.amber .fill{background:#c9922e}
 .rn-run-estbar.red .fill{background:#b8283c}
 .rn-run-estbar .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:#e8ecf1;border-radius:1px}
-.rn-run-estscale{display:flex;justify-content:space-between;font-size:10.5px;color:#7f8792}
-.rn-run-estparts{display:flex;gap:6px;flex-wrap:wrap}
+.rn-run-estscale{display:flex;justify-content:space-between;font-size:10px;color:#7f8792}
+.rn-run-estparts{display:flex;gap:5px;flex-wrap:wrap}
+.rn-run-estparts .rn-ws-chip{font-size:10.5px;padding:1px 7px}
+.rn-run-estcard .rn-ws-note{font-size:10.5px}
 .rn-run-facts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
 .rn-run-status.running{border-color:#4a8fe0;color:#cfe0f5}
 .rn-run-status.done{border-color:#2e7d4f;color:#9fe0b4}
