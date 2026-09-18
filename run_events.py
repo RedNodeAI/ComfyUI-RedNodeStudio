@@ -36,6 +36,7 @@ _state = {
     "news": 0.0,       # when a stage last started, moved or ended
     "announced": set(),  # models whose load was said, so their unload can be
     "last_used": None,   # the card's used MB at the last sample, for real unloads
+    "gone": {},          # models that left the list, waiting to see if they come back
 }
 _lock = threading.Lock()
 _ticker = {"thread": None}
@@ -45,6 +46,7 @@ STUCK_STOP = 1800.0    # and after this long with no stage news at all
 LOAD_NOTE_MB = 100     # a load is said once the model holds this much
 UNLOAD_SHARE = 0.4     # an unload is said once this share of the model left the card
 LIST_MIN_MB = 50       # the card list leaves out anything smaller
+FLAP_S = 3.0           # a model back within this long never left, as far as the log goes
 
 # which rig a loaded model came from, by the id of its ModelPatcher (and of the
 # patcher a LoRA clone was made from), so the card list can say "Krea 2 · Rig 2"
@@ -169,13 +171,14 @@ def _sample(force_models=False):
     before = _state["models"]
     used = v.get("used")
     last_used = _state["last_used"]
+    new_names = {m["name"] for m in models}
+    said = _state["announced"]
+    gone = _state["gone"]
     if force_models or models != before:
         payload["models"] = models
         if before is not None:
-            new_names = {m["name"] for m in models}
-            said = _state["announced"]
             for m in before:
-                if m["name"] in new_names or m["name"] not in said:
+                if m["name"] in new_names or m["name"] not in said or m["name"] in gone:
                     continue
                 # a name leaving the list is only an unload when the card gave the
                 # memory back. The sampler clones the model to patch it, and the
@@ -184,8 +187,21 @@ def _sample(force_models=False):
                 freed = (last_used - used) if (used is not None and last_used is not None) else None
                 if freed is not None and freed < UNLOAD_SHARE * m["mb"]:
                     continue
-                said.discard(m["name"])
-                note("%s unloaded (%.1f GB freed)" % (m["name"], m["mb"] / 1024), "unload")
+                # NOT SAID YET. A tiled pass calls the VAE twice a tile and the loader
+                # re-registers it each time; caught mid-swap by a once-a-second look,
+                # with a tile's activations just freed, a 0.2 GB VAE passed the test
+                # above every tile and the log filled with unloads that never happened.
+                gone[m["name"]] = {"mb": m["mb"], "at": time.time()}
+    # a model back within FLAP_S never left; one still away after it, or away when
+    # the run is over, did
+    for name in list(gone):
+        if name in new_names:
+            del gone[name]
+        elif time.time() - gone[name]["at"] >= FLAP_S or not _state["active"]:
+            said.discard(name)
+            note("%s unloaded (%.1f GB freed)" % (name, gone.pop(name)["mb"] / 1024), "unload")
+    if force_models or models != before:
+        if before is not None:
             for m in models:
                 # a model is said once it holds a real share of the card; one caught
                 # at the start of its load would read 0.0 GB. A name that never really
