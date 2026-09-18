@@ -95,18 +95,22 @@ the full screen button and the same panel takes the whole window. The socket tuc
 row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
 forty sockets is no taller than its panel.
 
-**Overview.** The run as it is set up, one box per stage in the order it happens: what feeds the
+![The Overview: the Workspace preset card, what feeds the render, the run in order, and what the run needs](images/overview.webp)
+
+**Overview.** Workspace presets sit at the top: save the whole panel under a name and load it
+back, with Current standing for the panel as it is now. Under that, the run as it is set up, one box per stage in the order it happens: what feeds the
 render (the rig, the prompts, the camera, LoRAs, the Moodboard, the identity galleries, Paint, the
 auto prompt), then the run itself (the canvas or source, Re-angle, Swap, the encode, every pass,
 the decode, the Detailer, Post FX, Save). Green is on, grey is off, amber is on but stood aside
-with the reason on hover, red wants fixing. A click on a box opens the page that decides it, and a
+with the reason on hover, red wants fixing. A click on a box opens the page that decides it, a
+right-click turns that stage on or off with the same switch its own page has, and a
 Needs attention list under the map collects every reason a stage will not run, each line a link.
 Under that, Check installs says which node packs, caption engines and model files these settings
 actually call for, which of them are already here, and where to get the rest. It reads what
 ComfyUI has loaded and the file lists it already hands the panel. It downloads and installs
 nothing: ComfyUI Manager does the installing, where you can see what it is doing.
 
-![The Models tab: two rigs, the sampler numbers, the built-in sampler chosen](images/workspace-models.webp)
+![The Models tab: the rigs, the files one loads, its sampling numbers, and the seed](images/workspace-models.webp)
 
 **Models.** A rig is a model with its CLIP and VAE, its sampler numbers, its detailer steps, a
 second sampler pair for image to image runs, and which LoRA set it carries. Keep several and switch
@@ -171,14 +175,16 @@ Wildcards and `@keyword` macros resolve on the run's seed.
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
 LoRAs, and a separate one for the Img2Img tab's re-angle.
 
-![The LoRAs tab: Main and a named set, grouped slots, a random range, the row menu](images/lora-stack.webp)
+![The LoRAs tab: a tab per set, stack presets, and grouped slots that fold and switch off together](images/lora-stack.webp)
 
 **LoRAs.** The main stack, plus named sets on their own sub-tabs. Rows drag by their grip, switch
 off by their eye, and group under titles; a strength can be a random range with the roll shown
 after the run. A rig picks its set by name, and so can a Detailer pass or a paint pass. The Paint
 tab has a stack of its own.
 
-![The Latent tab: the canvas, and two refine passes with a denoise and a scale each](images/latent.webp)
+![The Latent tab's canvas: aspect presets, the exact size, and what it costs in VRAM](images/latent.webp)
+
+![The Latent tab's passes: six passes, each with its own denoise and scale, and the ramps](images/latent-passes.webp)
 
 **Latent.** The canvas size, with aspect presets, a random size, and an auto latent that follows
 the camera's frame at a pixel budget. Refine passes run on the blank canvas: pass 1 generates, and
@@ -190,7 +196,11 @@ rigs keeping both models loaded. Continue the noise between passes makes the pas
 one schedule instead, each carrying the last one's leftover noise on with none added, which is
 how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same sections.
 
-![The Img2Img tab: source, pass, RE-ANGLE, SWAP and the auto prompt](images/img2img.webp)
+![The Img2Img tab's Source page: the gallery and the picture in use](images/img2img.webp)
+
+![The Img2Img passes: a denoise, a scale and a rig per pass](images/img2img-passes.webp)
+
+![The Auto prompt page: the caption it wrote, six caption engines, and where the words go](images/auto-prompt.webp)
 
 **Img2Img.** A source picture, the pass over it, and two edit stages of one shape. Denoise is a
 full-width bar, and with several passes each one can have its own denoise and its own scale.
@@ -206,7 +216,7 @@ PyTorch attention, so SageAttention does not break them. Its Auto prompt page al
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
 
-![The Paint tab in full screen: the mask, the result, and the paint settings](images/paint.webp)
+![The Paint tab: the mask on the picture, the result under it, and the paint settings](images/paint.webp)
 
 **Paint.** Mask a region, set the denoise, queue. It composites back by itself, and it runs on
 whichever renderer you point it at: a rig from the Models tab, the pack's own Paint Render, or an
@@ -217,9 +227,11 @@ size the tab chooses. Every result stays in a history with a full screen viewer 
 one click sends the keeper through the post chain and into the save tree. Blend sits beside
 Feather, the Detailer's dial for how much of the repaint goes back under the mask. Use last result
 can take the picture from before Post FX, so grain and grade never land under the brush, and the
-Subject, Scene and Moodboard reference toggles follow the Model choice's rig.
+Subject, Scene and Moodboard reference toggles follow the Model choice's rig. Blank canvas makes
+a white sheet at the Latent tab's size to paint on from nothing, grey or black on a right-click,
+and Clear canvas takes the picture off as well as the paint, where Clear paint keeps it.
 
-![The Subject tab, with references and the identity dials](images/workspace-subject.webp)
+![The Subject page of Krea 2 Identity: the gallery, with the main subject picked](images/workspace-subject.webp)
 
 **Krea 2 Identity: Subject, Scene, Masks.** One tab with a sub-tab for each, and a light on
 each showing what is in use. Subject is one gallery where you pick the people in order: the
@@ -277,10 +289,17 @@ models.
 
 ## The Detailer
 
-![The Detailer: two sampler passes, a face detailer and an upscale, with a Live Preview watching](images/detailer.webp)
+![The Detailer in its Simple view: named passes in two groups, with the dials most passes need](images/detailer.webp)
+
+![The same passes in the Advanced view: sampling, tiling, the SeedVR2 model and output, and the prompt row](images/detailer-advanced.webp)
 
 RedNode Studio Detailer is the post-render work as a list, read top to bottom, with no wires
-between the passes. Each pass is a card: what it is, which rig runs it, what it aims at, and three
+between the passes. It has two views of the same passes. Simple shows what most passes need: the
+rig, the target, the size, the strength bars and the references. Advanced shows every setting.
+Switching views changes no value, and in Simple a card carries a chip naming any hidden setting
+that is in use. Every pass has a name in front of its kind: left alone it names itself (Tiled
+upscale, Face detailer 2), and a name you type is kept and used in the run log. Each pass is a
+card: what it is, which rig runs it, what it aims at, and three
 boxes under that. Sampling holds steps, CFG, sampler, scheduler and a start and end step window,
 where anything left empty inherits the rig's own numbers. Strength holds Scale and Denoise as bars
 and the Repeat count, and a repeat above one offers a denoise and a scale per round with a Ramp.
@@ -364,7 +383,7 @@ canvas of Get and Set nodes with named channels. The wires that are not there ar
 
 ## The camera stage
 
-![The stage from above: two subjects, the camera, its path, and the sets and camera controls beside it](images/camera-stage.webp)
+![The Camera tab: the stage from above, the camera's height, lens and aim, the subjects and the lights](images/camera-stage.webp)
 
 RedNode Camera Studio is a stage seen from above. Put the subjects on it, drag the walls out to the
 size of the room, then move the camera. Every subject card carries a lock, a duplicate button and a
@@ -414,7 +433,7 @@ Light Slider, also on Civitai. They all go in `models/loras`.
 
 ## The prompt frame
 
-![The frame editor: Style, Subject, Surroundings, Light and colour, the framing dial, and the preview it writes](images/prompt.webp)
+![The Prompts tab: the frame's boxes, the camera chips, Auto sort and Rewrite, and the live preview](images/prompt.webp)
 
 Word order sets the framing. Open a prompt with the person and you get a close shot. Put the room
 first and the camera pulls back, same words. That is most of what "wide" and "close" actually mean
