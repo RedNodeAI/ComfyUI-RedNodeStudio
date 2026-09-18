@@ -732,9 +732,10 @@ def vae_images(t):
 
 
 def estimate_vram(cfg, rig_files=None):
-    """{"peak": GB, "parts": [[name, GB], ...], "work": GB, "stages": [[name, GB]]}
-    for the Workspace's own run, from the model files it will load and the size it
-    works at. Rough on purpose: it decides whether Auto holds, and it is shown so
+    """{"peak": GB, "need": GB, "parts": [[name, GB], ...], "work": GB,
+    "stages": [[name, GB]]} for the Workspace's own run, from the model files it
+    will load and the size it works at. "peak" is everything resident at once;
+    "need" is what cannot leave the card while a stage samples (vram_hold.decide). Rough on purpose: it decides whether Auto holds, and it is shown so
     the number is not a mystery. `rig_files` names the files of "Your own nodes"
     rigs (graph_rig_files). None when the Workspace does not render (external
     sampler, no rig)."""
@@ -808,8 +809,22 @@ def estimate_vram(cfg, rig_files=None):
         parts.append(["Fidelity boost matrix", round(tokens * tokens * 4 / 1024 ** 3, 1)])
     render = round(sum(g for _n, g in parts), 1)
     render_work = sum(g for n, g in parts if "Working memory" in n or "boost matrix" in n)
+
+    def need_of(stage_parts, total):
+        # WHAT CANNOT LEAVE THE CARD while the stage samples. The text encoder has
+        # done its work by then, SAM3 has found its target and the upscale model has
+        # grown the frame: ComfyUI drops all three by itself when the card fills, so
+        # they are in "peak" (everything resident) and not in "need". A pass on the
+        # rig already on the card carries that rig's text encoder inside one part.
+        drop = sum(g for n, g in stage_parts
+                   if str(n).startswith(("Text encoder", "Edit text encoder", "SAM3",
+                                         "Upscale model")))
+        if any(str(n).startswith("Rig on the card") for n, _g in stage_parts):
+            drop += te
+        return round(max(0.0, total - drop), 1)
+
     out = {"peak": render, "parts": parts, "work": round(render_work, 1),
-           "stages": [["Render", render]]}
+           "need": need_of(parts, render), "stages": [["Render", render]]}
 
     def rig_cost(name):
         # (model, text encoder, VAE) in GB for a rig named on a Detailer pass
@@ -832,6 +847,7 @@ def estimate_vram(cfg, rig_files=None):
         out["stages"].append([name, round(etotal, 1)])
         out["peak"] = round(max(out["peak"], etotal), 1)
         out["work"] = round(max(out["work"], ework), 1)
+        out["need"] = round(max(out["need"], need_of(eparts, etotal)), 1)
     return out
 
 
@@ -2672,7 +2688,12 @@ class RedNodeStudioWorkspace:
                       % (_held[0], _hold.hold_mode(cfg).capitalize(),
                          _hold._current["held"], _held[1] / 1024), "unload")
         elif _lim and _hold.hold_mode(cfg) == "auto":
-            _run.note("Not holding: the run fits under the limit, so it keeps its speed")
+            if _hold.decide(cfg, _est)[1] == "droppable":
+                _run.note("Not holding: what the sampler needs is about %.1f GB, under the "
+                          "limit. The rest is the text encoder and SAM3, which ComfyUI "
+                          "drops by itself when the card fills" % _est["need"])
+            else:
+                _run.note("Not holding: the run fits under the limit, so it keeps its speed")
         _taps = cfg["taps"]
 
         def _tap(point, label, img=None, latent=None, model_for=None):
@@ -4827,10 +4848,10 @@ try:
             from . import vram_hold as _vh
             est = estimate_vram(cfg, data.get("rig_files"))
             lim = _vh.limit_gb(cfg)
+            hold, why = _vh.decide(cfg, est)
             return web.json_response({
                 "estimate": est, "card": _vh.card_gb(cfg), "limit": lim,
-                "mode": _vh.hold_mode(cfg),
-                "hold": _vh.should_hold(cfg, est["peak"] if est else None)})
+                "mode": _vh.hold_mode(cfg), "hold": hold, "why": why})
         except Exception as e:
             return web.json_response({"error": str(e)}, status=400)
 

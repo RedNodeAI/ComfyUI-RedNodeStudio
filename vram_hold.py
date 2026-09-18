@@ -74,17 +74,51 @@ def _peak_and_work(estimate):
     return (float(estimate) if estimate is not None else None), 0.0
 
 
-def should_hold(cfg, estimate_gb=None):
-    estimate_gb, _w = _peak_and_work(estimate_gb)
+def real_card_gb():
+    """The card ComfyUI actually runs on, in GB, or None when it cannot be asked."""
+    try:
+        import comfy.model_management as mm
+        return float(mm.get_total_memory(mm.get_torch_device())) / GB
+    except Exception:
+        return None
+
+
+def decide(cfg, estimate=None, real_gb=None):
+    """(hold, why) for this run. why is one of: free (no limit), off, on, unknown,
+    fits, need, below, droppable.
+
+    The estimate has two numbers. "peak" is everything resident at once; "need" is
+    what cannot leave the card while a stage samples. Between the two sit the text
+    encoder, SAM3 and an upscale model, which ComfyUI drops by itself when the card
+    fills. So a peak over the limit with the need under it only wants a hold when
+    the limit is BELOW the real card: there nothing else keeps the run under the
+    line. When the limit is the card, the card enforces itself and the run keeps
+    its speed. Since 1.4.1 counted the Detailer's passes, a pass on a second rig
+    read tens of GB over and Auto held runs that fit."""
     lim = limit_gb(cfg)
     if lim is None:
-        return False
+        return False, "free"
     mode = hold_mode(cfg)
     if mode == "off":
-        return False
+        return False, "off"
     if mode == "on":
-        return True
-    return estimate_gb is None or estimate_gb > lim
+        return True, "on"
+    peak, _w = _peak_and_work(estimate)
+    if peak is None:
+        return True, "unknown"
+    if peak <= lim:
+        return False, "fits"
+    need = estimate.get("need") if isinstance(estimate, dict) else None
+    if need is None or float(need) > lim:
+        return True, "need"
+    real = real_card_gb() if real_gb is None else real_gb
+    if real is None or card_gb(cfg) < real - 1.0:
+        return True, "below"
+    return False, "droppable"
+
+
+def should_hold(cfg, estimate_gb=None):
+    return decide(cfg, estimate_gb)[0]
 
 
 def _aimdo():

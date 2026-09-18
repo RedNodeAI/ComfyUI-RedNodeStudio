@@ -301,6 +301,19 @@ const VRAM_TIER_FOR = { 8: "low", 12: "low", 16: "low", 24: "medium", 32: "high"
 const HEADROOM_GB = 0.5;
 const _estCache = { key: "", data: null };
 
+// THE SERVER DECIDES (vram_hold.decide) and says why; this only words it. An
+// answer from before 1.4.2 carries neither, and falls back to peak against limit.
+// spared: over the limit with everything resident, but the sampler's own need
+// fits and the limit is the card, so ComfyUI drops the rest by itself.
+function holdVerdict(cfg, d, lim) {
+  const e = d.estimate;
+  const mode = cfg.vram_hold_mode || "auto";
+  const over = lim ? e.peak > lim : false;
+  const held = typeof d.hold === "boolean" ? d.hold : (over && mode !== "off");
+  const spared = over && !held && d.why === "droppable";
+  return { mode, over, held, spared, need: Number(e.need ?? e.peak) };
+}
+
 export function estimateText(cfg, d) {
   if (!d || d.error) return "";
   const lim = cfg.vram_gb ? cfg.vram_gb - HEADROOM_GB : null;
@@ -311,10 +324,14 @@ export function estimateText(cfg, d) {
   }
   const parts = e.parts.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ");
   let verdict = "";
+  const hv = holdVerdict(cfg, d, lim);
   if (lim) {
-    const over = e.peak > lim;
-    const mode = cfg.vram_hold_mode || "auto";
-    verdict = over
+    const { over, mode } = hv;
+    verdict = hv.spared
+      ? ` Over the ${lim} GB limit with everything resident, but the sampler needs about `
+        + `${hv.need.toFixed(1)} GB: ComfyUI drops the text encoder and SAM3 by itself when `
+        + "the card fills, so it runs at full speed."
+      : over
       ? (mode === "off" ? ` Over the ${lim} GB limit, and Hold is Off, so it may run out.`
          : ` Over the ${lim} GB limit, so it will hold: slower, and it stays near the line.`)
       : (mode === "on" ? ` Under the ${lim} GB limit; Hold is On, so it holds anyway.`
@@ -328,7 +345,7 @@ export function estimateText(cfg, d) {
   // is the number Hold reads to decide whether to hold at all. Once it holds, the
   // peak you actually see is far below it. Calling both a peak, with the measured
   // one on the chart beside it, read as the estimate having been wrong by tens of GB.
-  const held = lim && e.peak > lim && (cfg.vram_hold_mode || "auto") !== "off";
+  const held = !!lim && hv.held && hv.over;
   return `Needs about ${e.peak.toFixed(1)} GB unheld${st} (${parts}).${verdict} `
          + (held ? "Holding keeps the peak well under that, so the measured peak on the "
                  + "chart is the one to read. " : "")
@@ -424,10 +441,12 @@ export function renderEstimate(cfg, d, host) {
       : "No estimate: the Workspace is not rendering with its own sampler."));
     return;
   }
-  const mode = cfg.vram_hold_mode || "auto";
-  const over = lim ? e.peak > lim : false;
-  const tone = !lim ? "plain" : over ? (mode === "off" ? "red" : "amber") : "green";
+  const hv = holdVerdict(cfg, d, lim);
+  const { mode, over } = hv;
+  const tone = !lim ? "plain" : hv.spared ? "green"
+    : over ? (mode === "off" ? "red" : "amber") : "green";
   const verdict = !lim ? ""
+    : hv.spared ? `The sampler needs ${hv.need.toFixed(1)} GB, under the ${lim} GB limit: full speed`
     : over ? (mode === "off" ? `Over the ${lim} GB limit, Hold is Off: it may run out`
                               : `Over the ${lim} GB limit: it will hold, slower, near the line`)
     : (mode === "on" ? `Under the ${lim} GB limit; Hold is On, so it holds anyway`
@@ -475,7 +494,13 @@ export function renderEstimate(cfg, d, host) {
   if (Array.isArray(e.stages) && e.stages.length > 1) {
     notes.push("Peaks at its largest stage: " + e.stages.map(([n, g]) => `${n} ${Number(g).toFixed(1)}`).join(", ") + ".");
   }
-  if (over && mode !== "off") notes.push("Holding keeps the peak well under that, so the measured peak on the chart is the one to read.");
+  if (hv.spared) {
+    notes.push("The big number is everything resident at once. The text encoder and SAM3 are not "
+      + "needed while the sampler runs, and ComfyUI drops them by itself when the card fills, so "
+      + "this run is not held.");
+  } else if (over && hv.held) {
+    notes.push("Holding keeps the peak well under that, so the measured peak on the chart is the one to read.");
+  }
   notes.push("Captioners are not counted.");
   host.appendChild(el("div", "rn-ws-note", notes.join(" ")));
 }
