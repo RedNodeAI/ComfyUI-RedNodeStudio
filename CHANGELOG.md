@@ -4,6 +4,67 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.4.1** - 2026-09-18
+
+A day of Prompts tab work after 1.4.0 went live, plus two things the Overview and
+the Run tab got wrong.
+
+### Prompts
+
+- Import prompt, beside Add prompt: pick a PNG, or drop one anywhere on the page,
+  and the browser reads its metadata. A picture RedNode Studio saved offers its
+  prompt row whole, frame boxes included, or its entire Workspace setup after a
+  second question. Any picture with the usual parameters text offers its words,
+  in the Anything else box ready for Auto sort, or its words plus the steps,
+  CFG, sampler, scheduler, denoise, size and a fixed seed. Nothing goes to the
+  server
+- The chosen prompt row is the one that renders. Two rows linked to the same rig
+  used to fall to whichever came first, while the tab badged the row being
+  edited as active. The choice rides the config now, the run reads it first,
+  the ACTIVE badge marks the row that will render for the active rig, and a
+  line under the bar says which serves what when the open row is not it
+- As queued last run: a box under the preview with the words the last run
+  sent, every socket, caption and wildcard resolved, with the time, the seed
+  and Copy. The live preview cannot see what a computed upstream adds, so this
+  is where a Style browser's or a Scene node's words show up
+- The preview shows what the sockets add. A Wired in line names every wired
+  frame and caption socket and its node; text a Prompt Box, a Note or a
+  primitive holds is joined into the words the way the run joins it; a
+  computed node is named as made when queued
+- Rewrite as "A fresh variation": a fifth choice that keeps the subject,
+  setting, mood and clothing category and moves the rest, pose, gesture,
+  clothing detail, props, framing, light. Same boxes in and out
+- The Prompt Frame reads top to bottom: the title and saved prompts at the top,
+  the camera and the placement side by side, then Anything else, the tools bar
+  and the preview, which is drawn as output rather than one more text box
+- Advanced stays on the page. It sets the Camera Studio as the driver and shows
+  an Open the Camera tab link instead of jumping there
+- Clear leaves the prompt completely blank: the boxes, the two presets, the
+  camera words off and the brightness at neutral
+- A Text size slider on the prompt head scales the words in every box without
+  moving the boxes; the delete button is a small red cross at the right end
+  of the controls line
+
+### Full screen
+
+- A generation data card at the right edge of the full screen room, over the
+  picture and unmoved by zoom or pan: the prompt with Copy, the negative, the
+  rig and model, the settings, the LoRAs with strengths, Copy all, and Hide,
+  which folds it to a tab. It follows the arrows through the history and reads,
+  best first, the Workspace's own record of the words it queued, the saved
+  file's metadata, or the run's setup from ComfyUI's history, and says which
+
+### Fixes
+
+- The Overview said the SAM3 checkpoint was missing while the Detailer offered
+  it: the SAM3 loader describes its file list in ComfyUI's newer combo shape,
+  which the model list reader did not know. One reader now handles both shapes
+  for every list the panel pulls
+- The Run tab's on-card list named the diffusion model and its LoRA clone the
+  same; the row says model, and a second copy says with LoRAs or copy
+- The Post tab's settings cog sits on the Post FX switch bar; its own row read
+  as a stray box
+
 **1.4.0** - 2026-09-17
 
 The panel is clearer to read. The big tabs are pages of sub-tabs, each with
