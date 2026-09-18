@@ -1441,6 +1441,7 @@ export function readCfg(node) {
   // the Prompts tab: named prompts, each linked to a rig by the rig's name
   d.prompts = d.prompts && typeof d.prompts === "object" ? d.prompts : {};
   if (!Array.isArray(d.prompts.rows)) d.prompts.rows = [];
+  if (typeof d.prompts.active !== "number") d.prompts.active = -1;   // the chosen row
   d.prompts.rows = d.prompts.rows.filter((x) => x && typeof x === "object");
   for (const x of d.prompts.rows) {
     for (const k of ["name", "rig", "text", "negative"]) {
@@ -11736,9 +11737,27 @@ function promptsBody(node, body) {
         + "color:#a855f7;flex:none";
       bt.textContent = "PROMPT";
       bar.appendChild(bt);
+      // THE CHOSEN ROW is on the config (prompts.active), so the run reads the
+      // same choice the tab shows; the page's own memory only fills in when the
+      // config has none yet
+      if (typeof cfg.prompts.active === "number" && cfg.prompts.active >= 0 && cfg.prompts.active < R.length) {
+        node._rnPromptSel = cfg.prompts.active;
+      }
       if (typeof node._rnPromptSel !== "number" || node._rnPromptSel >= R.length) {
         node._rnPromptSel = Math.max(0, R.length - 1);
       }
+      // THE ROW THAT RENDERS for the active rig, by the run's own rule: the
+      // chosen row when it serves that rig and has words, else the first row
+      // linked to it with words, else the first unlinked row with words
+      const activeRig = M.rigs[M.active]?.name || "";
+      const linksOf = (r) => (Array.isArray(r.rigs) ? r.rigs : (r.rig ? [r.rig] : [])).filter((x) => String(x || "").trim());
+      const hasWords = (r) => String(r.text || "").trim().length > 0;
+      const renders = (() => {
+        const pick = R[node._rnPromptSel];
+        if (pick && hasWords(pick) && (linksOf(pick).includes(activeRig) || !linksOf(pick).length)) return pick;
+        return R.find((r) => linksOf(r).includes(activeRig) && hasWords(r))
+            || R.find((r) => !linksOf(r).length && hasWords(r)) || null;
+      })();
       R.forEach((row, i) => {
         const chip = document.createElement("button");
         const on = node._rnPromptSel === i;
@@ -11758,15 +11777,20 @@ function promptsBody(node, body) {
             chip.appendChild(rg);
           }
         }
-        if (on) {
+        if (row === renders) {
+          // the badge means "this one renders for the active rig", which is
+          // the chosen row whenever it serves that rig; the purple edge means
+          // "this one is open below"
           const badge = document.createElement("span");
           badge.textContent = "ACTIVE";
           badge.style.cssText = "font-size:9px;font-weight:700;padding:2px 7px;"
             + "border-radius:8px;background:#1e5233;color:#a7f3c0";
           chip.appendChild(badge);
         }
-        chip.title = "Edit this prompt below.";
-        chip.onclick = () => { node._rnPromptSel = i; render(node); };
+        chip.title = row === renders
+          ? "This prompt renders for the active rig. Click to edit it below."
+          : "Click to choose this prompt: it opens below and renders for the rigs it serves.";
+        chip.onclick = () => { node._rnPromptSel = i; cfg.prompts.active = i; writeCfg(node); render(node); };
         bar.appendChild(chip);
       });
       const addP = document.createElement("button");
@@ -11774,7 +11798,7 @@ function promptsBody(node, body) {
       addP.textContent = "\uFF0B Add prompt";
       addP.onclick = () => {
         R.push({ name: "", rig: "", rigs: [], kind: "krea2", text: "", negative: "" });
-        node._rnPromptSel = R.length - 1;
+        node._rnPromptSel = R.length - 1; cfg.prompts.active = node._rnPromptSel;
         writeCfg(node); render(node);
       };
       bar.appendChild(addP);
@@ -11794,6 +11818,19 @@ function promptsBody(node, body) {
       };
       impP.onclick = () => pick.click();
       bar.append(impP, pick);
+      // when the row you are editing is not the one the active rig renders,
+      // say which one is, and why
+      const editing = R[node._rnPromptSel];
+      if (editing && renders && editing !== renders) {
+        const why = document.createElement("div");
+        why.className = "rn-ws-note";
+        why.style.cssText = "flex-basis:100%";
+        const lk = linksOf(editing);
+        why.textContent = `Editing ${editing.name || "Prompt " + (node._rnPromptSel + 1)}, which `
+          + (hasWords(editing) ? `serves ${lk.join(", ")}` : "has no words yet")
+          + `. The active rig, ${activeRig || "none"}, renders ${renders.name || "Prompt " + (R.indexOf(renders) + 1)}.`;
+        bar.appendChild(why);
+      }
       body.appendChild(bar);
     }
   }
@@ -11873,6 +11910,7 @@ function promptsBody(node, body) {
     del.onclick = () => {
       R.splice(i, 1);
       node._rnPromptSel = Math.max(0, Math.min(node._rnPromptSel, R.length - 1));
+      cfg.prompts.active = R.length ? node._rnPromptSel : -1;
       writeCfg(node); render(node);
     };
     // the Camera words switch lives on the frame editor's Camera section
@@ -16069,6 +16107,7 @@ async function importPromptFromPng(node, cfg, rows, file) {
   const addRow = (row) => {
     rows.push(row);
     node._rnPromptSel = rows.length - 1;
+    cfg.prompts.active = node._rnPromptSel;
     writeCfg(node); render(node);
   };
   if (config) {

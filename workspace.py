@@ -1307,7 +1307,12 @@ def parse_config(config_json):
                      (p.get("auto") if isinstance(p.get("auto"), dict) else {}).items()
                      if isinstance(v, str)},
         })
-    prompts_cfg = {"rows": prompt_rows}
+    # the chosen row (the Prompts tab writes it; prompt_row_for reads it first)
+    try:
+        _pact = int(prin.get("active", -1))
+    except (TypeError, ValueError):
+        _pact = -1
+    prompts_cfg = {"rows": prompt_rows, "active": _pact if 0 <= _pact < len(prompt_rows) else -1}
     # the Paint tab: an inpaint loop that stays inside the node. The painted mask
     # and the source ride the SAME sockets the edit mask and Img2Img already use
     # (edit_mask, output_latent, denoise), so the sampler chain needs no changes.
@@ -1666,8 +1671,24 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
         want = rigs[max(0, min(int(models_cfg.get("active", 0)),
                                len(rigs) - 1))]["name"]
     rows = prompts_cfg.get("rows") or []
+    links = lambda row: (row.get("rigs") or ([row["rig"]] if row.get("rig") else []))
+    # THE CHOSEN ROW FIRST. The Prompts tab writes the row you picked as
+    # prompts.active; when it serves this rig (linked to it, or linked to
+    # nothing) and has words, it renders, whatever its place in the list.
+    # Two rows linked to one rig used to fall to whichever came first, while
+    # the tab badged the one you were editing as active.
+    try:
+        _pick = int(prompts_cfg.get("active", -1))
+    except (TypeError, ValueError):
+        _pick = -1
+    if 0 <= _pick < len(rows):
+        row = rows[_pick]
+        if str(row.get("text") or "").strip():
+            lk = links(row)
+            if (want in lk) or not any(str(x or "").strip() for x in lk):
+                return row
     for row in rows:
-        if want in (row.get("rigs") or ([row["rig"]] if row.get("rig") else [])) and row["text"].strip():
+        if want in links(row) and row["text"].strip():
             return row
     # An UNLINKED row serves any rig: with one rig on the tab, demanding the link
     # be typed before anything renders is a tax, and an unlinked row with text is
