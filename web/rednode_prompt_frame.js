@@ -74,6 +74,7 @@ const STYLE = `
 .rn-pf-head { display: flex; align-items: center; gap: 6px; }
 .rn-pf-head .ttl { flex: 1; font-size: 12px; letter-spacing: .04em;
   text-transform: uppercase; color: #8f97a3; }
+.rn-pf-toolsbar { justify-content: flex-end; }
 
 .rn-pf-row { display: flex; align-items: center; gap: 6px; }
 .rn-pf-row > label { width: 84px; flex: none; font-size: 12px; color: #9aa2ad; }
@@ -165,7 +166,6 @@ const STYLE = `
 .rn-pf { container-type: inline-size; }
 .rn-pf-cols { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr) minmax(0,.95fr);
   gap: 10px; align-items: start; }
-.rn-pf-colpv { position: sticky; top: 0; }
 /* the writing column spans two rows, so the tools and the Anything else box fill
    the space under the camera and the preview instead of sitting under everything */
 .rn-pf-cols > .rn-pf-col:first-child { grid-row: 1 / span 2; }
@@ -174,7 +174,6 @@ const STYLE = `
 @container (max-width: 980px) {
   .rn-pf-cols { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .rn-pf-cols > .rn-pf-col:first-child { grid-row: auto; }
-  .rn-pf-colpv { grid-column: 1 / -1; position: static; }
   .rn-pf-under { grid-column: 1 / -1; }
 }
 .rn-pf-live { margin-left: auto; font-size: 11.5px; color: #9fe0b4; display: inline-flex;
@@ -291,14 +290,17 @@ export function buildFrameEditor(wrap, F) {
   // ---- head: presets ------------------------------------------------------------
   const head = el("div", "rn-pf-head");
   head.appendChild(el("span", "ttl", "Prompt Frame"));
-  // TWO GROUPS on the head line, so the saved prompts (whole frames, load and
-  // save) and the tools (the two Ollama buttons) stop reading as one row
+  // THE HEAD LINE carries the title and the saved prompts (whole frames, load
+  // and save) and sits at the top of the editor. The tools (Auto sort, the
+  // rewrite, Clear) get a bar of their own right above the preview: they act
+  // on the text and their result shows there.
   const grpSaved = el("div", "rn-pf-headgrp");
   grpSaved.appendChild(el("span", "rn-pf-headcap", "Saved prompts"));
   const grpTools = el("div", "rn-pf-headgrp");
   grpTools.appendChild(el("span", "rn-pf-headcap", "Tools"));
   head.appendChild(grpSaved);
-  head.appendChild(grpTools);
+  const toolsBar = el("div", "rn-pf-head rn-pf-toolsbar");
+  toolsBar.appendChild(grpTools);
   const presetSel = document.createElement("select");
   presetSel.style.maxWidth = "180px";
   fillSelect(presetSel, ["Load prompts..."], "Load prompts...");
@@ -604,23 +606,25 @@ export function buildFrameEditor(wrap, F) {
   const foldGet = (k) => (F.folds?.get ? F.folds.get(k) : localFolds[k]);
   const foldSet = (k, v) => { if (F.folds?.set) F.folds.set(k, v); else localFolds[k] = v; };
   const ICONS = { style: "✨", subject: "👤", surroundings: "⛰",
-                  framing: "\u2316", light: "\u2600" };
-  // TWO COLUMNS when the host is wide (the Workspace's Prompts tab): the
-  // writing sections stack on the left, the dials and the preview on the
-  // right - the arrangement you drew. A narrow host keeps one column.
+                  framing: "\u2316", placement: "\u25ce", light: "\u2600" };
+  // THREE COLUMNS when the host is wide (the Workspace's Prompts tab): the
+  // writing sections stack on the left, the camera in the middle, the placement
+  // on the right, and under the camera and placement the Anything else box, the
+  // tools and the preview - the arrangement you drew. A narrow host keeps one
+  // column.
   let colL = null, colR = null, colP = null;
   if (F.twoColumn) {
     const cols = el("div", "rn-pf-cols");
     colL = el("div", "rn-pf-col");
     colR = el("div", "rn-pf-col");
-    colP = el("div", "rn-pf-col rn-pf-colpv");
+    colP = el("div", "rn-pf-col");
     cols.appendChild(colL); cols.appendChild(colR); cols.appendChild(colP);
     wrap.appendChild(cols);
   }
   // writing on the left (style, subject, surroundings, light & colour); the
   // camera and the prompt preview on the right - your arrangement
   const RIGHT = new Set(["framing"]);
-  const group = (key, title, hint, els, extra) => {
+  const group = (key, title, hint, els, extra, target) => {
     const gbox = el("div", "rn-pf-box");
     const gh = el("div", "head");
     const car = el("span", "car", "\u25be");
@@ -643,7 +647,7 @@ export function buildFrameEditor(wrap, F) {
     gh.addEventListener("click", () => { foldSet(key, !isOpen()); apply(); });
     apply();
     gbox.appendChild(gh); gbox.appendChild(bd);
-    (colL ? (RIGHT.has(key) ? colR : colL) : wrap).appendChild(gbox);
+    (target || (colL ? (RIGHT.has(key) ? colR : colL) : wrap)).appendChild(gbox);
   };
   const bigEdit = (title, ta) => {
     document.querySelector(".rn-pf-bigedit")?.remove();
@@ -863,11 +867,19 @@ export function buildFrameEditor(wrap, F) {
   placementLabel.title = "Where the subject stands in the scene, in your words. Optional; "
                        + "it rides the prompt whether the camera words are on or off.";
   const placementBox = el("div", null);
-  placementBox.appendChild(placementLabel);
+  if (!colP) placementBox.appendChild(placementLabel);   // its own box has a title
   placementBox.appendChild(counted(placement, 200, "Placement"));
-  group("framing", "Camera and placement",
-        "Where the camera is and where the subject stands.",
-        [camBody, studioBar, placementBox]);
+  if (colP) {
+    group("framing", "Camera", "Where the camera is.", [camBody, studioBar]);
+    group("placement", "Placement",
+          "Where the subject stands, in your words. Optional; it rides the prompt "
+          + "whether the camera words are on or off.",
+          [placementBox], null, colP);
+  } else {
+    group("framing", "Camera and placement",
+          "Where the camera is and where the subject stands.",
+          [camBody, studioBar, placementBox]);
+  }
   const studioHost = el("div", "rn-pf-studio");
   studioHost.style.display = "none";
   wrap.appendChild(studioHost);            // full width, under the columns
@@ -997,14 +1009,16 @@ export function buildFrameEditor(wrap, F) {
         [lightRow, brightRow, counted(lac, 200, "Light and colour"), lightSnip],
         presetsBtn(lightSnip));
   refreshSnips();
-  // the tools sit right above the Anything else box. With columns, both go in
-  // the space under the camera and the preview (the writing column is the tall
-  // one); without, under everything. Type a lump, press Auto sort, done.
+  // Under the camera and the placement (the writing column is the tall one):
+  // the Anything else box, then the tools bar, then the preview, so the text
+  // you type, the buttons that rework it and the result read top to bottom.
+  // Without columns the same order runs under everything. The head line with
+  // the title and the saved prompts goes to the top either way.
   const under = colP ? el("div", "rn-pf-under") : wrap;
   if (colP) wrap.querySelector(".rn-pf-cols").appendChild(under);
-  under.appendChild(head);
+  wrap.insertBefore(head, wrap.firstChild);
+  const xbox = el("div", "rn-pf-box rn-pf-extrabox");
   {
-    const xbox = el("div", "rn-pf-box rn-pf-extrabox");
     const xh = el("div", "head");
     xh.style.cursor = "default";
     xh.appendChild(el("span", "ico", "\u270E"));
@@ -1017,6 +1031,10 @@ export function buildFrameEditor(wrap, F) {
     xbox.appendChild(xb);
     under.appendChild(xbox);
   }
+  // the tools: right above the preview when the preview is here, else right
+  // above the Anything else box they act on
+  if (F.previewHost) under.insertBefore(toolsBar, xbox);
+  else under.appendChild(toolsBar);
 
   // ---- notice + preview ----------------------------------------------------------------
   const note = el("div", "rn-pf-note ok", "");
@@ -1059,7 +1077,7 @@ export function buildFrameEditor(wrap, F) {
     const pvBody = el("div", "body");
     pvBody.appendChild(outWrap);
     pvBox.appendChild(pvBody);
-    colP.appendChild(pvBox);
+    under.appendChild(pvBox);
   } else wrap.appendChild(outWrap);
 
   // ---- wiring ---------------------------------------------------------------------------
