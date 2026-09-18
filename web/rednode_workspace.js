@@ -16100,13 +16100,18 @@ async function importPromptFromPng(node, cfg, rows, file) {
       + (params.negative ? "\nNegative: " + clip(params.negative, 160) : "")
       + (st.model ? "\nModel named in the file: " + st.model + " (not changed here)" : "")
       + (applies.length ? "\n\nSettings in the file: " + applies.join(", ") + "." : "\n\nNo settings line in the file.");
-    const plainRow = () => ({ name: "Imported", rig: "", rigs: [], kind: "plain",
-                              text: params.positive, negative: params.negative });
-    const choices = [{ label: "Add as a prompt", tip: "A new plain prompt row with these words.",
+    // UNSORTED WORDS GO INTO ANYTHING ELSE, not a box that claims to know
+    // what they are: a Frame box row with the text there, ready for Auto sort
+    // to file it, and the negative on the row
+    const plainRow = () => ({ name: "Imported", rig: "", rigs: [], kind: "krea2",
+                              text: params.positive, negative: params.negative,
+                              frame: { extra: params.positive, camera_off: true } });
+    const choices = [{ label: "Add as a prompt",
+                       tip: "A new prompt row with these words in its Anything else box, ready for Auto sort.",
                        run: () => addRow(plainRow()) }];
     if (applies.length) {
       choices.push({ label: "Add and apply settings",
-        tip: "The prompt row, plus the steps, CFG, sampler, scheduler, size, seed and denoise from the file onto the active rig and the canvas.",
+        tip: "The prompt row, its words in Anything else, plus the steps, CFG, sampler, scheduler, size, seed and denoise from the file onto the active rig and the canvas.",
         run: () => {
           const rig = cfg.models.rigs[cfg.models.active] || null;
           if (rig) {
