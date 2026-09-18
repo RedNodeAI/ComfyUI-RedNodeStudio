@@ -79,6 +79,9 @@ def vram():
 _NAMES = {"Krea2": "Krea 2", "Flux": "Flux", "SDXL": "SDXL", "ZImage": "Z-Image",
           "AutoencodingEngine": "VAE", "AutoencoderKL": "VAE", "WanVAE": "VAE",
           "Florence2": "Florence-2"}
+# the families above that are the diffusion model itself: their row says "model"
+# so it cannot be read as the text encoder of the same family
+_DIFFUSION = {"Krea2", "Flux", "SDXL", "ZImage"}
 
 
 def name_rig(rig, *parts):
@@ -111,7 +114,7 @@ def _model_name(lm):
         cls = type(inner if inner is not None else m).__name__
         low = cls.lower()
         if cls in _NAMES:
-            base = _NAMES[cls]
+            base = _NAMES[cls] + (" model" if cls in _DIFFUSION else "")
         elif "clip" in low or "text" in low or low.endswith("te") or "temodel" in low:
             fam = cls.replace("TEModel", "").replace("_", "").strip()
             base = "Text encoder" + (" (%s)" % _NAMES.get(fam, fam) if fam else "")
@@ -135,10 +138,25 @@ def loaded_models():
                 mb = 0
             if mb < LIST_MIN_MB:
                 continue
-            out.append({"name": _model_name(lm), "mb": mb})
+            # a clone of a model already on the card (the copy that carries the
+            # LoRAs for a pass, or a second handle on the VAE) is its own entry
+            # in comfy's list, and both read the same name; the copy says why
+            try:
+                patcher = lm.model
+                patched = bool(getattr(patcher, "patches", None)) or bool(getattr(patcher, "object_patches", None))
+            except Exception:
+                patched = False
+            out.append({"name": _model_name(lm), "mb": mb, "patched": patched})
     except Exception:
         return []
     out.sort(key=lambda x: -x["mb"])
+    seen = {}
+    for row in out:
+        n = row.pop("patched", False)
+        k = row["name"]
+        seen[k] = seen.get(k, 0) + 1
+        if seen[k] > 1:
+            row["name"] = k + (" (with LoRAs)" if n else " (copy)")
     return out
 
 
