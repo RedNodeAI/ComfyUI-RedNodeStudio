@@ -175,6 +175,9 @@ css.textContent = `
 .rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
 .rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
+.rn-ws-pdel{margin-left:auto;align-self:flex-start;width:28px;height:28px;padding:0;flex:none;
+  background:#111316;border:1px solid #3a2a2e;color:#e0405a;font-size:13px;line-height:26px}
+.rn-ws-pdel:hover{background:#2a1418;border-color:#b8283c;color:#ff6b7f}
 .rn-ws-pfield{display:flex;flex-direction:column;gap:3px}
 .rn-ws-negrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
 .rn-ws-pillgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
@@ -11828,8 +11831,7 @@ function promptsBody(node, body) {
       render(node);
     });
     const del = document.createElement("button");
-    del.className = "rn-ws-btn";
-    del.style.width = "auto";
+    del.className = "rn-ws-btn rn-ws-pdel";
     del.textContent = "\u2715";
     del.onclick = () => {
       R.splice(i, 1);
@@ -11853,8 +11855,22 @@ function promptsBody(node, body) {
     };
     head.classList.add("rn-ws-phead");
     del.title = "Delete this prompt.";
+    // TEXT SIZE for this tab's boxes, a percentage on the config. It sets one
+    // CSS variable on the prompt's box, which the frame's text boxes and the
+    // preview read for their font, so the words grow and the boxes do not:
+    // a box is a set height that scrolls, never one that follows its text.
+    const pctOf = () => Math.max(70, Math.min(160, Number(cfg.prompt_text_pct) || 100));
+    const applyPct = () => box.style.setProperty("--rn-pf-font", (13 * pctOf() / 100).toFixed(1) + "px");
+    const size = document.createElement("input");
+    size.type = "range"; size.min = "70"; size.max = "160"; size.step = "5";
+    size.value = String(pctOf());
+    size.style.cssText = "width:110px;height:28px;margin:0";
+    size.title = "The size of the words in the boxes below. The boxes themselves keep their size.";
+    size.oninput = () => { cfg.prompt_text_pct = Number(size.value); applyPct(); };
+    size.onchange = () => { writeCfg(node); };
+    applyPct();
     head.append(field("Prompt name", name), field("Linked rigs", rigPick),
-                field("Output box", kind), del);
+                field("Output box", kind), field("Text size", size), del);
     box.appendChild(head);
 
     if (folded()) { body.appendChild(box); return; }
@@ -11943,6 +11959,7 @@ function promptsBody(node, body) {
       }
     } else {
       const text = document.createElement("textarea");
+      text.style.fontSize = "var(--rn-pf-font, 13px)";
       text.rows = 8;                       // room to write, not a slot to peer through
       text.value = row.text;
       text.placeholder = "Prompt...";

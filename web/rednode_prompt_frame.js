@@ -104,7 +104,7 @@ const STYLE = `
   box-sizing: border-box; width: 100%; min-height: 72px;
   padding: 6px 8px; background: var(--rn-bg); color: #e2e5ea;
   border: 1px solid var(--rn-line); border-radius: 5px;
-  font: inherit; font-size: 13px; line-height: 1.35;
+  font: inherit; font-size: var(--rn-pf-font, 13px); line-height: 1.35;
   resize: vertical;               /* adjustable, inside the frame */
   outline: none; white-space: pre-wrap; overflow-wrap: break-word;
 }
@@ -186,7 +186,8 @@ const STYLE = `
    and the text at full brightness. The drag corner stays, since a long prompt
    still wants pulling taller. */
 .rn-pf-pvbox { background: #1a1d22; border-color: #343a44; }
-.rn-pf-pvbox .rn-pf-out { min-height: 220px; max-height: none; font-size: 13px;
+.rn-pf-pvbox .rn-pf-out { height: 240px; min-height: 120px; max-height: none;
+  font-size: var(--rn-pf-font, 13px);
   line-height: 1.55; color: #e6e9ee;
   background: #21262e; border: 1px solid #3c4450; border-left: 3px solid #b8283c;
   border-radius: 6px; padding: 10px 12px;
