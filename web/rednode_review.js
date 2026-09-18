@@ -73,21 +73,29 @@ css.textContent = `
    the furniture up to the room. The picture already fills whatever it is given. */
 .rn-rv-fshost{flex:1;min-height:0;height:auto;border:1px solid #2f333a;border-radius:8px;
   padding:10px}
-.rn-rv-info{position:fixed;right:22px;top:58px;width:360px;max-height:calc(100vh - 84px);
-  overflow:auto;z-index:9995;background:#16181cf2;border:1px solid #3a3f47;border-radius:10px;
-  padding:12px 14px;color:#e2e5ea;font:13px system-ui,sans-serif;line-height:1.5;
-  box-shadow:0 8px 30px #000a}
-.rn-rv-infohead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.rn-rv-infohead b{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#c9ced6;flex:1}
-.rn-rv-info button{background:#111316;border:1px solid #33373d;border-radius:5px;color:#c2c7cd;
-  cursor:pointer;font-size:12px;padding:4px 9px}
-.rn-rv-info button:hover{border-color:#b8283c;color:#fff}
-.rn-rv-infosec{margin:8px 0}
-.rn-rv-infosec .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#8a919b;margin-bottom:2px}
-.rn-rv-infosec .v{white-space:pre-wrap;color:#e2e5ea}
-.rn-rv-infosec .v.dim,.rn-rv-infolora .dim{color:#9fa7b2}
-.rn-rv-infolora{display:flex;justify-content:space-between;gap:10px}
-.rn-rv-infosrc{font-size:11.5px;color:#7f8792;margin-top:8px}
+.rn-rv-info{position:fixed;right:24px;top:60px;width:440px;max-height:calc(100vh - 88px);
+  overflow:auto;z-index:9995;background:#16181cf5;border:1px solid #3a3f47;border-radius:12px;
+  padding:16px 20px 14px;color:#e2e5ea;font:14.5px 'Segoe UI',system-ui,sans-serif;line-height:1.6;
+  box-shadow:0 10px 36px #000c}
+.rn-rv-info::-webkit-scrollbar{width:9px}
+.rn-rv-info::-webkit-scrollbar-thumb{background:#ffffff2e;border-radius:5px}
+.rn-rv-infohead{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;
+  border-bottom:1px solid #2a2e34}
+.rn-rv-infohead b{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#e0e4ea;flex:1}
+.rn-rv-info button{background:#1d2026;border:1px solid #3a3f47;border-radius:6px;color:#d6d9de;
+  cursor:pointer;font-size:12.5px;padding:5px 11px;line-height:1.2}
+.rn-rv-info button:hover{border-color:#b8283c;background:#26161a;color:#fff}
+.rn-rv-infosec{margin:0 0 14px}
+.rn-rv-infosec .k{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#8f97a3;margin-bottom:4px}
+.rn-rv-infosec .k .act{font-size:11.5px;padding:2px 9px;text-transform:none;letter-spacing:0}
+.rn-rv-infosec .v{white-space:pre-wrap;color:#e6e9ee}
+.rn-rv-infosec .v.dim,.rn-rv-infolora .dim{color:#a3aab5}
+.rn-rv-infolora{display:flex;justify-content:space-between;gap:12px;padding:3px 0;
+  border-bottom:1px solid #22262c}
+.rn-rv-infolora:last-child{border-bottom:0}
+.rn-rv-infolora .dim{font-variant-numeric:tabular-nums}
+.rn-rv-infosrc{font-size:12px;color:#7f8792;margin-top:4px;padding-top:10px;border-top:1px solid #2a2e34}
 .rn-rv-infotab{position:fixed;right:0;top:58px;z-index:9995;background:#16181c;border:1px solid #3a3f47;
   border-right:0;border-radius:8px 0 0 8px;color:#c2c7cd;cursor:pointer;font-size:12px;padding:10px 8px;
   writing-mode:vertical-rl}
@@ -646,10 +654,20 @@ function infoCard(node, ov) {
   ov.append(card, tab);
   apply();
   let plain = "";
-  const sec = (label, text, dim) => {
+  const sec = (label, text, dim, action) => {
     const d = document.createElement("div");
     d.className = "rn-rv-infosec";
-    const k = document.createElement("div"); k.className = "k"; k.textContent = label;
+    const k = document.createElement("div"); k.className = "k";
+    const kl = document.createElement("span"); kl.textContent = label;
+    k.appendChild(kl);
+    if (action) {
+      // the label line carries the section's one action, so a Copy sits with
+      // what it copies instead of floating in the text
+      const b = document.createElement("button");
+      b.className = "act"; b.textContent = action.label; b.title = action.tip || "";
+      b.onclick = action.run;
+      k.appendChild(b);
+    }
     const v = document.createElement("div"); v.className = "v" + (dim ? " dim" : ""); v.textContent = text;
     d.append(k, v);
     return d;
@@ -658,17 +676,15 @@ function infoCard(node, ov) {
     body.replaceChildren();
     const bits = [];
     if (rec.prompt) {
-      const p = sec("Prompt", rec.prompt);
-      const cp = document.createElement("button");
-      cp.textContent = "Copy";
-      cp.style.cssText = "float:right;margin:-2px 0 4px 8px";
-      cp.title = "Copy the prompt.";
-      cp.onclick = () => navigator.clipboard?.writeText(rec.prompt);
-      p.insertBefore(cp, p.firstChild);
-      body.appendChild(p);
+      body.appendChild(sec("Prompt", rec.prompt, false,
+        { label: "Copy", tip: "Copy the prompt.", run: () => navigator.clipboard?.writeText(rec.prompt) }));
       bits.push(rec.prompt);
     }
-    if (rec.negative) { body.appendChild(sec("Negative", rec.negative, true)); bits.push("Negative prompt: " + rec.negative); }
+    if (rec.negative) {
+      body.appendChild(sec("Negative", rec.negative, true,
+        { label: "Copy", tip: "Copy the negative.", run: () => navigator.clipboard?.writeText(rec.negative) }));
+      bits.push("Negative prompt: " + rec.negative);
+    }
     const modelLine = [rec.rig, rec.model].filter(Boolean).join(" \u00b7 ");
     if (modelLine) { body.appendChild(sec("Rig and model", modelLine)); bits.push("Model: " + modelLine); }
     const s = rec.settings || {};
