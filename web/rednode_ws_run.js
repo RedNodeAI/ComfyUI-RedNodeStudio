@@ -980,6 +980,10 @@ function runPage(node, body) {
   pipe.appendChild(estCard);
   view.refs.est = estCard;
   fetchEstimate(node, estCard);
+  // the measured peak beside the estimate, so the two can be compared
+  const estMeasured = el("div", "rn-ws-note rn-run-estmeasured");
+  pipe.appendChild(estMeasured);
+  view.refs.estMeasured = estMeasured;
   view.refs.boxes = boxes;
   root.appendChild(pipe);
 
@@ -1240,8 +1244,20 @@ function refresh(view) {
   drawChart(refs.chart, limitGb, S);
   const last = S.vram[S.vram.length - 1];
   const gb = (mb) => `${(mb / 1024).toFixed(1)} GB`;
-  const peak = S.vram.reduce((m, v) => Math.max(m, v.used), 0);
+  // THE RUN'S PEAK, not the card's state before it: what the last run left
+  // on the card is there at the first sample and goes at the first unload, so
+  // the peak is read from that unload on. With no unload it is the whole run.
+  const firstUnload = (S.marks || []).find((m) => m.level === "unload");
+  const from = firstUnload ? firstUnload.t : -1;
+  const peak = S.vram.reduce((m, v) => (v.t >= from ? Math.max(m, v.used) : m), 0)
+            || S.vram.reduce((m, v) => Math.max(m, v.used), 0);
   const tgt = limitGb ? limitGb - HEADROOM_GB : 0;
+  if (refs.estMeasured) {
+    refs.estMeasured.textContent = peak
+      ? `Measured peak ${S.past ? "of that run" : "this run"}: ${gb(peak)}.`
+        + (firstUnload ? " Read from the first unload on, so what the run before left on the card is not counted." : "")
+      : "";
+  }
   refs.onCardHead.textContent = S.past ? "ON THE CARD AT THE END" : "ON THE CARD NOW";
   refs.memLine.textContent = S.total
     ? `${last ? gb(last.used) : "-"} of ${gb(S.total)} in use${peak ? ` · peak ${gb(peak)}` : ""}`
@@ -1450,6 +1466,7 @@ export const RUN_CSS = `
 .rn-run-estparts{display:flex;gap:5px;flex-wrap:wrap}
 .rn-run-estparts .rn-ws-chip{font-size:10.5px;padding:1px 7px}
 .rn-run-estcard .rn-ws-note{font-size:10.5px}
+.rn-run-estmeasured{font-size:10.5px;margin-top:2px}
 .rn-run-facts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
 .rn-run-status.running{border-color:#4a8fe0;color:#cfe0f5}
 .rn-run-status.done{border-color:#2e7d4f;color:#9fe0b4}

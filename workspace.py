@@ -860,12 +860,14 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         label = {"sampler": "Sampler pass", "detailer": "Detailer pass",
                  "upscale": "SeedVR2 pass", "usdu": "Tiled upscale"}[kind]
         parts = []
-        if not s.get("free_vram"):
-            parts.append(["Rig on the card (%s %d)" % (label, i + 1), round(base_gb, 1)])
         other = str(s.get("rig") or "").strip()
         active_name = str((cfg["models"].get("rigs") or [{}])[min(cfg["models"].get("active", 0),
                           max(0, len(cfg["models"].get("rigs") or []) - 1))].get("name") or "")
         if other and other != active_name and rig_cost and kind != "upscale":
+            # A PASS ON ANOTHER RIG NEEDS THAT RIG, NOT BOTH. ComfyUI evicts the
+            # main model when this one wants the room, so the two are never
+            # summed; counting them together read tens of GB over anything the
+            # chart ever showed.
             om, ot, ov = rig_cost(other)
             if om:
                 parts.append(["Model (%s, %s %d)" % (other, label, i + 1), round(om, 1)])
@@ -873,6 +875,8 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
                 parts.append(["Text encoder (%s, %s %d)" % (other, label, i + 1), round(ot, 1)])
             if ov:
                 parts.append(["VAE (%s, %s %d)" % (other, label, i + 1), round(ov, 1)])
+        elif kind != "upscale" and not s.get("free_vram"):
+            parts.append(["Rig on the card (%s %d)" % (label, i + 1), round(base_gb, 1)])
         if kind == "detailer":
             g = _file_gb(("sam3",), str(s.get("sam_model") or "sam3.pt"))
             if g:
@@ -884,7 +888,14 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         if kind == "upscale":
             g = _file_gb(("seedvr2",), str(s.get("dit_model") or ""))
             if g:
-                parts.append(["SeedVR2 model (%s %d)" % (label, i + 1), round(g, 1)])
+                # blocks swapped to the CPU are not on the card: by default all
+                # 36 are, leaving roughly a tenth of the file resident
+                try:
+                    swapped = max(0, min(36, int(s.get("blocks_to_swap", 36))))
+                except (TypeError, ValueError):
+                    swapped = 36
+                g = g * max(0.1, (36 - swapped) / 36.0)
+                parts.append(["SeedVR2 model on the card (%s %d)" % (label, i + 1), round(g, 1)])
             g = _file_gb(("seedvr2",), str(s.get("vae_model") or ""))
             if g:
                 parts.append(["SeedVR2 VAE (%s %d)" % (label, i + 1), round(g, 1)])
@@ -893,6 +904,13 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         # picture as it arrives, grown by the pass's scale
         if kind == "upscale":
             px = float(UPSCALE_SIZES.get(str(s.get("size") or "1080p"), UPSCALE_SIZES["1080p"]))
+            if s.get("tiled", True) is not False:
+                # tiled encode and decode: a tile at a time, never the frame
+                try:
+                    tile = max(64, min(4096, int(s.get("tile", 1024))))
+                except (TypeError, ValueError):
+                    tile = 1024
+                px = min(px, float(tile * tile))
         elif kind == "usdu":
             try:
                 tile = max(256, min(2048, int(s.get("usdu_tile", 1024))))
