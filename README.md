@@ -333,6 +333,14 @@ did.
 
 ## Watching a render
 
+![The Run tab: the stages with their times, the estimate against the card, the live picture, the VRAM chart and the log](images/run-tab.webp)
+
+The **Run** tab is where a render is watched. Generate sits at the top with the Draft switch and
+the VRAM limit; under it the pipeline names every stage with the time it took, then the estimate
+card says what the run needs against your card, and the live picture and the VRAM chart sit side
+by side while the log reads the run out step by step. What is on the card right now is listed
+under the chart, largest first.
+
 ![A Live Preview mid-render: pass 1 of 2, step 3 of 8](images/live-preview.webp)
 
 **RedNode Live Preview** shows the picture forming. Wire an image output into it and every step of
