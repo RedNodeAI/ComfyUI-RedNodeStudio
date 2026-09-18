@@ -59,7 +59,14 @@ the Run tab got wrong.
 - The VRAM estimate is a card under the pipeline stages: the number the run
   needs with nothing held, large; a bar against the card with the limit marked
   on it; a verdict in green, amber or red; the parts as chips. It was one long
-  sentence on the top row
+  sentence on the top row. Hide folds it to one line
+- The estimate counts the Detailer as a stage of its own: a pass on another rig
+  costs that rig, a detailer pass the SAM3 checkpoint, a tiled pass its upscale
+  model, a SeedVR2 pass the blocks it keeps on the card and a tile of working
+  memory. Captioners are the one thing still not counted
+- The measured peak reads from the run's first unload on, so what the run
+  before left on the card is not called this run's peak, and it shows under the
+  estimate for comparison
 
 ### Fixes
 
