@@ -971,8 +971,16 @@ def _pass_list(raw, on, base, lo, hi, n, first=None):
     is not the same job as the rest, which is the Latent tab: it generates, the others
     refine. Shared by the Img2Img tab and the Latent tab so both read one field either
     way and the sampler loop does not care which tab it came from.
+
+    ONE PASS HAS NOTHING TO VARY, so the list never speaks for it. The panel already
+    works this way: at one pass it hides the per-pass cards and shows the single dial,
+    while the stored list stays in the workflow for when the count goes back up. The
+    server did not, so dropping the Img2Img tab back to one pass left the list's stale
+    first value overriding the Denoise bar, and the bar looked dead. The Detailer's
+    repeat reads this too, which had the same silent override at a repeat of 1.
     """
-    use = bool(on) and isinstance(raw, list) and bool(raw)
+    n = max(1, int(n))
+    use = n > 1 and bool(on) and isinstance(raw, list) and bool(raw)
     out = []
     for i in range(max(1, int(n))):
         v = base if (i or first is None) else first
@@ -987,8 +995,10 @@ def _pass_list(raw, on, base, lo, hi, n, first=None):
 
 def _pass_names(raw, on, n):
     """(switch, one rig name per pass): "" means the run's own rig. The same
-    repeat rule as _pass_list, so raising the pass count keeps the names chosen."""
-    use = bool(on) and isinstance(raw, list) and bool(raw)
+    repeat rule as _pass_list, and the same single-pass rule: one pass runs on the
+    run's own rig, because the panel offers no rig picker until there are two."""
+    n = max(1, int(n))
+    use = n > 1 and bool(on) and isinstance(raw, list) and bool(raw)
     out = []
     for i in range(max(1, int(n))):
         v = ""
