@@ -18,7 +18,7 @@ import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
-         wholeFrameLimit } from "./rednode_ws_tables.js";
+         wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
 import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
@@ -10582,8 +10582,7 @@ async function fetchModelLists() {
     try {
       const r = await api.fetchApi("/object_info/" + nodeName);
       const d = await r.json();
-      const v = d?.[nodeName]?.input?.required?.[field]?.[0];
-      return Array.isArray(v) ? v : [];
+      return comboOptions(d?.[nodeName]?.input?.required?.[field]);
     } catch (e) { return []; }
   };
   MODEL_LISTS = {

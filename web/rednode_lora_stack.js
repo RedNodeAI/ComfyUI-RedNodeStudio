@@ -12,6 +12,7 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { nodeById, allNodes } from "./rednode_graph.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
+import { comboOptions } from "./rednode_ws_tables.js";
 
 const NODE_NAME = "RedNodeLoraStack";
 const NO_LORA = "None";
@@ -38,8 +39,8 @@ async function loraNames() {
   if (namesCache) return namesCache;
   namesPending = namesPending || (async () => {
     for (const [ep, pick] of [
-      ["LoraLoaderModelOnly", (i) => i?.LoraLoaderModelOnly?.input?.required?.lora_name?.[0]],
-      ["LoraLoader", (i) => i?.LoraLoader?.input?.required?.lora_name?.[0]],
+      ["LoraLoaderModelOnly", (i) => comboOptions(i?.LoraLoaderModelOnly?.input?.required?.lora_name)],
+      ["LoraLoader", (i) => comboOptions(i?.LoraLoader?.input?.required?.lora_name)],
     ]) {
       try {
         const r = await api.fetchApi(`/object_info/${ep}`);

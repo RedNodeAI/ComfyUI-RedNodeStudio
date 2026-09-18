@@ -16,6 +16,17 @@
 // the same names the server looks up in NODE_CLASS_MAPPINGS. Every address here
 // was checked against the pack that really owns those node types: a search page
 // full of forks made people pick, and a guess would send them somewhere wrong.
+// The option list of a combo input as /object_info describes it, in either of
+// ComfyUI's two shapes: [[...options], {...}] (classic) or ["COMBO", {options}]
+// (the v3 schema, which the SAM3 loader and newer core nodes use). Anything else
+// is an empty list.
+export const comboOptions = (spec) => {
+  if (!Array.isArray(spec)) return [];
+  if (Array.isArray(spec[0])) return spec[0];
+  if (spec[0] === "COMBO" && Array.isArray(spec[1]?.options)) return spec[1].options;
+  return [];
+};
+
 export const EXTRA_PACKS = [
   { id: "seedvr2", name: "ComfyUI-SeedVR2_VideoUpscaler",
     what: "the SeedVR2 upscale on a Detailer pass",

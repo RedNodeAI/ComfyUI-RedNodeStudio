@@ -1,4 +1,5 @@
 import { app } from "../../scripts/app.js";
+import { comboOptions } from "./rednode_ws_tables.js";
 
 // RedNode Camera Studio - the panel. Phase 1: a 2D TOP-VIEW planner.
 //
@@ -488,8 +489,7 @@ async function fetchLoras() {
   try {
     const r = await fetch("/object_info/LoraLoader");
     const d = await r.json();
-    const v = d?.LoraLoader?.input?.required?.lora_name?.[0];
-    LORA_LIST = Array.isArray(v) ? v : [];
+    LORA_LIST = comboOptions(d?.LoraLoader?.input?.required?.lora_name);
   } catch (e) { LORA_LIST = []; }
   return LORA_LIST;
 }

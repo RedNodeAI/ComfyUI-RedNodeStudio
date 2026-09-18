@@ -1,6 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { makePicker } from "./rednode_picker.js";
+import { comboOptions } from "./rednode_ws_tables.js";
 
 // RedNode Studio Detailer — the post-render passes as a list you can read.
 //
@@ -181,12 +182,7 @@ function wireProgress() {
 // A combo's choices come in two shapes. A V1 node lists them in place; a comfy_api
 // V3 node (Easy-Sam3 is one) says "COMBO" and keeps the list under options. Reading
 // only the first shape is why the SAM picker showed nothing but its placeholder.
-const optionsOf = (spec) => {
-  if (!Array.isArray(spec)) return [];
-  if (Array.isArray(spec[0])) return spec[0];
-  if (spec[0] === "COMBO" && Array.isArray(spec[1]?.options)) return spec[1].options;
-  return [];
-};
+const optionsOf = comboOptions;   // the shared reader; both combo shapes
 let LISTS = null;
 async function fetchLists() {
   if (LISTS) return LISTS;
