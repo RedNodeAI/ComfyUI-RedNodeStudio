@@ -99,7 +99,9 @@ css.textContent = `
 .rn-adv button{background:#15171b;border:1px solid #33373d;border-radius:4px;
   color:#c8ccd2;cursor:pointer;font-size:12px;padding:3px 8px}
 .rn-adv button:hover{border-color:#b8283c;color:#fff}
-.rn-adv .eye{flex:none;width:26px}
+.rn-adv .eye,.rn-adv .ico{flex:none;width:26px;height:24px;padding:0;display:inline-flex;
+  align-items:center;justify-content:center;line-height:1;font-size:13px}
+.rn-adv .ico{width:28px}
 .rn-adv .grow{flex:1}
 .rn-adv .add{display:flex;gap:6px}
 .rn-adv .add button{flex:1;font-weight:600}
@@ -119,6 +121,12 @@ css.textContent = `
 .rn-adv .rep.on{border-color:#b8283c;background:#1d1418;color:#fff}
 .rn-adv .tcard{display:flex;align-items:center;gap:6px;background:#212429;
   border:1px solid #2a2e34;border-radius:6px;padding:5px 6px}
+.rn-adv .card input.pname{flex:0 1 auto;min-width:90px;max-width:260px;background:transparent;
+  border:1px solid transparent;border-radius:4px;font-size:13px;font-weight:700;color:#eef1f5;
+  padding:1px 5px}
+.rn-adv .card input.pname.auto{font-weight:600;color:#c3c8cf}
+.rn-adv .card input.pname:hover,.rn-adv .card input.pname:focus{border-color:#3a3d44;background:#15171b}
+.rn-adv .card.off input.pname{text-decoration:line-through;color:#f87171}
 .rn-adv .tcard input.name{flex:1;font-weight:700;letter-spacing:.04em;
   background:transparent;border:none;min-width:60px}
 .rn-adv .tcard.off input.name{text-decoration:line-through;color:#f87171}
@@ -819,6 +827,33 @@ function buildPanel(node, hostEl = null) {
       });
       return grip;
     };
+    // A PASS'S NAME: the one typed, else the card's own, numbered when it is not the
+    // first of its kind (Tiled upscale, Tiled upscale 2). The default is worked out,
+    // never stored, so it follows the pass's type and target and is always true.
+    // Mirrors pass_name in refine_pipeline.py, which is what the run log says.
+    const baseName = (x) => {
+      if (x.type === "detailer") {
+        const t = String(x.target || "face").trim() || "face";
+        return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
+      }
+      return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale" })[x.type] || "Pass";
+    };
+    const uniqueName = (base, taken) => {
+      if (!taken.has(base)) return base;
+      let n = 2;
+      while (taken.has(`${base} ${n}`)) n++;
+      return `${base} ${n}`;
+    };
+    const typedNames = () => new Set(d.stages.filter((x) => x.type !== "title" && x.name).map((x) => x.name));
+    const shown = [];
+    {
+      const taken = typedNames();
+      d.stages.forEach((x, k) => {
+        if (x.type === "title") return;
+        shown[k] = x.name || uniqueName(baseName(x), taken);
+        taken.add(shown[k]);
+      });
+    }
     let inGroup = false;
     let groupFolded = false;
     d.stages.forEach((s, i) => {
@@ -877,6 +912,7 @@ function buildPanel(node, hostEl = null) {
                     + "delete.";
         nameI.onchange = () => { s.name = nameI.value.trim(); writeCfg(node, d); };
         const dupT = document.createElement("button");
+        dupT.className = "ico";
         dupT.textContent = "\u29c9";
         dupT.title = "Duplicate this group, title and passes, right after it.";
         dupT.onclick = () => {
@@ -888,6 +924,7 @@ function buildPanel(node, hostEl = null) {
           writeAndRender();
         };
         const delT = document.createElement("button");
+        delT.className = "ico";
         delT.textContent = "✕";
         delT.title = "Remove this title; its passes stay.";
         delT.onclick = () => {
@@ -928,10 +965,30 @@ function buildPanel(node, hostEl = null) {
       eye.onclick = () => { s.on = s.on === false; writeCfg(node, d); render(); };
       const chip = document.createElement("span");
       chip.className = "chip " + s.type;
+      // the chip says the KIND of pass in plain words (USDU meant nothing to anyone)
       chip.textContent = s.type === "sampler" ? "SAMPLER"
-                       : s.type === "upscale" ? "UPSCALE"
-                       : s.type === "usdu" ? "USDU" : "DETAILER";
-      top.append(caret, grip, eye, chip);
+                       : s.type === "upscale" ? "VR2 UPSCALE"
+                       : s.type === "usdu" ? "TILE UPSCALE" : "DETAILER";
+      chip.title = s.type === "upscale" ? "A SeedVR2 upscale pass."
+                 : s.type === "usdu" ? "A tiled upscale pass (Ultimate SD Upscale)."
+                 : s.type === "sampler" ? "A sampler pass over the whole frame."
+                 : "A detailer pass: SAM3 finds the target and this pass redraws it.";
+      // THE NAME, in front of the kind: the card's own until one is typed
+      const nameP = document.createElement("input");
+      nameP.type = "text";
+      nameP.className = "pname" + (s.name ? "" : " auto");
+      nameP.value = shown[i];
+      nameP.size = Math.max(10, Math.min(30, shown[i].length + 1));
+      nameP.title = "Name this pass. The run log and the Stage View use it. Clear it to "
+                  + "go back to the automatic name.";
+      nameP.onchange = () => {
+        const v = nameP.value.trim().slice(0, 48);
+        // cleared, or left as the automatic name: stay automatic
+        if (!v) s.name = "";
+        else if (v !== shown[i]) s.name = v;
+        writeAndRender();
+      };
+      top.append(caret, grip, eye, nameP, chip);
       if (isFolded) {
         // folded, the header still says what would run
         const sum = document.createElement("span");
@@ -1032,15 +1089,22 @@ function buildPanel(node, hostEl = null) {
       // pass just tuned and nudge one number. The right-click menu has it too,
       // but a button is found and a menu has to be remembered.
       const dup = document.createElement("button");
+      dup.className = "ico";
       dup.textContent = "\u29c9";
       dup.title = "Duplicate this pass, placed right after it with every setting "
                 + "copied. A chain of near-identical passes is one click each.";
       dup.onclick = () => {
-        d.stages.splice(i + 1, 0, JSON.parse(JSON.stringify(s)));
+        const copy = JSON.parse(JSON.stringify(s));
+        // a typed name takes the next free number; an automatic one numbers itself
+        if (copy.name) {
+          copy.name = uniqueName(copy.name.replace(/ \d+$/, ""), new Set(shown.filter(Boolean)));
+        }
+        d.stages.splice(i + 1, 0, copy);
         shiftFolds(node, i + 1, 1);
         writeAndRender();
       };
       const del = document.createElement("button");
+      del.className = "ico";
       del.textContent = "\u2715";
       del.title = "Remove this pass.";
       del.onclick = () => {

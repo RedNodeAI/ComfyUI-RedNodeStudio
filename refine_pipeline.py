@@ -164,6 +164,8 @@ def parse_pipeline(config_json):
             # over its own result N times, fresh seed each round
             "repeat": _num("repeat", 1, 10, 1, int),
             "color": str(s.get("color") or ""),      # panel cosmetics, kept
+            # the name typed on the card; "" is the card's automatic one
+            "name": str(s.get("name") or "").strip()[:48],
             # WHICH PROMPT this pass reads when its box is empty: "" is the row
             # linked to its rig, else a Prompts-tab row by name, or "#N" for
             # the Nth row when it has no name
@@ -590,7 +592,11 @@ WARN_WORDS = ("failed", "missing", "passed through", "not installed",
 
 
 def pass_name(s):
-    """A pass as its card names it: Sampler pass, Face detailer, ..."""
+    """A pass as its card names it: the name typed there, else Sampler pass,
+    Face detailer, ..."""
+    typed = str(s.get("name") or "").strip()
+    if typed:
+        return typed
     if s.get("type") == "detailer":
         t = str(s.get("target") or "face").strip() or "face"
         return "%s detailer" % (t[:1].upper() + t[1:])
