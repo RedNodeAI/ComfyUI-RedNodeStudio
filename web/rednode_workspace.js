@@ -6964,6 +6964,51 @@ async function adoptPaintSource(node, file) {
   render(node);
 }
 
+// A BLANK CANVAS to paint on from nothing: a flat sheet at the Latent tab's size, made
+// in the browser and taken in through the same door as a dropped picture, so it is a
+// real file the run can read and everything downstream treats it as any other source.
+const BLANK_SHEETS = [["white", "White", "#ffffff"], ["grey", "Mid grey", "#808080"],
+                      ["black", "Black", "#000000"]];
+function blankCanvasSize(cfg) {
+  const L = cfg?.latent || {};
+  const eff = (v) => Math.max(64, Math.min(STORE_MAX_EDGE,
+    Math.floor((Number(v) || 1024) * (Number(L.scale) || 1) / 8) * 8));
+  return L.random ? [1024, 1024] : [eff(L.w), eff(L.h)];
+}
+async function blankPaintCanvas(node, sheet = "white") {
+  const [id, , hex] = BLANK_SHEETS.find((s) => s[0] === sheet) || BLANK_SHEETS[0];
+  const [w, h] = blankCanvasSize(node._rnCfg);
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = hex;
+  ctx.fillRect(0, 0, w, h);
+  const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+  if (!blob) throw new Error("the canvas produced nothing");
+  console.log(`[RedNode Workspace] blank ${id} canvas, ${w}x${h}`);
+  await adoptPaintSource(node, new File([blob], `blank_${id}_${w}x${h}.png`, { type: "image/png" }));
+}
+
+// CLEAR THE CANVAS: the picture, the mask, the auto mask, the colours and the strokes,
+// all of it, back to "nothing chosen". Clear paint keeps the picture; this does not.
+// The files stay on disk, so Open image or Use last result brings a picture back.
+function clearPaintCanvas(node) {
+  const P = node._rnCfg.paint;
+  P.source = "";
+  P.mask = "";
+  P.auto_mask = "";
+  P.colour = "";
+  node._rnStrokes = [];
+  node._rnMaskDirty = false;
+  node._rnColourDirty = false;
+  node._rnPaintDirty = true;
+  node._rnResetPaint?.();
+  node._rnResetColour?.();
+  writeCfg(node);
+  render(node);
+}
+
 // Pull a picture out of a clipboard event. `files` covers a copied image FILE, and the
 // items walk covers a screenshot or a browser's "copy image", which arrive as raw data
 // with no file entry. getAsFile must be called here, synchronously: the item is dead
@@ -9688,6 +9733,50 @@ function paintBody(node, body) {
              + "canvas.";
   open.onclick = () => pickPaintSource(node);
 
+  // BLANK CANVAS: a flat sheet to paint on from nothing. White on a click; the
+  // right-click offers grey and black, the two other grounds people start from.
+  const blank = document.createElement("button");
+  blank.className = "rn-ws-btn rn-ws-compact rn-ws-blankcanvas";
+  blank.style.width = "auto";
+  blank.style.padding = "0 10px";
+  blank.textContent = "Blank canvas";
+  {
+    const [bw, bh] = blankCanvasSize(node._rnCfg);
+    blank.title = `A blank white sheet to paint on, ${bw} × ${bh}, the Latent tab's size. `
+                + "Right-click for mid grey or black. It replaces the picture on the canvas.";
+  }
+  const makeBlank = (sheet) => blankPaintCanvas(node, sheet).catch((e) => {
+    console.error("[RedNode Workspace] blank canvas failed:", e);
+    alert(`Could not make a blank canvas: ${e.message}`);
+  });
+  blank.onclick = () => makeBlank("white");
+  blank.addEventListener("contextmenu", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    document.querySelector(".rn-ws-menu")?.remove();
+    const m = document.createElement("div");
+    m.className = "rn-ws-menu";
+    for (const t of ["pointerdown", "click", "contextmenu"]) {
+      m.addEventListener(t, (e) => e.stopPropagation());
+    }
+    for (const [id, label] of BLANK_SHEETS) {
+      const b = document.createElement("button");
+      b.textContent = label + " canvas";
+      b.onclick = () => { m.remove(); makeBlank(id); };
+      m.appendChild(b);
+    }
+    document.body.appendChild(m);
+    m.style.left = Math.max(6, Math.min(ev.clientX || 0, (window.innerWidth || 1920) - 236)) + "px";
+    m.style.top = Math.max(6, Math.min(ev.clientY || 0, (window.innerHeight || 1080) - 130)) + "px";
+    const close = (e) => {
+      if (!m.contains(e.target)) {
+        m.remove();
+        document.removeEventListener("pointerdown", close, true);
+      }
+    };
+    document.addEventListener("pointerdown", close, true);
+  });
+
   const useLast = document.createElement("button");
   useLast.className = "rn-ws-btn rn-ws-compact";
   useLast.style.width = "auto";
@@ -9928,6 +10017,27 @@ function paintBody(node, body) {
     // showing the coverage Clear just removed, which is the old resurrection again
     node._rnResetPaint?.();
     render(node);
+  };
+
+  // CLEAR CANVAS: Clear paint's bigger sibling. The picture goes too, so the tab is
+  // back to empty. Asks first only when there is painted work to lose.
+  const clearAll = document.createElement("button");
+  clearAll.className = "rn-ws-btn rn-ws-compact rn-ws-clearcanvas";
+  clearAll.style.width = "auto";
+  clearAll.style.padding = "0 10px";
+  clearAll.textContent = "Clear canvas";
+  clearAll.disabled = !P.source;
+  clearAll.title = clearAll.disabled
+    ? "The canvas is already empty."
+    : "Take everything off the canvas: the picture, the mask, the colours and the "
+      + "strokes. Clear paint keeps the picture; this does not. The files stay on disk, "
+      + "so Open image or Use last result brings a picture back.";
+  clearAll.onclick = () => {
+    const live = node._rnCfg?.paint || P;
+    if (!live.source) return;
+    const work = (node._rnStrokes || []).length || live.mask || live.auto_mask || live.colour;
+    if (work && !confirm("Clear the canvas? The picture and everything painted on it go.")) return;
+    clearPaintCanvas(node);
   };
 
   // SAVE MASK IS GONE, because it was never your job. The mask now uploads by
@@ -10412,7 +10522,7 @@ function paintBody(node, body) {
   const maskActions = document.createElement("div");
   maskActions.className = "rn-ws-row";
   state.classList.add("rn-ws-file-state");
-  maskActions.append(open, useLast, lastFrom, keep, clear, state);
+  maskActions.append(open, blank, useLast, lastFrom, keep, clear, clearAll, state);
   autoMaskBox.appendChild(row2);             // background, subject and Cut
   maskStateBox.appendChild(maskActions);
   if (!P.mask_only) {
