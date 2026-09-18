@@ -3840,6 +3840,13 @@ class RedNodeStudioWorkspace:
         # standalone node's pipeline
         for tab_name in CONVERTER_TABS:
             conv = tabs[tab_name].get("conv") or {}
+            # A SWITCHED-OFF TAB CONVERTS NOTHING. A caption wired in by hand passes
+            # through even with the tab off, on purpose, but the Converter page says
+            # in as many words that nothing on it is used while the tab is off, and
+            # its dot reads dark. It was still swapping genders, converting styles and
+            # stripping terms against the moodboard on the way past.
+            if not tabs[tab_name].get("on"):
+                continue
             if not (prompts.get(tab_name) and conv and conv.get("on", True)):
                 continue
             before = prompts[tab_name]
@@ -4116,16 +4123,18 @@ class RedNodeStudioWorkspace:
                 # 1 made, so the tab with no source image gets the draft-and-climb run
                 # the Img2Img tab already had. It never competes with a real i2i pass:
                 # that one owns the canvas and is checked first.
+                # THE PASS COUNT IS THE WHOLE CONDITION. It used to also require the
+                # canvas to be built on the tab, and at least one per-pass list to be
+                # switched on. Both quietly cost the passes the panel says will run:
+                # a wired latent dropped them although the source picker's own tooltip
+                # promises "the passes still run", and a plain "3 passes, refine 0.45"
+                # with no advanced list ran exactly once while the bar read 3 Passes.
+                # A wired latent is the canvas like any other, and the Refine dial is
+                # the denoise for passes 2 and on whether or not a list is open.
                 _lc_pass = cfg["latent"]
                 _lat_run = (not _i2i_run and not _lat_from_i2i
                             and bool(_lc_pass.get("on"))
-                            and _lc_pass.get("source") == "tab"
-                            and int(_lc_pass.get("passes", 1)) > 1
-                            and (_lc_pass.get("pass_custom")
-                                 or _lc_pass.get("scale_custom")
-                                 or _lc_pass.get("rig_custom")
-                                 or _lc_pass.get("steps_custom")
-                                 or _lc_pass.get("handoff_continue")))
+                            and int(_lc_pass.get("passes", 1)) > 1)
                 if _i2i_run:
                     _npass = int(it.get("passes", 1))
                 elif _lat_run:
