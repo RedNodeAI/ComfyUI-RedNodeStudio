@@ -11951,11 +11951,19 @@ function promptsBody(node, body) {
                          mood_caption_in: "Moodboard caption", i2i_caption_in: "Img2Img caption" };
           const outw = { lines: [] };
           const g = node.graph || app.graph;
+          // ONLY NODES WHOSE WIDGET IS THEIR OUTPUT. A browser node or a
+          // combiner also carries widgets, holding metadata or settings that
+          // are nothing like its text output; reading those put a moodboard's
+          // JSON into the preview. Everything else is named, not read.
+          const TEXT_WIDGET = { PrimitiveNode: null, PrimitiveString: "value",
+                                PrimitiveStringMultiline: "value", RedNodePromptBox: "text",
+                                RedNodeNote: "text" };
           const textOf = (src) => {
+            const type = String(src?.type || "");
+            if (!(type in TEXT_WIDGET)) return "";
             const ws = src?.widgets || [];
-            const w = ws.find((x) => x?.type === "customtext")
-                   || ws.find((x) => { const t = String(x?.type || ""); return t === "text" || t === "string"; })
-                   || (String(src?.type || "") === "PrimitiveNode" ? ws[0] : null);
+            const name = TEXT_WIDGET[type];
+            const w = name ? ws.find((x) => x?.name === name) : ws[0];
             const v = w?.value;
             return typeof v === "string" ? v.trim() : "";
           };
