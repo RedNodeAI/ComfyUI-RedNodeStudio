@@ -54,6 +54,13 @@ the Run tab got wrong.
   best first, the Workspace's own record of the words it queued, the saved
   file's metadata, or the run's setup from ComfyUI's history, and says which
 
+### Run
+
+- The VRAM estimate is a card under the pipeline stages: the number the run
+  needs with nothing held, large; a bar against the card with the limit marked
+  on it; a verdict in green, amber or red; the parts as chips. It was one long
+  sentence on the top row
+
 ### Fixes
 
 - The Overview said the SAM3 checkpoint was missing while the Detailer offered
