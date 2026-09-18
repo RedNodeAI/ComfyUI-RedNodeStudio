@@ -528,6 +528,15 @@ def collect_meta(prompt, ctx):
     if flagged:
         meta["positive"] = flagged
 
+    # The Workspace rendered the picture itself and says which words it used. The trace
+    # above takes the first sampler in the graph, so a second chain with its own Prompt
+    # Box used to put that box's text on a picture it never made.
+    words = ctx.get("words") if isinstance(ctx, dict) else None
+    if isinstance(words, dict) and str(words.get("positive") or "").strip():
+        meta["positive"] = str(words["positive"]).strip()
+        meta["negative"] = str(words.get("negative") or "").strip()
+        meta["negative_note"] = ""
+
     # The backstop, and the one that actually holds up. Comparing the sampler's two
     # link origins only catches a studio wired straight in; route either side through
     # a Set/Get pair or a switch and the origins differ while both still trace back to
@@ -1266,12 +1275,15 @@ class RedNodeSave:
                    "image, which unlike PNG metadata is readable by eye and survives "
                    "moving between ComfyUI and other front ends.")
 
-    def save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None):
+    def save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
+             words=None):
         from . import run_events as _re
         return _re.tracked("save", "Save")(self._save)(
-            images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo)
+            images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo,
+            words=words)
 
-    def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None):
+    def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
+              words=None):
         from . import builtin_chain as _chain
         if _chain.done("save"):
             from . import run_events as _re
@@ -1300,7 +1312,8 @@ class RedNodeSave:
         if cfg["civitai"]:
             try:
                 civ_res, civ_sampler = civitai_record(
-                    prompt, ws, collect_meta(prompt, {"preset": preset, "seed": seed}))
+                    prompt, ws, collect_meta(prompt, {"preset": preset, "seed": seed,
+                                                      "words": words}))
             except Exception as exc:    # a record must never cost the save
                 print(f"[RedNode Save] no Civitai record this time: {exc}", flush=True)
                 civ_res = None
@@ -1310,7 +1323,7 @@ class RedNodeSave:
             arr = np.clip(255.0 * image.cpu().numpy(), 0, 255).astype(np.uint8)
             img = Image.fromarray(arr)
             ctx = {"when": when, "preset": preset, "seed": seed, "keep": keep,
-                   "width": img.width, "height": img.height}
+                   "width": img.width, "height": img.height, "words": words}
             meta = collect_meta(prompt, ctx)
             ctx["model"] = meta.get("model")
             folder, stem = build_path(cfg, ctx)

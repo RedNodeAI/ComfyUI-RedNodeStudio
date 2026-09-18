@@ -20,7 +20,7 @@ import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
-import { pngTextChunks, parseParameters, workspaceConfigIn } from "./rednode_png_meta.js";
+import { pngTextChunks, parseParameters, workspaceConfigIn, chosenRow } from "./rednode_png_meta.js";
 import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
@@ -16022,23 +16022,32 @@ async function importPromptFromPng(node, cfg, rows, file) {
   if (config) {
     // THE PACK'S OWN PICTURE: its prompt row comes over whole (frame boxes and
     // all), or the entire setup replaces this Workspace's, on a second question
-    const crow = (() => {
-      const rs = Array.isArray(config.prompts?.rows) ? config.prompts.rows : [];
-      const rigs = Array.isArray(config.models?.rigs) ? config.models.rigs : [];
-      const an = rigs[config.models?.active || 0]?.name || "";
-      return rs.find((r) => (r?.rigs || []).includes(an)) || rs[0] || null;
-    })();
+    // the row the run rendered (the chosen one), not the first linked to the rig
+    const crow = chosenRow(config);
     const words = crow ? String(crow.text || "").trim() : "";
-    const summary = (words ? "Prompt: " + clip(words) + "\n\n" : "No prompt row in it.\n\n")
+    // the words the picture was made with, sockets and wildcards resolved, when
+    // the file has them and they say more than the row does
+    const sent = String(params?.positive || "").trim();
+    const differs = sent && sent !== words;
+    const summary = (words ? "Prompt row" + (crow.name ? " “" + crow.name + "”" : "") + ": " + clip(words) + "\n\n"
+                           : "No prompt row in it.\n\n")
+      + (differs ? "As rendered: " + clip(sent) + "\n\n" : "")
       + "This picture was saved by RedNode Studio and carries its whole Workspace setup: "
       + "rigs, LoRAs, latent, Img2Img, Detailer and Post FX settings.";
     const choices = [];
     if (crow) {
       choices.push({ label: "Add its prompt",
-        tip: "A new prompt row with the picture's words, frame boxes included, linked to no rig.",
+        tip: "A new prompt row with the picture's row, frame boxes included, linked to no rig.",
         run: () => addRow({ ...JSON.parse(JSON.stringify(crow)),
                             name: (crow.name || "Imported") + (crow.name ? " (imported)" : ""),
                             rig: "", rigs: [] }) });
+    }
+    if (differs) {
+      choices.push({ label: "Add the words as rendered",
+        tip: "A new prompt row with the exact words the picture was made with, in its Anything else box.",
+        run: () => addRow({ name: "Imported", rig: "", rigs: [], kind: "krea2",
+                            text: sent, negative: String(params.negative || ""),
+                            frame: { extra: sent, camera_off: true } }) });
     }
     choices.push({ label: "Load the whole setup",
       tip: "Replace every setting of this Workspace with the picture's. The rigs it names must exist here.",

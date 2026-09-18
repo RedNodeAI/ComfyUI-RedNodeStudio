@@ -115,12 +115,10 @@ export function parseResources(text) {
   } catch (e) { return []; }
 }
 
-// what a Workspace config says about a run: the rig, its settings, the LoRAs,
-// the canvas, the chosen prompt row. The row rule mirrors the server's
-// prompt_row_for: the chosen row when it serves the active rig with words,
-// else the first row linked to it with words, else the first unlinked row
-// with words.
-export function summariseConfig(cfg) {
+// the prompt row a config renders. Mirrors the server's prompt_row_for: the
+// chosen row when it serves the active rig with words, else the first row
+// linked to it with words, else the first unlinked row with words.
+export function chosenRow(cfg) {
   if (!cfg || typeof cfg !== "object") return null;
   const M = cfg.models || {};
   const rigs = Array.isArray(M.rigs) ? M.rigs : [];
@@ -130,9 +128,20 @@ export function summariseConfig(cfg) {
   const linksOf = (r) => (Array.isArray(r?.rigs) ? r.rigs : (r?.rig ? [r.rig] : [])).filter((x) => String(x || "").trim());
   const hasWords = (r) => String(r?.text || "").trim().length > 0;
   const pick = rows[Number(cfg.prompts?.active)];
-  const row = (pick && hasWords(pick) && (linksOf(pick).includes(activeName) || !linksOf(pick).length)) ? pick
+  return (pick && hasWords(pick) && (linksOf(pick).includes(activeName) || !linksOf(pick).length)) ? pick
     : rows.find((r) => linksOf(r).includes(activeName) && hasWords(r))
       || rows.find((r) => !linksOf(r).length && hasWords(r)) || null;
+}
+
+// what a Workspace config says about a run: the rig, its settings, the LoRAs,
+// the canvas, the chosen prompt row
+export function summariseConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") return null;
+  const M = cfg.models || {};
+  const rigs = Array.isArray(M.rigs) ? M.rigs : [];
+  const rig = rigs[Math.max(0, Math.min(Number(M.active) || 0, rigs.length - 1))] || null;
+  const activeName = rig?.name || "";
+  const row = chosenRow(cfg);
   const loras = (Array.isArray(cfg.loras?.slots) ? cfg.loras.slots : [])
     .filter((s) => s && s.type !== "title" && s.enabled !== false && String(s.name || "").trim())
     .map((s) => ({ name: String(s.name), weight: Number.isFinite(Number(s.strength)) ? Number(s.strength) : 1 }));

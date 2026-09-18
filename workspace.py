@@ -4592,9 +4592,15 @@ class RedNodeStudioWorkspace:
             if cfg["save_on"]:
                 try:
                     from .save_node import RedNodeSave
+                    # the built-in sampler made this picture from the words above, so the
+                    # record says those; a trace would land on any other sampler's text box
+                    _words = None
+                    if (_mode == "internal" and not _prt and not _stage_only
+                            and prompt_text_out.strip()):
+                        _words = {"positive": prompt_text_out, "negative": negative_text_out}
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
                                              seed=run_seed, prompt=prompt,
-                                             extra_pnginfo=extra_pnginfo)
+                                             extra_pnginfo=extra_pnginfo, words=_words)
                     _chain.mark("save")
                     _simgs = ((_sv or {}).get("ui") or {}).get("images") or []
                     if _simgs:
