@@ -176,7 +176,7 @@ export function onRunEvent(d) {
         (wsn.properties ||= {}).rn_last_prompt = {
           text: RUN.prompt, negative: String(d.info.negative || ""),
           row: String(d.info.prompt_row || ""), index: Number(d.info.prompt_index ?? -1),
-          seed: RUN.seed, at: Date.now(),
+          seed: RUN.seed, at: Date.now(), promptId: RUN.promptId || null,
         };
         wsn._rnLastPromptChanged?.();
       }
@@ -469,6 +469,7 @@ function reviewHost(node) {
   node._rnReviewHost ||= { id: `${node.id}:run`, type: "RedNodeImageReview" };
   node._rnReviewHost.properties = node.properties.rn_run_review;
   node._rnReviewHost.graph = node.graph;
+  node._rnReviewHost._rnOwner = node;   // the Workspace behind it, for its run records
   // hosted from the start: full screen from the picture can render it before the
   // Review sub-tab ever mounted it
   node._rnReviewHost.size ||= [0, 0];

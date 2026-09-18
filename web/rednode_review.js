@@ -2,6 +2,8 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { setting } from "./rednode_settings.js";
 import { arrowKeys, forgetArrowKeys } from "./rednode_keys.js";
+import { pngTextChunks, parseParameters, parseResources, workspaceConfigInPrompt,
+         summariseConfig } from "./rednode_png_meta.js";
 
 // RedNode Image Review — the panel over review.py.
 //
@@ -71,6 +73,24 @@ css.textContent = `
    the furniture up to the room. The picture already fills whatever it is given. */
 .rn-rv-fshost{flex:1;min-height:0;height:auto;border:1px solid #2f333a;border-radius:8px;
   padding:10px}
+.rn-rv-info{position:fixed;right:22px;top:58px;width:360px;max-height:calc(100vh - 84px);
+  overflow:auto;z-index:9995;background:#16181cf2;border:1px solid #3a3f47;border-radius:10px;
+  padding:12px 14px;color:#e2e5ea;font:13px system-ui,sans-serif;line-height:1.5;
+  box-shadow:0 8px 30px #000a}
+.rn-rv-infohead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.rn-rv-infohead b{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#c9ced6;flex:1}
+.rn-rv-info button{background:#111316;border:1px solid #33373d;border-radius:5px;color:#c2c7cd;
+  cursor:pointer;font-size:12px;padding:4px 9px}
+.rn-rv-info button:hover{border-color:#b8283c;color:#fff}
+.rn-rv-infosec{margin:8px 0}
+.rn-rv-infosec .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#8a919b;margin-bottom:2px}
+.rn-rv-infosec .v{white-space:pre-wrap;color:#e2e5ea}
+.rn-rv-infosec .v.dim,.rn-rv-infolora .dim{color:#9fa7b2}
+.rn-rv-infolora{display:flex;justify-content:space-between;gap:10px}
+.rn-rv-infosrc{font-size:11.5px;color:#7f8792;margin-top:8px}
+.rn-rv-infotab{position:fixed;right:0;top:58px;z-index:9995;background:#16181c;border:1px solid #3a3f47;
+  border-right:0;border-radius:8px 0 0 8px;color:#c2c7cd;cursor:pointer;font-size:12px;padding:10px 8px;
+  writing-mode:vertical-rl}
 .rn-rv-fshost .rn-rv-strip{height:auto}
 .rn-rv-fshost .rn-rv-th{width:96px;height:96px}
 .rn-rv-fshost .rn-rv-tag,.rn-rv-fshost .rn-rv-stats,.rn-rv-fshost .rn-rv-cnt{font-size:13px}
@@ -538,6 +558,165 @@ function stepSlot(node, dir) {
   render(node);
 }
 
+
+// ---- the info card ---------------------------------------------------------
+// GENERATION DATA BESIDE THE PICTURE, in the full screen room only: the prompt
+// as the run had it, the negative, the rig and model, the settings and the
+// LoRAs, fixed to the right edge and unmoved by zoom or pan, folding to a tab.
+// Three sources, best first: the Workspace's record of the words it queued for
+// this prompt id; the saved file's own metadata (the parameters text and the
+// resource list the Save node writes); and the run's setup out of ComfyUI's
+// history, where the prompt is the row as typed. A picture with none of the
+// three says so.
+async function gatherInfo(owner, entry, slot) {
+  const out = { source: "", prompt: "", negative: "", rig: "", model: "", settings: {}, loras: [], seed: null };
+  const last = owner?.properties?.rn_last_prompt;
+  if (last && entry?.prompt && last.promptId && last.promptId === entry.prompt) {
+    out.prompt = String(last.text || ""); out.negative = String(last.negative || "");
+    if (last.seed != null) out.seed = last.seed;
+    out.source = "this session's run";
+  }
+  try {
+    const r = await recover(entry, slot);
+    if (r.file && /\.png$/i.test(r.file.filename)) {
+      const resp = await api.fetchApi(`/view?${fileArgs(r.file)}`);
+      const chunks = pngTextChunks(await resp.arrayBuffer());
+      const params = parseParameters(chunks.parameters);
+      const res = parseResources(chunks.civitaiResources);
+      if (params) {
+        if (!out.prompt) { out.prompt = params.positive; out.negative = params.negative; out.source = "the saved file"; }
+        for (const [k, v] of Object.entries(params.settings)) if (v != null && v !== "") out.settings[k] = v;
+        if (out.seed == null && params.settings.seed != null) out.seed = params.settings.seed;
+        if (!out.model && params.settings.model) out.model = params.settings.model;
+      }
+      if (res.length) {
+        out.loras = res.filter((x) => x.type === "lora");
+        const ck = res.find((x) => x.type === "checkpoint");
+        if (ck && !out.model) out.model = ck.name;
+      }
+    }
+  } catch (e) { /* no saved file to read */ }
+  try {
+    if (entry?.prompt) {
+      const sum = summariseConfig(workspaceConfigInPrompt(await fetchPrompt(entry.prompt)));
+      if (sum) {
+        out.rig = sum.rigName;
+        if (!out.model) out.model = sum.model;
+        for (const k of ["steps", "cfg", "sampler", "scheduler", "width", "height"]) {
+          if (out.settings[k] == null || out.settings[k] === "") out.settings[k] = sum[k];
+        }
+        if (!out.loras.length) out.loras = sum.loras;
+        if (out.seed == null && sum.seed != null) out.seed = sum.seed;
+        if (!out.prompt) { out.prompt = sum.prompt; out.negative = sum.negative; out.source = "the run's setup, as typed"; }
+      }
+    }
+  } catch (e) { /* not in history any more */ }
+  return out;
+}
+
+function infoCard(node, ov) {
+  const owner = node._rnOwner || node;
+  const card = document.createElement("div");
+  card.className = "rn-rv-info";
+  const tab = document.createElement("button");
+  tab.className = "rn-rv-infotab";
+  tab.textContent = "Info";
+  tab.title = "Show the generation data.";
+  let open = true;
+  try { open = localStorage.getItem("rn-rv-info-open") !== "0"; } catch (e) { /* no storage */ }
+  const remember = () => { try { localStorage.setItem("rn-rv-info-open", open ? "1" : "0"); } catch (e) { /* fine */ } };
+  const apply = () => { card.style.display = open ? "" : "none"; tab.style.display = open ? "none" : ""; };
+  const head = document.createElement("div");
+  head.className = "rn-rv-infohead";
+  const ttl = document.createElement("b");
+  ttl.textContent = "Generation data";
+  const copyAll = document.createElement("button");
+  copyAll.textContent = "Copy all";
+  copyAll.title = "Copy everything on the card as text.";
+  const hide = document.createElement("button");
+  hide.textContent = "Hide";
+  hide.title = "Fold the card to a tab at the edge.";
+  hide.onclick = () => { open = false; remember(); apply(); };
+  tab.onclick = () => { open = true; remember(); apply(); };
+  head.append(ttl, copyAll, hide);
+  const body = document.createElement("div");
+  body.className = "rn-rv-infobody";
+  card.append(head, body);
+  for (const t of ["pointerdown", "pointerup", "click", "dblclick"]) card.addEventListener(t, (e) => e.stopPropagation());
+  ov.append(card, tab);
+  apply();
+  let plain = "";
+  const sec = (label, text, dim) => {
+    const d = document.createElement("div");
+    d.className = "rn-rv-infosec";
+    const k = document.createElement("div"); k.className = "k"; k.textContent = label;
+    const v = document.createElement("div"); v.className = "v" + (dim ? " dim" : ""); v.textContent = text;
+    d.append(k, v);
+    return d;
+  };
+  const draw = (rec) => {
+    body.replaceChildren();
+    const bits = [];
+    if (rec.prompt) {
+      const p = sec("Prompt", rec.prompt);
+      const cp = document.createElement("button");
+      cp.textContent = "Copy";
+      cp.style.cssText = "float:right;margin:-2px 0 4px 8px";
+      cp.title = "Copy the prompt.";
+      cp.onclick = () => navigator.clipboard?.writeText(rec.prompt);
+      p.insertBefore(cp, p.firstChild);
+      body.appendChild(p);
+      bits.push(rec.prompt);
+    }
+    if (rec.negative) { body.appendChild(sec("Negative", rec.negative, true)); bits.push("Negative prompt: " + rec.negative); }
+    const modelLine = [rec.rig, rec.model].filter(Boolean).join(" \u00b7 ");
+    if (modelLine) { body.appendChild(sec("Rig and model", modelLine)); bits.push("Model: " + modelLine); }
+    const s = rec.settings || {};
+    const parts = [];
+    if (s.steps != null) parts.push(`Steps ${s.steps}`);
+    if (s.cfg != null) parts.push(`CFG ${s.cfg}`);
+    if (s.sampler) parts.push(String(s.sampler));
+    if (s.scheduler) parts.push(String(s.scheduler));
+    if (rec.seed != null) parts.push(`Seed ${rec.seed}`);
+    if (s.width && s.height) parts.push(`${s.width} \u00d7 ${s.height}`);
+    if (s.denoise != null) parts.push(`Denoise ${s.denoise}`);
+    if (parts.length) { body.appendChild(sec("Settings", parts.join("  \u00b7  "))); bits.push(parts.join(", ")); }
+    if (rec.loras.length) {
+      const d = document.createElement("div");
+      d.className = "rn-rv-infosec";
+      const k = document.createElement("div"); k.className = "k"; k.textContent = "LoRAs";
+      d.appendChild(k);
+      for (const l of rec.loras) {
+        const row = document.createElement("div");
+        row.className = "rn-rv-infolora";
+        const n = document.createElement("span"); n.textContent = l.name;
+        const w = document.createElement("span"); w.className = "dim"; w.textContent = Number(l.weight).toFixed(2);
+        row.append(n, w);
+        d.appendChild(row);
+        bits.push(`LoRA: ${l.name} ${Number(l.weight).toFixed(2)}`);
+      }
+      body.appendChild(d);
+    }
+    const src = document.createElement("div");
+    src.className = "rn-rv-infosrc";
+    src.textContent = rec.source
+      ? `From ${rec.source}.`
+      : "No record for this picture: it was not saved with metadata, and its run is not in this session or in ComfyUI's history.";
+    body.appendChild(src);
+    plain = bits.join("\n");
+  };
+  copyAll.onclick = () => navigator.clipboard?.writeText(plain);
+  let token = 0;
+  const refresh = async (entry, slot) => {
+    const my = ++token;
+    body.replaceChildren(sec("", "Reading\u2026", true));
+    const rec = await gatherInfo(owner, entry, slot);
+    if (my !== token) return;
+    draw(rec);
+  };
+  return { refresh, dispose: () => { card.remove(); tab.remove(); } };
+}
+
 export function openFullscreen(node) {
   if (node._rnFsPrev) return;                       // already open
   const ov = document.createElement("div");
@@ -565,6 +744,7 @@ export function openFullscreen(node) {
   fshost.className = "rn-rv-wrap rn-rv-fshost";
   ov.append(bar, fshost);
   document.body.appendChild(ov);
+  node._rnFsCard = infoCard(node, ov);
 
   const step = (dir) => {
     const h = hist(node);
@@ -581,6 +761,7 @@ export function openFullscreen(node) {
   // event, so nothing here can also act on it. Anywhere else it does nothing, and
   // never reaches the canvas underneath.
   ov.addEventListener("wheel", (e) => {
+    if (e.target?.closest?.(".rn-rv-info")) { e.stopPropagation(); return; }   // the card scrolls itself
     e.preventDefault();
     e.stopPropagation();
     const strip = fshost.querySelector(".rn-rv-strip");
@@ -598,6 +779,8 @@ export function openFullscreen(node) {
     node._rnRootEl = node._rnFsPrev;
     node._rnFsPrev = null;
     node._rnFsClose = null;
+    node._rnFsCard?.dispose?.();
+    node._rnFsCard = null;
     forgetArrowKeys(fshost);
     ov.remove();
     document.removeEventListener("keydown", onKey, true);
@@ -774,6 +957,7 @@ function render(node) {
     }
     main.appendChild(img);
     if (node._rnFsPrev) roomZoom(node, main, img, view);
+    if (node._rnFsPrev) node._rnFsCard?.refresh?.(entry, slot);
     const corner = document.createElement("div");
     corner.className = "rn-rv-corner";
     const tag = document.createElement("span");

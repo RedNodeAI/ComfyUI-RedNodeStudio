@@ -20,6 +20,7 @@ import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
+import { pngTextChunks, parseParameters, workspaceConfigIn } from "./rednode_png_meta.js";
 import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
@@ -15964,98 +15965,6 @@ function refreshPresetList(node, names) {
 // whole config sits as its widget value. Any other PNG with a parameters chunk
 // gives at least the prompt. All of it is read here in the browser, off the
 // file the user picks; nothing goes to the server.
-function pngTextChunks(buf) {
-  const out = {};
-  try {
-    const u8 = new Uint8Array(buf);
-    const sig = [137, 80, 78, 71, 13, 10, 26, 10];
-    if (u8.length < 8 || sig.some((b, i) => u8[i] !== b)) return out;
-    const dv = new DataView(buf);
-    const latin = (a, b) => { let s = ""; for (let i = a; i < b; i++) s += String.fromCharCode(u8[i]); return s; };
-    const utf8 = new TextDecoder("utf-8");
-    let p = 8;
-    while (p + 8 <= u8.length) {
-      const len = dv.getUint32(p);
-      const type = latin(p + 4, p + 8);
-      const a = p + 8, b = a + len;
-      if (b > u8.length) break;
-      if (type === "tEXt") {
-        const z = u8.indexOf(0, a);
-        if (z > 0 && z < b) out[latin(a, z)] = latin(z + 1, b);
-      } else if (type === "iTXt") {
-        const z = u8.indexOf(0, a);
-        if (z > 0 && z < b) {
-          const key = latin(a, z);
-          const comp = u8[z + 1];
-          // language tag and translated keyword, each zero-ended
-          let q = z + 3;
-          q = u8.indexOf(0, q) + 1;
-          q = u8.indexOf(0, q) + 1;
-          if (comp === 0 && q > 0 && q <= b) out[key] = utf8.decode(u8.subarray(q, b));
-        }
-      } else if (type === "IEND") break;
-      p = b + 4;
-    }
-  } catch (e) { /* not a png we can read */ }
-  return out;
-}
-
-// the A1111 parameters text: the prompt, "Negative prompt: ...", then one
-// settings line. Keys are picked out one by one, since the line also carries
-// JSON with commas of its own.
-function parseParameters(text) {
-  const t = String(text || "").replace(/\r/g, "");
-  if (!t.trim()) return null;
-  const lines = t.split("\n");
-  let settingsAt = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/^Steps: \d+|^Seed: \d+|, Seed: \d+|^Size: \d+x\d+/.test(lines[i])) { settingsAt = i; break; }
-  }
-  const bodyLines = settingsAt >= 0 ? lines.slice(0, settingsAt) : lines;
-  const settingsLine = settingsAt >= 0 ? lines[settingsAt] : "";
-  const body = bodyLines.join("\n");
-  const negAt = body.indexOf("Negative prompt:");
-  const positive = (negAt >= 0 ? body.slice(0, negAt) : body).trim();
-  const negative = negAt >= 0 ? body.slice(negAt + "Negative prompt:".length).trim() : "";
-  const grab = (re) => { const m = settingsLine.match(re); return m ? m[1].trim() : ""; };
-  const num = (v) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-  const size = settingsLine.match(/Size: (\d+)x(\d+)/);
-  return {
-    positive, negative,
-    settings: {
-      steps: num(grab(/Steps: ([\d.]+)/)),
-      sampler: grab(/Sampler: ([^,]+)/),
-      scheduler: grab(/Schedule type: ([^,]+)/),
-      cfg: num(grab(/CFG scale: ([\d.]+)/)),
-      seed: num(grab(/Seed: (\d+)/)),
-      width: size ? Number(size[1]) : null,
-      height: size ? Number(size[2]) : null,
-      denoise: num(grab(/Denoising strength: ([\d.]+)/)),
-      model: grab(/(?:^|, )Model: ([^,]+)/),
-    },
-  };
-}
-
-// the Workspace's own config out of the embedded graph, if the picture has one
-function workspaceConfigIn(chunks) {
-  const parse = (s) => { try { return JSON.parse(s); } catch (e) { return null; } };
-  const wf = parse(chunks.workflow);
-  for (const n of (wf?.nodes || [])) {
-    if (n?.type === "RedNodeStudioWorkspace") {
-      const c = parse(n.widgets_values?.[0]);
-      if (c && typeof c === "object") return c;
-    }
-  }
-  const pr = parse(chunks.prompt);
-  for (const v of Object.values(pr || {})) {
-    if (v?.class_type === "RedNodeStudioWorkspace") {
-      const c = parse(v.inputs?.config);
-      if (c && typeof c === "object") return c;
-    }
-  }
-  return null;
-}
-
 // one small dialog: what was found, and the ways to bring it in
 function importChoice(title, summary, choices) {
   const ov = document.createElement("div");
