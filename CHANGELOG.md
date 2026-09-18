@@ -4,6 +4,49 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.4.3** - 2026-09-19
+
+Fixes, most of them the same shape: a control the panel shows, and a run that
+read something else. Every one now has a test asserting the two agree.
+
+### Fixes
+
+- Civitai showed no generation data for any picture the pack saved. The
+  "Civitai resources" list named every model and LoRA, with a version id only
+  when one was known, and Civitai's reader wants a numeric id on every entry;
+  one without it fails the whole picture, so the site kept nothing at all, not
+  the prompt, not the steps, not the seed. The list now holds only resources
+  whose version id is known, and is left out when there are none. A resource
+  known by hash alone is still in Model hash, Lora hashes and Hashes, which is
+  where Civitai matches hashes anyway. Pictures already saved can be repaired
+  without re-rendering
+- The Img2Img tab ignored its own Denoise bar at one pass. The per-pass lists
+  only mean anything above one pass, so the panel hides them and shows the
+  single dial while keeping the stored list for when the count goes back up;
+  the run read that list whatever the count, and its stale first value won. The
+  same silent override applied to scale, steps, the per-pass rig, and the
+  Detailer's repeat
+- The Latent tab's passes needed the canvas to be built on the tab AND a
+  per-pass list switched on, so a plain three passes at the Refine denoise
+  sampled once while the bar read 3 Passes, and a wired latent dropped them
+  although the source picker says they still run. The pass count is the whole
+  condition now
+- Paint's Subject, Scene and Moodboard references were encoded through the
+  Krea 2 path on a rig the panel had already greyed them out for, and a greyed
+  button has no click handler, so they could not be switched off either. They
+  are refused on a rig that is not Krea 2, with a line saying so, which is what
+  the Detailer has always done. The panel also stopped judging by the Models
+  tab's active rig when the target is a render node, whose model it cannot see
+- The Prompt Converter rewrote a caption wired into a switched-off tab, while
+  that page says in as many words that nothing on it is used. The caption still
+  passes through, unchanged
+- A Detailer card's header wrapped onto a second line once a pass had a name
+  alongside SAM and Res
+
+### Notes
+
+- Checked against ComfyUI 0.35.1 as well as 0.30.2
+
 **1.4.2** - 2026-09-18
 
 Fixes for two things 1.4.1 got wrong, and a round of panel work on the Overview,
