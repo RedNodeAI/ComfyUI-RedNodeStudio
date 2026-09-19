@@ -1,5 +1,5 @@
 {
-  "last_node_id": 16,
+  "last_node_id": 17,
   "last_link_id": 0,
   "nodes": [
     {
@@ -50,8 +50,8 @@
       "widgets_values": []
     },
     {
-      "id": 3,
-      "type": "UltimateSDUpscale",
+      "id": 17,
+      "type": "VOSR2Upscale",
       "pos": [
         300,
         0
@@ -66,15 +66,15 @@
       "inputs": [],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "UltimateSDUpscale",
-        "aux_id": "ssitu/ComfyUI_UltimateSDUpscale"
+        "Node name for S&R": "VOSR2Upscale",
+        "cnr_id": "comfyui-vosr2"
       },
-      "title": "Tiled upscale (ComfyUI_UltimateSDUpscale)",
+      "title": "VOSR 2.0 upscale (ComfyUI-VOSR2)",
       "widgets_values": []
     },
     {
-      "id": 4,
-      "type": "easy sam3ModelLoader",
+      "id": 3,
+      "type": "UltimateSDUpscale",
       "pos": [
         600,
         0
@@ -89,15 +89,15 @@
       "inputs": [],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "easy sam3ModelLoader",
-        "aux_id": "yolain/ComfyUI-Easy-Sam3"
+        "Node name for S&R": "UltimateSDUpscale",
+        "aux_id": "ssitu/ComfyUI_UltimateSDUpscale"
       },
-      "title": "Segmenting (ComfyUI-Easy-Sam3)",
+      "title": "Tiled upscale (ComfyUI_UltimateSDUpscale)",
       "widgets_values": []
     },
     {
-      "id": 5,
-      "type": "UnetLoaderGGUF",
+      "id": 4,
+      "type": "easy sam3ModelLoader",
       "pos": [
         900,
         0
@@ -112,15 +112,15 @@
       "inputs": [],
       "outputs": [],
       "properties": {
-        "Node name for S&R": "UnetLoaderGGUF",
-        "aux_id": "city96/ComfyUI-GGUF"
+        "Node name for S&R": "easy sam3ModelLoader",
+        "cnr_id": "comfyui-easy-sam3"
       },
-      "title": "GGUF models (ComfyUI-GGUF)",
+      "title": "Segmenting (ComfyUI-Easy-Sam3)",
       "widgets_values": []
     },
     {
-      "id": 6,
-      "type": "OTUNetLoaderW8A8",
+      "id": 5,
+      "type": "UnetLoaderGGUF",
       "pos": [
         0,
         190
@@ -131,6 +131,29 @@
       ],
       "flags": {},
       "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "UnetLoaderGGUF",
+        "aux_id": "city96/ComfyUI-GGUF"
+      },
+      "title": "GGUF models (ComfyUI-GGUF)",
+      "widgets_values": []
+    },
+    {
+      "id": 6,
+      "type": "OTUNetLoaderW8A8",
+      "pos": [
+        300,
+        190
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 6,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -146,7 +169,7 @@
       "id": 7,
       "type": "WD14Tagger|pysssss",
       "pos": [
-        300,
+        600,
         190
       ],
       "size": [
@@ -154,7 +177,7 @@
         130
       ],
       "flags": {},
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -169,7 +192,7 @@
       "id": 8,
       "type": "Florence2Run",
       "pos": [
-        600,
+        900,
         190
       ],
       "size": [
@@ -177,7 +200,7 @@
         130
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -192,15 +215,15 @@
       "id": 9,
       "type": "JC_adv",
       "pos": [
-        900,
-        190
+        0,
+        380
       ],
       "size": [
         270,
         130
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -215,7 +238,7 @@
       "id": 10,
       "type": "AILab_QwenVL",
       "pos": [
-        0,
+        300,
         380
       ],
       "size": [
@@ -223,7 +246,7 @@
         130
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -238,7 +261,7 @@
       "id": 11,
       "type": "DepthAnythingV2Preprocessor",
       "pos": [
-        300,
+        600,
         380
       ],
       "size": [
@@ -246,7 +269,7 @@
         130
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -261,7 +284,7 @@
       "id": 12,
       "type": "RMBG",
       "pos": [
-        600,
+        900,
         380
       ],
       "size": [
@@ -269,7 +292,7 @@
         130
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -284,15 +307,15 @@
       "id": 13,
       "type": "Krea2BBOXPromptEffect",
       "pos": [
-        900,
-        380
+        0,
+        570
       ],
       "size": [
         270,
         130
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -307,7 +330,7 @@
       "id": 14,
       "type": "KreaMoodboardVisualBrowser",
       "pos": [
-        0,
+        300,
         570
       ],
       "size": [
@@ -315,7 +338,7 @@
         130
       ],
       "flags": {},
-      "order": 13,
+      "order": 14,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -330,7 +353,7 @@
       "id": 15,
       "type": "Seed (rgthree)",
       "pos": [
-        300,
+        600,
         570
       ],
       "size": [
@@ -338,7 +361,7 @@
         130
       ],
       "flags": {},
-      "order": 14,
+      "order": 15,
       "mode": 0,
       "inputs": [],
       "outputs": [],
@@ -354,21 +377,21 @@
       "type": "Note",
       "pos": [
         0,
-        420
+        780
       ],
       "size": [
         1180,
         620
       ],
       "flags": {},
-      "order": 15,
+      "order": 16,
       "mode": 0,
       "inputs": [],
       "outputs": [],
       "title": "Note",
       "properties": {},
       "widgets_values": [
-        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. It installs without a checkpoint, so put one in models/sam3 too: https://huggingface.co/yolain/sam3-safetensors\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nDepth\n    The depth that Depth of field, Atmospheric haze and Relight read on the Post tab. Its estimators fetch their own weights the first time they run.\n    https://github.com/Fannovel16/comfyui_controlnet_aux\n\nSubject mask\n    The subject mask a Post card's Limit row uses to work on the subject or the background alone.\n    https://github.com/1038lab/ComfyUI-RMBG\n\nLight and Scene\n    The Light & Color and Scene nodes in the RedNode Studio template. That template will not run without this one.\n    https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter\n\nStyle browser\n    The Style browser in the RedNode Studio template, for picking a look from the Krea moodboards.\n    https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
+        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nVOSR 2.0 upscale\n    A Detailer pass set to VOSR 2.0. It enlarges what is there rather than inventing detail, which suits anime and lineart, and it costs about a quarter of the VRAM of a SeedVR2 pass at x4. The model downloads itself on the first run, about 6.5 GB.\n    https://github.com/ylchen333/ComfyUI-VOSR2\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. It installs without a checkpoint, so put one in models/sam3 too: https://huggingface.co/yolain/sam3-safetensors\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nDepth\n    The depth that Depth of field, Atmospheric haze and Relight read on the Post tab. Its estimators fetch their own weights the first time they run.\n    https://github.com/Fannovel16/comfyui_controlnet_aux\n\nSubject mask\n    The subject mask a Post card's Limit row uses to work on the subject or the background alone.\n    https://github.com/1038lab/ComfyUI-RMBG\n\nLight and Scene\n    The Light & Color and Scene nodes in the RedNode Studio template. That template will not run without this one.\n    https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter\n\nStyle browser\n    The Style browser in the RedNode Studio template, for picking a look from the Krea moodboards.\n    https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
       ],
       "color": "#432",
       "bgcolor": "#653"
