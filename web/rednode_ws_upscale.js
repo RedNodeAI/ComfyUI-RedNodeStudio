@@ -5,7 +5,8 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
-import { batchStrip, batchState, afterRow } from "./rednode_ws_batch.js";
+import { batchStrip, batchState, afterRow,
+         sourceSwitch } from "./rednode_ws_batch.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -360,132 +361,141 @@ export function upscaleBody(node, body) {
     },
   };
 
+  // ONE BOX AT A TIME. The two look alike and the page is long, so the switch
+  // shows the one being worked on and folds the other. It changes the VIEW, not
+  // what a run uses: each box still runs from its own buttons.
+  const view = sourceSwitch(node, body, "upscale", "Single image");
+
   // THE PICTURE
-  const { line: srcLine } = card(body, "SINGLE IMAGE");
-  const thumb = document.createElement(U.source ? "img" : "div");
-  thumb.style.cssText = "width:120px;height:120px;border:1px solid #2a2e35;border-radius:6px;"
-                      + "background:#15171b;flex:none;object-fit:contain";
-  // AN IMG, not a background: the panel has to be able to read the picture's real
-  // size, which is the first thing you want to know before upscaling it
-  const sizeLine = el("span", "hint", "");
-  sizeLine.style.cssText = "font-size:11px";
-  if (U.source && U.on) {
-    const q = new URLSearchParams({ filename: U.source.split("/").pop(),
-                                    subfolder: U.source.includes("/")
-                                      ? U.source.slice(0, U.source.lastIndexOf("/")) : "",
-                                    type: "input" });
-    thumb.src = api.apiURL(`/view?${q}`);
-    const sayFrom = () => {
-      const w0 = Number(thumb.naturalWidth) || 0;
-      const h0 = Number(thumb.naturalHeight) || 0;
-      if (!w0 || !h0) return;
-      // what it is, what it is taken to, and what comes out: the three numbers
-      // you would otherwise work out on paper before pressing anything
-      const fit = Number(U.pre_size) || 0;
-      let w = w0, h = h0;
-      let line = `${w0} × ${h0}`;
-      if (fit) {
-        const k = fit / Math.max(w0, h0);
-        const r8 = (x) => Math.max(64, Math.round(x * k / 8) * 8);
-        w = r8(w0); h = r8(h0);
-        line += ` → resized ${w} × ${h}`;
-      }
-      if (S.type === "vosr2") {
-        const mul = Math.max(1, Number(S.vosr2_scale) || 2);
-        line += ` → out ${w * mul} × ${h * mul}`;
-      } else if (S.type === "usdu") {
-        const by = Number(S.upscale_by) || 2;
-        line += ` → out about ${Math.round(w * by)} × ${Math.round(h * by)}`;
-      }
-      sizeLine.textContent = line;
-    };
-    thumb.addEventListener("load", sayFrom);
-    if (thumb.complete) sayFrom();
-  } else {
-    thumb.textContent = "Drop a picture";
-    thumb.style.cssText += ";display:flex;align-items:center;justify-content:center;"
-                         + "font-size:11px;color:#7f8792;text-align:center;padding:6px";
-  }
-  paintDropZone(node, thumb, "upscale");
-  const srcBtns = el("div");
-  srcBtns.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:none";
-  const useLast = el("button", "rn-ws-btn", "Use last result");
-  useLast.style.cssText = "width:auto;padding:3px 12px";
-  useLast.title = "Take the picture the last run produced.";
-  useLast.onclick = () => {
-    const r = lastResultNow();
-    if (!r) { alert("No result yet. Render something first, or drop a picture here."); return; }
-    adoptResult(node, r, "Use last result on the Upscale tab", "upscale");
-  };
-  const pick = el("button", "rn-ws-btn", "Pick a picture");
-  pick.style.cssText = "width:auto;padding:3px 12px";
-  pick.onclick = () => {
-    const inp = document.createElement("input");
-    inp.type = "file";
-    inp.accept = "image/*";
-    inp.onchange = async () => {
-      try { await adoptPaintSource(node, (inp.files || [])[0], "upscale"); }
-      catch (err) { alert(`Could not use that image: ${err.message}`); }
-    };
-    inp.click();
-  };
-  const paste = el("button", "rn-ws-btn", "Paste");
-  paste.style.cssText = "width:auto;padding:3px 12px";
-  paste.title = "Take the picture on the clipboard. Ctrl+V anywhere on this tab does "
-              + "the same, so a screenshot goes straight in.";
-  paste.onclick = async () => {
-    try {
-      const items = await navigator.clipboard?.read?.();
-      for (const it of items || []) {
-        const type = (it.types || []).find((t) => t.startsWith("image/"));
-        if (!type) continue;
-        const blob = await it.getType(type);
-        await adoptPaintSource(node, new File([blob], `pasted_${Date.now()}.png`,
-                                              { type: blob.type || "image/png" }),
-                               "upscale");
-        return;
-      }
-      alert("There is no picture on the clipboard. Copy one, or press Ctrl+V on "
-          + "this tab.");
-    } catch (err) {
-      alert("The clipboard could not be read here. Press Ctrl+V on this tab "
-          + "instead, which always works.");
+  // BUILT ONLY WHEN SHOWING. Made and then hidden, its picture would still
+  // be fetched and decoded for a box nobody is looking at.
+  if (view === "own") {
+    const { line: srcLine } = card(body, "SINGLE IMAGE");
+    const thumb = document.createElement(U.source ? "img" : "div");
+    thumb.style.cssText = "width:120px;height:120px;border:1px solid #2a2e35;border-radius:6px;"
+                        + "background:#15171b;flex:none;object-fit:contain";
+    // AN IMG, not a background: the panel has to be able to read the picture's real
+    // size, which is the first thing you want to know before upscaling it
+    const sizeLine = el("span", "hint", "");
+    sizeLine.style.cssText = "font-size:11px";
+    if (U.source && U.on) {
+      const q = new URLSearchParams({ filename: U.source.split("/").pop(),
+                                      subfolder: U.source.includes("/")
+                                        ? U.source.slice(0, U.source.lastIndexOf("/")) : "",
+                                      type: "input" });
+      thumb.src = api.apiURL(`/view?${q}`);
+      const sayFrom = () => {
+        const w0 = Number(thumb.naturalWidth) || 0;
+        const h0 = Number(thumb.naturalHeight) || 0;
+        if (!w0 || !h0) return;
+        // what it is, what it is taken to, and what comes out: the three numbers
+        // you would otherwise work out on paper before pressing anything
+        const fit = Number(U.pre_size) || 0;
+        let w = w0, h = h0;
+        let line = `${w0} × ${h0}`;
+        if (fit) {
+          const k = fit / Math.max(w0, h0);
+          const r8 = (x) => Math.max(64, Math.round(x * k / 8) * 8);
+          w = r8(w0); h = r8(h0);
+          line += ` → resized ${w} × ${h}`;
+        }
+        if (S.type === "vosr2") {
+          const mul = Math.max(1, Number(S.vosr2_scale) || 2);
+          line += ` → out ${w * mul} × ${h * mul}`;
+        } else if (S.type === "usdu") {
+          const by = Number(S.upscale_by) || 2;
+          line += ` → out about ${Math.round(w * by)} × ${Math.round(h * by)}`;
+        }
+        sizeLine.textContent = line;
+      };
+      thumb.addEventListener("load", sayFrom);
+      if (thumb.complete) sayFrom();
+    } else {
+      thumb.textContent = "Drop a picture";
+      thumb.style.cssText += ";display:flex;align-items:center;justify-content:center;"
+                           + "font-size:11px;color:#7f8792;text-align:center;padding:6px";
     }
-  };
-  const clear = el("button", "rn-ws-btn", "Clear");
-  clear.style.cssText = "width:auto;padding:3px 12px";
-  clear.title = "Forget this picture. The file stays where it is.";
-  clear.disabled = !U.source;
-  clear.onclick = () => { U.source = ""; node._rnUpStat = null; wr(); };
-  srcBtns.append(useLast, pick, paste, clear);
-  const srcCol = el("div");
-  srcCol.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:0;"
-                       + "align-self:center";
-  const srcName = el("span", "hint", U.source || "nothing chosen yet");
-  srcName.style.cssText = "font-size:11px;overflow:hidden;text-overflow:ellipsis";
-  srcCol.append(sizeLine, srcName);
-  srcLine.append(thumb, srcBtns, srcCol);
-
-  // THE RUN, beside the picture it works on. It used to sit in a card of its own
-  // at the bottom called RUN, under the batch and the method, which read as if it
-  // ran whatever was above it (the user, 2026-09-20). Next to the one picture it
-  // is plainly about the one picture, and the folder's own button is beside it so
-  // the difference is visible rather than remembered.
-  const runBox = el("div");
-  runBox.style.cssText = "margin-left:auto;display:flex;flex-direction:column;gap:6px;"
-                       + "align-items:flex-end;flex:none";
-  const go = el("button", "rn-ws-btn", "Run this Image");
-  go.style.cssText = "width:auto;padding:6px 18px;font-weight:600;"
-                   + "background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
-  go.title = "Run the one picture on the left. The result appears at the bottom of "
-           + "this tab, ready for Post, the Detailer or Save.";
-  const status = el("span", "hint", "");
-  status.style.cssText = "font-size:11px;text-align:right";
-  go.onclick = () => upscaleGenerate(node, status, batchOpts.afterEach);
-  runBox.appendChild(go);
-
-  runBox.appendChild(status);
-  srcLine.appendChild(runBox);
+    paintDropZone(node, thumb, "upscale");
+    const srcBtns = el("div");
+    srcBtns.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:none";
+    const useLast = el("button", "rn-ws-btn", "Use last result");
+    useLast.style.cssText = "width:auto;padding:3px 12px";
+    useLast.title = "Take the picture the last run produced.";
+    useLast.onclick = () => {
+      const r = lastResultNow();
+      if (!r) { alert("No result yet. Render something first, or drop a picture here."); return; }
+      adoptResult(node, r, "Use last result on the Upscale tab", "upscale");
+    };
+    const pick = el("button", "rn-ws-btn", "Pick a picture");
+    pick.style.cssText = "width:auto;padding:3px 12px";
+    pick.onclick = () => {
+      const inp = document.createElement("input");
+      inp.type = "file";
+      inp.accept = "image/*";
+      inp.onchange = async () => {
+        try { await adoptPaintSource(node, (inp.files || [])[0], "upscale"); }
+        catch (err) { alert(`Could not use that image: ${err.message}`); }
+      };
+      inp.click();
+    };
+    const paste = el("button", "rn-ws-btn", "Paste");
+    paste.style.cssText = "width:auto;padding:3px 12px";
+    paste.title = "Take the picture on the clipboard. Ctrl+V anywhere on this tab does "
+                + "the same, so a screenshot goes straight in.";
+    paste.onclick = async () => {
+      try {
+        const items = await navigator.clipboard?.read?.();
+        for (const it of items || []) {
+          const type = (it.types || []).find((t) => t.startsWith("image/"));
+          if (!type) continue;
+          const blob = await it.getType(type);
+          await adoptPaintSource(node, new File([blob], `pasted_${Date.now()}.png`,
+                                                { type: blob.type || "image/png" }),
+                                 "upscale");
+          return;
+        }
+        alert("There is no picture on the clipboard. Copy one, or press Ctrl+V on "
+            + "this tab.");
+      } catch (err) {
+        alert("The clipboard could not be read here. Press Ctrl+V on this tab "
+            + "instead, which always works.");
+      }
+    };
+    const clear = el("button", "rn-ws-btn", "Clear");
+    clear.style.cssText = "width:auto;padding:3px 12px";
+    clear.title = "Forget this picture. The file stays where it is.";
+    clear.disabled = !U.source;
+    clear.onclick = () => { U.source = ""; node._rnUpStat = null; wr(); };
+    srcBtns.append(useLast, pick, paste, clear);
+    const srcCol = el("div");
+    srcCol.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:0;"
+                         + "align-self:center";
+    const srcName = el("span", "hint", U.source || "nothing chosen yet");
+    srcName.style.cssText = "font-size:11px;overflow:hidden;text-overflow:ellipsis";
+    srcCol.append(sizeLine, srcName);
+    srcLine.append(thumb, srcBtns, srcCol);
+  
+    // THE RUN, beside the picture it works on. It used to sit in a card of its own
+    // at the bottom called RUN, under the batch and the method, which read as if it
+    // ran whatever was above it (the user, 2026-09-20). Next to the one picture it
+    // is plainly about the one picture, and the folder's own button is beside it so
+    // the difference is visible rather than remembered.
+    const runBox = el("div");
+    runBox.style.cssText = "margin-left:auto;display:flex;flex-direction:column;gap:6px;"
+                         + "align-items:flex-end;flex:none";
+    const go = el("button", "rn-ws-btn", "Run this Image");
+    go.style.cssText = "width:auto;padding:6px 18px;font-weight:600;"
+                     + "background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
+    go.title = "Run the one picture on the left. The result appears at the bottom of "
+             + "this tab, ready for Post, the Detailer or Save.";
+    const status = el("span", "hint", "");
+    status.style.cssText = "font-size:11px;text-align:right";
+    go.onclick = () => upscaleGenerate(node, status, batchOpts.afterEach);
+    runBox.appendChild(go);
+  
+    runBox.appendChild(status);
+    srcLine.appendChild(runBox);
+  }
   // A CARD OF ITS OWN, between the single image and the folder, because it
   // governs both. Tucked under the single picture it read as belonging to that
   // one picture; on the batch card it read as belonging to the folder (the user,
@@ -506,7 +516,7 @@ export function upscaleBody(node, body) {
   // THE BATCH, under the one picture: the same tab, a folder instead of a file.
   // Each picture runs on its own queue with the settings below, so the whole tab
   // means the same thing whether it is doing one or two hundred.
-  batchStrip(node, "upscale", body, batchOpts);
+  if (view === "batch") batchStrip(node, "upscale", body, batchOpts);
 
   // THE METHOD
   const { line: mLine } = card(body, "METHOD");

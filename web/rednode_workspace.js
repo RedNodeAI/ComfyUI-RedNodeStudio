@@ -14,7 +14,7 @@ import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
-import { batchStrip } from "./rednode_ws_batch.js";
+import { batchStrip, sourceSwitch } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -13618,7 +13618,12 @@ function i2iTabs(node, body) {
       && !(sub === "swap" && t.swap?.target === "render")
       && !(sub === "reangle" && t.reangle?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") {
-    galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
+    // ONE SOURCE BOX AT A TIME. The gallery and the folder look alike stacked, and
+    // the page is long. A VIEW switch: Queue still renders from the gallery and
+    // the folder still runs from its own buttons, whichever is showing.
+    const view = sourceSwitch(node, body, "i2i", "Gallery");
+    if (view === "own") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
+    else {
     // THE SAME FOLDER BATCH the Upscale tab uses, under the gallery it feeds. An
     // Img2Img run is an ordinary Queue, so a batch is that queue once per picture
     // with the gallery pointed at each in turn, in the QUEUED copy only.
@@ -13654,6 +13659,7 @@ function i2iTabs(node, body) {
         return String(d.prompt_id || "");
       },
     });
+    }
   }
   else if (sub === "passes") passesTab(node, body);
   else if (sub === "auto") i2iAutoPage(node, body);

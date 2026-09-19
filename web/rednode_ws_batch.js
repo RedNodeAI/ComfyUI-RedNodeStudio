@@ -645,3 +645,48 @@ export function afterRow(node, host, opts = {}) {
   }
   return arow;
 }
+
+/** Which source box is showing: the gallery/single picture, or the batch folder.
+ *
+ *  A VIEW switch, not a routing one. Queue is ComfyUI's button and always renders
+ *  from the gallery; the folder only ever runs from its own buttons. So this shows
+ *  one box and folds the other, which is what makes the page readable, and each
+ *  box still says plainly what runs it. A switch that claimed to redirect the
+ *  Queue would be a lie told in a nice colour.
+ */
+export function sourceView(node, key) {
+  const all = ((node.properties ||= {}).rn_src_view ||= {});
+  return all[key] === "batch" ? "batch" : "own";
+}
+
+export function sourceSwitch(node, host, key, ownLabel, onPick) {
+  const cur = sourceView(node, key);
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  row.style.cssText = "gap:6px;align-items:center";
+  const seg = document.createElement("div");
+  seg.style.cssText = "display:inline-flex;border:1px solid #3a3d44;border-radius:6px;"
+                    + "overflow:hidden;flex:none;margin-left:auto";
+  for (const [id, label, why] of [
+    ["own", ownLabel, `Show ${ownLabel.toLowerCase()}. An ordinary Queue always `
+      + "renders from this one."],
+    ["batch", "Batch folder", "Show the folder batch. It runs from its own buttons, "
+      + "one picture per queue."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-btn";
+    b.textContent = label;
+    b.title = why;
+    b.style.cssText = "width:auto;padding:4px 14px;border:0;border-radius:0;flex:none;"
+                    + (cur === id ? "background:#2b3a4d;color:#cfe6ff" : "");
+    b.onclick = () => {
+      ((node.properties ||= {}).rn_src_view ||= {})[key] = id;
+      onPick?.(id);
+      render(node);
+    };
+    seg.appendChild(b);
+  }
+  row.appendChild(seg);
+  host.appendChild(row);
+  return cur;
+}
