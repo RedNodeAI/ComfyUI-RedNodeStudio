@@ -6775,6 +6775,15 @@ function workspacePrefs(node, body) {
 let lastResult = null;                               // {filename, subfolder, type}
 // the last picture any run produced, for a tab that wants to start from it
 export const lastResultNow = () => lastResult;
+// THE UPSCALE TAB'S RUNS, by prompt id. A finished run only puts itself on screen
+// when the tab that asked for it says so: an ordinary queue updates lastResult and
+// stays quiet. Paint has paintProgressRuns for this; the Upscale tab needs its own,
+// because being adopted by the paint registry would put the picture on the canvas.
+const upscaleRuns = new Map();
+let lastUpscaleOwner = null;
+export const registerUpscaleRun = (promptId, node) => {
+  if (promptId && node) upscaleRuns.set(String(promptId), node);
+};
 // the same run's picture before Post FX, when the Workspace ran Post itself
 // (rn_before_post on its executed event); the tab can start from it instead
 let lastBeforePost = null;
@@ -16737,6 +16746,12 @@ app.registerExtension({
       // prompt is pruned to the paint chain, so the only image output in it is the
       // composite: no stage preview, draft save or renderer autosave can be mistaken
       // for the result, which is how intermediate pictures were being pulled in.
+      const upscaler = promptId && upscaleRuns.get(promptId);
+      if (upscaler) {
+        upscaleRuns.delete(promptId);
+        lastResult.upscale = true;               // this tab asked for it, so it may show it
+        lastUpscaleOwner = upscaler;
+      }
       const painter = promptId && paintProgressRuns.get(promptId);
       lastPaintResultOwner = painter || null;
       if (painter) {
@@ -16762,6 +16777,14 @@ app.registerExtension({
       // ONLY THIS TAB'S OWN RUNS REACH THE PANE. An ordinary queue still updates
       // lastResult, so Use last result can pull it in when asked, but it does not put
       // itself on screen, take over the strip or redraw the tab underneath you.
+      if (lastResult.upscale) {
+        // the Upscale tab draws its own result card off lastResult, so a redraw of
+        // the node it happened on is the whole job
+        const un = lastUpscaleOwner;
+        lastUpscaleOwner = null;
+        if (un) render(un);
+        return;
+      }
       if (!lastResult.paint) return;
       const owner = lastPaintResultOwner;
       lastPaintResultOwner = null;

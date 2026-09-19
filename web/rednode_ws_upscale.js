@@ -4,7 +4,7 @@ import { api } from "../../scripts/api.js";
 import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
-         openPaintViewer } from "./rednode_workspace.js";
+         openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -151,6 +151,9 @@ async function queueUpscale(node, say, over) {
     if (!res.ok || d.error) {
       throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
     }
+    // claim the run, or the finished picture updates lastResult and never reaches
+    // this tab: only the tab that asked for a result is allowed to show it
+    registerUpscaleRun(String(d.prompt_id || ""), node);
     return true;
   } catch (err) {
     console.error("[RedNode Workspace] upscale queue failed:", err);
