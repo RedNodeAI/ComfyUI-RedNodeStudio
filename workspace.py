@@ -2860,6 +2860,13 @@ class RedNodeStudioWorkspace:
         # builtin chain have the picture, so Detailer, Post and Save run on it
         # exactly as they would on an ordinary render
         _uchain = bool(_urt and cfg["upscale"].get("run_mode") == "chain")
+        # AN UPSCALE RUN THAT CARRIES ON. The tab's After a run steps are the
+        # builtin chain, so they belong in the SAME queue as the upscale rather
+        # than a second one: two queues showed as two runs, with the second one's
+        # pipeline full of stages that never fire (the user, 2026-09-20).
+        _uafter = bool(_urt and not _uchain
+                       and any((cfg["upscale"].get("after") or {}).get(k)
+                               for k in ("detailer", "post", "save")))
         # the Run tab's feed (run_events.py): a new run, then each stage as it goes
         from . import run_events as _run
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
@@ -4807,6 +4814,10 @@ class RedNodeStudioWorkspace:
         # which is what actually runs it, so SeedVR2, VOSR 2.0 and the tiled
         # upscale mean the same thing here as they do on the Detailer.
         if _urt:
+            # THE RUN TAB HEARS ABOUT IT. Without a stage of its own, an upscale
+            # run showed the ordinary pipeline with everything sitting at waiting,
+            # because none of those stages ever fire (the user, 2026-09-20).
+            _run.begin("upscale", "Upscale")
             try:
                 from .refine_pipeline import RedNodeStudioDetailer
                 _up = cfg["upscale"]
@@ -4868,15 +4879,17 @@ class RedNodeStudioWorkspace:
                         # system has never heard of it, so the panel does not get a
                         # second giant copy of the picture drawn under the node
                         ui_extra = {"rn_paint_images": _ur["ui"].get("images") or []}
+                _run.end("upscale", "Upscale")
             except _UpscaleHandled:
-                pass
+                _run.end("upscale", "Upscale")
             except Exception as exc:
+                _run.end("upscale", "Upscale", state="error")
                 print("[RedNode Workspace] built-in upscale failed: %s" % exc,
                       flush=True)
         # THE BUILT-IN CHAIN, on a normal render: the Detailer passes, then Post FX,
         # then the save, each only when switched on here. The image output carries
         # the finished picture, and a separate node after this one steps aside.
-        if rig_image is not None and (not _norun or _uchain):
+        if rig_image is not None and (not _norun or _uchain or _uafter):
             from . import builtin_chain as _chain
             if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
                 try:

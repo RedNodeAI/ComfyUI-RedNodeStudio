@@ -16846,7 +16846,10 @@ app.registerExtension({
         // the node it happened on is the whole job
         const un = lastUpscaleOwner;
         lastUpscaleOwner = null;
-        if (un) render(un);
+        if (un) {
+          un._rnRunKind = null;      // the run is over; the plan goes back to normal
+          render(un);
+        }
         return;
       }
       if (!lastResult.paint) return;

@@ -7,6 +7,7 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
 import { batchStrip, batchState, afterRow,
          sourceSwitch } from "./rednode_ws_batch.js";
+import { runStageRows } from "./rednode_ws_run.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -106,7 +107,7 @@ export function upscaleNodeKey(prompt) {
     (k) => prompt[k]?.class_type === "RedNodeUpscaleRender") || null;
 }
 
-async function upscaleGenerate(node, statusEl, after) {
+async function upscaleGenerate(node, statusEl) {
   const U = node._rnCfg?.upscale;
   const say = (t) => { if (statusEl) statusEl.textContent = t; };
   if (!U?.on) {
@@ -127,15 +128,6 @@ async function upscaleGenerate(node, statusEl, after) {
   await waitForPrompt(pid);
   pushStage(node, methodLabel(node));
   render(node);
-  // THE SAME FOLLOW-UPS THE BATCH USES. One picture or a folder, the After a run
-  // switches mean the same thing, so a single run must honour them too.
-  if (!after) return;
-  try {
-    await after();
-  } catch (err) {
-    console.error("[RedNode Workspace] the follow-up failed:", err);
-    say(`Made, but the follow-up failed: ${err.message}`);
-  }
 }
 
 /** Queue THIS Workspace with an Upscale-tab token in the queued copy only.
@@ -153,8 +145,15 @@ async function queueUpscale(node, say, over, quiet, top) {
     const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
     c.upscale = { ...(c.upscale || {}), ...over };
     c.upscale.run_token = `upscale-${Date.now()}`;
-    // the follow-up chain says which of the three steps it wants, in the queued
-    // copy only, so the tab's own switches are left where you set them
+    // THE CHOSEN STEPS RIDE THIS QUEUE. After a run is the builtin chain, and the
+    // chain is part of the same render, so Detailer, Post and Save are stamped
+    // here rather than queued again afterwards. Manual stamps nothing.
+    const A = c.upscale.after || {};
+    if (!over?.run_mode && !A.manual && (A.detailer || A.post || A.save)) {
+      c.detailer_on = !!A.detailer;
+      c.post_on = !!A.post;
+      c.save_on = !!A.save;
+    }
     if (top) Object.assign(c, top);
     pruned[wsKey].inputs.config = JSON.stringify(c);
   } catch (e) {
@@ -176,6 +175,8 @@ async function queueUpscale(node, say, over, quiet, top) {
     // claim the run, or the finished picture updates lastResult and never reaches
     // this tab: only the tab that asked for a result is allowed to show it
     registerUpscaleRun(String(d.prompt_id || ""), node);
+    // the Run tab's plan follows this while the run is in flight
+    node._rnRunKind = "upscale";
     // what went in and when, so the result can say what it cost
     const srcName = over?.source || node._rnCfg?.upscale?.source || "";
     node._rnUpStat = { t0: Date.now(), from: null, ms: 0, src: srcName };
@@ -337,28 +338,8 @@ export function upscaleBody(node, body) {
       ["save", "Save",
        "File each picture through the Save tab, named and filed the usual way."],
     ],
-    afterEach: async () => {
-      const A = node._rnCfg.upscale.after || {};
-      if (!A.detailer && !A.post && !A.save) return;
-      const r = lastResultNow();
-      if (!r) throw new Error("no picture came back to pass on");
-      const name = await copyResultToInput(r);
-      if (!name) throw new Error("the picture could not be taken across");
-      // the Workspace's builtin chain IS Detailer then Post then Save, each on its
-      // own switch, so the three buttons are those switches for this run only
-      const pid = await queueUpscale(node, () => {},
-                                     { source: name, run_mode: "chain" }, true,
-                                     { detailer_on: !!A.detailer,
-                                       post_on: !!A.post,
-                                       save_on: !!A.save });
-      if (!pid) throw new Error("the follow-up would not queue");
-      await waitForPrompt(pid);
-      // one queue runs all the chosen steps, so the pane is named for all of them
-      const ran = [A.detailer && "Detailer", A.post && "Post", A.save && "Saved"]
-        .filter(Boolean);
-      pushStage(node, ran.join(" + ") || "Chain");
-      render(node);
-    },
+    // NO afterEach: the chosen steps ride the SAME queue as the upscale, stamped
+    // below, so one press is one run rather than two.
   };
 
   // ONE BOX AT A TIME. The two look alike and the page is long, so the switch
@@ -490,7 +471,7 @@ export function upscaleBody(node, body) {
              + "this tab, ready for Post, the Detailer or Save.";
     const status = el("span", "hint", "");
     status.style.cssText = "font-size:11px;text-align:right";
-    go.onclick = () => upscaleGenerate(node, status, batchOpts.afterEach);
+    go.onclick = () => upscaleGenerate(node, status);
     runBox.appendChild(go);
   
     runBox.appendChild(status);
@@ -649,6 +630,39 @@ export function upscaleBody(node, body) {
   }
 
   // GO
+  // THE PIPELINE, on this tab. The same rows the Run page draws, through
+  // runStageRows, because two readings of one run computed separately would
+  // disagree the moment one of them was forgotten. Small, because it is here to
+  // be watched while a run goes rather than to be read.
+  {
+    const { line: pLine } = card(body, "PIPELINE");
+    pLine.style.cssText += ";gap:6px;flex-wrap:wrap";
+    let rows = [];
+    try { rows = runStageRows(node) || []; } catch (e) { rows = []; }
+    if (!rows.length) {
+      const none = el("span", "hint", "The steps of a run show here as it goes.");
+      none.style.cssText = "font-size:11px";
+      pLine.appendChild(none);
+    }
+    rows.forEach((r, i) => {
+      if (i) {
+        const arrow = el("span", "hint", "→");
+        arrow.style.cssText = "font-size:11px;flex:none";
+        pLine.appendChild(arrow);
+      }
+      const b = el("span", "", r.label);
+      const tone = r.state === "done" ? ["#16321f", "#2f6b46", "#86efac"]
+                 : r.state === "running" ? ["#1d2e40", "#3d5570", "#cfe6ff"]
+                 : r.state === "error" ? ["#2e1416", "#6b2028", "#fca5a5"]
+                 : r.state === "skip" || r.state === "notrun" ? ["#1b1e23", "#2a2e35", "#6b727c"]
+                 : ["#15171b", "#2a2e35", "#8a919b"];
+      b.style.cssText = `background:${tone[0]};border:1px solid ${tone[1]};color:${tone[2]};`
+                      + "border-radius:5px;padding:3px 10px;font-size:11px;flex:none";
+      if (r.s?.why) b.title = r.s.why;
+      pLine.appendChild(b);
+    });
+  }
+
   // THE RESULT, on this tab. The upscale runs through the Workspace's own door,
   // so the finished picture comes back on the executed event like any other run
   // and there is nowhere else to go looking for it.

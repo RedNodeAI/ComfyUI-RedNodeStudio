@@ -677,6 +677,21 @@ const PASS_LABEL = (i, latent) => `Pass ${i} · ${i > 1 ? "Refine" : latent ? "G
 export function plannedStages(node, cfg) {
   const out = [];
   const tabs = cfg.tabs || {};
+  // AN UPSCALE RUN HAS ITS OWN SHAPE. It renders nothing, so the ordinary plan
+  // sat there with Encode, the passes and Decode all at waiting for stages that
+  // never fire (the user, 2026-09-20). The tab says when one of its runs is in
+  // flight and the plan follows it.
+  if (node?._rnRunKind === "upscale") {
+    const U = cfg.upscale || {};
+    const A = U.after || {};
+    out.push(["upscale", (U.stage?.type === "none") ? "Resize" : "Upscale"]);
+    if (!A.manual) {
+      if (A.detailer) out.push(["detailer", "Detailer"]);
+      if (A.post) out.push(["post", "Post FX"]);
+      if (A.save) out.push(["save", "Save"]);
+    }
+    return out;
+  }
   const captions = Object.values(tabs).some((t) => t?.on && t.auto?.on
     && (t.images?.length || 0) > 0);
   if (captions) out.push(["captions", "Captions"]);
@@ -1152,6 +1167,15 @@ function runPage(node, body) {
 
 const STATE_TEXT = { waiting: "Waiting", start: "Running", progress: "Running", done: "Done",
                      skip: "Skipped", error: "Failed", notrun: "Not run", cached: "Reused" };
+
+/** The pipeline as rows, for anywhere that wants to show it.
+ *
+ *  Exported so the Upscale tab can carry the same strip: two readings of the same
+ *  run, computed twice, would disagree the moment one of them was forgotten.
+ */
+export function runStageRows(node) {
+  return stageRows(node);
+}
 
 function stageRows(node) {
   const cfg = node._rnCfg;
