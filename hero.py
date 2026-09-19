@@ -28,6 +28,7 @@ import torch
 from PIL import Image
 
 import folder_paths
+import nodes as _core          # the core node classes, by name
 
 from . import workspace as _ws
 from .automask import INSTALL_HINT, _prepared_segmenters, _subject_mask_prepared
@@ -441,12 +442,28 @@ def front_prompt(repair):
     return ", ".join(bits + [FRONT])
 
 
-def _node(name):
+# Every core node used by the render, by the name ComfyUI knows it as. Kept in
+# one place so a test can check they all exist rather than finding out mid-render.
+RENDER_NODES = ("UNETLoader", "LoraLoaderModelOnly", "CLIPLoader", "VAELoader",
+                "EmptyLatentImage", "CLIPTextEncode", "KSampler", "VAEDecode")
+
+
+def _run(name, **kw):
+    """Call a core node through the entry point IT declares.
+
+    Not a hardcoded method name. A node's callable is named by its own FUNCTION
+    attribute, and hardcoding "load_unet" here would break silently the day core
+    renamed it, in the middle of a render rather than at import.
+    """
     cls = _core.NODE_CLASS_MAPPINGS.get(name)
     if cls is None:
         raise ValueError("this ComfyUI has no %s node, so the render cannot be built"
                          % name)
-    return cls()
+    fn = getattr(cls(), getattr(cls, "FUNCTION", "") or "", None)
+    if fn is None:
+        raise ValueError("the %s node has no callable entry point in this ComfyUI"
+                         % name)
+    return fn(**kw)
 
 
 def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
@@ -473,25 +490,24 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
         # unguarded import at the top took the whole pack down with it on one.
         from .identity import Krea2IdentityEdit
 
-        model = _node("UNETLoader").load_unet(unet_name=unet, weight_dtype="default")[0]
-        model = _node("LoraLoaderModelOnly").load_lora_model_only(
-            model=model, lora_name=lora, strength_model=1.0)[0]
-        cl = _node("CLIPLoader").load_clip(clip_name=clip, type="krea2")[0]
-        va = _node("VAELoader").load_vae(vae_name=vae)[0]
+        model = _run("UNETLoader", unet_name=unet, weight_dtype="default")[0]
+        model = _run("LoraLoaderModelOnly", model=model, lora_name=lora,
+                     strength_model=1.0)[0]
+        cl = _run("CLIPLoader", clip_name=clip, type="krea2")[0]
+        va = _run("VAELoader", vae_name=vae)[0]
 
         side = int(base.shape[1])
-        latent = _node("EmptyLatentImage").generate(width=side, height=side, batch_size=1)[0]
+        latent = _run("EmptyLatentImage", width=side, height=side, batch_size=1)[0]
         pos = Krea2IdentityEdit().encode(
             clip=cl, prompt=front_prompt(report.get("repair")), vae=va, image=base,
             grounding_px=side, ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST,
             target_latent=latent, fit_mode="fit", ref_t0_modulation=False,
             system_prompt=SYSTEM)[0]
-        neg = _node("CLIPTextEncode").encode(clip=cl, text="")[0]
-        out = _node("KSampler").sample(
-            model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
-            sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
-            latent_image=latent, denoise=1.0)[0]
-        render = _node("VAEDecode").decode(samples=out, vae=va)[0]
+        neg = _run("CLIPTextEncode", clip=cl, text="")[0]
+        out = _run("KSampler", model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
+                   sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
+                   latent_image=latent, denoise=1.0)[0]
+        render = _run("VAEDecode", samples=out, vae=va)[0]
 
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         final = _save_hero(flat, source, "front")

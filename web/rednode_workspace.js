@@ -13887,7 +13887,10 @@ function heroBody(node, body, sub) {
     + "Making one runs the segmenter four times and often an upscale, so the "
     + "second press costs nothing.";
   src.appendChild(go);
-  if (state.error) {
+  // shown under the button that CAUSED it. The render's failure was landing in
+  // this card, above the button that had just been pressed and often off screen,
+  // so a failed render read as a button that did nothing.
+  if (state.error && state.errorAt !== "front") {
     const e = document.createElement("div");
     e.className = "rn-ws-note warn";
     e.textContent = state.error;
@@ -14065,11 +14068,18 @@ function heroBody(node, body, sub) {
         MADE()[S().source] = { result: d.result, report: d.report };
       } catch (e) {
         S().error = String(e.message || e);
+        S().errorAt = "front";
       }
       S().busy = false;
       render(node);
     };
     rep.appendChild(frontBtn);
+    if (state.error && state.errorAt === "front") {
+      const e = document.createElement("div");
+      e.className = "rn-ws-note warn";
+      e.textContent = state.error;
+      rep.appendChild(e);
+    }
     body.appendChild(rep);
   }
 
@@ -14091,6 +14101,7 @@ function heroBody(node, body, sub) {
       S().result = null;
       S().report = null;
       S().error = String(e.message || e);
+      S().errorAt = "hero";
     }
     S().busy = false;
     render(node);
