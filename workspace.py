@@ -622,6 +622,36 @@ def _file_gb(folders, name):
     return 0.0
 
 
+def _vosr2_gb(bundle):
+    """A VOSR 2.0 bundle's size in GB. It is a FOLDER (DiT + Qwen VAE + DINOv2),
+    not a single file, so _file_gb cannot see it. Falls back to the measured
+    size of the one published bundle when the folder is not on disk yet, since
+    the pass would download it on first run rather than fail."""
+    try:
+        import folder_paths
+        root = os.path.join(folder_paths.models_dir, "vosr2", bundle or "VOSR2")
+        if os.path.isdir(root):
+            total = 0
+            for dirpath, dirnames, names in os.walk(root):
+                if ".cache" in dirpath:
+                    continue
+                for n in names:
+                    try:
+                        total += os.path.getsize(os.path.join(dirpath, n))
+                    except OSError:
+                        pass
+            if total:
+                return total / 1024 ** 3
+    except Exception:
+        pass
+    return 6.5
+
+
+# THE PASS KINDS THAT LOAD NO RIG: their own loaders do the loading, so the
+# rig on the card is not their cost. Both upscalers, and the estimate and the
+# run must agree on the set (refine_pipeline.UPSCALERS is the run's copy).
+UPSCALE_KINDS = ("upscale", "vosr2")
+
 # rough working memory for a diffusion transformer at batch 1, per megapixel sampled
 WORK_GB_PER_MP = 1.8
 # the Qwen edit model (Swap, Re-angle) per megapixel of each picture it reads
@@ -866,7 +896,8 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         return None
     raw = cfg.get("detailer") if isinstance(cfg.get("detailer"), dict) else {}
     stages = [s for s in (raw.get("stages") or []) if isinstance(s, dict)
-              and s.get("on", True) and s.get("type") in ("sampler", "detailer", "upscale", "usdu")]
+              and s.get("on", True)
+              and s.get("type") in ("sampler", "detailer", "upscale", "usdu", "vosr2")]
     if not stages:
         return None
     from .refine_pipeline import UPSCALE_SIZES
@@ -874,12 +905,13 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
     for i, s in enumerate(stages):
         kind = s.get("type")
         label = {"sampler": "Sampler pass", "detailer": "Detailer pass",
-                 "upscale": "SeedVR2 pass", "usdu": "Tiled upscale"}[kind]
+                 "upscale": "SeedVR2 pass", "usdu": "Tiled upscale",
+                 "vosr2": "VOSR2 pass"}[kind]
         parts = []
         other = str(s.get("rig") or "").strip()
         active_name = str((cfg["models"].get("rigs") or [{}])[min(cfg["models"].get("active", 0),
                           max(0, len(cfg["models"].get("rigs") or []) - 1))].get("name") or "")
-        if other and other != active_name and rig_cost and kind != "upscale":
+        if other and other != active_name and rig_cost and kind not in UPSCALE_KINDS:
             # A PASS ON ANOTHER RIG NEEDS THAT RIG, NOT BOTH. ComfyUI evicts the
             # main model when this one wants the room, so the two are never
             # summed; counting them together read tens of GB over anything the
@@ -891,7 +923,7 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
                 parts.append(["Text encoder (%s, %s %d)" % (other, label, i + 1), round(ot, 1)])
             if ov:
                 parts.append(["VAE (%s, %s %d)" % (other, label, i + 1), round(ov, 1)])
-        elif kind != "upscale" and not s.get("free_vram"):
+        elif kind not in UPSCALE_KINDS and not s.get("free_vram"):
             parts.append(["Rig on the card (%s %d)" % (label, i + 1), round(base_gb, 1)])
         if kind == "detailer":
             g = _file_gb(("sam3",), str(s.get("sam_model") or "sam3.pt"))
@@ -915,6 +947,12 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
             g = _file_gb(("seedvr2",), str(s.get("vae_model") or ""))
             if g:
                 parts.append(["SeedVR2 VAE (%s %d)" % (label, i + 1), round(g, 1)])
+        if kind == "vosr2":
+            # the whole bundle goes to the card: no block swapping to discount,
+            # and force_full_load=True in the pack's loader means all of it
+            g = _vosr2_gb(str(s.get("vosr2_model") or ""))
+            if g:
+                parts.append(["VOSR2 bundle (%s %d)" % (label, i + 1), round(g, 1)])
         # the size the pass works at: SeedVR2 writes its target size; a tiled
         # pass one tile at a time; a sampler or detailer pass its crop or the
         # picture as it arrives, grown by the pass's scale
@@ -927,6 +965,16 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
                 except (TypeError, ValueError):
                     tile = 1024
                 px = min(px, float(tile * tile))
+        elif kind == "vosr2":
+            # VOSR2 tiles, which is why its measured peak barely moves between
+            # x2 and x4. A tile of 0 means no tiling, and then the cost follows
+            # the output, which is not knowable from the config; 1080p stands
+            # in for it so the estimate is not silently optimistic.
+            try:
+                tile = max(0, min(4096, int(s.get("vosr2_tile", 512))))
+            except (TypeError, ValueError):
+                tile = 512
+            px = float(tile * tile) if tile else float(UPSCALE_SIZES["1080p"])
         elif kind == "usdu":
             try:
                 tile = max(256, min(2048, int(s.get("usdu_tile", 1024))))

@@ -225,6 +225,10 @@ async function fetchLists() {
   const dit = await inputs("SeedVR2LoadDiTModel");
   const svae = await inputs("SeedVR2LoadVAEModel");
   const up = await inputs("SeedVR2VideoUpscaler");
+  // VOSR2's two nodes for the alt upscale card; it is not on the Registry, so
+  // absent is the NORMAL case and the card has to say how to get it
+  const vld = await inputs("VOSR2ModelLoader");
+  const vup = await inputs("VOSR2Upscale");
   // Ultimate SD Upscale for the tiled pass, and core's upscale model list
   const usdu = await inputs("UltimateSDUpscale");
   LISTS = {
@@ -243,6 +247,10 @@ async function fetchLists() {
     attention: optionsOf(dit.attention_mode),
     offloads: optionsOf(dit.offload_device),
     colorFixes: optionsOf(up.color_correction),
+    vosr2: !!Object.keys(vld).length,
+    vosr2Models: optionsOf(vld.model),
+    vosr2Dtypes: optionsOf(vld.dtype),
+    vosr2Colors: optionsOf(vup.color_alignment),
   };
   return LISTS;
 }
@@ -517,6 +525,7 @@ function buildPanel(node, hostEl = null) {
     if (isSimple()) wrap.classList.add("simple"); else wrap.classList.remove("simple");
     const L = LISTS || { samplers: [], schedulers: [], loras: [], samModels: [],
                          samPrecisions: [], ditModels: [], vaeModels: [],
+                         vosr2: false, vosr2Models: [], vosr2Dtypes: [], vosr2Colors: [],
                          attention: [], offloads: [], colorFixes: [],
                          usdu: false, usduModes: [], seamModes: [], upscaleModels: [] };
     wrap.replaceChildren();
@@ -710,6 +719,16 @@ function buildPanel(node, hostEl = null) {
     const hiddenSet = (s) => {
       const out = [];
       const has = (name, cond) => { if (cond) out.push(name); };
+      if (s.type === "vosr2") {
+        has("Bundle", !!s.vosr2_model); has("Precision", !!s.vosr2_dtype);
+        has("Colour", (s.vosr2_color || "wavelet") !== "wavelet");
+        has("Tile", (s.vosr2_tile ?? 512) !== 512);
+        has("Overlap", (s.vosr2_tile_overlap ?? 32) !== 32);
+        has("VAE tile", (s.vosr2_vae_tile ?? 1024) !== 1024);
+        has("VAE overlap", (s.vosr2_vae_overlap ?? 32) !== 32);
+        has("Tone lock", !!s.tone_lock);
+        return out;
+      }
       if (s.type === "upscale") {
         has("DiT", !!s.dit_model); has("VAE", !!s.vae_model); has("Attention", !!s.attention);
         has("Blocks to swap", (s.blocks_to_swap ?? 36) !== 36);
@@ -840,7 +859,8 @@ function buildPanel(node, hostEl = null) {
         const t = String(x.target || "face").trim() || "face";
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
-      return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale" })[x.type] || "Pass";
+      return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
+                vosr2: "VOSR2 upscale" })[x.type] || "Pass";
     };
     const uniqueName = (base, taken) => {
       if (!taken.has(base)) return base;
@@ -972,8 +992,12 @@ function buildPanel(node, hostEl = null) {
       // the chip says the KIND of pass in plain words (USDU meant nothing to anyone)
       chip.textContent = s.type === "sampler" ? "SAMPLER"
                        : s.type === "upscale" ? "VR2 UPSCALE"
+                       : s.type === "vosr2" ? "VOSR2 UPSCALE"
                        : s.type === "usdu" ? "TILE UPSCALE" : "DETAILER";
       chip.title = s.type === "upscale" ? "A SeedVR2 upscale pass."
+                 : s.type === "vosr2" ? "A VOSR 2.0 upscale pass: it enlarges what is "
+                   + "there instead of inventing detail, which is what you want on "
+                   + "anime and lineart, and ahead of a tiled upscale."
                  : s.type === "usdu" ? "A tiled upscale pass (Ultimate SD Upscale)."
                  : s.type === "sampler" ? "A sampler pass over the whole frame."
                  : "A detailer pass: SAM3 finds the target and this pass redraws it.";
@@ -1002,6 +1026,11 @@ function buildPanel(node, hostEl = null) {
           ? "SeedVR2 \u00b7 " + (s.size || "1080p")
             + (s.region ? " \u00b7 " + s.region : "")
             + (s.dit_model ? " \u00b7 " + s.dit_model.replace(/\.safetensors$/i, "") : "")
+          : s.type === "vosr2"
+          ? "VOSR2 \u00b7 x" + (s.vosr2_scale ?? 2)
+            + (s.region ? " \u00b7 " + s.region : "")
+            + " \u00b7 tile " + (s.vosr2_tile ?? 512)
+            + (s.tone_lock ? " \u00b7 tone lock" : "")
           : (s.rig || "(active rig)")
           + (s.type === "detailer" ? " \u00b7 " + (s.target || "face") : "")
           + (s.type === "usdu" ? " \u00b7 x" + (s.upscale_by ?? 2) + " \u00b7 "
@@ -1038,6 +1067,23 @@ function buildPanel(node, hostEl = null) {
                        + "size under a feathered matte. The frame keeps its size; "
                        + "the region gains the detail. (whole frame) upscales "
                        + "everything and grows the frame.",
+                       (v) => { s.region = v; writeCfg(node, d); }, "(whole frame)"));
+      } else if (s.type === "vosr2") {
+        // no rig and no pixel budget: VOSR 2.0 takes an INTEGER multiplier, and
+        // the reason to reach for it is that it does not invent, so a budget
+        // that resized its output would defeat the pass.
+        top.append(lab("Scale"),
+                   sel(["1", "2", "3", "4", "6", "8"], String(s.vosr2_scale ?? 2),
+                       "Exact output multiplier. x2 and x4 are the tested ones; "
+                       + "the model was trained on degradations to 16x but quality "
+                       + "is not promised much past x4.",
+                       (v) => { s.vosr2_scale = parseInt(v, 10) || 2; writeCfg(node, d); }));
+        top.append(lab("Region"),
+                   sel(TARGETS, s.region || "",
+                       "Upscale only this target: SAM3 finds it, the crop goes "
+                       + "through VOSR2 and comes back at its own size under a "
+                       + "feathered matte. The frame keeps its size. (whole frame) "
+                       + "upscales everything and grows the frame.",
                        (v) => { s.region = v; writeCfg(node, d); }, "(whole frame)"));
       } else {
         top.append(lab("Rig"),
@@ -1208,6 +1254,65 @@ function buildPanel(node, hostEl = null) {
           warn.className = "hint";
           warn.textContent = "ComfyUI-SeedVR2_VideoUpscaler is not installed, so this pass "
                            + "will say so and pass the picture through.";
+          card.appendChild(warn);
+        }
+      } else if (!isFolded && s.type === "vosr2") {
+        // MODEL: the bundle and the precision. The bundle is one folder (DiT +
+        // Qwen VAE + DINOv2) and downloads itself on first run, so an empty
+        // list is normal on a machine that has never run the pass.
+        const mdl = group("Model");
+        mdl.line.append(
+          lab("Bundle"),
+          sel(L.vosr2Models, s.vosr2_model,
+              "The VOSR 2.0 bundle under models/vosr2. (loader default) is VOSR2, "
+              + "which downloads itself on first run, about 6.5 GB.",
+              (v) => { s.vosr2_model = v; writeCfg(node, d); }, "(loader default)"),
+          lab("Precision"),
+          sel(L.vosr2Dtypes, s.vosr2_dtype,
+              "Compute precision for the DiT and the vision encoder. fp16 or bf16 "
+              + "roughly halves their memory; the Qwen VAE always runs fp32 "
+              + "whatever this says.",
+              (v) => { s.vosr2_dtype = v; writeCfg(node, d); }, "(loader default)"));
+        A(mdl.box);
+        card.appendChild(mdl.box);
+
+        // TILING: the two tiles do different jobs, which is why they are separate
+        const tl = group("Tiling");
+        tl.line.append(
+          lab("Colour"),
+          sel(L.vosr2Colors.length ? L.vosr2Colors : ["wavelet", "adain", "none"],
+              s.vosr2_color || "wavelet",
+              "Matches the result's colour back to the input. wavelet is the "
+              + "author's recommendation and measured neutral here.",
+              (v) => { s.vosr2_color = v; writeCfg(node, d); }),
+          lab("Tile"),
+          num(s.vosr2_tile ?? 512, 64,
+              "The DiT tile in pixels. This one is about QUALITY, not memory: the "
+              + "model was trained at 512, so anything bigger than 512 of output "
+              + "wants tiling or the result degrades. 0 turns tiling off.",
+              (v) => { s.vosr2_tile = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("Overlap"),
+          num(s.vosr2_tile_overlap ?? 32, 8, "Pixels of overlap between DiT tiles, "
+              + "blended to hide seams. Must stay under the tile.",
+              (v) => { s.vosr2_tile_overlap = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("VAE tile"),
+          num(s.vosr2_vae_tile ?? 1024, 64,
+              "The VAE tile in pixels. This one IS about memory: 0 decodes the whole "
+              + "picture in one go, which is the usual way to run out past about "
+              + "1024px of output. 1024 suits a 4K result.",
+              (v) => { s.vosr2_vae_tile = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          lab("VAE overlap"),
+          num(s.vosr2_vae_overlap ?? 32, 8, "Pixels of overlap between VAE tiles.",
+              (v) => { s.vosr2_vae_overlap = Math.max(0, Math.round(v)); writeCfg(node, d); }));
+        A(tl.box);
+        card.appendChild(tl.box);
+        if (LISTS && !L.vosr2) {
+          const warn = document.createElement("div");
+          warn.className = "hint";
+          warn.textContent = "ComfyUI-VOSR2 is not installed, so this pass will say so "
+                           + "and pass the picture through. It is not on the Registry, "
+                           + "so Manager will not find it: clone ylchen333/ComfyUI-VOSR2 "
+                           + "into custom_nodes.";
           card.appendChild(warn);
         }
       } else if (!isFolded) {
@@ -1550,6 +1655,14 @@ function buildPanel(node, hostEl = null) {
                                      cache_model: false, tiled: true, tile: 1024,
                                      tile_overlap: 128, color_fix: "lab", max_edge: 0,
                                      input_noise: 0, latent_noise: 0 }));
+    // VOSR 2.0 as a pass, opened on the author's own recommendation, which is
+    // also what measured best here: x2, DiT tile 512, VAE tile 1024, wavelet.
+    // Good as an alt to the SeedVR2 pass and as the step before a tiled upscale.
+    mk("＋ VOSR2 upscale", () => ({ on: true, type: "vosr2", vosr2_model: "",
+                                       vosr2_dtype: "", vosr2_scale: 2,
+                                       vosr2_color: "wavelet", vosr2_tile: 512,
+                                       vosr2_tile_overlap: 32, vosr2_vae_tile: 1024,
+                                       vosr2_vae_overlap: 32 }));
     // Ultimate SD Upscale as a pass, opened on the Pro Grade notes: 6 steps of
     // deis/simple at 0.25, x2, 1024 tiles padded 128, no seam fix
     mk("＋ Tiled upscale", () => ({ on: true, type: "usdu", rig: "", steps: 6,

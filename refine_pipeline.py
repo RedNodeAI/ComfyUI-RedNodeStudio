@@ -67,7 +67,7 @@ def parse_pipeline(config_json):
                            "name": str(s.get("name") or ""),
                            "color": str(s.get("color") or "")})
             continue
-        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu"):
+        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -186,6 +186,20 @@ def parse_pipeline(config_json):
             "max_edge": _num("max_edge", 0, 16384, 0, int),
             "input_noise": _num("input_noise", 0.0, 1.0, 0.0),
             "latent_noise": _num("latent_noise", 0.0, 1.0, 0.0),
+            # A VOSR2 UPSCALE PASS. Deliberately NOT the size combo above:
+            # VOSR 2.0 takes an integer multiplier, and forcing a pixel budget
+            # on to it would mean resizing its output, which is the one thing
+            # this upscaler is picked for not doing. Defaults are the author's
+            # own recommendation, which is also what measured best here:
+            # tile 512, VAE tile 1024, wavelet.
+            "vosr2_model": str(s.get("vosr2_model") or ""),
+            "vosr2_dtype": str(s.get("vosr2_dtype") or ""),
+            "vosr2_scale": _num("vosr2_scale", 1, 8, 2, int),
+            "vosr2_color": str(s.get("vosr2_color") or "wavelet"),
+            "vosr2_tile": _num("vosr2_tile", 0, 4096, 512, int),
+            "vosr2_tile_overlap": _num("vosr2_tile_overlap", 0, 512, 32, int),
+            "vosr2_vae_tile": _num("vosr2_vae_tile", 0, 8192, 1024, int),
+            "vosr2_vae_overlap": _num("vosr2_vae_overlap", 0, 512, 32, int),
         })
         if stages[-1]["size"] not in UPSCALE_SIZES:
             stages[-1]["size"] = "1080p"
@@ -406,6 +420,92 @@ def _seedvr2(image, s, seed):
         return None, "SeedVR2 failed: %s" % exc
 
 
+def _vosr2(image, s, seed):
+    """The picture through VOSR 2.0 at the pass's multiplier, or None with a reason.
+
+    Same shape as _seedvr2 and for the same reasons: the pack's own two nodes
+    called out of NODE_CLASS_MAPPINGS rather than reimplemented, everything in
+    one try so an optional pack fails as words and never as a dead queue.
+
+    What differs is the maths. VOSR 2.0 takes an INTEGER MULTIPLIER, not a
+    pixel budget, and it is picked precisely because it does not invent, so
+    resizing its output to hit a budget would undo the reason for using it.
+    The DiT tile and the VAE tile are separate dials here: the model was
+    trained at 512, so the DiT tile carries quality while the VAE tile is
+    only about fitting the decode on the card.
+    """
+    try:
+        maps = _core.NODE_CLASS_MAPPINGS
+        ld_cls = maps.get("VOSR2ModelLoader")
+        up_cls = maps.get("VOSR2Upscale")
+        if ld_cls is None or up_cls is None:
+            return None, ("ComfyUI-VOSR2 is not installed, and it is what upscales. "
+                          "It is not on the Registry, so Manager will not find it: "
+                          "clone ylchen333/ComfyUI-VOSR2 into custom_nodes.")
+
+        def fill(cls, values):
+            kw = _defaults_for(cls)
+            have = _all_inputs(cls)
+            for k, v in values.items():
+                if k in have and v is not None and v != "":
+                    kw[k] = v
+            return kw
+        bundle = _call_node(ld_cls, fill(ld_cls, {
+            "model": s["vosr2_model"], "dtype": s["vosr2_dtype"]}))[0]
+        # THE TILE LADDER, as the SeedVR2 pass has: an out-of-memory halves the
+        # DiT tile and the VAE tile together, overlap kept under a quarter of
+        # the tile, down to 128 before giving up. A tile of 0 means "no tiling"
+        # to the node, so it is never halved into one.
+        tile = int(s["vosr2_tile"])
+        vtile = int(s["vosr2_vae_tile"])
+        while True:
+            over = min(int(s["vosr2_tile_overlap"]), tile // 4) if tile else 0
+            vover = min(int(s["vosr2_vae_overlap"]), vtile // 4) if vtile else 0
+            try:
+                outs = _call_node(up_cls, fill(up_cls, {
+                    "model": bundle, "image": image,
+                    "upscale": int(s["vosr2_scale"]),
+                    "seed": int(seed) & 0x7fffffff,
+                    "color_alignment": s["vosr2_color"],
+                    "tile_size": tile, "tile_overlap": over,
+                    "vae_tile_size": vtile, "vae_tile_overlap": vover}))
+                break
+            except Exception as exc:
+                if not (_is_oom(exc) and (tile > 128 or vtile > 128)):
+                    raise
+                tile = max(128, tile // 2) if tile else tile
+                vtile = max(128, vtile // 2) if vtile else vtile
+                _say("VOSR2 ran out of memory; the tiles are halved to %d / %d "
+                     "and the pass tried again" % (tile, vtile))
+                try:
+                    import comfy.model_management as _mm
+                    _mm.soft_empty_cache()
+                except Exception:
+                    pass
+        for v in outs:
+            if torch.is_tensor(v) and v.ndim == 4:
+                return v, None
+        return None, "VOSR2 returned no image"
+    except Exception as exc:
+        return None, "VOSR2 failed: %s" % exc
+
+
+# WHICH UPSCALER a pass kind runs, BY NAME. Both have the same shape, (image,
+# stage, seed) -> (tensor or None, reason or None), so the region and batch
+# helpers take either without knowing which.
+#
+# By name, and looked up when the pass runs, NOT the function object: holding
+# the object freezes whatever was bound at import, so a test that swaps
+# rp._seedvr2 for a fake, or any later wrapper around one of these, would be
+# quietly bypassed. test_run_events.py patches exactly that way.
+UPSCALERS = {"upscale": "_seedvr2", "vosr2": "_vosr2"}
+
+
+def _upscaler(kind):
+    """The upscaler function for a pass kind, resolved at call time."""
+    return globals()[UPSCALERS[kind]]
+
+
 def _pass_prompt_row(ws_cfg, s):
     """The Prompts-tab row a pass reads: the one it names, else its rig's.
 
@@ -586,7 +686,7 @@ def _sam3_mask(image, target, threshold, sam_model="", precision=""):
 from . import run_events as _run_events
 
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
-              "usdu": "Tiled upscale"}
+              "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale"}
 WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 
@@ -771,23 +871,26 @@ class RedNodeStudioDetailer:
             # With a region it works the target's crop only, and the frame
             # keeps its size: the region gains the detail, the way a detailer's
             # scale spends pixels on a face.
-            if s["type"] == "upscale":
+            if s["type"] in UPSCALERS:
+                # what this pass is working to, in its own terms: SeedVR2 a
+                # pixel budget, VOSR2 an integer multiplier
+                want = (s["size"] if s["type"] == "upscale"
+                        else "x%d" % int(s["vosr2_scale"]))
+                self._rn_live_label = "upscale %d of %d" % (i, len(stages))
                 if s["region"]:
-                    self._rn_live_label = "upscale %d of %d" % (i, len(stages))
                     up, why = self._each_frame(
                         out, lambda frame, _s=s, _seed=seed + i:
                         self._upscale_region(frame, _s, _seed))
                     if why is not None:
                         up = None
                 else:
-                    self._rn_live_label = "upscale %d of %d" % (i, len(stages))
                     up, why = self._upscale_each(out, s, seed + i)
                 if up is not None:
                     line = ("%s: %s on the %s, %d x %d kept" % (
-                                tag, s["size"], s["region"], out.shape[2], out.shape[1])
+                                tag, want, s["region"], out.shape[2], out.shape[1])
                             if s["region"] else
                             "%s: %s, %d x %d to %d x %d" % (
-                                tag, s["size"], out.shape[2], out.shape[1],
+                                tag, want, out.shape[2], out.shape[1],
                                 up.shape[2], up.shape[1]))
                     out = self._tone(up, pass_in, s, tag, report)
                 else:
@@ -795,7 +898,7 @@ class RedNodeStudioDetailer:
                 _say(line)
                 report.append(line)
                 if tap and up is not None:
-                    tap(out, "%d upscale %s" % (i, s["size"]))
+                    tap(out, "%d upscale %s" % (i, want))
                 continue
             # AN ENGINE RIG (a handled kind, the personal NovelAI rig) takes
             # its own road: the handler renders, nothing loads
@@ -1076,7 +1179,7 @@ class RedNodeStudioDetailer:
         return res
 
     def _upscale_region(self, frame, s, seed):
-        """SeedVR2 on the region only: the target's box padded 16 and rounded
+        """The pass's upscaler on the region only: the target's box padded 16 and rounded
         to 8, the crop through the upscaler at the pass's size, back at the
         crop's own size under the feathered matte at the blend."""
         mask, box, why = self._locate(frame, dict(s, target=s["region"]))
@@ -1087,7 +1190,7 @@ class RedNodeStudioDetailer:
         y0, x0 = max(0, (y0 - 16) // 8 * 8), max(0, (x0 - 16) // 8 * 8)
         y1, x1 = min(H, -(-(y1 + 16) // 8) * 8), min(W, -(-(x1 + 16) // 8) * 8)
         crop = frame[:, y0:y1, x0:x1, :3]
-        up, why = _seedvr2(crop, s, seed)
+        up, why = _upscaler(s["type"])(crop, s, seed)
         if up is None:
             return frame, why
         if up.shape[1:3] != crop.shape[1:3]:
@@ -1097,18 +1200,24 @@ class RedNodeStudioDetailer:
                            s["feather"], s["blend"]), None
 
     def _upscale_each(self, image, s, seed):
-        """SeedVR2 on every picture of a batch, one call each. It is a video
-        upscaler: a batch in one call is a clip, and a clip of two came back as
-        one picture. Any picture failing passes the whole batch through."""
+        """The pass's upscaler on every picture of a batch, one call each.
+
+        SeedVR2 is a video upscaler: a batch in one call is a clip, and a clip
+        of two came back as one picture. VOSR2 would take a batch whole, but it
+        goes the same way here on purpose, because one path that is right for
+        both beats two paths where only one is ever exercised. Any picture
+        failing passes the whole batch through.
+        """
+        fn = _upscaler(s["type"])
         n = int(image.shape[0])
         if n <= 1:
-            return _seedvr2(image, s, seed)
+            return fn(image, s, seed)
         base = getattr(self, "_rn_live_label", "")
         outs = []
         try:
             for k in range(n):
                 self._rn_live_label = base + " \u00b7 image %d of %d" % (k + 1, n)
-                up, why = _seedvr2(image[k:k + 1], s, seed + k)
+                up, why = fn(image[k:k + 1], s, seed + k)
                 if up is None:
                     return None, "image %d of %d: %s" % (k + 1, n, why)
                 outs.append(up)
