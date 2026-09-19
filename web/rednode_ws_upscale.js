@@ -684,6 +684,38 @@ export function upscaleBody(node, body) {
       none.style.cssText = "font-size:11px";
       pLine.appendChild(none);
     }
+    // TOO BIG TO BE SENSIBLE. Worked out before the run rather than after it: a
+    // long edge past this is minutes of work and a card's worth of memory, and the
+    // number is easy to reach by accident with Resize off and a x4 (the user,
+    // 2026-09-20).
+    const BIG = 5000;
+    const warn = el("div", "");
+    warn.style.cssText = "display:none;width:100%;font-size:11.5px;color:#f0c98a;"
+                       + "background:#2e2413;border:1px solid #6b5220;"
+                       + "border-left:3px solid #d99a2b;border-radius:4px;"
+                       + "padding:5px 8px;line-height:1.4;margin-top:4px";
+    if (U.source && U.on) {
+      imgDims(viewInput(U.source)).then((d0) => {
+        if (!d0 || !d0.w) return;
+        let w = d0.w, h = d0.h;
+        const fit = Number(U.pre_size) || 0;
+        if (fit) {
+          const k = fit / Math.max(w, h);
+          const r8 = (x) => Math.max(64, Math.round(x * k / 8) * 8);
+          w = r8(w); h = r8(h);
+        }
+        const kind = S.type || "vosr2";
+        const mul = kind === "vosr2" ? Math.max(1, Number(S.vosr2_scale) || 2)
+                  : kind === "usdu" ? (Number(S.upscale_by) || 2) : 1;
+        w = Math.round(w * mul); h = Math.round(h * mul);
+        const long = Math.max(w, h);
+        if (long <= BIG) return;
+        warn.textContent = `That comes out at about ${w} × ${h}. A long edge past `
+          + `${BIG} is slow and heavy on the card, and it is easy to reach by `
+          + "accident. Set Resize, or a smaller Scale, unless you mean it.";
+        warn.style.display = "";
+      });
+    }
     rows.forEach((r, i) => {
       if (i) {
         const arrow = el("span", "hint", "→");
@@ -701,6 +733,7 @@ export function upscaleBody(node, body) {
       if (r.s?.why) b.title = r.s.why;
       pLine.appendChild(b);
     });
+    pLine.appendChild(warn);
   }
 
   // THE RESULT, on this tab. The upscale runs through the Workspace's own door,
