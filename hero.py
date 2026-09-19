@@ -20,7 +20,11 @@ Measured behaviour behind the constants is in the hub's HERO_CREATOR.md.
 """
 
 import contextlib
+import hashlib
+import io
+import json
 import os
+import re
 import time
 
 import numpy as np
@@ -292,18 +296,84 @@ def crop_and_cut(image, sam_model=""):
 # written to output was never a gallery picture. It looked like one until a
 # restart, and then the slot pointed at nothing.
 HERO_DIR = "rednode/heroes"
+MANIFEST = "set.json"
 
 
-def _save_hero(flat, source, tag="hero"):
-    """Square it with white and write it where the gallery can keep it."""
+def set_folder(source):
+    """One folder per gallery picture: "<readable name>_<hash>".
+
+    The hash is of the WHOLE entry, not the file's name. "people/anna.png" and
+    "refs/anna.png" are two different pictures and a folder named for the stem
+    alone would have them overwrite each other. The readable half is there so
+    the folder can be browsed and recognised, which is the point of having
+    folders at all.
+    """
+    entry = str(source)
+    stem = os.path.splitext(os.path.basename(entry))[0][:40]
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", stem).strip("_") or "hero"
+    short = hashlib.md5(entry.encode("utf-8")).hexdigest()[:8]
+    return "%s/%s_%s" % (HERO_DIR, stem, short)
+
+
+def _abs_set(sub):
+    return os.path.join(folder_paths.get_input_directory(), *sub.split("/"))
+
+
+def read_manifest(sub):
+    try:
+        with io.open(os.path.join(_abs_set(sub), MANIFEST), encoding="utf-8") as f:
+            got = json.load(f)
+        return got if isinstance(got, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_manifest(sub, source, kind, fname, report):
+    """Record what this folder holds, beside what it holds.
+
+    So the folder is self-describing and the set can be rebuilt by reading the
+    disk. The workflow's copy is then a cache rather than the only record: a
+    fresh workflow, or one whose properties were lost, can still find every
+    picture that was made and say which gallery entry each came from.
+    """
+    man = read_manifest(sub) or {}
+    man["source"] = str(source)
+    if kind == "edit":
+        man.setdefault("edits", [])
+        man["edits"].append({"filename": fname, "report": report})
+    else:
+        man[kind] = {"filename": fname, "report": report}
+        if kind == "crop":
+            # a new crop invalidates both: they were made from the old one
+            man.pop("front", None)
+            man["edits"] = []
+    try:
+        with io.open(os.path.join(_abs_set(sub), MANIFEST), "w", encoding="utf-8") as f:
+            json.dump(man, f, indent=2)
+    except Exception as exc:                 # the pictures matter, the note does not
+        print("[RedNode Hero] could not write %s: %s" % (MANIFEST, exc), flush=True)
+
+
+def _save_hero(flat, source, tag="crop", report=None):
+    """Square it with white and write it into this picture's own folder.
+
+    The crop and the front-on have FIXED names, because there is one of each and
+    remaking one replaces it: a timestamped name would leave the old file behind
+    as an orphan every time. Changes are timestamped, because there are many and
+    each one is kept.
+    """
     arr = _pad_square(flat.detach().cpu().numpy())
     png = (np.clip(arr, 0.0, 1.0) * 255.0).astype(np.uint8)
-    folder = os.path.join(folder_paths.get_input_directory(), *HERO_DIR.split("/"))
-    os.makedirs(folder, exist_ok=True)
-    stem = os.path.splitext(os.path.basename(str(source)))[0][:40] or "hero"
-    fname = "%s_%s_%s.png" % (stem, tag, time.strftime("%Y%m%d-%H%M%S%f")[:-3])
-    Image.fromarray(png, "RGB").save(os.path.join(folder, fname))
-    return {"filename": fname, "subfolder": HERO_DIR, "type": "input"}
+    sub = set_folder(source)
+    os.makedirs(_abs_set(sub), exist_ok=True)
+    fname = ("edit_%s.png" % time.strftime("%Y%m%d-%H%M%S")) if tag == "edit" \
+        else "%s.png" % tag
+    Image.fromarray(png, "RGB").save(os.path.join(_abs_set(sub), fname))
+    _write_manifest(sub, source, tag, fname, report or {})
+    # rand busts the browser's cache: crop.png keeps its name when remade, so
+    # without it the panel would show the previous one for ever
+    return {"filename": fname, "subfolder": sub, "type": "input",
+            "rand": int(time.time() * 1000) % 1000000000}
 
 
 # _vosr2 reads a whole PASS, not a multiplier: the loader's checkpoint and dtype,
@@ -339,8 +409,6 @@ def _make_hero(source, sam_model, enlarge):
     side = min(int(flat.shape[0]), int(flat.shape[1]))
     if enlarge:
         flat, side, grew = _enlarge(flat)
-    entry = _save_hero(flat, source)
-    fname = entry["filename"]
 
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
     report = {
@@ -353,7 +421,9 @@ def _make_hero(source, sam_model, enlarge):
         "below_floor": side < FLOOR,
         "route": "repair" if rep else ("enlarge" if en else "crop only"),
     }
-    return entry, report
+    # written AFTER the report, so the folder's note carries it and the set can
+    # be rebuilt from disk with its chips intact
+    return _save_hero(flat, source, "crop", report), report
 
 
 def make_edit(base_entry, want, unet="", clip="", vae="", lora="", sam_model="",
@@ -399,17 +469,17 @@ def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed):
         render = _render_front(base, prompt, unet, clip, vae, lora, seed=seed)
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
-        entry = _save_hero(flat, source, "edit")
         _settle()
 
     side = min(int(flat.shape[0]), int(flat.shape[1]))
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
-    return entry, {
+    out = {
         "crop_side": side, "hair_ratio": hair_ratio, "cover": cover,
         "enlarge": en, "repair": rep, "enlarged": "", "segmenter": used,
         "below_floor": False, "route": "edit", "generated": True,
         "extra": str(want).strip(), "prompt": prompt, "seed": seed,
     }
+    return _save_hero(flat, source, "edit", out), out
 
 
 try:
@@ -490,6 +560,46 @@ try:
               % (entry["subfolder"], entry["filename"], report.get("extra")), flush=True)
         return web.json_response({"result": entry, "report": report})
 
+    @PromptServer.instance.routes.get("/rednode/hero_sets")
+    async def _rednode_hero_sets(request):
+        """Every set on disk, keyed by the gallery picture it was made from.
+
+        The workflow keeps its own copy, but this is the one that survives a
+        fresh workflow or lost properties: each folder says which entry it came
+        from, so the index is rebuildable rather than authoritative.
+        """
+        root = os.path.join(folder_paths.get_input_directory(), *HERO_DIR.split("/"))
+        out = {}
+        try:
+            names = sorted(os.listdir(root))
+        except Exception:
+            names = []
+        for name in names:
+            sub = "%s/%s" % (HERO_DIR, name)
+            if not os.path.isdir(_abs_set(sub)):
+                continue
+            man = read_manifest(sub)
+            src = str(man.get("source") or "")
+            if not src:
+                continue
+            def one(rec):
+                if not rec or not rec.get("filename"):
+                    return None
+                # only what is still THERE: a note outliving its picture would
+                # put a dead slot on the card
+                if not os.path.isfile(os.path.join(_abs_set(sub), rec["filename"])):
+                    return None
+                return {"result": {"filename": rec["filename"], "subfolder": sub,
+                                   "type": "input"},
+                        "report": rec.get("report") or {}}
+            crop = one(man.get("crop"))
+            if not crop:
+                continue                      # no crop, no set
+            out[src] = {"crop": crop, "front": one(man.get("front")),
+                        "edits": [e for e in (one(x) for x in man.get("edits") or [])
+                                  if e]}
+        return web.json_response({"sets": out})
+
     @PromptServer.instance.routes.post("/rednode/hero_drop")
     async def _rednode_hero_drop(request):
         """Delete one picture this pack made. Only ever one of ours: the path is
@@ -499,17 +609,31 @@ try:
         except Exception:
             data = {}
         name = os.path.basename(str(data.get("filename") or ""))
+        sub = str(data.get("subfolder") or "")
         if not name:
             return web.json_response({"error": "no picture named"}, status=400)
-        path = os.path.join(folder_paths.get_input_directory(),
-                            *HERO_DIR.split("/"), name)
+        # rebuilt from the hero root, so nothing outside it can be named however
+        # the request is phrased
+        if not sub.startswith(HERO_DIR + "/") or "/../" in sub or sub.endswith("/.."):
+            return web.json_response({"error": "that is not a hero folder"}, status=400)
+        path = os.path.join(_abs_set(sub), name)
         try:
             if os.path.isfile(path):
                 os.remove(path)
         except Exception as e:
             return web.json_response({"error": "could not delete it (%s)" % e},
                                      status=500)
-        print("[RedNode Hero] deleted %s/%s" % (HERO_DIR, name), flush=True)
+        man = read_manifest(sub)
+        if man:
+            man["edits"] = [e for e in (man.get("edits") or [])
+                            if e.get("filename") != name]
+            try:
+                with io.open(os.path.join(_abs_set(sub), MANIFEST), "w",
+                             encoding="utf-8") as f:
+                    json.dump(man, f, indent=2)
+            except Exception:
+                pass
+        print("[RedNode Hero] deleted %s/%s" % (sub, name), flush=True)
         return web.json_response({"deleted": name})
 
 except Exception:                     # no server (tests, or a bare import): fine
@@ -664,12 +788,11 @@ def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
                                unet, clip, vae, lora)
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
-        final = _save_hero(flat, source, "front")
         _settle()
 
     fside = min(int(flat.shape[0]), int(flat.shape[1]))
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, fside)
-    return final, {
+    out = {
         "crop_side": fside, "hair_ratio": hair_ratio, "cover": cover,
         "enlarge": en, "repair": rep, "enlarged": "", "segmenter": used,
         "below_floor": report.get("crop_side", 0) < FLOOR,
@@ -678,3 +801,4 @@ def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
         "prompt": front_prompt(report.get("repair"), extra),
         "extra": str(extra or "").strip(),
     }
+    return _save_hero(flat, source, "front", out), out

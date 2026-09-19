@@ -13854,6 +13854,29 @@ function heroBody(node, body, sub) {
   const state = S();
   const store = (p, set) => { MADE()[p] = set; };
 
+  // Each folder on disk says which gallery picture it came from, so the sets are
+  // rebuildable. Read once per session and merged in for pictures this workflow
+  // has no record of: a fresh workflow, or one whose properties were lost, still
+  // finds everything that was made. Never overwrites what is already known,
+  // because that copy may be newer than the disk was when this was fetched.
+  if (!node._rnHeroScan) {
+    node._rnHeroScan = "running";
+    api.fetchApi("/rednode/hero_sets").then((r) => r.json()).then((d) => {
+      node._rnHeroScan = "done";
+      const sets = d?.sets || {};
+      let found = 0;
+      for (const [p, set] of Object.entries(sets)) {
+        if (MADE()[p]) continue;
+        MADE()[p] = set;
+        found++;
+      }
+      if (found) {
+        load(S().source);
+        render(node);
+      }
+    }).catch(() => { node._rnHeroScan = "done"; });
+  }
+
   // anything this tab MADE is never something to make one FROM: cropping a crop
   // is a no-op at best and a second generation of the same face at worst
   const pics = (t.images || []).filter((x) => String(x || "").trim())
@@ -14270,7 +14293,8 @@ function heroBody(node, body, sub) {
       try {
         await api.fetchApi("/rednode/hero_drop", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: ed.result.filename }),
+          body: JSON.stringify({ filename: ed.result.filename,
+                                 subfolder: ed.result.subfolder }),
         });
       } catch (e) { /* the file may be gone already; the entry still goes */ }
       const set = heroSet(node, S().source) || { edits: [] };
