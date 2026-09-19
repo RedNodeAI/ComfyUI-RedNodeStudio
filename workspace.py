@@ -2363,7 +2363,11 @@ def blank_frame(size=BLANK_EDGE):
     return torch.ones((1, size, size, 3), dtype=torch.float32)
 
 
-UPSCALE_METHODS = ("upscale", "vosr2", "usdu")
+# "none" is a real choice: no upscaler at all, so the tab is a way to put a folder
+# of pictures through the Detailer, Post and Save without going near Img2Img, which
+# carries a tab full of other things. Fit first still applies, so it doubles as a
+# batch resize.
+UPSCALE_METHODS = ("upscale", "vosr2", "usdu", "none")
 
 
 class _UpscaleHandled(Exception):
@@ -2403,6 +2407,11 @@ def _upscale_cfg(raw):
         # into the builtin chain instead, which is the tab's Send to Detailer
         "run_mode": ("chain" if str(d.get("run_mode") or "") == "chain"
                      else "upscale"),
+        # FIT FIRST: the long edge the picture is taken to BEFORE the upscaler
+        # sees it, so a folder of mixed sizes comes out at one size. 0 leaves it
+        # alone. Uses paint_render._fit, the same resize the Paint tab works to.
+        "pre_size": max(0, min(8192, int(d.get("pre_size") or 0)))
+                    if str(d.get("pre_size") or "0").lstrip("-").isdigit() else 0,
         # what the batch does with each picture once it is made. Panel-driven, so
         # the server only has to carry it rather than act on it.
         "after": {"detailer": bool((d.get("after") or {}).get("detailer")),
@@ -4749,16 +4758,36 @@ class RedNodeStudioWorkspace:
                     rig_image = _ubase
                     print("[RedNode Upscale] sent to the Detailer chain", flush=True)
                     raise _UpscaleHandled
-                _ustage = dict(_up.get("stage") or {})
-                _ustage["on"] = True
-                _ucfg = {"stages": [_ustage], "seed": _up.get("seed", 0),
-                         "seed_random": bool(_up.get("seed_random", True))}
-                _uout, _ureport = RedNodeStudioDetailer().run(
-                    _ubase, config=json.dumps(_ucfg), prompt=prompt,
-                    unique_id=unique_id, chain_step=None, **_custom_rigs)
-                for _line in str(_ureport or "").splitlines():
-                    if _line.strip():
-                        print("[RedNode Upscale] %s" % _line.strip(), flush=True)
+                _ukind = str((_up.get("stage") or {}).get("type") or "")
+                _upre = int(_up.get("pre_size") or 0)
+                if _upre:
+                    from .paint_render import _fit as _paint_fit
+                    _b4 = (int(_ubase.shape[2]), int(_ubase.shape[1]))
+                    _ubase = _paint_fit(_ubase, _upre)
+                    print("[RedNode Upscale] fitted %d x %d to a %d long edge: "
+                          "%d x %d" % (_b4[0], _b4[1], _upre,
+                                       int(_ubase.shape[2]), int(_ubase.shape[1])),
+                          flush=True)
+                if _ukind == "none":
+                    # NO UPSCALER, on purpose: the picture as it arrived, fitted if
+                    # asked. It still has to come back as a result, because what
+                    # happens to it next is the batch's follow-ups or the Send
+                    # buttons, and both read the result.
+                    _uout = _ubase
+                    print("[RedNode Upscale] no upscaler, the picture passes through "
+                          "at %d x %d" % (int(_ubase.shape[2]), int(_ubase.shape[1])),
+                          flush=True)
+                else:
+                    _ustage = dict(_up.get("stage") or {})
+                    _ustage["on"] = True
+                    _ucfg = {"stages": [_ustage], "seed": _up.get("seed", 0),
+                             "seed_random": bool(_up.get("seed_random", True))}
+                    _uout, _ureport = RedNodeStudioDetailer().run(
+                        _ubase, config=json.dumps(_ucfg), prompt=prompt,
+                        unique_id=unique_id, chain_step=None, **_custom_rigs)
+                    for _line in str(_ureport or "").splitlines():
+                        if _line.strip():
+                            print("[RedNode Upscale] %s" % _line.strip(), flush=True)
                 if _uout is not None and torch.is_tensor(_uout):
                     rig_image = _uout
                     from .paint_render import _out as _paint_out

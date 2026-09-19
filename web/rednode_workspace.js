@@ -1455,6 +1455,7 @@ export function readCfg(node) {
   if (typeof d.upscale.on !== "boolean") d.upscale.on = false;
   if (typeof d.upscale.source !== "string") d.upscale.source = "";
   if (typeof d.upscale.seed !== "number") d.upscale.seed = 0;
+  if (typeof d.upscale.pre_size !== "number") d.upscale.pre_size = 0;
   if (typeof d.upscale.seed_random !== "boolean") d.upscale.seed_random = true;
   d.upscale.after = d.upscale.after && typeof d.upscale.after === "object"
     ? d.upscale.after : {};

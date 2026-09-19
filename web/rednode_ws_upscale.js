@@ -29,8 +29,12 @@ export const UPSCALE_METHODS = [
    + "where made-up skin and hair texture is a bonus rather than damage."],
   ["usdu", "Tiled",
    "Ultimate SD Upscale: your own rig re-renders the picture a tile at a time. "
-   + "The only one of the three that needs a model and a prompt, and the only one "
-   + "that can follow the prompt while it grows."],
+   + "The only one that needs a model and a prompt, and the only one that can "
+   + "follow the prompt while it grows."],
+  ["none", "None",
+   "No upscaler at all. The picture goes through as it is, or at the size Fit "
+   + "first gives it, so this tab can put a folder through the Detailer, Post and "
+   + "Save without going near Img2Img."],
 ];
 
 const el = (tag, cls, text) => {
@@ -206,7 +210,7 @@ export function upscaleBody(node, body) {
   // named, because the button beside the picture and the batch card's own
   // button have to start exactly the same run
   const batchOpts = {
-    runLabel: "Upscale them all",
+    runLabel: "Run All Batch",
     // checked ONCE, before the first picture: a switched-off tab fails every
     // picture in the folder, and two hundred ticks of nothing is not an answer
     precheck: () => (node._rnCfg?.upscale?.on
@@ -246,15 +250,45 @@ export function upscaleBody(node, body) {
 
   // THE PICTURE
   const { card: srcCard, line: srcLine } = card(body, "PICTURE");
-  const thumb = el("div");
+  const thumb = document.createElement(U.source ? "img" : "div");
   thumb.style.cssText = "width:120px;height:120px;border:1px solid #2a2e35;border-radius:6px;"
-                      + "background:#15171b center/contain no-repeat;flex:none";
+                      + "background:#15171b;flex:none;object-fit:contain";
+  // AN IMG, not a background: the panel has to be able to read the picture's real
+  // size, which is the first thing you want to know before upscaling it
+  const sizeLine = el("span", "hint", "");
+  sizeLine.style.cssText = "font-size:11px";
   if (U.source) {
     const q = new URLSearchParams({ filename: U.source.split("/").pop(),
                                     subfolder: U.source.includes("/")
                                       ? U.source.slice(0, U.source.lastIndexOf("/")) : "",
                                     type: "input" });
-    thumb.style.backgroundImage = `url(${api.apiURL(`/view?${q}&r=${Date.now()}`)})`;
+    thumb.src = api.apiURL(`/view?${q}`);
+    const sayFrom = () => {
+      const w0 = Number(thumb.naturalWidth) || 0;
+      const h0 = Number(thumb.naturalHeight) || 0;
+      if (!w0 || !h0) return;
+      // what it is, what it is taken to, and what comes out: the three numbers
+      // you would otherwise work out on paper before pressing anything
+      const fit = Number(U.pre_size) || 0;
+      let w = w0, h = h0;
+      let line = `${w0} × ${h0}`;
+      if (fit) {
+        const k = fit / Math.max(w0, h0);
+        const r8 = (x) => Math.max(64, Math.round(x * k / 8) * 8);
+        w = r8(w0); h = r8(h0);
+        line += ` → fit ${w} × ${h}`;
+      }
+      if (S.type === "vosr2") {
+        const mul = Math.max(1, Number(S.vosr2_scale) || 2);
+        line += ` → out ${w * mul} × ${h * mul}`;
+      } else if (S.type === "usdu") {
+        const by = Number(S.upscale_by) || 2;
+        line += ` → out about ${Math.round(w * by)} × ${Math.round(h * by)}`;
+      }
+      sizeLine.textContent = line;
+    };
+    thumb.addEventListener("load", sayFrom);
+    if (thumb.complete) sayFrom();
   } else {
     thumb.textContent = "Drop a picture";
     thumb.style.cssText += ";display:flex;align-items:center;justify-content:center;"
@@ -284,9 +318,13 @@ export function upscaleBody(node, body) {
     inp.click();
   };
   srcBtns.append(useLast, pick);
+  const srcCol = el("div");
+  srcCol.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:0;"
+                       + "align-self:center";
   const srcName = el("span", "hint", U.source || "nothing chosen yet");
-  srcName.style.cssText = "font-size:11px;align-self:center";
-  srcLine.append(thumb, srcBtns, srcName);
+  srcName.style.cssText = "font-size:11px;overflow:hidden;text-overflow:ellipsis";
+  srcCol.append(sizeLine, srcName);
+  srcLine.append(thumb, srcBtns, srcCol);
 
   // THE RUN, beside the picture it works on. It used to sit in a card of its own
   // at the bottom called RUN, under the batch and the method, which read as if it
@@ -296,11 +334,11 @@ export function upscaleBody(node, body) {
   const runBox = el("div");
   runBox.style.cssText = "margin-left:auto;display:flex;flex-direction:column;gap:6px;"
                        + "align-items:flex-end;flex:none";
-  const go = el("button", "rn-ws-btn", "Upscale this picture");
+  const go = el("button", "rn-ws-btn", "Run this Image");
   go.style.cssText = "width:auto;padding:6px 18px;font-weight:600;"
                    + "background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
-  go.title = "Upscale the one picture on the left. The result appears at the bottom "
-           + "of this tab, ready for Post, the Detailer or Save.";
+  go.title = "Run the one picture on the left. The result appears at the bottom of "
+           + "this tab, ready for Post, the Detailer or Save.";
   const status = el("span", "hint", "");
   status.style.cssText = "font-size:11px;text-align:right";
   go.onclick = () => upscaleGenerate(node, status);
@@ -311,8 +349,8 @@ export function upscaleBody(node, body) {
   // them apart is what made that unclear
   const bst = batchState(node, "upscale");
   const bgo = el("button", "rn-ws-btn",
-                 bst.files.length ? `Upscale them all (${bst.files.length})`
-                                  : "Upscale a folder");
+                 bst.files.length ? `Run All Batch (${bst.files.length})`
+                                  : "Pick a batch folder");
   bgo.style.cssText = "width:auto;padding:5px 16px";
   bgo.disabled = bst.running;
   bgo.title = bst.files.length
@@ -324,15 +362,7 @@ export function upscaleBody(node, body) {
   };
   runBox.appendChild(bgo);
 
-  const seedRow = el("div");
-  seedRow.style.cssText = "display:flex;align-items:center;gap:6px";
-  const seedRand = el("button", "rn-ws-sw" + (U.seed_random !== false ? " on" : ""));
-  seedRand.title = "A fresh seed each run. Off pins the seed beside it.";
-  seedRand.onclick = () => { U.seed_random = U.seed_random === false; wr(); };
-  seedRow.append(lab("Random seed"), seedRand,
-                 num(U.seed || 0, 1, "The seed a pass runs on when Random seed is off.",
-                     (v) => { U.seed = Math.max(0, Math.round(v)); w(); }));
-  runBox.append(seedRow, status);
+  runBox.appendChild(status);
   srcLine.appendChild(runBox);
 
   // THE BATCH, under the one picture: the same tab, a folder instead of a file.
@@ -355,6 +385,25 @@ export function upscaleBody(node, body) {
     seg.appendChild(b);
   }
   mLine.appendChild(seg);
+  // the seed belongs with the method: it is the method that uses it, and None
+  // does not use it at all, which is worth being able to see
+  const seedRand = el("button", "rn-ws-sw" + (U.seed_random !== false ? " on" : ""));
+  seedRand.title = "A fresh seed each run. Off pins the seed beside it.";
+  seedRand.onclick = () => { U.seed_random = U.seed_random === false; wr(); };
+  const seedNum = num(U.seed || 0, 1,
+                      "The seed this runs on when Random seed is off.",
+                      (v) => { U.seed = Math.max(0, Math.round(v)); w(); });
+  if (S.type === "none") {
+    seedRand.disabled = true;
+    seedNum.disabled = true;
+  }
+  const seedWrap = el("span");
+  seedWrap.style.cssText = "display:flex;align-items:center;gap:6px;margin-left:auto";
+  seedWrap.append(lab("Random seed"), seedRand, seedNum);
+  seedWrap.title = S.type === "none"
+    ? "None runs no sampler, so there is no seed to set."
+    : "";
+  mLine.appendChild(seedWrap);
   const why = el("div", "hint",
     (UPSCALE_METHODS.find((m) => m[0] === (S.type || "vosr2")) || UPSCALE_METHODS[0])[2]);
   why.style.cssText = "font-size:11px;width:100%;padding-top:4px";
@@ -362,6 +411,21 @@ export function upscaleBody(node, body) {
 
   // THE METHOD'S OWN DIALS. Field names are the Detailer stage's, on purpose.
   const { line: dLine } = card(body, "SETTINGS");
+  // FIT FIRST, above the method's own dials because it happens before them. A
+  // folder of mixed sizes comes out at one size this way, and the same resize the
+  // Paint tab works to is used, so a picture is the same size in either tab.
+  dLine.append(
+    lab("Fit first"),
+    sel([["512", "512 long edge"], ["768", "768"], ["1024", "1024"], ["1280", "1280"],
+         ["1536", "1536"], ["2048", "2048"]],
+        U.pre_size ? String(U.pre_size) : "",
+        "Take the picture to this long edge BEFORE upscaling it, so a folder of "
+        + "mixed sizes all comes out the same. (as it is) upscales whatever arrives, "
+        + "which on a mixed folder means mixed results.",
+        (v) => { U.pre_size = v ? parseInt(v, 10) : 0; wr(); }, "(as it is)"));
+  const sep = el("span");
+  sep.style.cssText = "width:1px;align-self:stretch;background:#2e333a;margin:0 2px";
+  dLine.appendChild(sep);
   if ((S.type || "vosr2") === "vosr2") {
     dLine.append(
       lab("Scale"),
@@ -402,6 +466,13 @@ export function upscaleBody(node, body) {
           "Transformer blocks moved off the card to fit it. 36 is all of the 7B's; "
           + "0 keeps everything on the GPU, fastest and biggest.",
           (v) => { S.blocks_to_swap = Math.max(0, Math.min(36, Math.round(v))); w(); }));
+  } else if (S.type === "none") {
+    const note = el("div", "hint",
+      "Nothing else to set: the picture goes through as it is, or at the size Fit "
+      + "first gives it. What happens to it after that is the batch's follow-ups "
+      + "below, or the buttons on the result.");
+    note.style.cssText = "font-size:11px;flex:1 1 260px;line-height:1.35";
+    dLine.appendChild(note);
   } else {
     const rigs = (cfg.models?.rigs || []).map((r, i) => r.name || `Rig ${i + 1}`);
     dLine.append(

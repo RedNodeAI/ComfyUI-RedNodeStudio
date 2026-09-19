@@ -285,12 +285,12 @@ export function batchStrip(node, key, host, opts = {}) {
     + "own input folder, so nothing on your drive is read by the server.",
     () => pickFolder(node, key), st.running);
   if (st.files.length && !st.running) {
-    btn(head, opts.runLabel || "Run the batch",
+    btn(head, opts.runLabel || "Run All Batch",
         "Run every picture in turn, one per queue. A picture that fails is marked "
         + "and the rest carry on.",
         () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach));
     if (chosen().length) {
-      const only = btn(head, `Run ${chosen().length} selected`,
+      const only = btn(head, `Run Selected (${chosen().length})`,
         "Run only the pictures you have ticked, in order.",
         () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach,
                        chosen()));
