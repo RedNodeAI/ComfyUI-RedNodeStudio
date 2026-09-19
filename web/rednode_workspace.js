@@ -14325,21 +14325,27 @@ function heroBody(node, body, sub) {
   const rig = rigNow();
   const idLora = idLoraNow();
   const modelName = rig.unet || rig.checkpoint || "";
-  const issues = [];
-  if (!modelName || !rig.clip || !rig.vae) {
-    issues.push("The active rig needs a model, a text encoder and a VAE. Set them on "
-                + "the Models tab.");
-  }
-  if (!idLora) {
-    issues.push("No Krea 2 edit LoRA is switched on in the LoRAs tab. The render works "
-                + "through it, and without one the face comes back a stranger.");
-  }
-  if (modelName && !/krea2turboofficial/i.test(modelName.replace(/[^a-z0-9]/gi, ""))) {
-    issues.push("This was proved on the official Krea 2 turbo. The rig is running "
-                + JSON.stringify(modelName) + ", and a finetune or a raw base may come "
-                + "back distorted or blank.");
-  }
-  const blocked = !modelName || !rig.clip || !rig.vae || !idLora;
+  // WHAT IS ACTUALLY SELECTED, next to what is needed. A red note saying "the
+  // rig needs a model" does not answer the question being asked, which is
+  // always "then what have I got?". Each row names the thing, its state and its
+  // current value, so a wrong model reads as wrong rather than as missing.
+  const official = modelName
+    && /krea2turboofficial/i.test(modelName.replace(/[^a-z0-9]/gi, ""));
+  const reqs = [
+    { what: "Model", val: modelName,
+      state: !modelName ? "missing" : official ? "ok" : "wrong",
+      wrong: "Not the official Krea 2 turbo. A finetune barely moved the render in "
+           + "testing and a raw base came back blank." },
+    { what: "Text encoder", val: rig.clip, state: rig.clip ? "ok" : "missing" },
+    { what: "VAE", val: rig.vae, state: rig.vae ? "ok" : "missing" },
+    { what: "Krea 2 edit LoRA", val: idLora?.name,
+      state: idLora ? "ok" : "missing",
+      miss: "Switch one on in the LoRAs tab. The render steers through it, and "
+          + "without one the face comes back a stranger." },
+  ];
+  // A wrong model is a WARNING, not a block: it may still work and it is not my
+  // place to refuse. A missing one is a block, because there is nothing to run.
+  const blocked = reqs.some((q) => q.state === "missing");
 
   const rep = document.createElement("div");
   rep.className = "rn-ws-card";
@@ -14352,11 +14358,51 @@ function heroBody(node, body, sub) {
   what.textContent = "Rebuild the head facing the camera, taking off a cap, goggles or "
     + "a hand on the way. One picture: rendering again replaces it.";
   rep.appendChild(what);
-  for (const t0 of issues) {
-    const n = document.createElement("div");
-    n.className = "rn-ws-note warn";
-    n.textContent = t0;
-    rep.appendChild(n);
+  const reqBox = document.createElement("div");
+  reqBox.style.cssText = "display:flex;flex-direction:column;gap:3px;"
+    + "background:#15171b;border-radius:6px;padding:7px 9px";
+  for (const q of reqs) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:7px;align-items:baseline;font-size:11.5px";
+    const dot = document.createElement("span");
+    dot.textContent = q.state === "ok" ? "\u2713" : q.state === "wrong" ? "!" : "\u00d7";
+    dot.style.cssText = "flex:none;width:13px;text-align:center;font-weight:700;color:"
+      + (q.state === "ok" ? "#1f9d55" : q.state === "wrong" ? "#d98324" : "#b8283c");
+    const name = document.createElement("span");
+    name.style.cssText = "flex:none;width:112px;opacity:.7";
+    name.textContent = q.what;
+    const val = document.createElement("span");
+    val.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;"
+      + "white-space:nowrap;color:" + (q.state === "missing" ? "#b8283c" : "#e8ecf1");
+    val.textContent = q.val || "Nothing selected";
+    val.title = q.val || "";
+    row.append(dot, name, val);
+    reqBox.appendChild(row);
+    if (q.state === "wrong" && q.wrong) {
+      const w = document.createElement("div");
+      w.className = "rn-ws-note";
+      w.style.cssText = "margin-left:20px;color:#d98324";
+      w.textContent = q.wrong;
+      reqBox.appendChild(w);
+    }
+    if (q.state === "missing" && q.miss) {
+      const w = document.createElement("div");
+      w.className = "rn-ws-note";
+      w.style.cssText = "margin-left:20px;color:#b8283c";
+      w.textContent = q.miss;
+      reqBox.appendChild(w);
+    }
+  }
+  rep.appendChild(reqBox);
+  if (blocked) {
+    // directly above the button, naming the things, so the answer to "why can I
+    // not press this" is in the same glance as the button that will not press
+    const stop = document.createElement("div");
+    stop.className = "rn-ws-note warn";
+    stop.textContent = "Cannot render: "
+      + reqs.filter((q) => q.state === "missing").map((q) => q.what.toLowerCase())
+            .join(", ") + " missing.";
+    rep.appendChild(stop);
   }
   if (state.crop?.report?.below_floor) {
     const n = document.createElement("div");
@@ -14371,6 +14417,10 @@ function heroBody(node, body, sub) {
   btns.frontBlocked = blocked;
   btns.front = frontBtn;
   frontBtn.disabled = !!state.busy || blocked;
+  frontBtn.title = blocked
+    ? "Cannot render: " + reqs.filter((q) => q.state === "missing")
+        .map((q) => q.what).join(", ") + " not set."
+    : "Rebuild the head facing the camera. One picture: rendering again replaces it.";
   frontBtn.onclick = async () => {
     // the picture this STARTED from: reading the live selection after the await
     // filed one person's face on another's card
@@ -14473,10 +14523,21 @@ function heroBody(node, body, sub) {
       + "so it may not take. Hair and age are far more reliable.";
     ed.appendChild(n);
   }
-  if (!state.front) {
+  if (blocked) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = "The rig above is not ready, so a change cannot render either.";
+    ed.appendChild(n);
+  } else if (!state.front) {
     const n = document.createElement("div");
     n.className = "rn-ws-note warn";
     n.textContent = "Make the front-on picture first. A change is made from it.";
+    ed.appendChild(n);
+  } else if (!line) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.style.opacity = ".7";
+    n.textContent = "Pick a hair, eye or age change, or type one, to enable this.";
     ed.appendChild(n);
   }
 
@@ -14486,6 +14547,10 @@ function heroBody(node, body, sub) {
   btns.editBlocked = blocked || !state.front || !line;
   btns.edit = editBtn;
   editBtn.disabled = !!state.busy || btns.editBlocked;
+  editBtn.title = blocked ? "The rig above is not ready, so a change cannot render."
+    : !state.front ? "Make the front-on picture first: a change is made from it."
+    : !line ? "Pick something to change first."
+    : "Render a changed version. Every one is kept.";
   editBtn.onclick = async () => {
     const from = S().source;
     const base = S().front?.result;
