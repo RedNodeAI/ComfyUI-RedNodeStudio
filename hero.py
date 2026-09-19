@@ -58,6 +58,45 @@ HAIR_MIN = 0.10
 COVER_MAX = 0.08       # occluder over the head box, above which a crop cannot win
 
 
+# Heroes already made, keyed by the source and the settings that shape the
+# output. Making one runs SAM3 four times, a matting pass and often an upscale,
+# so pressing the button twice on the same picture should cost nothing.
+_HERO_CACHE = {}
+
+
+def _source_key(source, sam_model, enlarge):
+    """What makes two presses the SAME press.
+
+    The filename alone is what automask keys on, and that is enough while
+    pictures are only ever added. A gallery slot can be overwritten with a
+    different photograph under the same name though, and a hero remembered by
+    name alone would then be somebody else's face, which is the worst possible
+    way for a cache to be wrong. So the file's size and mtime go in the key.
+    """
+    name = os.path.normcase(os.path.normpath(str(source)))
+    size = mtime = 0
+    try:
+        st = os.stat(_ws._filepath(source))
+        size, mtime = int(st.st_size), int(st.st_mtime)
+    except Exception:
+        pass                       # unreadable: fall back to the name, and re-run
+    return (name, size, mtime, str(sam_model or ""), bool(enlarge))
+
+
+def _cached_hero(key):
+    """A remembered hero, but only while its file is still on disk."""
+    got = _HERO_CACHE.get(key)
+    if not got:
+        return None
+    entry = got["entry"]
+    path = os.path.join(folder_paths.get_output_directory(),
+                        entry.get("subfolder", ""), entry["filename"])
+    if not os.path.isfile(path):
+        _HERO_CACHE.pop(key, None)      # deleted from the output folder: make it again
+        return None
+    return got
+
+
 @contextlib.contextmanager
 def progress_safe():
     """Let nodes that report progress run outside a queue item.
@@ -185,14 +224,27 @@ def assess(head, hair, occ, head_box, crop_side):
     return enlarge, repair, round(hair_ratio, 3), round(cover, 3)
 
 
-def make_hero(source, sam_model="", enlarge=True):
+def make_hero(source, sam_model="", enlarge=True, rebuild=False):
     """The lossless half: locate, crop, cut to white, enlarge. Returns (entry, report).
 
     Raises ValueError with a readable reason. Every caller of this is a person
     pressing a button, so a reason they can act on beats a traceback.
     """
+    key = _source_key(source, sam_model, enlarge)
+    if not rebuild:
+        got = _cached_hero(key)
+        if got is not None:
+            print("[RedNode Hero] reusing the hero already made for this picture",
+                  flush=True)
+            # said out loud in the report: a panel that showed a cached result as
+            # if it had just been made would hide a stale one for ever
+            return got["entry"], dict(got["report"], reused=True)
+    entry, report = None, None
     with progress_safe():
-        return _make_hero(source, sam_model, enlarge)
+        entry, report = _make_hero(source, sam_model, enlarge)
+    report["reused"] = False
+    _HERO_CACHE[key] = {"entry": entry, "report": report}
+    return entry, report
 
 
 def _make_hero(source, sam_model, enlarge):
@@ -275,15 +327,17 @@ try:
             return web.json_response({"error": "no picture to work from"}, status=400)
         try:
             entry, report = make_hero(source, str(data.get("sam_model") or ""),
-                                      bool(data.get("enlarge", True)))
+                                      bool(data.get("enlarge", True)),
+                                      bool(data.get("rebuild")))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
             return web.json_response({"error": "the hero failed (%s)" % e}, status=500)
-        print("[RedNode Hero] %s/%s %s, %d px%s"
-              % (entry["subfolder"], entry["filename"], report["route"],
-                 report["crop_side"],
-                 ", " + report["enlarged"] if report["enlarged"] else ""), flush=True)
+        if not report.get("reused"):
+            print("[RedNode Hero] %s/%s %s, %d px%s"
+                  % (entry["subfolder"], entry["filename"], report["route"],
+                     report["crop_side"],
+                     ", " + report["enlarged"] if report["enlarged"] else ""), flush=True)
         return web.json_response({"result": entry, "report": report})
 
 except Exception:                     # no server (tests, or a bare import): fine

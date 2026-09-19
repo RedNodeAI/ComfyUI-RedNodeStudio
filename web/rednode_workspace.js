@@ -13873,6 +13873,9 @@ function heroBody(node, body, sub) {
   go.className = "rn-ws-btn go";
   go.textContent = state.busy ? "Working…" : "Create hero";
   go.disabled = !!state.busy;
+  go.title = "A hero already made from this picture is handed straight back. "
+    + "Making one runs the segmenter four times and often an upscale, so the "
+    + "second press costs nothing.";
   src.appendChild(go);
   if (state.error) {
     const e = document.createElement("div");
@@ -13915,7 +13918,10 @@ function heroBody(node, body, sub) {
                 : r.route === "enlarge" ? "Enlarged" : "Needs repair";
     for (const text of [`Route: ${route}`, `Crop: ${r.crop_side} px`,
                         r.enlarged ? `Enlarge: ${r.enlarged}` : "",
-                        `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`]) {
+                        `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`,
+                        // shown, never silent: a reused hero that looked freshly
+                        // made would hide a stale one for ever
+                        r.reused ? "Reused" : ""]) {
       if (!text) continue;
       const c = document.createElement("span");
       c.className = "rn-ws-chip";
@@ -13957,19 +13963,25 @@ function heroBody(node, body, sub) {
     open.className = "rn-ws-btn";
     open.textContent = "Open full size";
     open.onclick = () => window.open(resultUrl(state.result), "_blank");
-    acts.append(send, open);
+    const again = document.createElement("button");
+    again.className = "rn-ws-btn";
+    again.textContent = "Make again";
+    again.title = "Ignore the one already made and run it fresh. Worth it only "
+      + "after changing the picture behind this slot.";
+    again.onclick = () => go.onclick({ rebuild: true });
+    acts.append(send, open, again);
     card.appendChild(acts);
     body.appendChild(card);
   }
 
-  go.onclick = async () => {
+  go.onclick = async (opts) => {
     S().busy = true;
     S().error = "";
     render(node);
     try {
       const res = await api.fetchApi("/rednode/hero", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: state.source }),
+        body: JSON.stringify({ source: S().source, rebuild: !!opts?.rebuild }),
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);
