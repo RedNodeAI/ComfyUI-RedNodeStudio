@@ -2,7 +2,8 @@ import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
 import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
-         pruneToNode, advanceSeeds, lastResultNow, rollSeed } from "./rednode_workspace.js";
+         pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
+         runPaintFinal } from "./rednode_workspace.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -111,27 +112,23 @@ async function upscaleGenerate(node, statusEl) {
         + "pick one from disk.");
     return;
   }
+  // THE WORKSPACE'S OWN DOOR, exactly as the Paint tab's built-in pass works: this
+  // node is queued with a token stamped into the QUEUED copy of the config only.
+  // Nothing is wired, no second node exists, and an ordinary Queue has no token so
+  // it can never upscale by accident.
   const { output } = await app.graphToPrompt();
-  const key = upscaleNodeKey(output);
-  if (!key) {
-    alert("This tab runs through a RedNode Upscale node, and there is not one in the "
-        + "graph. Add one (right-click the canvas, Add Node, RedNode, Image) and press "
-        + "Generate again. Nothing needs wiring to it.");
+  const wsKey = promptKeyFor(output, node);
+  if (!wsKey) { alert("The Workspace is not in the queued graph."); return; }
+  const pruned = pruneToNode(output, wsKey);
+  try {
+    const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
+    c.upscale = c.upscale || {};
+    c.upscale.run_token = `upscale-${Date.now()}`;
+    pruned[wsKey].inputs.config = JSON.stringify(c);
+  } catch (e) {
+    alert("Could not stamp the upscale run: " + e.message);
     return;
   }
-  const pruned = pruneToNode(output, key);
-  // the tab's settings ride in the QUEUED copy only, so an ordinary queue can never
-  // upscale by accident and the saved workflow keeps whatever was last set here
-  const stage = { ...(U.stage || {}), on: true };
-  pruned[key].inputs.config = JSON.stringify({
-    on: true, source: U.source, stage,
-    seed: U.seed_random ? rollSeed() : (U.seed || 0),
-    seed_random: false,
-  });
-  pruned[key].inputs.run_token = `upscale-${Date.now()}`;
-  // the Workspace settings too: a tiled pass needs a rig, and the Workspace node is
-  // not in this pruned prompt to be read from
-  pruned[key].inputs.ws_config = JSON.stringify(node._rnCfg || {});
   advanceSeeds(pruned, Object.keys(pruned));
   say("Upscaling…");
   try {
@@ -145,7 +142,7 @@ async function upscaleGenerate(node, statusEl) {
     if (!res.ok || d.error) {
       throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
     }
-    say("Queued. The picture lands in the result pane.");
+    say("Queued. The picture appears below when it is done.");
   } catch (err) {
     console.error("[RedNode Workspace] upscale queue failed:", err);
     say(`Could not queue it: ${err.message}`);
@@ -322,4 +319,53 @@ export function upscaleBody(node, body) {
                num(U.seed || 0, 1, "The seed this pass runs on when Random seed is off.",
                    (v) => { U.seed = Math.max(0, Math.round(v)); w(); }),
                status);
+
+  // THE RESULT, on this tab. The upscale runs through the Workspace's own door,
+  // so the finished picture comes back on the executed event like any other run
+  // and there is nowhere else to go looking for it.
+  const r = lastResultNow();
+  const { line: rLine } = card(body, "RESULT");
+  if (!r) {
+    const none = el("span", "hint",
+      "Nothing yet. Press Generate and the upscaled picture appears here.");
+    none.style.cssText = "font-size:11px";
+    rLine.appendChild(none);
+    return;
+  }
+  const shot = el("div");
+  shot.style.cssText = "width:190px;height:190px;border:1px solid #2a2e35;border-radius:6px;"
+                     + "background:#15171b center/contain no-repeat;flex:none";
+  const rq = new URLSearchParams({ filename: r.filename, subfolder: r.subfolder || "",
+                                   type: r.type || "temp" });
+  shot.style.backgroundImage = `url(${api.apiURL(`/view?${rq}&r=${r.rand || 0}`)})`;
+  shot.title = "The last picture a run produced.";
+  const acts = el("div");
+  acts.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:none";
+  const act = (label, title, fn) => {
+    const b = el("button", "rn-ws-btn", label);
+    b.style.cssText = "width:auto;padding:4px 14px";
+    b.title = title;
+    b.disabled = !!node._rnFinalBusy;
+    b.onclick = fn;
+    acts.appendChild(b);
+    return b;
+  };
+  act("Send to Post", "Apply the Post tab to this picture and file the finished copy "
+                    + "in Save.", async () => {
+    try { await runPaintFinal(node, r, true); }
+    catch (err) { alert(`Post and Save failed: ${err.message}`); }
+  });
+  act("Send to Paint", "Put this picture on the Paint tab, ready to paint on.", () => {
+    adoptResult(node, r, "sent from the Upscale tab", "paint");
+    node._rnTab = "paint";
+    render(node);
+  });
+  act("Save", "File this picture in Save exactly as it is, with no Post.", async () => {
+    try { await runPaintFinal(node, r, false); }
+    catch (err) { alert(`Save failed: ${err.message}`); }
+  });
+  const rname = el("span", "hint", node._rnFinalStatus || "");
+  rname.style.cssText = "font-size:11px;align-self:center";
+  if (node._rnFinalFailed) rname.style.color = "#fca5a5";
+  rLine.append(shot, acts, rname);
 }

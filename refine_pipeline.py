@@ -789,7 +789,7 @@ class RedNodeStudioDetailer:
 
     @_run_events.tracked("detailer", "Detailer")
     def run(self, image, config="{}", prompt=None, unique_id=None,
-            chain_step="detailer", ws_config=None, **_custom_rigs):
+            chain_step="detailer", **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
         #
         # chain_step: which builtin-chain step this counts as. The Workspace marks
@@ -817,13 +817,8 @@ class RedNodeStudioDetailer:
         if not stages:
             _run_events.skip("detailer", "Detailer", "no passes switched on")
             return (image, "no passes configured")
-        # ws_config: the Workspace settings handed over directly, for a caller
-        # whose queued prompt does not carry the Workspace node. The Upscale tab
-        # queues its own node alone, so the graph walk below would find nothing
-        # and a tiled pass would lose its rig.
         try:
-            ws_cfg = _ws.parse_config(ws_config if isinstance(ws_config, str)
-                                      else json.dumps(_workspace_cfg(prompt)))
+            ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
         except Exception:
             ws_cfg = _ws.parse_config("{}")
         self._rn_ws_cfg = ws_cfg              # the VRAM hold reads it before each pass

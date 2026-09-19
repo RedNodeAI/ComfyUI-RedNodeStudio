@@ -2388,6 +2388,9 @@ def _upscale_cfg(raw):
         # the managed filename of the picture being upscaled, the same convention
         # cfg.paint["source"] uses
         "source": str(d.get("source") or ""),
+        # stamped into the QUEUED copy by the tab's Generate, never saved: an
+        # ordinary queue has no token and so never upscales by accident
+        "run_token": str(d.get("run_token") or ""),
         "stage": st,
         "seed": seed,
         "seed_random": (True if d.get("seed_random") is None
@@ -4105,18 +4108,24 @@ class RedNodeStudioWorkspace:
                 pass
 
         _prt = str(cfg["paint"].get("run_token") or "")
+        _urt = str(cfg["upscale"].get("run_token") or "")
+        # EITHER TAB'S OWN RUN. The Paint and Upscale tabs both queue THIS
+        # node with a token stamped into their own config block, and neither
+        # wants the ordinary render underneath it. Every guard below reads
+        # "this is a plain render", so both tokens have to clear them.
+        _norun = _prt or _urt
         # A HANDLED RIG KIND renders here: the registered handler (a personal
         # local/ module, the NovelAI rig) is the engine, and its picture takes
         # the image output exactly as the embedded sampler's would. Everything
         # downstream - Detailer chains, Review, Save - neither knows nor cares.
         _hk = _ar.get("kind")
-        if _stage_only and _mode == "internal" and not _prt:
+        if _stage_only and _mode == "internal" and not _norun:
             # the re-shot picture is the render: nothing below runs, so the rig is
             # never asked for VRAM while the edit model holds it
             rig_image = i2i_img
             print("[RedNode Workspace] %s only: the edited picture is the image "
                   "output; no encode, no i2i pass" % (_stage_only_by or "re-angle"), flush=True)
-        if (_mode == "internal" and not _prt and not _stage_only
+        if (_mode == "internal" and not _norun and not _stage_only
                 and _hk in RIG_KIND_HANDLERS):
             # THE CAMERA PATH ON AN ENGINE RIG: the same one-render-per-shot the
             # built-in sampler does, with the shot's words in place of its
@@ -4158,7 +4167,7 @@ class RedNodeStudioWorkspace:
                 _hh = min(x.shape[1] for x in _h_imgs)
                 _hw = min(x.shape[2] for x in _h_imgs)
                 rig_image = torch.cat([x[:, :_hh, :_hw, :] for x in _h_imgs], dim=0)
-        if (_mode == "internal" and not _prt and not _stage_only and rig_image is None
+        if (_mode == "internal" and not _norun and not _stage_only and rig_image is None
                 and positive is not None and model is not None):
             try:
                 import nodes as _core
@@ -4581,7 +4590,7 @@ class RedNodeStudioWorkspace:
         # polishes it. Before the swap, so a swapped face lands on the final
         # viewpoint, the order the source stages run in
         if (_rg.get("on") and _rg.get("target") == "render" and rig_image is not None
-                and not _prt and not _stage_only):
+                and not _norun and not _stage_only):
             _reshot = None
             try:
                 from . import reangle as _re
@@ -4614,7 +4623,7 @@ class RedNodeStudioWorkspace:
         # an Img2Img one) gets the person, then the rig polishes it at a low
         # denoise, the pass a source swap gets from the Img2Img pass
         if (_sw.get("on") and _sw.get("target") == "render" and rig_image is not None
-                and not _prt and not _stage_only):
+                and not _norun and not _stage_only):
             _ref, _ref_name = _swap_ref()
             if _ref is None:
                 _run.skip("swap", "Swap", "no reference picture")
@@ -4686,10 +4695,46 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in paint pass failed: %s" % exc,
                       flush=True)
 
+
+        # THE UPSCALE TAB'S OWN DOOR, the same shape as the paint one above: the
+        # tab queued THIS node with a token in its own config block, so there is
+        # no render underneath and no node to wire. It holds ONE Detailer pass,
+        # which is what actually runs it, so SeedVR2, VOSR 2.0 and the tiled
+        # upscale mean the same thing here as they do on the Detailer.
+        if _urt:
+            try:
+                from .refine_pipeline import RedNodeStudioDetailer
+                _up = cfg["upscale"]
+                _ubase = (image_in if image_in is not None
+                          else load_image_or_blank(_up.get("source") or "", 0,
+                                                   "RedNode Upscale"))
+                _ustage = dict(_up.get("stage") or {})
+                _ustage["on"] = True
+                _ucfg = {"stages": [_ustage], "seed": _up.get("seed", 0),
+                         "seed_random": bool(_up.get("seed_random", True))}
+                _uout, _ureport = RedNodeStudioDetailer().run(
+                    _ubase, config=json.dumps(_ucfg), prompt=prompt,
+                    unique_id=unique_id, chain_step=None, **_custom_rigs)
+                for _line in str(_ureport or "").splitlines():
+                    if _line.strip():
+                        print("[RedNode Upscale] %s" % _line.strip(), flush=True)
+                if _uout is not None and torch.is_tensor(_uout):
+                    rig_image = _uout
+                    from .paint_render import _out as _paint_out
+                    _ur = _paint_out(_uout)
+                    if isinstance(_ur, dict) and isinstance(_ur.get("ui"), dict):
+                        # the same private key the paint door uses: the result pane
+                        # reads it off the executed event, and core's own preview
+                        # system has never heard of it, so the panel does not get a
+                        # second giant copy of the picture drawn under the node
+                        ui_extra = {"rn_paint_images": _ur["ui"].get("images") or []}
+            except Exception as exc:
+                print("[RedNode Workspace] built-in upscale failed: %s" % exc,
+                      flush=True)
         # THE BUILT-IN CHAIN, on a normal render: the Detailer passes, then Post FX,
         # then the save, each only when switched on here. The image output carries
         # the finished picture, and a separate node after this one steps aside.
-        if rig_image is not None and not _prt:
+        if rig_image is not None and not _norun:
             from . import builtin_chain as _chain
             if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
                 try:
@@ -4720,7 +4765,7 @@ class RedNodeStudioWorkspace:
                     # the built-in sampler made this picture from the words above, so the
                     # record says those; a trace would land on any other sampler's text box
                     _words = None
-                    if (_mode == "internal" and not _prt and not _stage_only
+                    if (_mode == "internal" and not _norun and not _stage_only
                             and prompt_text_out.strip()):
                         _words = {"positive": prompt_text_out, "negative": negative_text_out}
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
@@ -4751,7 +4796,7 @@ class RedNodeStudioWorkspace:
 
         _empty = None
         if rig_image is None or result_latent_out is None:
-            _why = (None if (_prt or _stage_only)
+            _why = (None if (_norun or _stage_only)
                     else nothing_rendered(cfg, rig_name, model, clip, _enc_err, _samp_err,
                                           _no_vae))
             if _why and rig_image is None:
@@ -4798,7 +4843,7 @@ class RedNodeStudioWorkspace:
                 # APPENDED: the embedded sampler's latent before decode, for
                 # chaining a same-model workspace with no VAE round trip
                 result_latent_out if result_latent_out is not None
-                else (blocked(_why) if rig_image is None and not (_prt or _stage_only)
+                else (blocked(_why) if rig_image is None and not (_norun or _stage_only)
                       else blocked()),
                 # APPENDED: this run's seed, randomised or pinned per the Models
                 # tab. Wire it into an external renderer (the NovelAI chain) so

@@ -2356,7 +2356,7 @@ async function queuePostProcessedKeeper(node, r, saveNoticeId) {
   render(node);
 }
 
-async function runPaintFinal(node, r, withPost) {
+export async function runPaintFinal(node, r, withPost) {
   if (!node || !r || node._rnFinalBusy) return;
   const saveNoticeId = withPost
     ? `paint_final_${Date.now()}_${Math.floor(Math.random() * 1000000)}`
