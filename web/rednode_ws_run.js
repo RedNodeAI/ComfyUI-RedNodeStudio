@@ -1,7 +1,9 @@
 import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import { api } from "../../scripts/api.js";
-import { writeCfg, render, setupProblems, packInstalled } from "./rednode_workspace.js";
+import { writeCfg, render, setupProblems, packInstalled,
+         i2iBatchOpts } from "./rednode_workspace.js";
+import { batchState, runBatch, sourceView } from "./rednode_ws_batch.js";
 import { EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
          openFullscreen as reviewFullscreen } from "./rednode_review.js";
@@ -918,6 +920,25 @@ function runPage(node, body) {
   const gen = el("button", "rn-run-go", "Generate");
   gen.title = "Queue the whole workflow, the same as ComfyUI's Queue button.";
   gen.onclick = () => queueWorkflow(gen);
+  // THE FOLDER BATCH, here too, when Img2Img is on and its source is the folder.
+  // Generate above queues the workflow ONCE, which is one picture however many
+  // are in the folder, so without this the Run page cannot start the thing the
+  // Img2Img tab is set up to do (the user, 2026-09-20).
+  const i2iOn = !!cfg.tabs?.i2i?.on;
+  const bst = batchState(node, "i2i");
+  const batchGo = (i2iOn && sourceView(node, "i2i") === "batch" && bst.files.length)
+    ? el("button", "rn-run-go rn-run-go-batch",
+         bst.running ? "Running the batch…"
+                     : `Run All Batch (${bst.sel?.size || bst.files.length})`)
+    : null;
+  if (batchGo) {
+    batchGo.title = "Run the Img2Img folder, one picture per queue. Generate beside "
+                  + "it renders once, from the gallery.";
+    batchGo.disabled = bst.running;
+    batchGo.onclick = () => runBatch(node, "i2i", i2iBatchOpts(node),
+                                     bst.sel?.size ? [...bst.sel].sort((a, b) => a - b)
+                                                   : undefined);
+  }
   const mode = el("div", "rn-ws-seg rn-ws-switch rn-run-mode");
   mode.dataset.choice = "draft";
   for (const [v, label, tip] of [
@@ -975,7 +996,9 @@ function runPage(node, body) {
   }
   const facts = el("div", "rn-run-facts");
   view.refs.facts = facts;
-  top.append(gen, mode, tierWrap, facts);
+  top.append(gen);
+  if (batchGo) top.append(batchGo);
+  top.append(mode, tierWrap, facts);
   root.appendChild(top);
   const banner = el("div", "rn-ws-card rn-run-past");
   const bannerText = el("span", "tx");
@@ -1471,6 +1494,10 @@ export const RUN_CSS = `
   font-size:14px;letter-spacing:.04em;border-radius:8px;padding:9px 22px;cursor:pointer}
 .rn-run-go:hover{background:#cf2f45}
 .rn-run-go:disabled{opacity:.6;cursor:wait}
+/* the folder batch is the blue the batch buttons use everywhere else, so the red
+   Generate beside it stays the one that renders once */
+.rn-run-go-batch{background:#2b3a4d;border-color:#3d5570;color:#cfe6ff}
+.rn-run-go-batch:hover{background:#365072}
 .rn-run-tier{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rn-run-estcard{margin-top:8px;padding-top:8px;border-top:1px solid #2a2e34;display:flex;flex-direction:column;gap:4px}
 .rn-run-estbig{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

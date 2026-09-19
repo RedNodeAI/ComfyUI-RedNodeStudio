@@ -13639,38 +13639,7 @@ function i2iTabs(node, body) {
     // THE SAME FOLDER BATCH the Upscale tab uses, under the gallery it feeds. An
     // Img2Img run is an ordinary Queue, so a batch is that queue once per picture
     // with the gallery pointed at each in turn, in the QUEUED copy only.
-    batchStrip(node, "i2i", body, {
-      runLabel: "Run All Batch",
-      loadImages: !!cfg.tabs.i2i.on,
-      precheck: () => (cfg.tabs.i2i.on
-        ? "" : "Img2Img is switched off, so nothing would be rendered. Switch it on "
-             + "at the top of this tab, then run the batch again."),
-      onRun: async (file) => {
-        const { output } = await app.graphToPrompt();
-        const wsKey = promptKeyFor(output, node);
-        if (!wsKey) throw new Error("the Workspace is not in the queued graph");
-        const pruned = pruneToNode(output, wsKey);
-        const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
-        const t2 = (c.tabs ||= {}).i2i ||= {};
-        t2.on = true;
-        t2.images = [file];        // this picture, this queue
-        t2.sel = 0;
-        t2.random = false;         // the dice would undo the point of a batch
-        pruned[wsKey].inputs.config = JSON.stringify(c);
-        advanceSeeds(pruned, Object.keys(pruned));
-        const res = await api.fetchApi("/prompt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: pruned,
-                                 client_id: api.clientId ?? api.socket?.clientId }),
-        });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok || d.error) {
-          throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
-        }
-        return String(d.prompt_id || "");
-      },
-    });
+      batchStrip(node, "i2i", body, i2iBatchOpts(node));
     }
   }
   else if (sub === "passes") passesTab(node, body);
@@ -16901,3 +16870,42 @@ app.registerExtension({
     api.addEventListener?.("execution_interrupted", failPaintFinal);
   },
 });
+
+// THE IMG2IMG FOLDER BATCH, as options rather than inline: the Run tab offers
+// the same run, and two copies of a queue builder is two places for it to
+// drift.
+export function i2iBatchOpts(node) {
+  const cfg = node._rnCfg;
+  return {
+    runLabel: "Run All Batch",
+    loadImages: !!cfg.tabs.i2i.on,
+    precheck: () => (cfg.tabs.i2i.on
+      ? "" : "Img2Img is switched off, so nothing would be rendered. Switch it on "
+           + "at the top of this tab, then run the batch again."),
+    onRun: async (file) => {
+      const { output } = await app.graphToPrompt();
+      const wsKey = promptKeyFor(output, node);
+      if (!wsKey) throw new Error("the Workspace is not in the queued graph");
+      const pruned = pruneToNode(output, wsKey);
+      const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
+      const t2 = (c.tabs ||= {}).i2i ||= {};
+      t2.on = true;
+      t2.images = [file];        // this picture, this queue
+      t2.sel = 0;
+      t2.random = false;         // the dice would undo the point of a batch
+      pruned[wsKey].inputs.config = JSON.stringify(c);
+      advanceSeeds(pruned, Object.keys(pruned));
+      const res = await api.fetchApi("/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: pruned,
+                               client_id: api.clientId ?? api.socket?.clientId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.error) {
+        throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
+      }
+      return String(d.prompt_id || "");
+    },
+    };
+}
