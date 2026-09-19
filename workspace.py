@@ -2436,6 +2436,30 @@ def load_image_or_blank(name, target, who):
         return blank_frame()
 
 
+# The text chunks a RedNode save writes. Carried, not rebuilt: an upscale of last
+# week's render must say what MADE that picture, not what happens to be loaded in
+# the Workspace today.
+CARRY_CHUNKS = ("parameters", "civitaiResources", "hashes", "rednode_words")
+
+
+def png_carry(name):
+    """The RedNode metadata already in a picture, or {} if it has none.
+
+    A picture dropped on the Upscale tab is usually one this pack made, and it
+    carries its own prompt, model, LoRAs, seed and steps in its text chunks. Those
+    belong to the render, so they follow the picture through an upscale rather
+    than being replaced by whatever rig is loaded now.
+    """
+    try:
+        with Image.open(_filepath(name)) as img:
+            text = dict(getattr(img, "text", {}) or {})
+    except Exception:
+        return {}
+    out = {k: text[k] for k in CARRY_CHUNKS if str(text.get(k) or "").strip()}
+    # only worth carrying if it names a render: the two lists alone say nothing
+    return out if out.get("parameters") else {}
+
+
 def load_image(name, target):
     """IMAGE tensor [1,H,W,3] in 0..1, long edge resized to `target`."""
     img = Image.open(_filepath(name))
@@ -2795,6 +2819,7 @@ class RedNodeStudioWorkspace:
         # the Upscale tab's own run, read EARLY: the rig load below happens long
         # before the doors, and an upscale must not drag a model onto the card
         _urt = str(cfg["upscale"].get("run_token") or "")
+        _carry_for_save = {}          # a picture's own record, when it brought one
         # Send to Detailer: an upscale-tab run that skips the upscale and lets the
         # builtin chain have the picture, so Detailer, Post and Save run on it
         # exactly as they would on an ordinary render
@@ -4754,10 +4779,19 @@ class RedNodeStudioWorkspace:
                                                    "RedNode Upscale"))
                 if _uchain:
                     # Send to Detailer: no upscale, the picture goes straight on
-                    # and the builtin chain below does the work
+                    # and the builtin chain below does the work. Its record comes
+                    # with it, so the save says what made it.
+                    _carry_for_save = png_carry(_up.get("source") or "")
                     rig_image = _ubase
                     print("[RedNode Upscale] sent to the Detailer chain", flush=True)
                     raise _UpscaleHandled
+                # what MADE this picture, if this pack made it. Read before
+                # anything touches it, and carried from here on.
+                _ucarry = png_carry(_up.get("source") or "")
+                if _ucarry:
+                    print("[RedNode Upscale] the picture carries its own record; the "
+                          "upscale keeps it rather than this run's settings",
+                          flush=True)
                 _ukind = str((_up.get("stage") or {}).get("type") or "")
                 _upre = int(_up.get("pre_size") or 0)
                 if _upre:
@@ -4791,7 +4825,7 @@ class RedNodeStudioWorkspace:
                 if _uout is not None and torch.is_tensor(_uout):
                     rig_image = _uout
                     from .paint_render import _out as _paint_out
-                    _ur = _paint_out(_uout)
+                    _ur = _paint_out(_uout, _ucarry)
                     if isinstance(_ur, dict) and isinstance(_ur.get("ui"), dict):
                         # the same private key the paint door uses: the result pane
                         # reads it off the executed event, and core's own preview
@@ -4842,7 +4876,8 @@ class RedNodeStudioWorkspace:
                         _words = {"positive": prompt_text_out, "negative": negative_text_out}
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
                                              seed=run_seed, prompt=prompt,
-                                             extra_pnginfo=extra_pnginfo, words=_words)
+                                             extra_pnginfo=extra_pnginfo, words=_words,
+                                             carry=_carry_for_save or None)
                     _chain.mark("save")
                     _simgs = ((_sv or {}).get("ui") or {}).get("images") or []
                     if _simgs:

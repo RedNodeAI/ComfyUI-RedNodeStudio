@@ -1276,14 +1276,14 @@ class RedNodeSave:
                    "moving between ComfyUI and other front ends.")
 
     def save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
-             words=None):
+             words=None, carry=None):
         from . import run_events as _re
         return _re.tracked("save", "Save")(self._save)(
             images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo,
-            words=words)
+            words=words, carry=carry)
 
     def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
-              words=None):
+              words=None, carry=None):
         from . import builtin_chain as _chain
         if _chain.done("save"):
             from . import run_events as _re
@@ -1343,7 +1343,21 @@ class RedNodeSave:
                         png_meta.add_text("prompt", json.dumps(prompt))
                     for key, value in (extra_pnginfo or {}).items():
                         png_meta.add_text(key, json.dumps(value))
-                if civ_text:
+                # CARRIED: the picture that came in already said what made it, so
+                # that record is what goes out. An upscale of last week's render
+                # must not be labelled with the rig that happens to be loaded now.
+                _carry = carry if isinstance(carry, dict) else {}
+                _ctext = str(_carry.get("parameters") or "").strip()
+                if _ctext:
+                    png_meta = png_meta or PngInfo()
+                    png_meta.add_text("parameters", _ctext)
+                    # the marker travels with the words it vouches for: it says the
+                    # parameters text is a Workspace record rather than a trace, and
+                    # that is still true of a carried one
+                    for _k in ("civitaiResources", "hashes", "rednode_words"):
+                        if str(_carry.get(_k) or "").strip():
+                            png_meta.add_text(_k, str(_carry[_k]))
+                elif civ_text:
                     # the A1111 chunk Civitai and every gallery reads, plus the two
                     # lists on their own for readers that want them without parsing
                     png_meta = png_meta or PngInfo()

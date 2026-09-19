@@ -897,7 +897,7 @@ def blend_mask(m, pc):
     return m if b >= 1.0 else m * b
 
 
-def _out(image):
+def _out(image, carry=None):
     """Return the image AND show it, because nothing downstream will.
 
     Generate prunes the queued prompt to this node's own inputs, so a Save or
@@ -913,7 +913,20 @@ def _out(image):
         name = f"rednode_paint_{random.randint(0, 0xffffffff):08x}.png"
         t = image[0] if image.ndim == 4 else image
         arr = (t.detach().cpu().float().clamp(0, 1).numpy() * 255).astype("uint8")
+        # CARRIED METADATA rides the preview. This temp file is what the next step
+        # loads (the batch's follow-up chain, Send to Detailer, Use last result), so
+        # a record that stops here is a record lost one hop later.
+        info = None
+        if isinstance(carry, dict) and carry:
+            try:
+                from PIL.PngImagePlugin import PngInfo
+                info = PngInfo()
+                for k, v in carry.items():
+                    info.add_text(str(k), str(v))
+            except Exception:
+                info = None
         _PILImage.fromarray(arr[..., :3], mode="RGB").save(os.path.join(out_dir, name),
+                                                          pnginfo=info,
                                                           compress_level=4)
         return {"ui": {"images": [{"filename": name, "subfolder": "", "type": "temp"}]},
                 "result": (image,)}
