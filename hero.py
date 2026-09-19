@@ -297,13 +297,26 @@ def _save_hero(flat, source, tag="hero"):
     return {"filename": fname, "subfolder": "heroes", "type": "output"}
 
 
+# _vosr2 reads a whole PASS, not a multiplier: the loader's checkpoint and dtype,
+# the DiT tile and the VAE tile and both overlaps, the colour alignment. Handing
+# it only the scale failed as "VOSR2 failed: 'vosr2_model'", which reads like a
+# missing model rather than a missing dictionary key. The values are the
+# Detailer's own defaults (refine_pipeline.py:203-210); the two that name files
+# are left empty, which means "whatever the node itself defaults to".
+VOSR2_PASS = {
+    "vosr2_model": "", "vosr2_dtype": "", "vosr2_color": "wavelet",
+    "vosr2_tile": 512, "vosr2_tile_overlap": 32,
+    "vosr2_vae_tile": 1024, "vosr2_vae_overlap": 32,
+}
+
+
 def _enlarge(flat):
     """VOSR2 up to the working size. An upscaler, so it costs no likeness."""
     side = min(int(flat.shape[0]), int(flat.shape[1]))
     if side >= WORKING:
         return flat, side, ""
     mult = min(8, max(2, -(-WORKING // max(1, side))))
-    up, why_up = _vosr2(flat.unsqueeze(0), {"vosr2_scale": mult}, 0)
+    up, why_up = _vosr2(flat.unsqueeze(0), dict(VOSR2_PASS, vosr2_scale=mult), 0)
     if up is None:
         return flat, side, "not enlarged: %s" % why_up
     return up[0], side, "VOSR2 x%d" % mult
