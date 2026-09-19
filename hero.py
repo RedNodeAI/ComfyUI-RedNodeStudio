@@ -247,10 +247,15 @@ def make_hero(source, sam_model="", enlarge=True, rebuild=False):
     return entry, report
 
 
-def _make_hero(source, sam_model, enlarge):
-    image = _ws.load_image(source, 0)               # 0 = its own size, no resize
-    h, w = int(image.shape[1]), int(image.shape[2])
+def crop_and_cut(image, sam_model=""):
+    """Locate, crop above the garment, drop the background. On any picture.
 
+    Used twice per hero when a front on render is asked for: once on the source,
+    to make a clean reference, and again on the RENDER, because a full
+    regeneration reinvents clothing every time and puts back exactly what the
+    first crop removed.
+    """
+    h, w = int(image.shape[1]), int(image.shape[2])
     head, why = _mask_np(image, HEAD, sam_model)
     if head is None:
         raise ValueError(why or "SAM3 found no head in this picture")
@@ -277,26 +282,43 @@ def _make_hero(source, sam_model, enlarge):
         sub = torch.nn.functional.interpolate(
             sub.unsqueeze(1), size=(crop.shape[1], crop.shape[2]),
             mode="bilinear", align_corners=False).squeeze(1)
-    flat = _on_white(crop, sub)
+    return _on_white(crop, sub), (head, hair, occ, head_box), used
 
-    side = min(int(flat.shape[0]), int(flat.shape[1]))
-    grew = ""
-    if enlarge and side < WORKING:
-        mult = min(8, max(2, -(-WORKING // max(1, side))))
-        up, why_up = _vosr2(flat.unsqueeze(0), {"vosr2_scale": mult}, 0)
-        if up is not None:
-            flat = up[0]
-            grew = "VOSR2 x%d" % mult
-        else:
-            grew = "not enlarged: %s" % why_up
 
+def _save_hero(flat, source, tag="hero"):
+    """Square it with white and write it beside every other hero."""
     arr = _pad_square(flat.detach().cpu().numpy())
     png = (np.clip(arr, 0.0, 1.0) * 255.0).astype(np.uint8)
     folder = os.path.join(folder_paths.get_output_directory(), "heroes")
     os.makedirs(folder, exist_ok=True)
     stem = os.path.splitext(os.path.basename(str(source)))[0][:40] or "hero"
-    fname = "%s_hero_%s.png" % (stem, time.strftime("%Y%m%d-%H%M%S"))
+    fname = "%s_%s_%s.png" % (stem, tag, time.strftime("%Y%m%d-%H%M%S"))
     Image.fromarray(png, "RGB").save(os.path.join(folder, fname))
+    return {"filename": fname, "subfolder": "heroes", "type": "output"}
+
+
+def _enlarge(flat):
+    """VOSR2 up to the working size. An upscaler, so it costs no likeness."""
+    side = min(int(flat.shape[0]), int(flat.shape[1]))
+    if side >= WORKING:
+        return flat, side, ""
+    mult = min(8, max(2, -(-WORKING // max(1, side))))
+    up, why_up = _vosr2(flat.unsqueeze(0), {"vosr2_scale": mult}, 0)
+    if up is None:
+        return flat, side, "not enlarged: %s" % why_up
+    return up[0], side, "VOSR2 x%d" % mult
+
+
+def _make_hero(source, sam_model, enlarge):
+    image = _ws.load_image(source, 0)               # 0 = its own size, no resize
+    h, w = int(image.shape[1]), int(image.shape[2])
+    flat, (head, hair, occ, head_box), used = crop_and_cut(image, sam_model)
+    grew = ""
+    side = min(int(flat.shape[0]), int(flat.shape[1]))
+    if enlarge:
+        flat, side, grew = _enlarge(flat)
+    entry = _save_hero(flat, source)
+    fname = entry["filename"]
 
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
     report = {
@@ -309,7 +331,7 @@ def _make_hero(source, sam_model, enlarge):
         "below_floor": side < FLOOR,
         "route": "repair" if rep else ("enlarge" if en else "crop only"),
     }
-    return {"filename": fname, "subfolder": "heroes", "type": "output"}, report
+    return entry, report
 
 
 try:
@@ -340,5 +362,134 @@ try:
                      ", " + report["enlarged"] if report["enlarged"] else ""), flush=True)
         return web.json_response({"result": entry, "report": report})
 
+    @PromptServer.instance.routes.post("/rednode/hero_front")
+    async def _rednode_hero_front(request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        source = str(data.get("source") or "")
+        if not source:
+            return web.json_response({"error": "no picture to work from"}, status=400)
+        try:
+            entry, report = make_front(source,
+                                       str(data.get("unet") or ""),
+                                       str(data.get("clip") or ""),
+                                       str(data.get("vae") or ""),
+                                       str(data.get("lora") or ""),
+                                       str(data.get("sam_model") or ""))
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except Exception as e:
+            return web.json_response({"error": "the render failed (%s)" % e}, status=500)
+        print("[RedNode Hero] %s/%s front-on render from a %s px crop"
+              % (entry["subfolder"], entry["filename"], report.get("from_crop")),
+              flush=True)
+        return web.json_response({"result": entry, "report": report})
+
 except Exception:                     # no server (tests, or a bare import): fine
     pass
+
+
+# ---- the front on render ------------------------------------------------------------
+# The crop is lossless and stops here for most pictures. Where it cannot win, because
+# the face is behind a cap or a hand or turned away, the head has to be REBUILT, and
+# that is a different bargain: the occluder goes and the pose comes front on, but the
+# face is generated rather than kept. Measured: a 562 px crop came back nearly
+# identical to its source, a 161 px crop came back a different person. Hence FLOOR.
+
+FRONT = ("facing the camera directly, front view, head on, symmetrical, looking "
+         "straight into the lens, neutral closed mouth, bare shoulders, no clothing, "
+         "plain white background, even soft studio lighting")
+SYSTEM = ("A plain front-facing studio headshot of the person in the reference. "
+          "Even soft lighting, neutral expression, plain white background.")
+# 2.0 holds the original pose, because the pose lives in the reference and boost IS
+# adherence to it. 1.0 lets the head come front on, which is the whole job here.
+FRONT_BOOST = 1.0
+FRONT_STEPS = 8
+FRONT_CFG = 1.0
+
+
+def front_prompt(repair):
+    """The instruction, built from the reasons the crop lost.
+
+    Naming the actual job beats one generic studio line: "no swim cap" belongs in
+    the prompt only when there IS one. The hair clause describes HAIR and never
+    the absence of a hat, because "bare head" reads as bare scalp and came back
+    shaved.
+    """
+    bits = []
+    for r in repair or []:
+        if "hair" in r:
+            bits.append("a full head of natural hair, hairline visible, hair covering "
+                        "the scalp, nothing worn on the head")
+        if "covered" in r:
+            bits.append("nothing covering the face, nothing held up beside the head")
+    return ", ".join(bits + [FRONT])
+
+
+def _node(name):
+    cls = _core.NODE_CLASS_MAPPINGS.get(name)
+    if cls is None:
+        raise ValueError("this ComfyUI has no %s node, so the render cannot be built"
+                         % name)
+    return cls()
+
+
+def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
+    """Rebuild the head front on, then crop and cut the render.
+
+    Step 6 is not optional. A full regeneration reinvents clothing every time, so
+    the crop that took the garment out has to run again on the OUTPUT or the hero
+    comes back in a collar.
+    """
+    if not (unet and clip and vae):
+        raise ValueError("the front-on render needs a model, a text encoder and a "
+                         "VAE from the active rig. Set them on the Models tab.")
+    if not lora:
+        raise ValueError("the front-on render works through a Krea 2 edit LoRA, and "
+                         "none is switched on in the LoRAs tab. Without it the "
+                         "reference steers nothing and the face comes back a stranger.")
+
+    entry, report = make_hero(source, sam_model, True)
+    with progress_safe():
+        base = _ws.load_image("%s/%s [output]" % (entry["subfolder"], entry["filename"]), 0)
+
+        # imported HERE, not at module level: identity.py needs
+        # comfy.text_encoders.krea2, which an older core does not have, and an
+        # unguarded import at the top took the whole pack down with it on one.
+        from .identity import Krea2IdentityEdit
+
+        model = _node("UNETLoader").load_unet(unet_name=unet, weight_dtype="default")[0]
+        model = _node("LoraLoaderModelOnly").load_lora_model_only(
+            model=model, lora_name=lora, strength_model=1.0)[0]
+        cl = _node("CLIPLoader").load_clip(clip_name=clip, type="krea2")[0]
+        va = _node("VAELoader").load_vae(vae_name=vae)[0]
+
+        side = int(base.shape[1])
+        latent = _node("EmptyLatentImage").generate(width=side, height=side, batch_size=1)[0]
+        pos = Krea2IdentityEdit().encode(
+            clip=cl, prompt=front_prompt(report.get("repair")), vae=va, image=base,
+            grounding_px=side, ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST,
+            target_latent=latent, fit_mode="fit", ref_t0_modulation=False,
+            system_prompt=SYSTEM)[0]
+        neg = _node("CLIPTextEncode").encode(clip=cl, text="")[0]
+        out = _node("KSampler").sample(
+            model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
+            sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
+            latent_image=latent, denoise=1.0)[0]
+        render = _node("VAEDecode").decode(samples=out, vae=va)[0]
+
+        flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
+        final = _save_hero(flat, source, "front")
+
+    fside = min(int(flat.shape[0]), int(flat.shape[1]))
+    en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, fside)
+    return final, {
+        "crop_side": fside, "hair_ratio": hair_ratio, "cover": cover,
+        "enlarge": en, "repair": rep, "enlarged": "", "segmenter": used,
+        "below_floor": report.get("crop_side", 0) < FLOOR,
+        "route": "front-on render", "generated": True,
+        "from_crop": report.get("crop_side"),
+        "prompt": front_prompt(report.get("repair")),
+    }

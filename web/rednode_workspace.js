@@ -13817,6 +13817,11 @@ function heroBody(node, body, sub) {
   // a reference keeps writing to it after anything replaces node._rnHero, and
   // then the panel and the handler disagree about which state is live.
   const S = () => (node._rnHero ||= {});
+  // What has already been made, keyed by the picture it came from. The server
+  // caches the work, but the panel was throwing the RESULT away on every change
+  // of thumbnail, so coming back to a picture showed nothing. In properties, so
+  // it is still there after a reload: the files outlive the session.
+  const MADE = () => ((node.properties ||= {}).rn_hero_made ||= {});
   const state = S();
   const pics = (t.images || []).filter((x) => String(x || "").trim());
 
@@ -13852,17 +13857,22 @@ function heroBody(node, body, sub) {
     const im = document.createElement("img");
     im.src = thumbUrl(p, 120);
     im.alt = "";
-    im.title = parseName(p).filename;
     const on = p === state.source;
+    const done = !!MADE()[p];
+    im.title = parseName(p).filename + (done ? " (hero already made)" : "");
     // outline, not border: a border would resize the tile as the choice moves
     im.style.cssText = "width:82px;height:82px;object-fit:cover;border-radius:6px;"
       + "cursor:pointer;background:#111;"
-      + (on ? "outline:2px solid #b8283c;outline-offset:1px" : "outline:1px solid #2a2e35");
+      + (on ? "outline:2px solid #b8283c;outline-offset:1px" : "outline:1px solid #2a2e35")
+      + (done ? ";box-shadow:0 0 0 2px #1f9d55 inset" : "");
     im.onclick = () => {
       const st = S();
       st.source = p;
-      st.result = null;                 // a new source, so the old hero is not its result
-      st.report = null;
+      st.error = "";
+      // show what was made from THIS picture, not the last one looked at
+      const was = MADE()[p];
+      st.result = was?.result || null;
+      st.report = was?.report || null;
       render(node);
     };
     grid.appendChild(im);
@@ -13975,6 +13985,92 @@ function heroBody(node, body, sub) {
     acts.append(send, open, again);
     card.appendChild(acts);
     body.appendChild(card);
+
+    // ---- the front-on render -------------------------------------------------
+    // The crop is lossless and most pictures stop there. This REBUILDS the head:
+    // the cap goes, the pose comes front on, and the face is generated rather
+    // than kept. Offered even when the crop was fine, because a turned head is a
+    // reason to want it that no measurement of mine detects.
+    const rep = document.createElement("div");
+    rep.className = "rn-ws-card";
+    const rph = document.createElement("div");
+    rph.className = "ch";
+    rph.textContent = "FRONT-ON RENDER";
+    rep.appendChild(rph);
+
+    const what = document.createElement("div");
+    what.className = "rn-ws-note";
+    what.textContent = "Rebuild the head facing the camera, taking off a cap, goggles "
+      + "or a hand on the way. This GENERATES the face rather than keeping it, so it "
+      + "is the one step here that can cost a likeness.";
+    rep.appendChild(what);
+
+    const cfg = node._rnCfg;
+    const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
+    const slots = (cfg.loras?.slots || []).filter((sl) => sl && sl.type !== "title");
+    const idLora = slots.find((sl) => sl.enabled && isIdentityLora(sl.name));
+    const modelName = rig.unet || rig.checkpoint || "";
+    const issues = [];
+    if (!modelName || !rig.clip || !rig.vae) {
+      issues.push("The active rig needs a model, a text encoder and a VAE. Set them "
+                  + "on the Models tab.");
+    }
+    if (!idLora) {
+      issues.push("No Krea 2 edit LoRA is switched on in the LoRAs tab. The render "
+                  + "works through it, and without one the face comes back a stranger.");
+    }
+    // The recipe was proved on the OFFICIAL turbo. A finetune was tried and barely
+    // moved, and the raw base bare came back blank, so this is a warning worth
+    // making rather than a preference.
+    if (modelName && !/krea2turbooffical|krea2turboofficial/i.test(modelName)) {
+      issues.push("This was proved on the official Krea 2 turbo. The rig is running "
+                  + `"${modelName}", and a finetune or a raw base may come back `
+                  + "distorted or blank.");
+    }
+    for (const t0 of issues) {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note warn";
+      n.textContent = t0;
+      rep.appendChild(n);
+    }
+    if (r.below_floor) {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note warn";
+      n.textContent = `The crop is ${r.crop_side} px, under the ${400} px that a `
+        + "rebuild needs to hold a likeness. It will run if you ask, and the face "
+        + "that comes back may not be the same person.";
+      rep.appendChild(n);
+    }
+
+    const frontBtn = document.createElement("button");
+    frontBtn.className = "rn-ws-btn go";
+    frontBtn.textContent = state.busy ? "Rendering…" : "Make front-facing";
+    frontBtn.disabled = !!state.busy || !modelName || !rig.clip || !rig.vae || !idLora;
+    frontBtn.onclick = async () => {
+      S().busy = true;
+      S().error = "";
+      render(node);
+      try {
+        const res = await api.fetchApi("/rednode/hero_front", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: S().source, unet: rig.unet || rig.checkpoint || "",
+            clip: rig.clip, vae: rig.vae, lora: idLora?.name || "",
+          }),
+        });
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        S().result = d.result;
+        S().report = d.report;
+        MADE()[S().source] = { result: d.result, report: d.report };
+      } catch (e) {
+        S().error = String(e.message || e);
+      }
+      S().busy = false;
+      render(node);
+    };
+    rep.appendChild(frontBtn);
+    body.appendChild(rep);
   }
 
   go.onclick = async (opts) => {
@@ -13990,6 +14086,7 @@ function heroBody(node, body, sub) {
       if (d.error) throw new Error(d.error);
       S().result = d.result;
       S().report = d.report;
+      MADE()[S().source] = { result: d.result, report: d.report };
     } catch (e) {
       S().result = null;
       S().report = null;
