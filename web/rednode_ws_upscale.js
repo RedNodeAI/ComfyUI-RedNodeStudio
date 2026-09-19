@@ -174,8 +174,9 @@ async function queueUpscale(node, say, over, quiet, top) {
     // this tab: only the tab that asked for a result is allowed to show it
     registerUpscaleRun(String(d.prompt_id || ""), node);
     // what went in and when, so the result can say what it cost
-    node._rnUpStat = { t0: Date.now(), from: null, ms: 0 };
-    imgDims(viewInput(over?.source || node._rnCfg?.upscale?.source || ""))
+    const srcName = over?.source || node._rnCfg?.upscale?.source || "";
+    node._rnUpStat = { t0: Date.now(), from: null, ms: 0, src: srcName };
+    imgDims(viewInput(srcName))
       .then((d2) => { if (node._rnUpStat) node._rnUpStat.from = d2; });
     return String(d.prompt_id || "");
   } catch (err) {
@@ -268,6 +269,17 @@ export function upscaleBody(node, body) {
     flags: () => node._rnCfg.upscale.after,
     saveKey: "save",
     manualKey: "manual",
+    // MANUAL AND A FOLDER DO NOT MIX. Every picture would be made and left, but
+    // only the last stays on the card and the history keeps five, so a run of
+    // twenty on Manual quietly throws fifteen away. One picture is a fair reason
+    // to do it anyway, so this asks rather than refuses.
+    confirmRun: (n) => (n > 1 && node._rnCfg?.upscale?.after?.manual
+      ? `After a run is set to Manual, so these ${n} pictures will be made and `
+        + "left for you one at a time. Only the last stays on the result card and "
+        + "the history keeps five, so most of this run would be lost.\n\n"
+        + "Switch Save on, or one of the other steps, to keep them all.\n\n"
+        + "Run all " + n + " anyway?"
+      : ""),
     after: [
       ["manual", "Manual",
        "Nothing runs by itself. Each picture is made and left for you, and the "
@@ -300,7 +312,7 @@ export function upscaleBody(node, body) {
   };
 
   // THE PICTURE
-  const { card: srcCard, line: srcLine } = card(body, "PICTURE");
+  const { line: srcLine } = card(body, "SINGLE IMAGE");
   const thumb = document.createElement(U.source ? "img" : "div");
   thumb.style.cssText = "width:120px;height:120px;border:1px solid #2a2e35;border-radius:6px;"
                       + "background:#15171b;flex:none;object-fit:contain";
@@ -409,17 +421,21 @@ export function upscaleBody(node, body) {
     : "No folder yet. Drop one on the batch below, or press Pick a folder there.";
   bgo.onclick = () => {
     if (!bst.files.length) { pickFolder(node, "upscale"); return; }
-    runBatch(node, "upscale", batchOpts.onRun, batchOpts.precheck, batchOpts.afterEach);
+    runBatch(node, "upscale", batchOpts);
   };
   runBox.appendChild(bgo);
 
   runBox.appendChild(status);
   srcLine.appendChild(runBox);
-  // AFTER A RUN, governing the single run and the batch alike: one setting, one
-  // place. On the batch card alone it read as though a single picture could not
-  // be sent on (the user, 2026-09-20).
-  afterRow(node, srcCard, {
-    caption: "After a run:",
+  // A CARD OF ITS OWN, between the single image and the folder, because it
+  // governs both. Tucked under the single picture it read as belonging to that
+  // one picture; on the batch card it read as belonging to the folder (the user,
+  // 2026-09-20). Between them, titled like everything else, it belongs to neither
+  // and applies to both.
+  const { card: afterCard, line: afterLine } = card(body, "AFTER A RUN");
+  afterLine.remove();
+  afterRow(node, afterCard, {
+    caption: "",
     key: "upscale",
     saveKey: batchOpts.saveKey,
     manualKey: batchOpts.manualKey,
@@ -582,7 +598,7 @@ export function upscaleBody(node, body) {
   // in step, and would quietly lose Copy, Copy prompt, Rerun and the history.
   const shot = document.createElement("img");
   shot.src = resultUrl(r);
-  shot.style.cssText = "max-width:340px;max-height:340px;border:1px solid #2a2e35;"
+  shot.style.cssText = "max-width:300px;max-height:300px;border:1px solid #2a2e35;"
                      + "border-radius:6px;background:#15171b;flex:none;cursor:zoom-in;"
                      + "object-fit:contain";
   shot.title = "The last picture a run produced. Click for full size, right-click "
@@ -590,7 +606,8 @@ export function upscaleBody(node, body) {
   shot.onclick = () => openPaintViewer(node, r);
   shot.oncontextmenu = (ev) => { ev.preventDefault(); openResultMenu(node, r, ev); };
   const acts = el("div");
-  acts.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:none;width:190px";
+  acts.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:none;width:180px;"
+                     + "padding-top:18px";
   const act = (label, title, fn) => {
     const b = el("button", "rn-ws-btn", label);
     b.style.cssText = "width:100%;padding:8px 18px;font-size:13px;text-align:center";
@@ -647,14 +664,49 @@ export function upscaleBody(node, body) {
     try { await runPaintFinal(node, r, false); }
     catch (err) { alert(`Save failed: ${err.message}`); }
   });
-  const info = el("div");
-  info.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:flex-start;"
-                     + "min-width:0;flex:1 1 200px";
-  const stat = el("div", "hint", "");
-  stat.style.cssText = "font-size:12px;line-height:1.5";
+  // BEFORE AND AFTER, side by side. One picture on its own said nothing about
+  // what the run had done to it, and the numbers alone are not the same as seeing
+  // it (the user, 2026-09-20). The left is what went in, the right what came out,
+  // and the right follows a Send to Post or a Save because those make a new one.
+  rLine.style.cssText += ";align-items:flex-start;gap:14px";
+  const pane = (title) => {
+    const col = el("div");
+    col.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;"
+                      + "flex:none";
+    const cap = el("div", "hint", title);
+    cap.style.cssText = "font-size:10px;font-weight:700;letter-spacing:.08em;"
+                      + "color:#8a919b";
+    col.appendChild(cap);
+    return col;
+  };
+  const up = node._rnUpStat;
+  const beforeCol = pane("BEFORE");
+  const beforeName = up?.src || U.source || "";
+  if (beforeName) {
+    const bimg = document.createElement("img");
+    bimg.src = viewInput(beforeName);
+    bimg.style.cssText = "max-width:300px;max-height:300px;border:1px solid #2a2e35;"
+                       + "border-radius:6px;background:#15171b;object-fit:contain";
+    bimg.title = `What went in: ${beforeName}`;
+    const bsize = el("div", "hint", "");
+    bsize.style.cssText = "font-size:11px";
+    bimg.addEventListener("load", () => {
+      bsize.textContent = `${bimg.naturalWidth} × ${bimg.naturalHeight}`;
+    });
+    beforeCol.append(bimg, bsize);
+  } else {
+    const none = el("div", "hint", "nothing recorded");
+    none.style.cssText = "font-size:11px";
+    beforeCol.appendChild(none);
+  }
+
+  const afterCol = pane("AFTER");
+  const stat = el("div", "");
+  stat.style.cssText = "font-size:12px;letter-spacing:.02em;color:#c8ccd2;"
+                     + "background:#15171b;border:1px solid #2a2e35;border-radius:5px;"
+                     + "padding:4px 10px;text-align:center;line-height:1.45";
   // FROZEN on the first draw after a run: read at render time it would climb for
   // as long as the panel stayed open, which is a clock, not a measurement
-  const up = node._rnUpStat;
   if (up && up.t0 && !up.ms) up.ms = Date.now() - up.t0;
   // the three numbers arrive at different times: the size when the picture loads,
   // the file size from a HEAD, the duration already known. One function draws
@@ -664,23 +716,20 @@ export function upscaleBody(node, body) {
     const w = Number(shot.naturalWidth) || 0;
     const h = Number(shot.naturalHeight) || 0;
     if (!w || !h) return;
-    const from = up?.from;
-    const bits = [];
+    const bits = [`${w} × ${h}`];
     if (bytes) {
       bits.push(bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
                                     : `${Math.round(bytes / 1024)} KB`);
     }
     if (up?.ms) bits.push(`${(up.ms / 1000).toFixed(1)}s`);
-    stat.textContent = (from && from.w
-      ? `${from.w} × ${from.h} → ${w} × ${h}` : `${w} × ${h}`)
-      + (bits.length ? ` · ${bits.join(" · ")}` : "");
+    stat.textContent = bits.join(" · ");
   };
   shot.addEventListener("load", drawStat);
   if (shot.complete) drawStat();
   fileBytes(resultUrl(r)).then((n) => { bytes = n; drawStat(); });
-  const rname = el("span", "hint", node._rnFinalStatus || "");
-  rname.style.cssText = "font-size:11px";
+  const rname = el("div", "hint", node._rnFinalStatus || "");
+  rname.style.cssText = "font-size:11px;text-align:center";
   if (node._rnFinalFailed) rname.style.color = "#fca5a5";
-  info.append(stat, rname);
-  rLine.append(shot, acts, info);
+  afterCol.append(shot, stat, rname);
+  rLine.append(beforeCol, afterCol, acts);
 }

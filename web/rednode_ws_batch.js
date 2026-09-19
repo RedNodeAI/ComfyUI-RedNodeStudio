@@ -170,7 +170,8 @@ export function folderDropZone(node, el, key) {
  *  two hundred pictures failed one at a time, each with only a console line, is
  *  not an error message. It is what this did when the tab was switched off.
  */
-export async function runBatch(node, key, queueOne, precheck, afterEach, only) {
+export async function runBatch(node, key, opts = {}, only) {
+  const { onRun: queueOne, precheck, afterEach, confirmRun } = opts;
   const st = batchState(node, key);
   if (st.running || !st.files.length) return;
   // a partial run works the same way, just over fewer of them
@@ -182,6 +183,11 @@ export async function runBatch(node, key, queueOne, precheck, afterEach, only) {
     alert(stopper);
     return;
   }
+  // A WARNING YOU CAN OVERRULE, unlike the precheck above. The run would work;
+  // it is the outcome that is not what anyone wants, and one picture is a fair
+  // reason to do it anyway.
+  const doubt = confirmRun?.(order.length);
+  if (doubt && !confirm(doubt)) return;
   st.running = true;
   st.stop = false;
   st.done = [];
@@ -262,12 +268,15 @@ export function batchStrip(node, key, host, opts = {}) {
   const st = batchState(node, key);
   const box = document.createElement("div");
   box.className = "rn-ws-card";
-  const head = document.createElement("div");
-  head.className = "rn-ws-row";
+  // the title on its own line, the way every other card on the page does it. It
+  // sat inline with the buttons and read as a different kind of box (the user,
+  // 2026-09-20).
   const ttl = document.createElement("div");
   ttl.className = "ch";
-  ttl.textContent = "BATCH FOLDER";
-  head.appendChild(ttl);
+  ttl.textContent = opts.title || "BATCH FOLDER";
+  box.appendChild(ttl);
+  const head = document.createElement("div");
+  head.className = "rn-ws-row";
 
   const btn = (into, label, title, fn, disabled) => {
     const b = document.createElement("button");
@@ -288,7 +297,7 @@ export function batchStrip(node, key, host, opts = {}) {
     btn(head, opts.runLabel || "Run All Batch",
         "Run every picture in turn, one per queue. A picture that fails is marked "
         + "and the rest carry on.",
-        () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach));
+        () => runBatch(node, key, opts));
     btn(head, "Clear", "Forget this folder. The copies stay in the input folder.", () => {
       st.files = []; st.at = -1; st.done = []; st.failed = []; st.why = {};
       st.sel = new Set(); st.peek = -1; st.note = "";
@@ -312,7 +321,7 @@ export function batchStrip(node, key, host, opts = {}) {
   if (st.files.length && !st.running && chosen().length) {
     const only = btn(head, `Run Selected (${chosen().length})`,
       "Run only the pictures you have ticked, in order.",
-      () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach, chosen()));
+      () => runBatch(node, key, opts, chosen()));
     only.style.cssText += ";margin-left:auto;background:#2b3a4d;color:#cfe6ff;"
                         + "border-color:#3d5570";
   }
