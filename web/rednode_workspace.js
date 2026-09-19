@@ -13900,11 +13900,56 @@ function heroBody(node, body, sub) {
   if (!pics.includes(state.source)) { state.source = pics[0]; load(pics[0]); }
 
   const sel = () => (S().sel ||= []);
-  const toggleSel = (p) => {
+
+  // Every render() rebuilds this panel, and rebuilding it destroys and recreates
+  // every <img>, which blanks while the browser decodes them again. During a
+  // render or a batch that happened several times a second and the pictures
+  // flickered black. So anything that only changes a LABEL is written straight
+  // onto the element, and render() is kept for when the pictures really change.
+  // rebuilt every render, not reused: the elements from the last one are detached
+  // by now, and writing a label onto a detached button is a change nobody sees
+  const btns = (node._rnHeroBtns = {});
+  const paintBusy = () => {
+    const st = S();
+    const busy = !!st.busy;
+    if (btns.go) {
+      btns.go.textContent = st.busy === "hero" ? "Working..." : "Create hero";
+      btns.go.disabled = busy;
+    }
+    if (btns.front) {
+      btns.front.textContent = st.busy === "front" ? "Rendering..."
+        : st.front ? "Render again" : "Make front-facing";
+      btns.front.disabled = busy || btns.frontBlocked;
+    }
+    if (btns.batch) {
+      btns.batch.textContent = st.busy === "batch"
+        ? "Making " + (st.batchAt || 0) + " of " + (st.batchOf || 0) + "..."
+        : "Create " + sel().length + " selected";
+      btns.batch.disabled = busy;
+    }
+    if (btns.clear) btns.clear.disabled = busy;
+    // the lock has to be VISIBLE. Rendering to show it would rebuild every
+    // picture, which is the flicker this whole arrangement exists to avoid.
+    for (const im of btns.tiles || []) {
+      im.style.opacity = busy ? "0.45" : "1";
+      im.style.cursor = busy ? "not-allowed" : "pointer";
+    }
+  };
+
+  const toggleSel = (p, tile) => {
     const a = sel();
+    const was = a.length;
     const i = a.indexOf(p);
     if (i < 0) a.push(p); else a.splice(i, 1);
-    render(node);
+    // the toolbar gains or loses the batch buttons only at the 0 boundary; any
+    // other change is one outline and one number, and needs no rebuild
+    if (!was || !a.length) { render(node); return; }
+    if (tile) {
+      tile.style.cssText = tile.style.cssText.replace(
+        /outline:[^;]*/, a.includes(p) ? "outline:2px solid #3b82f6"
+                                       : "outline:1px solid #2a2e35");
+    }
+    paintBusy();
   };
 
   const grid = document.createElement("div");
@@ -13931,6 +13976,10 @@ function heroBody(node, body, sub) {
                      : "outline:1px solid #2a2e35")
       + (done ? ";box-shadow:0 0 0 2px #1f9d55 inset" : "");
     im.onclick = () => {
+      // locked while a run is in flight. The result is filed against the picture
+      // it started from either way, but changing the view underneath a running
+      // render reads as the wrong picture being worked on.
+      if (S().busy) return;
       S().source = p;
       S().error = "";
       load(p);                      // show what was made from THIS picture
@@ -13938,7 +13987,7 @@ function heroBody(node, body, sub) {
     };
     im.oncontextmenu = (e) => {
       e?.preventDefault?.();
-      toggleSel(p);
+      toggleSel(p, im);
       return false;
     };
     // one mark per stage, so which of the two has been made is visible without
@@ -13957,6 +14006,7 @@ function heroBody(node, body, sub) {
       marks.appendChild(b);
     }
     cell.append(im, marks);
+    (btns.tiles ||= []).push(im);   // so the lock can be shown without a rebuild
     grid.appendChild(cell);
   }
   src.appendChild(grid);
@@ -14007,11 +14057,12 @@ function heroBody(node, body, sub) {
     S().busy = "batch";
     S().error = "";
     S().batchAt = 0;
-    render(node);
+    S().batchOf = list.length;
+    paintBusy();                      // a counter, not a reason to redraw pictures
     const failed = [];
     for (let i = 0; i < list.length; i++) {
       S().batchAt = i + 1;
-      render(node);
+      paintBusy();
       const why = await makeOne(list[i], false);
       if (why) failed.push(parseName(list[i]).filename + ": " + why);
     }
@@ -14030,7 +14081,7 @@ function heroBody(node, body, sub) {
   go.onclick = async (opts) => {
     S().busy = "hero";
     S().error = "";
-    render(node);
+    paintBusy();
     const why = await makeOne(S().source, !!opts?.rebuild);
     if (why) {
       S().error = why;
@@ -14041,6 +14092,7 @@ function heroBody(node, body, sub) {
     S().busy = "";
     render(node);
   };
+  btns.go = go;
   const tools = document.createElement("div");
   tools.className = "rn-ws-row";
   tools.appendChild(go);
@@ -14073,11 +14125,13 @@ function heroBody(node, body, sub) {
     batch.title = "Run every selected picture in turn. Each result is kept with its "
       + "own picture, so clicking one afterwards shows what it made.";
     batch.onclick = () => runBatch();
+    btns.batch = batch;
     const clear = document.createElement("button");
     clear.className = "rn-ws-btn";
     clear.textContent = "Clear selection";
     clear.disabled = !!state.busy;
     clear.onclick = () => { S().sel = []; render(node); };
+    btns.clear = clear;
     tools.append(batch, clear);
   } else {
     const hint = document.createElement("span");
@@ -14329,25 +14383,35 @@ function heroBody(node, body, sub) {
   frontBtn.className = "rn-ws-btn go";
   frontBtn.textContent = state.busy === "front" ? "Rendering..."
     : state.front ? "Render again" : "Make front-facing";
-  frontBtn.disabled = !!state.busy || !modelName || !rig.clip || !rig.vae || !idLora;
+  btns.frontBlocked = !modelName || !rig.clip || !rig.vae || !idLora;
+  btns.front = frontBtn;
+  frontBtn.disabled = !!state.busy || btns.frontBlocked;
   frontBtn.onclick = async () => {
+    // The picture this STARTED from. Reading S().source again after the await
+    // files the result under whatever is selected when it lands, so switching
+    // pictures mid-render put one person's face on another's card.
+    const from = S().source;
+    const startedWith = MADE()[from];
     S().busy = "front";
     S().error = "";
-    render(node);
+    paintBusy();
     try {
       const res = await api.fetchApi("/rednode/hero_front", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source: S().source, unet: rig.unet || rig.checkpoint || "",
+          source: from, unet: rig.unet || rig.checkpoint || "",
           clip: rig.clip, vae: rig.vae, lora: idLora?.name || "",
           extra: extraLine(),
         }),
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);
-      S().front = { result: d.result, report: d.report };
-      S().pick = "front";
-      MADE()[S().source] = { hero: S().hero, front: S().front };
+      const front = { result: d.result, report: d.report };
+      MADE()[from] = { hero: startedWith?.hero || S().hero, front };
+      if (S().source === from) {      // still looking at it: show it
+        S().front = front;
+        S().pick = "front";
+      }
     } catch (e) {
       S().error = String(e.message || e);
       S().errorAt = "front";
