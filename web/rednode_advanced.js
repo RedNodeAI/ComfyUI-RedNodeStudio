@@ -17,7 +17,11 @@ import { comboOptions } from "./rednode_ws_tables.js";
 // never removed, and stays the value holder; the panel reads and writes it.
 
 const NODE_NAMES = ["RedNodeStudioDetailer", "RedNodeStudioAdvanced"];
-const TARGETS = ["face", "hair", "hands", "eyes", "clothes", "background"];
+// SAM3 is text prompted, so a target is any phrase it understands and this list
+// is the shortcut rather than the whole of it; CUSTOM types one instead.
+const TARGETS = ["face", "hair", "hands", "eyes", "feet", "breasts", "penis",
+                 "clothes", "background"];
+const CUSTOM = "Custom…";
 // the upscale sizes, in the order they grow; refine_pipeline.py holds the pixel
 // budget behind each name and works the short edge out from the frame's aspect
 const SIZES = ["720p", "1080p", "2K", "1440p", "4K"];
@@ -1192,11 +1196,24 @@ function buildPanel(node, hostEl = null) {
                    sel(rigs, s.rig, "Which Models-tab rig runs this pass.",
                        (v) => { s.rig = v; writeCfg(node, d); }, "(active rig)"));
         if (s.type === "detailer") {
+          // a target already set but off the list stays on it, so a phrase typed
+          // once is still the choice the next time the panel is drawn
           top.append(lab("Target"),
-                     sel(TARGETS.includes(s.target) ? TARGETS
-                                                    : [s.target, ...TARGETS],
-                         s.target, "What SAM3 segments and this pass redraws.",
-                         (v) => { s.target = v; writeCfg(node, d); }));
+                     sel(TARGETS.includes(s.target)
+                           ? [...TARGETS, CUSTOM]
+                           : [s.target, ...TARGETS, CUSTOM],
+                         s.target,
+                         "What SAM3 segments and this pass redraws. Custom takes "
+                         + "any phrase SAM3 understands, not only the listed ones.",
+                         (v) => {
+                           if (v === CUSTOM) {
+                             const typed = (prompt("What should SAM3 segment?",
+                                                   s.target || "") || "").trim();
+                             if (typed && typed !== CUSTOM) s.target = typed.slice(0, 48);
+                           } else s.target = v;
+                           writeCfg(node, d);
+                           node._rnAdvRender?.();
+                         }));
           top.append(...A(lab("SAM"),
                      sel(L.samModels, s.sam_model,
                          L.samModels.length
