@@ -22,7 +22,7 @@ export const IMAGE_RE = /\.(png|jpe?g|webp|bmp)$/i;
 
 export function batchState(node, key) {
   const all = node._rnBatch ||= {};
-  return all[key] ||= { files: [], at: -1, done: [], failed: [],
+  return all[key] ||= { files: [], at: -1, done: [], failed: [], why: {},
                         running: false, stop: false, note: "" };
 }
 
@@ -162,14 +162,28 @@ export function folderDropZone(node, el, key) {
   });
 }
 
-/** Run the batch: queueOne(file) queues that picture and returns its prompt id. */
-export async function runBatch(node, key, queueOne) {
+/** Run the batch: queueOne(file) queues that picture and returns its prompt id.
+ *
+ *  `precheck` returns a sentence when the run cannot work AT ALL. Anything that
+ *  would fail for every picture has to be caught here, before the loop: marking
+ *  two hundred pictures failed one at a time, each with only a console line, is
+ *  not an error message. It is what this did when the tab was switched off.
+ */
+export async function runBatch(node, key, queueOne, precheck, afterEach) {
   const st = batchState(node, key);
   if (st.running || !st.files.length) return;
+  const stopper = precheck?.();
+  if (stopper) {
+    st.note = stopper;
+    render(node);
+    alert(stopper);
+    return;
+  }
   st.running = true;
   st.stop = false;
   st.done = [];
   st.failed = [];
+  st.why = {};
   render(node);
   try {
     for (let i = 0; i < st.files.length; i++) {
@@ -178,26 +192,42 @@ export async function runBatch(node, key, queueOne) {
       st.note = `Picture ${i + 1} of ${st.files.length}`;
       render(node);
       let promptId = null;
+      let queueWhy = "";
       try {
         promptId = await queueOne(st.files[i], i);
       } catch (err) {
+        queueWhy = err?.message || String(err);
         console.error("[RedNode Workspace] batch queue failed:", err);
       }
       if (!promptId) {
         // A FAILURE MOVES ON. One unreadable picture must not cost the other 199.
         st.failed.push(i);
+        st.why[i] = queueWhy || "it would not queue";
         continue;
       }
       const { ok, why } = await waitForRun(promptId);
-      if (ok) st.done.push(i);
-      else {
+      if (ok) {
+        st.done.push(i);
+        // WHAT HAPPENS TO EACH PICTURE once it is made. The point of a batch is not
+        // to sit and press the same three buttons two hundred times, so the
+        // follow-ups run here, in turn, before the next picture starts.
+        try {
+          await afterEach?.(i);
+        } catch (err) {
+          st.why[i] = `made, but ${err?.message || err}`;
+          console.error("[RedNode Workspace] batch follow-up failed:", err);
+        }
+      } else {
         st.failed.push(i);
+        st.why[i] = why || "the run failed";
         console.warn(`[RedNode Workspace] batch picture ${i + 1} failed: ${why}`);
       }
     }
     if (!st.stop) {
+      const firstWhy = st.failed.length ? st.why[st.failed[0]] : "";
       st.note = st.failed.length
         ? `Finished. ${st.done.length} done, ${st.failed.length} would not run`
+          + (firstWhy ? `: ${firstWhy}` : "")
         : `Finished all ${st.done.length}`;
     }
   } finally {
@@ -252,7 +282,7 @@ export function batchStrip(node, key, host, opts = {}) {
     btn(opts.runLabel || "Run the batch",
         "Run every picture in turn, one per queue. A picture that fails is marked "
         + "and the rest carry on.",
-        () => runBatch(node, key, opts.onRun));
+        () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach));
     btn("Clear", "Forget this folder. The copies stay in the input folder.", () => {
       st.files = []; st.at = -1; st.done = []; st.failed = []; st.note = "";
       writeCfg(node);
@@ -303,7 +333,8 @@ export function batchStrip(node, key, host, opts = {}) {
                     + "border:2px solid " + (here ? "#4a8fe0" : failed ? "#b8283c"
                                              : done ? "#2f6b46" : "#2a2e35");
     t.title = `${i + 1}. ${f}`
-            + (failed ? " — would not run" : done ? " — done" : "");
+            + (failed ? ` — ${st.why[i] || "would not run"}`
+               : done ? " — done" : "");
     if (failed || done) {
       const mark = document.createElement("span");
       mark.textContent = failed ? "✕" : "✓";
@@ -315,6 +346,39 @@ export function batchStrip(node, key, host, opts = {}) {
     strip.appendChild(t);
   });
   box.appendChild(strip);
+
+  // WHAT TO DO WITH EACH ONE. A batch makes a picture at a time, so the follow-ups
+  // belong here rather than as two hundred presses on the result card.
+  if ((opts.after || []).length) {
+    const arow = document.createElement("div");
+    arow.className = "rn-ws-row";
+    arow.style.cssText = "gap:8px;flex-wrap:wrap;padding-top:2px";
+    const cap = document.createElement("span");
+    cap.className = "hint";
+    cap.style.cssText = "font-size:11px;flex:none";
+    cap.textContent = "With each one:";
+    arow.appendChild(cap);
+    const flags = opts.flags?.() || {};
+    for (const [fkey, label, title] of opts.after) {
+      const sw = document.createElement("button");
+      sw.className = "rn-ws-sw" + (flags[fkey] ? " on" : "");
+      sw.title = title;
+      sw.disabled = st.running;
+      sw.onclick = () => {
+        const f = opts.flags?.() || {};
+        f[fkey] = !f[fkey];
+        writeCfg(node);
+        render(node);
+      };
+      const lbl = document.createElement("span");
+      lbl.className = "hint";
+      lbl.style.cssText = "font-size:11px;flex:none";
+      lbl.textContent = label;
+      arow.append(sw, lbl);
+    }
+    box.appendChild(arow);
+  }
+
   host.appendChild(box);
   return box;
 }

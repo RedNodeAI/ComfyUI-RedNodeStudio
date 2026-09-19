@@ -2403,6 +2403,10 @@ def _upscale_cfg(raw):
         # into the builtin chain instead, which is the tab's Send to Detailer
         "run_mode": ("chain" if str(d.get("run_mode") or "") == "chain"
                      else "upscale"),
+        # what the batch does with each picture once it is made. Panel-driven, so
+        # the server only has to carry it rather than act on it.
+        "after": {"detailer": bool((d.get("after") or {}).get("detailer")),
+                  "save": bool((d.get("after") or {}).get("save"))},
         "stage": st,
         "seed": seed,
         "seed_random": (True if d.get("seed_random") is None

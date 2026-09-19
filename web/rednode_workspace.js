@@ -1456,6 +1456,10 @@ export function readCfg(node) {
   if (typeof d.upscale.source !== "string") d.upscale.source = "";
   if (typeof d.upscale.seed !== "number") d.upscale.seed = 0;
   if (typeof d.upscale.seed_random !== "boolean") d.upscale.seed_random = true;
+  d.upscale.after = d.upscale.after && typeof d.upscale.after === "object"
+    ? d.upscale.after : {};
+  if (typeof d.upscale.after.detailer !== "boolean") d.upscale.after.detailer = false;
+  if (typeof d.upscale.after.save !== "boolean") d.upscale.after.save = false;
   if (!d.upscale.stage || typeof d.upscale.stage !== "object") d.upscale.stage = {};
   if (!["vosr2", "upscale", "usdu"].includes(d.upscale.stage.type)) {
     d.upscale.stage.type = "vosr2";
@@ -2202,15 +2206,28 @@ function markMaskDirty(node) {
  *  the whole point: the Paint tab stopped announcing runs that were nothing to do
  *  with it and redrawing itself underneath the brush while you worked.
  */
-function showResult(r, autoNode = null) {
+/** Put a picture in the result history, without touching what any pane is showing.
+ *
+ *  The full screen viewer is built ENTIRELY from this history (paintViewerHost), so
+ *  a result that never lands here opens an empty room. That is what the Upscale
+ *  tab's results did: the card showed the picture and the viewer had nothing in it.
+ *  Kept apart from showResult because that one also takes over the Paint pane, and
+ *  an upscale must not change the picture under the brush.
+ */
+export function rememberResult(r) {
   if (!r) return;
-  shownResult = { ...r };
-  // the strip keeps the last five, newest first, without repeats of the same file
   if (resultHistory[0]?.filename !== r.filename
       || resultHistory[0]?.subfolder !== r.subfolder) {
     resultHistory.unshift({ ...r, ts: Date.now() });
     resultHistory = resultHistory.slice(0, 5);
   }
+}
+
+function showResult(r, autoNode = null) {
+  if (!r) return;
+  shownResult = { ...r };
+  // the strip keeps the last five, newest first, without repeats of the same file
+  rememberResult(r);
   // allNodes walks subgraphs, so a Workspace tidied into one still hears it
   for (const n of allNodes()) {
     if (n.type === NODE_NAME) n._rnResultView = null;   // a new result wins the pane
@@ -16755,6 +16772,9 @@ app.registerExtension({
         upscaleRuns.delete(promptId);
         lastResult.upscale = true;               // this tab asked for it, so it may show it
         lastUpscaleOwner = upscaler;
+        // the full screen viewer reads the history and nothing else, so a result
+        // that skips it opens an empty room
+        rememberResult(lastResult);
       }
       const painter = promptId && paintProgressRuns.get(promptId);
       lastPaintResultOwner = painter || null;

@@ -164,6 +164,22 @@ async function queueUpscale(node, say, over, quiet) {
   }
 }
 
+/** Wait for one prompt to finish, so a follow-up does not overlap the next picture. */
+function waitForPrompt(promptId) {
+  const id = String(promptId || "");
+  if (!id) return Promise.resolve();
+  return new Promise((resolve) => {
+    const off = () => {
+      for (const [n, f] of hooks) api.removeEventListener?.(n, f);
+      resolve();
+    };
+    const hit = (e) => { if (String(e?.detail?.prompt_id || "") === id) off(); };
+    const hooks = [["execution_success", hit], ["execution_error", hit],
+                   ["execution_interrupted", hit]];
+    for (const [n, f] of hooks) api.addEventListener?.(n, f);
+  });
+}
+
 export function upscaleBody(node, body) {
   const cfg = node._rnCfg;
   const U = cfg.upscale;
@@ -233,9 +249,38 @@ export function upscaleBody(node, body) {
   // means the same thing whether it is doing one or two hundred.
   batchStrip(node, "upscale", body, {
     runLabel: "Upscale them all",
-    onRun: async (file) => {
-      if (!node._rnCfg?.upscale?.on) throw new Error("the Upscale tab is off");
-      return queueUpscale(node, () => {}, { source: file }, true);
+    // checked ONCE, before the first picture: a switched-off tab fails every
+    // picture in the folder, and two hundred ticks of nothing is not an answer
+    precheck: () => (node._rnCfg?.upscale?.on
+      ? "" : "The Upscale tab is switched off, so nothing would be upscaled. "
+           + "Switch it on with the switch at the top of this tab, then run the "
+           + "batch again."),
+    onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
+    flags: () => node._rnCfg.upscale.after,
+    after: [
+      ["detailer", "Send to Detailer",
+       "Run the Detailer tab's passes on each upscaled picture, then Post and Save "
+       + "if those are on, before the next picture starts."],
+      ["save", "Save",
+       "File each upscaled picture in Save as it is. Leave this off if Send to "
+       + "Detailer is on, because the chain saves it at the end anyway."],
+    ],
+    afterEach: async () => {
+      const A = node._rnCfg.upscale.after || {};
+      const r = lastResultNow();
+      if (!r) throw new Error("no picture came back to pass on");
+      if (A.detailer) {
+        const name = await copyResultToInput(r);
+        if (!name) throw new Error("the picture could not be taken across");
+        const pid = await queueUpscale(node, () => {},
+                                       { source: name, run_mode: "chain" }, true);
+        if (!pid) throw new Error("the Detailer run would not queue");
+        await waitForPrompt(pid);
+      } else if (A.save) {
+        // the chain already files it when Send to Detailer is on, so this is the
+        // other way round rather than both
+        await runPaintFinal(node, r, false);
+      }
     },
   });
 
