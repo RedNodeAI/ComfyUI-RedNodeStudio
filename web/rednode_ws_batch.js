@@ -289,13 +289,6 @@ export function batchStrip(node, key, host, opts = {}) {
         "Run every picture in turn, one per queue. A picture that fails is marked "
         + "and the rest carry on.",
         () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach));
-    if (chosen().length) {
-      const only = btn(head, `Run Selected (${chosen().length})`,
-        "Run only the pictures you have ticked, in order.",
-        () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach,
-                       chosen()));
-      only.style.cssText += ";background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
-    }
     btn(head, "Clear", "Forget this folder. The copies stay in the input folder.", () => {
       st.files = []; st.at = -1; st.done = []; st.failed = []; st.why = {};
       st.sel = new Set(); st.peek = -1; st.note = "";
@@ -310,10 +303,19 @@ export function batchStrip(node, key, host, opts = {}) {
   }
   const note = document.createElement("span");
   note.className = "hint";
-  note.style.cssText = "font-size:11px;margin-left:auto";
+  note.style.cssText = "font-size:11px";
   note.textContent = st.note || (st.files.length ? `${st.files.length} pictures`
                                                  : "No folder yet");
   head.appendChild(note);
+  // RUN SELECTED at the END of the row: it is the conditional one, so it should
+  // not push the buttons that are always there around as a selection comes and goes
+  if (st.files.length && !st.running && chosen().length) {
+    const only = btn(head, `Run Selected (${chosen().length})`,
+      "Run only the pictures you have ticked, in order.",
+      () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach, chosen()));
+    only.style.cssText += ";margin-left:auto;background:#2b3a4d;color:#cfe6ff;"
+                        + "border-color:#3d5570";
+  }
   box.appendChild(head);
 
   if (!st.files.length) {
@@ -493,7 +495,16 @@ export function afterRow(node, host, opts = {}) {
                     + (flags[fkey] ? "background:#2b3a4d;color:#cfe6ff" : "");
     b.onclick = () => {
       const f = opts.flags?.() || {};
-      f[fkey] = !f[fkey];
+      if (fkey === opts.manualKey) {
+        // MANUAL IS EXCLUSIVE: it means nothing runs by itself, so it cannot sit
+        // on at the same time as a step that does
+        const turningOn = !f[fkey];
+        for (const [k] of opts.after) f[k] = false;
+        f[fkey] = turningOn;
+      } else {
+        f[fkey] = !f[fkey];
+        if (f[fkey] && opts.manualKey) f[opts.manualKey] = false;
+      }
       writeCfg(node);
       render(node);
     };
@@ -503,18 +514,25 @@ export function afterRow(node, host, opts = {}) {
   const why = document.createElement("span");
   why.className = "hint";
   why.style.cssText = "font-size:11px;flex:1 1 240px;min-width:150px;line-height:1.35";
-  const on = opts.after.filter(([k]) => flags[k]).map(([, l]) => l);
-  why.textContent = on.length
+  const manual = !!(opts.manualKey && flags[opts.manualKey]);
+  const on = opts.after.filter(([k]) => k !== opts.manualKey && flags[k])
+    .map(([, l]) => l);
+  why.textContent = manual
+    ? "Nothing runs by itself. Each picture is made and left for you, and the "
+      + "buttons on the result send it on."
+    : on.length
     ? `${on.join(" then ")} runs on every picture this tab makes, one or a folder.`
-    : "Nothing else happens: each picture is made and left for you, with the "
-      + "buttons on the result to send it on.";
+    : "Nothing is chosen yet: pick Manual, or the steps each picture should go "
+      + "through once it is made.";
   arow.appendChild(why);
   host.appendChild(arow);
 
   // NOTHING IS BEING KEPT. A finished picture is written to ComfyUI's temp folder
   // and the result history holds the last five, so a folder of two hundred with
   // Save off leaves a hundred and ninety-five to be cleared out.
-  if (opts.saveKey && !flags[opts.saveKey]) {
+  // MANUAL stands the warning down: it says the pictures are being dealt with by
+  // hand, so being told they are not filed is telling somebody what they just said
+  if (opts.saveKey && !flags[opts.saveKey] && !manual) {
     const st = batchState(node, opts.key || "upscale");
     const warn = document.createElement("div");
     warn.className = "rn-ws-batchwarn";

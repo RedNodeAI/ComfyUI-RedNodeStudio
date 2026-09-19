@@ -173,12 +173,48 @@ async function queueUpscale(node, say, over, quiet, top) {
     // claim the run, or the finished picture updates lastResult and never reaches
     // this tab: only the tab that asked for a result is allowed to show it
     registerUpscaleRun(String(d.prompt_id || ""), node);
+    // what went in and when, so the result can say what it cost
+    node._rnUpStat = { t0: Date.now(), from: null, ms: 0 };
+    imgDims(viewInput(over?.source || node._rnCfg?.upscale?.source || ""))
+      .then((d2) => { if (node._rnUpStat) node._rnUpStat.from = d2; });
     return String(d.prompt_id || "");
   } catch (err) {
     console.error("[RedNode Workspace] upscale queue failed:", err);
     say(`Could not queue it: ${err.message}`);
     if (!quiet) alert(`Could not queue it: ${err.message}`);
     return null;
+  }
+}
+
+/** The address of a picture in ComfyUI's input folder. */
+function viewInput(name) {
+  const at = String(name || "").lastIndexOf("/");
+  const q = new URLSearchParams({
+    filename: at < 0 ? String(name || "") : String(name).slice(at + 1),
+    subfolder: at < 0 ? "" : String(name).slice(0, at),
+    type: "input",
+  });
+  return api.apiURL(`/view?${q}`);
+}
+
+/** A picture's real size, read by loading it. Used for the before and after line. */
+function imgDims(url) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve({ w: im.naturalWidth || 0, h: im.naturalHeight || 0 });
+    im.onerror = () => resolve(null);
+    im.src = url;
+  });
+}
+
+/** How big the file actually is, without downloading it twice. */
+async function fileBytes(url) {
+  try {
+    const r = await fetch(url, { method: "HEAD" });
+    const n = Number(r.headers?.get?.("content-length") || 0);
+    return n > 0 ? n : 0;
+  } catch (e) {
+    return 0;
   }
 }
 
@@ -231,7 +267,11 @@ export function upscaleBody(node, body) {
     onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
     flags: () => node._rnCfg.upscale.after,
     saveKey: "save",
+    manualKey: "manual",
     after: [
+      ["manual", "Manual",
+       "Nothing runs by itself. Each picture is made and left for you, and the "
+       + "buttons on the result send it to Post, the Detailer, Paint or Save."],
       ["detailer", "Detailer",
        "Run the Detailer tab's passes on each upscaled picture, a face detailer "
        + "for instance, before the next one starts."],
@@ -382,6 +422,7 @@ export function upscaleBody(node, body) {
     caption: "After a run:",
     key: "upscale",
     saveKey: batchOpts.saveKey,
+    manualKey: batchOpts.manualKey,
     flags: batchOpts.flags,
     after: batchOpts.after,
     busy: batchState(node, "upscale").running,
@@ -541,7 +582,7 @@ export function upscaleBody(node, body) {
   // in step, and would quietly lose Copy, Copy prompt, Rerun and the history.
   const shot = document.createElement("img");
   shot.src = resultUrl(r);
-  shot.style.cssText = "max-width:190px;max-height:190px;border:1px solid #2a2e35;"
+  shot.style.cssText = "max-width:340px;max-height:340px;border:1px solid #2a2e35;"
                      + "border-radius:6px;background:#15171b;flex:none;cursor:zoom-in;"
                      + "object-fit:contain";
   shot.title = "The last picture a run produced. Click for full size, right-click "
@@ -549,10 +590,10 @@ export function upscaleBody(node, body) {
   shot.onclick = () => openPaintViewer(node, r);
   shot.oncontextmenu = (ev) => { ev.preventDefault(); openResultMenu(node, r, ev); };
   const acts = el("div");
-  acts.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:none";
+  acts.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:none;width:190px";
   const act = (label, title, fn) => {
     const b = el("button", "rn-ws-btn", label);
-    b.style.cssText = "width:auto;padding:4px 14px";
+    b.style.cssText = "width:100%;padding:8px 18px;font-size:13px;text-align:center";
     b.title = title;
     b.disabled = !!node._rnFinalBusy;
     b.onclick = fn;
@@ -606,8 +647,40 @@ export function upscaleBody(node, body) {
     try { await runPaintFinal(node, r, false); }
     catch (err) { alert(`Save failed: ${err.message}`); }
   });
+  const info = el("div");
+  info.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:flex-start;"
+                     + "min-width:0;flex:1 1 200px";
+  const stat = el("div", "hint", "");
+  stat.style.cssText = "font-size:12px;line-height:1.5";
+  // FROZEN on the first draw after a run: read at render time it would climb for
+  // as long as the panel stayed open, which is a clock, not a measurement
+  const up = node._rnUpStat;
+  if (up && up.t0 && !up.ms) up.ms = Date.now() - up.t0;
+  // the three numbers arrive at different times: the size when the picture loads,
+  // the file size from a HEAD, the duration already known. One function draws
+  // whatever is in hand, and each arrival calls it again.
+  let bytes = 0;
+  const drawStat = () => {
+    const w = Number(shot.naturalWidth) || 0;
+    const h = Number(shot.naturalHeight) || 0;
+    if (!w || !h) return;
+    const from = up?.from;
+    const bits = [];
+    if (bytes) {
+      bits.push(bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+                                    : `${Math.round(bytes / 1024)} KB`);
+    }
+    if (up?.ms) bits.push(`${(up.ms / 1000).toFixed(1)}s`);
+    stat.textContent = (from && from.w
+      ? `${from.w} × ${from.h} → ${w} × ${h}` : `${w} × ${h}`)
+      + (bits.length ? ` · ${bits.join(" · ")}` : "");
+  };
+  shot.addEventListener("load", drawStat);
+  if (shot.complete) drawStat();
+  fileBytes(resultUrl(r)).then((n) => { bytes = n; drawStat(); });
   const rname = el("span", "hint", node._rnFinalStatus || "");
-  rname.style.cssText = "font-size:11px;align-self:center";
+  rname.style.cssText = "font-size:11px";
   if (node._rnFinalFailed) rname.style.color = "#fca5a5";
-  rLine.append(shot, acts, rname);
+  info.append(stat, rname);
+  rLine.append(shot, acts, info);
 }

@@ -2414,7 +2414,11 @@ def _upscale_cfg(raw):
                     if str(d.get("pre_size") or "0").lstrip("-").isdigit() else 0,
         # what the batch does with each picture once it is made. Panel-driven, so
         # the server only has to carry it rather than act on it.
-        "after": {"detailer": bool((d.get("after") or {}).get("detailer")),
+        # "manual" is a real choice, not the absence of one: it says the pictures
+        # are being handled by hand from the result card, which is why it also
+        # stands the "nothing is being kept" warning down.
+        "after": {"manual": bool((d.get("after") or {}).get("manual")),
+                  "detailer": bool((d.get("after") or {}).get("detailer")),
                   "post": bool((d.get("after") or {}).get("post")),
                   "save": bool((d.get("after") or {}).get("save"))},
         "stage": st,

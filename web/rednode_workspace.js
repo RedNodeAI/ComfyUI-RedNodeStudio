@@ -1459,6 +1459,7 @@ export function readCfg(node) {
   if (typeof d.upscale.seed_random !== "boolean") d.upscale.seed_random = true;
   d.upscale.after = d.upscale.after && typeof d.upscale.after === "object"
     ? d.upscale.after : {};
+  if (typeof d.upscale.after.manual !== "boolean") d.upscale.after.manual = false;
   if (typeof d.upscale.after.detailer !== "boolean") d.upscale.after.detailer = false;
   if (typeof d.upscale.after.post !== "boolean") d.upscale.after.post = false;
   if (typeof d.upscale.after.save !== "boolean") d.upscale.after.save = false;
