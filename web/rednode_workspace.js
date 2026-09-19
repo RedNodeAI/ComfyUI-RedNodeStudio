@@ -13772,6 +13772,10 @@ function identityTabs(node, body) {
     ["auto", "AUTO PROMPT", !!(t.on && t.auto?.on)],
     ["converter", "CONVERTER", !!t.on && convActive(t.conv)],
   ];
+  // Hero Creator makes a reference OUT of a photograph, so it belongs to the
+  // Subject, which is the tab whose references are people. The Scene tab has
+  // nothing to crop a head from.
+  if (sub === "subject") innerSubs.push(["hero", "HERO CREATOR", false]);
   const ikey = "rn_identity_" + sub;
   let inner = (node._rnIdInner ||= {})[sub] || props[ikey] || "gallery";
   if (!innerSubs.some(([id]) => id === inner)) inner = "gallery";
@@ -13794,7 +13798,144 @@ function identityTabs(node, body) {
   if (inner === "gallery") galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
   else if (inner === "boosts") dialSection(node, body, sub, { flat: true });
   else if (inner === "auto") autoSection(node, body, sub, { flat: true });
+  else if (inner === "hero") heroBody(node, body, sub);
   else converterSection(node, body, sub, { flat: true });
+}
+
+// ---- Hero Creator ------------------------------------------------------------------
+// A subject reference carries its clothing into every generation: a photo in a
+// pageant sash puts the sash on her in a tennis match. Cropping to head and neck
+// beat both prompting the clothing away and generating a studio headshot, so
+// this is a cropper and everything it does to a face is lossless.
+//
+// The server decides the verdict, not the panel. Duplicating thresholds here is
+// KNOWN_TRAPS 13, the bug this pack keeps making, so the card shows what came
+// back from /rednode/hero rather than working anything out a second time.
+function heroBody(node, body, sub) {
+  const t = node._rnCfg.tabs[sub];
+  const state = (node._rnHero ||= {});
+
+  const intro = document.createElement("div");
+  intro.className = "rn-ws-note";
+  intro.textContent = "Make a clean subject reference from a photograph. The head is "
+    + "found, cropped above the clothing, cut out on white and enlarged if it is small. "
+    + "Nothing here goes through a sampler, so nothing here can soften a face.";
+  body.appendChild(intro);
+
+  const pics = (t.images || []).filter((x) => String(x || "").trim());
+  if (!pics.length) {
+    const none = document.createElement("div");
+    none.className = "rn-ws-note";
+    none.textContent = "No pictures on the Subject gallery yet. Add one there and it "
+      + "will be offered here.";
+    body.appendChild(none);
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = "Picture";
+  const pick = document.createElement("select");
+  for (const p of pics) {
+    const o = document.createElement("option");
+    o.value = p;
+    o.textContent = String(p).split(/[\\/]/).pop();
+    o.selected = p === state.source;
+    pick.appendChild(o);
+  }
+  if (!pics.includes(state.source)) state.source = pics[0];
+  pick.onchange = () => { state.source = pick.value; render(node); };
+
+  const go = document.createElement("button");
+  go.className = "rn-ws-btn go";
+  go.textContent = "Create hero";
+  row.append(lab, pick, go);
+  body.appendChild(row);
+
+  const out = document.createElement("div");
+  out.className = "rn-ws-note";
+  body.appendChild(out);
+
+  if (state.report) {
+    const r = state.report;
+    const card = document.createElement("div");
+    card.className = "rn-ws-status";
+    for (const text of [
+      `Route: ${r.route === "crop only" ? "Crop only" : r.route === "enlarge" ? "Enlarged" : "Needs repair"}`,
+      `Crop: ${r.crop_side} px`,
+      r.enlarged ? `Enlarge: ${r.enlarged}` : "",
+      `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`,
+    ]) {
+      if (!text) continue;
+      const c = document.createElement("span");
+      c.className = "rn-ws-chip";
+      c.textContent = text;
+      card.appendChild(c);
+    }
+    body.appendChild(card);
+
+    // Every reason the crop could not win on its own, in the server's words. A
+    // repair means REGENERATING the face, which costs likeness, so it is said
+    // plainly rather than done quietly.
+    for (const why of (r.repair || [])) {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note warn";
+      n.textContent = "Cannot be fixed by cropping: " + why
+        + ". A front-on regeneration would be needed, and that rebuilds the face.";
+      body.appendChild(n);
+    }
+    if (r.below_floor) {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note warn";
+      n.textContent = "This face is small in the source. A regenerated version would "
+        + "drift away from the person, so the crop is the better reference here.";
+      body.appendChild(n);
+    }
+  }
+
+  if (state.result) {
+    const img = document.createElement("img");
+    img.src = resultUrl(state.result);
+    img.style.cssText = "max-width:260px;border-radius:6px;display:block;margin:8px 0";
+    body.appendChild(img);
+
+    const send = document.createElement("button");
+    send.className = "rn-ws-btn";
+    send.textContent = "Send to Subject gallery";
+    send.onclick = () => {
+      const entry = state.result.subfolder
+        ? `${state.result.subfolder}/${state.result.filename}` : state.result.filename;
+      t.images = [...(t.images || []), entry];
+      writeCfg(node);
+      render(node);
+    };
+    body.appendChild(send);
+  }
+
+  go.onclick = async () => {
+    go.disabled = true;
+    go.textContent = "Working…";
+    out.textContent = "";
+    try {
+      const res = await api.fetchApi("/rednode/hero", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: state.source }),
+      });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      state.result = d.result;
+      state.report = d.report;
+    } catch (e) {
+      state.result = null;
+      state.report = null;
+      out.textContent = String(e.message || e);
+    }
+    go.disabled = false;
+    go.textContent = "Create hero";
+    render(node);
+  };
 }
 
 // ---- the Detailer tab -------------------------------------------------------------

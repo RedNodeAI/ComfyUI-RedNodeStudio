@@ -643,6 +643,8 @@ from . import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers
 from .camera_studio import RedNodeCameraStudio, RedNodeCameraLoRAs, RedNodeCameraMultiAngle  # noqa: E402
 from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
+# after refine_pipeline and automask, which it calls into
+from . import hero as _rednode_hero  # noqa: E402,F401  (registers the hero route)
 from .rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
 from .selector import RedNodeSelector  # noqa: E402
 from .combo_control import RedNodeComboControl  # noqa: E402
