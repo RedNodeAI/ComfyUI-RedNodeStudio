@@ -13827,9 +13827,23 @@ const HERO_AGE = ["A baby", "A young child", "A teenager", "In their twenties",
                   "In their thirties", "In their forties", "In their fifties",
                   "In their sixties", "Elderly", "Very old and deeply wrinkled"];
 
+// The two conversions, written out rather than assembled from adjectives, because
+// a style change has to describe a whole look and a word or two never does.
+// Placed FIRST in the line: the thing that decides what the picture IS has to
+// lead, and the later clauses were always the ones that failed to bite.
+const HERO_STYLE = {
+  anime: "anime illustration, cel shaded, crisp clean lineart, flat colour with "
+       + "soft gradients, large expressive eyes, stylised anime proportions, "
+       + "drawn artwork, not a photograph",
+  photo: "photorealistic photograph of a real person, natural skin texture with "
+       + "pores and fine detail, individual hair strands, realistic eyes, soft "
+       + "studio lighting, shot on a DSLR, not an illustration, not a drawing",
+};
+
 const heroExtraLine = (node) => {
   const e = (node.properties?.rn_hero_extra) || {};
-  return [e.hair ? e.hair.toLowerCase() + " hair" : "",
+  return [HERO_STYLE[e.style] || "",
+          e.hair ? e.hair.toLowerCase() + " hair" : "",
           e.eyes ? e.eyes.toLowerCase() + " eyes" : "",
           e.age ? e.age.toLowerCase() : "",
           String(e.free || "").trim()].filter(Boolean).join(", ");
@@ -14497,6 +14511,29 @@ function heroBody(node, body, sub) {
   ed.appendChild(edNote);
 
   const ex = (props.rn_hero_extra ||= {});
+  // Style first, because it decides what the picture IS and the rest describes
+  // the person in it.
+  const styleRow = document.createElement("div");
+  styleRow.className = "rn-ws-row";
+  const styleLab = document.createElement("span");
+  styleLab.className = "rn-ws-note";
+  styleLab.textContent = "Style";
+  const styleSeg = document.createElement("div");
+  styleSeg.className = "rn-ws-seg";
+  for (const [id, label] of [["", "As it is"], ["anime", "To anime"],
+                             ["photo", "To photo"]]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-segb" + ((ex.style || "") === id ? " on" : "");
+    b.dataset.choice = "hero_style_" + (id || "none");
+    b.textContent = label;
+    b.title = id ? HERO_STYLE[id] : "Leave the look alone and change only what is "
+      + "picked below.";
+    b.onclick = () => { ex.style = id; render(node); };
+    styleSeg.appendChild(b);
+  }
+  styleRow.append(styleLab, styleSeg);
+  ed.appendChild(styleRow);
+
   const exRow = document.createElement("div");
   exRow.className = "rn-ws-row";
   exRow.style.flexWrap = "wrap";
