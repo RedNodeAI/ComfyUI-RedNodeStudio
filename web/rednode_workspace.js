@@ -14187,18 +14187,20 @@ function heroBody(node, body, sub) {
     { id: "front", cap: "Front-on",
       url: state.front ? resultUrl(state.front.result) : "", pickable: !!state.front },
   ];
-  (state.edits || []).forEach((ed, i) => stages.push({
-    id: "edit:" + i, cap: ed.report?.extra || "Changed",
-    url: resultUrl(ed.result), pickable: true,
-  }));
-  if (!stages.find((x) => x.id === state.pick && x.pickable)) {
-    state.pick = state.front ? "front" : "crop";
-  }
+  // the changes are NOT in here. There are three hero shots and they are fixed;
+  // the changes are a growing set and belong in a box of their own.
+  const pickables = stages.filter((x) => x.pickable).map((x) => x.id)
+    .concat((state.edits || []).map((_, i) => "edit:" + i));
+  if (!pickables.includes(state.pick)) state.pick = state.front ? "front" : "crop";
 
-  const strip = document.createElement("div");
-  strip.style.cssText = "display:flex;gap:8px;align-items:flex-start;overflow-x:auto;"
-    + "padding:2px 2px 6px";
-  for (const st of stages) {
+  const buildStrip = (list) => {
+    const strip = document.createElement("div");
+    strip.style.cssText = "display:flex;gap:8px;align-items:flex-start;overflow-x:auto;"
+      + "padding:2px 2px 6px";
+    for (const st of list) strip.appendChild(buildTile(st));
+    return strip;
+  };
+  const buildTile = (st) => {
     const col = document.createElement("div");
     col.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center;"
       + "flex:none;width:150px";
@@ -14226,9 +14228,9 @@ function heroBody(node, body, sub) {
     c.textContent = st.cap + (isPick ? " (sending)" : "");
     c.title = st.cap;
     col.append(im, c);
-    strip.appendChild(col);
-  }
-  card.appendChild(strip);
+    return col;
+  };
+  card.appendChild(buildStrip(stages));
 
   const r = picked()?.report || {};
   const chips = document.createElement("div");
@@ -14260,7 +14262,9 @@ function heroBody(node, body, sub) {
   acts.className = "rn-ws-row";
   const send = document.createElement("button");
   send.className = "rn-ws-btn go";
-  send.textContent = "Send to the gallery";
+  // names the choice, because the picture it sends may be in the OTHER box now
+  send.textContent = "Send " + (String(state.pick).startsWith("edit:") ? "this change"
+    : state.pick === "front" ? "the front-on" : "the crop") + " to the gallery";
   send.onclick = () => {
     const chosen = picked();
     if (!chosen) return;
@@ -14278,39 +14282,6 @@ function heroBody(node, body, sub) {
   openBtn.onclick = () => { const c0 = picked(); if (c0) window.open(resultUrl(c0.result), "_blank"); };
   acts.append(send, openBtn);
 
-  // Delete is for the CHANGES only. The crop and the front-on are one picture
-  // each and remaking either replaces it, so there is nothing there to prune.
-  if (String(state.pick || "").startsWith("edit:")) {
-    const del = document.createElement("button");
-    del.className = "rn-ws-btn danger";
-    del.textContent = "Delete this change";
-    del.title = "Removes it from this picture's set and deletes the file.";
-    del.onclick = async () => {
-      const i = Number(S().pick.slice(5));
-      const ed = S().edits?.[i];
-      if (!ed) return;
-      del.disabled = true;
-      try {
-        await api.fetchApi("/rednode/hero_drop", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: ed.result.filename,
-                                 subfolder: ed.result.subfolder }),
-        });
-      } catch (e) { /* the file may be gone already; the entry still goes */ }
-      const set = heroSet(node, S().source) || { edits: [] };
-      set.edits = (set.edits || []).filter((_, j) => j !== i);
-      store(S().source, set);
-      // and out of the gallery too, or the slot points at a deleted file
-      const gone = resultEntry(ed.result);
-      if ((t.images || []).includes(gone)) {
-        t.images = t.images.filter((x) => x !== gone);
-        writeCfg(node);
-      }
-      load(S().source);
-      render(node);
-    };
-    acts.appendChild(del);
-  }
   const again = document.createElement("button");
   again.className = "rn-ws-btn";
   again.textContent = "Make again";
@@ -14320,6 +14291,62 @@ function heroBody(node, body, sub) {
   acts.appendChild(again);
   card.appendChild(acts);
   body.appendChild(card);
+
+  // ---- CHANGES: their own box, because there are many and they keep coming --
+  if ((state.edits || []).length) {
+    const gal = document.createElement("div");
+    gal.className = "rn-ws-card";
+    const gh = document.createElement("div");
+    gh.className = "ch";
+    gh.textContent = "CHANGES (" + state.edits.length + ")";
+    gal.appendChild(gh);
+    gal.appendChild(buildStrip(state.edits.map((ed, i) => ({
+      id: "edit:" + i, cap: ed.report?.extra || "Changed",
+      url: resultUrl(ed.result), pickable: true,
+    }))));
+
+    // Delete lives HERE, with the things it deletes. There is one crop and one
+    // front-on and remaking either replaces it, so there is nothing to prune in
+    // the other box.
+    if (String(state.pick || "").startsWith("edit:")) {
+      const del = document.createElement("button");
+      del.className = "rn-ws-btn danger";
+      del.textContent = "Delete this change";
+      del.title = "Removes it from this picture's set and deletes the file.";
+      del.onclick = async () => {
+        const i = Number(S().pick.slice(5));
+        const ed2 = S().edits?.[i];
+        if (!ed2) return;
+        del.disabled = true;
+        try {
+          await api.fetchApi("/rednode/hero_drop", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: ed2.result.filename,
+                                   subfolder: ed2.result.subfolder }),
+          });
+        } catch (e) { /* the file may be gone already; the entry still goes */ }
+        const set = heroSet(node, S().source) || { edits: [] };
+        set.edits = (set.edits || []).filter((_, j) => j !== i);
+        store(S().source, set);
+        // and out of the gallery too, or a slot points at a deleted file
+        const gone = resultEntry(ed2.result);
+        if ((t.images || []).includes(gone)) {
+          t.images = t.images.filter((x) => x !== gone);
+          writeCfg(node);
+        }
+        load(S().source);
+        render(node);
+      };
+      gal.appendChild(del);
+    } else {
+      const hint = document.createElement("div");
+      hint.className = "rn-ws-note";
+      hint.style.opacity = ".6";
+      hint.textContent = "Click one to send or delete it.";
+      gal.appendChild(hint);
+    }
+    body.appendChild(gal);
+  }
 
   // ---- FRONT-ON RENDER ----------------------------------------------------
   const rig = rigNow();
