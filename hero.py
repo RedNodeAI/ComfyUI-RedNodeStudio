@@ -466,6 +466,56 @@ def _run(name, **kw):
     return fn(**kw)
 
 
+def _settle():
+    """Collect, then let ComfyUI release whatever is now unreferenced."""
+    import gc
+
+    gc.collect()
+    try:
+        import comfy.model_management as _mm
+        _mm.soft_empty_cache()
+    except Exception:
+        pass
+
+
+def _render_front(base, want, unet, clip, vae, lora):
+    """The render, in a frame of its own, returning only the picture.
+
+    Its own function so that EVERY handle it takes on a model, a CLIP, a VAE, a
+    conditioning or a latent dies with the frame when it returns. A model loaded
+    inside an HTTP route is outside the executor's lifecycle, so nothing else
+    will ever let go of it: model_management then finds a live reference each
+    time it tries to evict and says "WARNING, memory leak with model Krea2",
+    once per model per eviction, for the rest of the session.
+
+    Clearing the names in a finally block does not do this. Assigning over
+    locals() has no effect in CPython, and a hand written del list goes stale the
+    first time the render gains a variable.
+    """
+    # imported HERE, not at module level: identity.py needs
+    # comfy.text_encoders.krea2, which an older core does not have, and an
+    # unguarded import at the top took the whole pack down with it on one.
+    from .identity import Krea2IdentityEdit
+
+    model = _run("UNETLoader", unet_name=unet, weight_dtype="default")[0]
+    model = _run("LoraLoaderModelOnly", model=model, lora_name=lora,
+                 strength_model=1.0)[0]
+    cl = _run("CLIPLoader", clip_name=clip, type="krea2")[0]
+    va = _run("VAELoader", vae_name=vae)[0]
+
+    side = int(base.shape[1])
+    latent = _run("EmptyLatentImage", width=side, height=side, batch_size=1)[0]
+    pos = Krea2IdentityEdit().encode(
+        clip=cl, prompt=want, vae=va, image=base, grounding_px=side,
+        ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST, target_latent=latent,
+        fit_mode="fit", ref_t0_modulation=False, system_prompt=SYSTEM)[0]
+    neg = _run("CLIPTextEncode", clip=cl, text="")[0]
+    out = _run("KSampler", model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
+               sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
+               latent_image=latent, denoise=1.0)[0]
+    return _run("VAEDecode", samples=out, vae=va)[0]
+
+
 def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
     """Rebuild the head front on, then crop and cut the render.
 
@@ -482,35 +532,25 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
                          "reference steers nothing and the face comes back a stranger.")
 
     entry, report = make_hero(source, sam_model, True)
+    try:
+        return _front(entry, report, source, unet, clip, vae, lora, sam_model)
+    except Exception as exc:
+        # a traceback keeps the frame that holds the models alive, so the reason
+        # is carried out and the traceback is dropped
+        _settle()
+        raise ValueError(str(exc) or exc.__class__.__name__) from None
+
+
+def _front(entry, report, source, unet, clip, vae, lora, sam_model):
     with progress_safe():
         base = _ws.load_image("%s/%s [output]" % (entry["subfolder"], entry["filename"]), 0)
 
-        # imported HERE, not at module level: identity.py needs
-        # comfy.text_encoders.krea2, which an older core does not have, and an
-        # unguarded import at the top took the whole pack down with it on one.
-        from .identity import Krea2IdentityEdit
-
-        model = _run("UNETLoader", unet_name=unet, weight_dtype="default")[0]
-        model = _run("LoraLoaderModelOnly", model=model, lora_name=lora,
-                     strength_model=1.0)[0]
-        cl = _run("CLIPLoader", clip_name=clip, type="krea2")[0]
-        va = _run("VAELoader", vae_name=vae)[0]
-
-        side = int(base.shape[1])
-        latent = _run("EmptyLatentImage", width=side, height=side, batch_size=1)[0]
-        pos = Krea2IdentityEdit().encode(
-            clip=cl, prompt=front_prompt(report.get("repair")), vae=va, image=base,
-            grounding_px=side, ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST,
-            target_latent=latent, fit_mode="fit", ref_t0_modulation=False,
-            system_prompt=SYSTEM)[0]
-        neg = _run("CLIPTextEncode", clip=cl, text="")[0]
-        out = _run("KSampler", model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
-                   sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
-                   latent_image=latent, denoise=1.0)[0]
-        render = _run("VAEDecode", samples=out, vae=va)[0]
-
+        render = _render_front(base, front_prompt(report.get("repair")),
+                               unet, clip, vae, lora)
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
+        render = None
         final = _save_hero(flat, source, "front")
+        _settle()
 
     fside = min(int(flat.shape[0]), int(flat.shape[1]))
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, fside)
