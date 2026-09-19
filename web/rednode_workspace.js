@@ -14,7 +14,8 @@ import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
-import { batchStrip, sourceSwitch } from "./rednode_ws_batch.js";
+import { batchStrip, sourceSwitch, sourceView,
+         batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -13547,8 +13548,19 @@ function i2iTabs(node, body) {
   const swapLive = i2iSubLit(cfg, "swap") && !issueOn("swap");
   const chips = [
     { sub: "source",
+      // WHAT WILL RUN, not what is remembered. A render uses ONE gallery picture,
+      // however many are kept there, so "2 Images" on a gallery said nothing true
+      // (the user, 2026-09-20). On the folder it is what the run buttons would
+      // take: the selection if there is one, else all of them.
       text: t.canvas === "image" ? "Wired image" : t.canvas === "latent" ? "Wired latent"
-        : `${t.images.length} Image${t.images.length === 1 ? "" : "s"}`,
+        : (() => {
+            if (sourceView(node, "i2i") === "batch") {
+              const bst = batchState(node, "i2i");
+              const n = bst.sel?.size || bst.files.length;
+              return n ? `Batch: ${n} image${n === 1 ? "" : "s"}` : "Batch: no folder";
+            }
+            return t.images.length ? "1 image" : "No image";
+          })(),
       warn: !!(t.on && ((t.canvas === "gallery" && !t.images.length)
                         || (t.canvas === "image" && !socketWired(node, "image_in"))
                         || (t.canvas === "latent" && !socketWired(node, "latent")))) },
