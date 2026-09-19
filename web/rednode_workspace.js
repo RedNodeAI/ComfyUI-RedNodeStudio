@@ -13889,6 +13889,29 @@ function heroBody(node, body, sub) {
   go.textContent = state.busy === "hero" ? "Working..." : "Create hero";
   go.disabled = !!state.busy;
   go.title = "A hero already made from this picture is handed straight back.";
+  go.onclick = async (opts) => {
+    S().busy = "hero";
+    S().error = "";
+    render(node);
+    try {
+      const res = await api.fetchApi("/rednode/hero", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: S().source, rebuild: !!opts?.rebuild }),
+      });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      S().hero = { result: d.result, report: d.report };
+      // a fresh crop makes the old render stale: it was built from the other one
+      if (opts?.rebuild) { S().front = null; S().pick = "hero"; }
+      MADE()[S().source] = { hero: S().hero, front: S().front };
+    } catch (e) {
+      S().hero = null;
+      S().error = String(e.message || e);
+      S().errorAt = "hero";
+    }
+    S().busy = "";
+    render(node);
+  };
   src.appendChild(go);
   if (state.error && state.errorAt !== "front") {
     const e = document.createElement("div");
@@ -14103,29 +14126,6 @@ function heroBody(node, body, sub) {
   }
   body.appendChild(rep);
 
-  go.onclick = async (opts) => {
-    S().busy = "hero";
-    S().error = "";
-    render(node);
-    try {
-      const res = await api.fetchApi("/rednode/hero", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: S().source, rebuild: !!opts?.rebuild }),
-      });
-      const d = await res.json();
-      if (d.error) throw new Error(d.error);
-      S().hero = { result: d.result, report: d.report };
-      // a fresh crop makes the old render stale: it was built from the other one
-      if (opts?.rebuild) { S().front = null; S().pick = "hero"; }
-      MADE()[S().source] = { hero: S().hero, front: S().front };
-    } catch (e) {
-      S().hero = null;
-      S().error = String(e.message || e);
-      S().errorAt = "hero";
-    }
-    S().busy = "";
-    render(node);
-  };
 }
 
 // ---- the Detailer tab -------------------------------------------------------------
