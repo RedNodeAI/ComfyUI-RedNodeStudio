@@ -90,8 +90,9 @@ def _cached_hero(key):
     if not got:
         return None
     entry = got["entry"]
-    path = os.path.join(folder_paths.get_output_directory(),
-                        entry.get("subfolder", ""), entry["filename"])
+    path = os.path.join(folder_paths.get_input_directory(),
+                        *(entry.get("subfolder", "") or "").split("/"),
+                        entry["filename"])
     if not os.path.isfile(path):
         _HERO_CACHE.pop(key, None)      # deleted from the output folder: make it again
         return None
@@ -286,16 +287,23 @@ def crop_and_cut(image, sam_model=""):
     return _on_white(crop, sub), (head, hair, occ, head_box), used
 
 
+# Where a hero is written. The INPUT folder, not the output one, and that is the
+# whole of the persistence story: the gallery is backed by input, so a hero
+# written to output was never a gallery picture. It looked like one until a
+# restart, and then the slot pointed at nothing.
+HERO_DIR = "rednode/heroes"
+
+
 def _save_hero(flat, source, tag="hero"):
-    """Square it with white and write it beside every other hero."""
+    """Square it with white and write it where the gallery can keep it."""
     arr = _pad_square(flat.detach().cpu().numpy())
     png = (np.clip(arr, 0.0, 1.0) * 255.0).astype(np.uint8)
-    folder = os.path.join(folder_paths.get_output_directory(), "heroes")
+    folder = os.path.join(folder_paths.get_input_directory(), *HERO_DIR.split("/"))
     os.makedirs(folder, exist_ok=True)
     stem = os.path.splitext(os.path.basename(str(source)))[0][:40] or "hero"
-    fname = "%s_%s_%s.png" % (stem, tag, time.strftime("%Y%m%d-%H%M%S"))
+    fname = "%s_%s_%s.png" % (stem, tag, time.strftime("%Y%m%d-%H%M%S%f")[:-3])
     Image.fromarray(png, "RGB").save(os.path.join(folder, fname))
-    return {"filename": fname, "subfolder": "heroes", "type": "output"}
+    return {"filename": fname, "subfolder": HERO_DIR, "type": "input"}
 
 
 # _vosr2 reads a whole PASS, not a multiplier: the loader's checkpoint and dtype,
@@ -346,6 +354,62 @@ def _make_hero(source, sam_model, enlarge):
         "route": "repair" if rep else ("enlarge" if en else "crop only"),
     }
     return entry, report
+
+
+def make_edit(base_entry, want, unet="", clip="", vae="", lora="", sam_model="",
+              source="hero", seed=0):
+    """A changed version of an already finished hero.
+
+    Runs on the FRONT-ON picture, not on the source photograph and not folded
+    into the front-on render itself. Two reasons. It is the cleanest picture in
+    the chain, already front on and already cut out, so the change is the only
+    thing being asked for. And keeping it separate means the front-on stays a
+    single fixed picture while the changes pile up beside it, which is what a
+    person comparing blue hair against grey actually needs.
+
+    Every call writes a NEW file. A change is a variant, not a correction.
+    """
+    if not str(want or "").strip():
+        raise ValueError("there is nothing to change. Pick a hair, eye or age "
+                         "change, or type one, and press again.")
+    if not (unet and clip and vae):
+        raise ValueError("the change needs a model, a text encoder and a VAE from "
+                         "the active rig. Set them on the Models tab.")
+    if not lora:
+        raise ValueError("the change works through a Krea 2 edit LoRA, and none is "
+                         "switched on in the LoRAs tab.")
+    if not (base_entry or {}).get("filename"):
+        raise ValueError("make the front-on picture first: a change is made from it.")
+
+    try:
+        return _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed)
+    except Exception as exc:
+        # a traceback keeps the frame that holds the models alive
+        _settle()
+        raise ValueError(str(exc) or exc.__class__.__name__) from None
+
+
+def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed):
+    with progress_safe():
+        base = _ws.load_image("%s/%s" % (base_entry.get("subfolder", ""),
+                                         base_entry["filename"]), 0)
+        # the change goes FIRST, then the framing. What is asked for has to lead:
+        # the clauses that failed to bite in testing were always the later ones.
+        prompt = "%s, %s" % (str(want).strip(), FRONT)
+        render = _render_front(base, prompt, unet, clip, vae, lora, seed=seed)
+        flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
+        render = None
+        entry = _save_hero(flat, source, "edit")
+        _settle()
+
+    side = min(int(flat.shape[0]), int(flat.shape[1]))
+    en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
+    return entry, {
+        "crop_side": side, "hair_ratio": hair_ratio, "cover": cover,
+        "enlarge": en, "repair": rep, "enlarged": "", "segmenter": used,
+        "below_floor": False, "route": "edit", "generated": True,
+        "extra": str(want).strip(), "prompt": prompt, "seed": seed,
+    }
 
 
 try:
@@ -401,6 +465,52 @@ try:
               % (entry["subfolder"], entry["filename"], report.get("from_crop")),
               flush=True)
         return web.json_response({"result": entry, "report": report})
+
+    @PromptServer.instance.routes.post("/rednode/hero_edit")
+    async def _rednode_hero_edit(request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        try:
+            entry, report = make_edit(data.get("base") or {},
+                                      str(data.get("extra") or ""),
+                                      str(data.get("unet") or ""),
+                                      str(data.get("clip") or ""),
+                                      str(data.get("vae") or ""),
+                                      str(data.get("lora") or ""),
+                                      str(data.get("sam_model") or ""),
+                                      str(data.get("source") or "hero"),
+                                      int(data.get("seed") or 0))
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        except Exception as e:
+            return web.json_response({"error": "the change failed (%s)" % e}, status=500)
+        print("[RedNode Hero] %s/%s edit: %s"
+              % (entry["subfolder"], entry["filename"], report.get("extra")), flush=True)
+        return web.json_response({"result": entry, "report": report})
+
+    @PromptServer.instance.routes.post("/rednode/hero_drop")
+    async def _rednode_hero_drop(request):
+        """Delete one picture this pack made. Only ever one of ours: the path is
+        rebuilt from the hero folder, so nothing outside it can be named."""
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        name = os.path.basename(str(data.get("filename") or ""))
+        if not name:
+            return web.json_response({"error": "no picture named"}, status=400)
+        path = os.path.join(folder_paths.get_input_directory(),
+                            *HERO_DIR.split("/"), name)
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+        except Exception as e:
+            return web.json_response({"error": "could not delete it (%s)" % e},
+                                     status=500)
+        print("[RedNode Hero] deleted %s/%s" % (HERO_DIR, name), flush=True)
+        return web.json_response({"deleted": name})
 
 except Exception:                     # no server (tests, or a bare import): fine
     pass
@@ -482,7 +592,7 @@ def _settle():
         pass
 
 
-def _render_front(base, want, unet, clip, vae, lora):
+def _render_front(base, want, unet, clip, vae, lora, seed=7000):
     """The render, in a frame of its own, returning only the picture.
 
     Its own function so that EVERY handle it takes on a model, a CLIP, a VAE, a
@@ -514,7 +624,8 @@ def _render_front(base, want, unet, clip, vae, lora):
         ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST, target_latent=latent,
         fit_mode="fit", ref_t0_modulation=False, system_prompt=SYSTEM)[0]
     neg = _run("CLIPTextEncode", clip=cl, text="")[0]
-    out = _run("KSampler", model=model, seed=7000, steps=FRONT_STEPS, cfg=FRONT_CFG,
+    out = _run("KSampler", model=model, seed=int(seed) or 7000,
+               steps=FRONT_STEPS, cfg=FRONT_CFG,
                sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
                latent_image=latent, denoise=1.0)[0]
     return _run("VAEDecode", samples=out, vae=va)[0]
@@ -547,9 +658,9 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""
 
 def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
     with progress_safe():
-        base = _ws.load_image("%s/%s [output]" % (entry["subfolder"], entry["filename"]), 0)
+        base = _ws.load_image("%s/%s" % (entry["subfolder"], entry["filename"]), 0)
 
-        render = _render_front(base, front_prompt(report.get("repair"), extra),
+        render = _render_front(base, front_prompt(report.get("repair")),
                                unet, clip, vae, lora)
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
