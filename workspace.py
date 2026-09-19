@@ -2443,7 +2443,12 @@ def load_image_or_blank(name, target, who):
 # The text chunks a RedNode save writes. Carried, not rebuilt: an upscale of last
 # week's render must say what MADE that picture, not what happens to be loaded in
 # the Workspace today.
-CARRY_CHUNKS = ("parameters", "civitaiResources", "hashes", "rednode_words")
+# The graph chunks go too. "parameters" alone was not enough: the pack's own
+# reader (web/rednode_png_meta.js, workspaceConfigIn) looks at "workflow" FIRST
+# and only falls back to "prompt", so a carried prompt sat next to today's graph
+# and the model, seed and LoRA stack came from whatever is loaded now.
+CARRY_CHUNKS = ("parameters", "civitaiResources", "hashes", "rednode_words",
+                "prompt", "workflow")
 
 
 def png_carry(name):

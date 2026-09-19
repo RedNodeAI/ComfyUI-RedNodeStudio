@@ -1336,18 +1336,28 @@ class RedNodeSave:
 
             fmt = cfg["format"]
             if fmt == "png":
+                _carry = carry if isinstance(carry, dict) else {}
+                _ctext = str(_carry.get("parameters") or "").strip()
                 png_meta = None
                 if cfg["embed_png"]:
                     png_meta = PngInfo()
-                    if prompt is not None:
+                    # THE GRAPH GOES WITH THE RECORD. Writing this run's graph next
+                    # to a carried parameters text is a picture that contradicts
+                    # itself, and the readers that look at the graph first (the
+                    # pack's own Import prompt, among others) would take the model,
+                    # seed and LoRA stack from the run that merely enlarged it.
+                    if _ctext and str(_carry.get("prompt") or "").strip():
+                        png_meta.add_text("prompt", str(_carry["prompt"]))
+                    elif prompt is not None:
                         png_meta.add_text("prompt", json.dumps(prompt))
                     for key, value in (extra_pnginfo or {}).items():
-                        png_meta.add_text(key, json.dumps(value))
+                        if _ctext and str(_carry.get(key) or "").strip():
+                            png_meta.add_text(key, str(_carry[key]))
+                        else:
+                            png_meta.add_text(key, json.dumps(value))
                 # CARRIED: the picture that came in already said what made it, so
                 # that record is what goes out. An upscale of last week's render
                 # must not be labelled with the rig that happens to be loaded now.
-                _carry = carry if isinstance(carry, dict) else {}
-                _ctext = str(_carry.get("parameters") or "").strip()
                 if _ctext:
                     png_meta = png_meta or PngInfo()
                     png_meta.add_text("parameters", _ctext)
