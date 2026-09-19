@@ -19,6 +19,7 @@ leaves the decision alone.
 Measured behaviour behind the constants is in the hub's HERO_CREATOR.md.
 """
 
+import contextlib
 import os
 import time
 
@@ -55,6 +56,42 @@ THRESHOLD = 0.35
 # exactly that case never fired.
 HAIR_MIN = 0.10
 COVER_MAX = 0.08       # occluder over the head box, above which a crop cannot win
+
+
+@contextlib.contextmanager
+def progress_safe():
+    """Let nodes that report progress run outside a queue item.
+
+    ComfyUI sets `last_prompt_id` on the server when a QUEUE ITEM starts, and its
+    progress hook reads it back (main.py). A node called from an HTTP route runs
+    outside any execution, so the attribute was never set and a node that
+    reports progress dies on that rather than on anything to do with the
+    picture: SAM3 came back as "'PromptServer' object has no attribute
+    'last_prompt_id'", which names nothing a user could act on.
+
+    Only what is MISSING is filled in, and it is taken back out afterwards, so a
+    real execution running at the same time is never touched.
+    """
+    srv = None
+    try:
+        from server import PromptServer
+        srv = PromptServer.instance
+    except Exception:
+        srv = None
+    added = []
+    if srv is not None:
+        for attr, val in (("last_prompt_id", "rednode-hero"), ("last_node_id", None)):
+            if not hasattr(srv, attr):
+                setattr(srv, attr, val)
+                added.append(attr)
+    try:
+        yield
+    finally:
+        for attr in added:
+            try:
+                delattr(srv, attr)
+            except Exception:
+                pass
 
 
 def _mask_np(image, target, sam_model=""):
@@ -154,6 +191,11 @@ def make_hero(source, sam_model="", enlarge=True):
     Raises ValueError with a readable reason. Every caller of this is a person
     pressing a button, so a reason they can act on beats a traceback.
     """
+    with progress_safe():
+        return _make_hero(source, sam_model, enlarge)
+
+
+def _make_hero(source, sam_model, enlarge):
     image = _ws.load_image(source, 0)               # 0 = its own size, no resize
     h, w = int(image.shape[1]), int(image.shape[2])
 
