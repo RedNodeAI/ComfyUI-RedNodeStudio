@@ -298,6 +298,7 @@ export function upscaleBody(node, body) {
   // button have to start exactly the same run
   const batchOpts = {
     runLabel: "Run All Batch",
+    loadImages: !!node._rnCfg?.upscale?.on,
     // checked ONCE, before the first picture: a switched-off tab fails every
     // picture in the folder, and two hundred ticks of nothing is not an answer
     precheck: () => (node._rnCfg?.upscale?.on
@@ -364,7 +365,7 @@ export function upscaleBody(node, body) {
   // size, which is the first thing you want to know before upscaling it
   const sizeLine = el("span", "hint", "");
   sizeLine.style.cssText = "font-size:11px";
-  if (U.source) {
+  if (U.source && U.on) {
     const q = new URLSearchParams({ filename: U.source.split("/").pop(),
                                     subfolder: U.source.includes("/")
                                       ? U.source.slice(0, U.source.lastIndexOf("/")) : "",
@@ -639,6 +640,18 @@ export function upscaleBody(node, body) {
   // and there is nowhere else to go looking for it.
   const r = lastResultNow();
   const { line: rLine } = card(body, "RESULT");
+  // A SWITCHED-OFF TAB FETCHES NOTHING. Every pane is an <img> pointing at /view,
+  // so drawing them on a tab that is not running is a pile of requests and a pile
+  // of decoded pictures held for something nobody asked for (the user,
+  // 2026-09-20). The panes come back the moment it is switched on.
+  if (!U.on) {
+    const off = el("span", "hint",
+      "The tab is off, so nothing is loaded here. Switch it on at the top and the "
+      + "steps of a run appear, one pane each.");
+    off.style.cssText = "font-size:11px";
+    rLine.appendChild(off);
+    return;
+  }
   // the recorded stages stand on their own: a run that happened is still worth
   // showing when the shared result has since moved on to somebody else's queue
   if (!r && !stages(node).length) {

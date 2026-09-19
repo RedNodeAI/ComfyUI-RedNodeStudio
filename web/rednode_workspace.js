@@ -1458,6 +1458,9 @@ export function readCfg(node) {
   if (typeof d.upscale.seed !== "number") d.upscale.seed = 0;
   if (typeof d.upscale.pre_size !== "number") d.upscale.pre_size = 0;
   if (typeof d.upscale.seed_random !== "boolean") d.upscale.seed_random = true;
+  // saved folder batches, per tab, shared by every tab that carries a batch
+  d.batch_folders = d.batch_folders && typeof d.batch_folders === "object"
+    ? d.batch_folders : {};
   d.upscale.after = d.upscale.after && typeof d.upscale.after === "object"
     ? d.upscale.after : {};
   if (typeof d.upscale.after.manual !== "boolean") d.upscale.after.manual = false;
@@ -13621,6 +13624,7 @@ function i2iTabs(node, body) {
     // with the gallery pointed at each in turn, in the QUEUED copy only.
     batchStrip(node, "i2i", body, {
       runLabel: "Run All Batch",
+      loadImages: !!cfg.tabs.i2i.on,
       precheck: () => (cfg.tabs.i2i.on
         ? "" : "Img2Img is switched off, so nothing would be rendered. Switch it on "
              + "at the top of this tab, then run the batch again."),

@@ -293,6 +293,70 @@ export function batchStrip(node, key, host, opts = {}) {
   btn(head, "Pick a folder", "Choose a folder. Its pictures are copied into ComfyUI's "
     + "own input folder, so nothing on your drive is read by the server.",
     () => pickFolder(node, key), st.running);
+
+  // SAVED FOLDERS: the same idea as the gallery's collections. A saved batch is a
+  // list of pictures already copied into the input folder, not a path, so it
+  // survives the folder on your drive being moved or renamed.
+  const saved = () => {
+    const all = (node._rnCfg.batch_folders ||= {});
+    return (all[key] ||= {});
+  };
+  const names = Object.keys(saved()).sort();
+  if (names.length) {
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    sel.style.cssText = "flex:none;max-width:170px";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = `Saved (${names.length})`;
+    sel.appendChild(blank);
+    for (const nm of names) {
+      const o = document.createElement("option");
+      o.value = nm;
+      o.textContent = `${nm} (${saved()[nm].length})`;
+      sel.appendChild(o);
+    }
+    sel.title = "Load a folder you saved before. The pictures are already in the "
+              + "input folder, so nothing is copied again.";
+    sel.disabled = st.running;
+    sel.onchange = () => {
+      const files = saved()[sel.value];
+      if (!files) return;
+      st.files = files.slice();
+      st.at = -1; st.done = []; st.failed = []; st.why = {};
+      st.sel = new Set(); st.peek = -1;
+      st.note = `${files.length} pictures from ${sel.value}`;
+      writeCfg(node);
+      render(node);
+    };
+    head.appendChild(sel);
+  }
+  if (st.files.length && !st.running) {
+    btn(head, "Save folder",
+        "Remember this set of pictures under a name, so it can be picked again "
+        + "without dropping the folder in.",
+        () => {
+          const nm = String(prompt("Name for this folder batch:", "") || "").trim();
+          if (!nm) return;
+          saved()[nm.slice(0, 48)] = st.files.slice();
+          st.note = `Saved as ${nm}`;
+          writeCfg(node);
+          render(node);
+        });
+  }
+  if (names.length && !st.running) {
+    btn(head, "Forget saved",
+        "Remove one of the saved folder batches. The pictures stay in the input "
+        + "folder.",
+        () => {
+          const nm = String(prompt("Which saved folder should go?\n\n"
+                                   + names.join(", "), names[0]) || "").trim();
+          if (!nm || !saved()[nm]) return;
+          delete saved()[nm];
+          writeCfg(node);
+          render(node);
+        });
+  }
   if (st.files.length && !st.running) {
     btn(head, "Clear", "Forget this folder. The copies stay in the input folder.", () => {
       st.files = []; st.at = -1; st.done = []; st.failed = []; st.why = {};
@@ -348,6 +412,19 @@ export function batchStrip(node, key, host, opts = {}) {
   // A CLOSER LOOK, beside the strip. Deliberately not the full screen viewer: this
   // is for checking which picture a thumbnail is while you tick your way through a
   // folder, not for inspecting a finished result.
+  // A TAB THAT IS NOT RUNNING LOADS NO PICTURES. Every thumbnail is a request and
+  // a decoded picture held for something nobody is doing; the folder is still
+  // named, so nothing is lost but the bandwidth (the user, 2026-09-20).
+  if (opts.loadImages === false) {
+    const quiet = document.createElement("div");
+    quiet.className = "hint";
+    quiet.style.cssText = "font-size:11px";
+    quiet.textContent = `${st.files.length} pictures in this folder. The tab is off, `
+                      + "so they are not loaded here; switch it on to see them.";
+    box.appendChild(quiet);
+    host.appendChild(box);
+    return box;
+  }
   const cols = document.createElement("div");
   cols.style.cssText = "display:flex;gap:10px;align-items:flex-start";
   const peek = document.createElement("div");
@@ -385,7 +462,12 @@ export function batchStrip(node, key, host, opts = {}) {
   const size = Math.max(40, Math.min(140, Number(st.thumb) || 58));
   const strip = document.createElement("div");
   strip.className = "rn-ws-batchstrip";
-  strip.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;max-height:320px;overflow:auto";
+  // PADDING, because the selection ring is an outline and an outline is drawn
+  // OUTSIDE the element's box. With the strip scrolling and starting flush
+  // against the first thumbnail, the ring was clipped at the top, the bottom and
+  // the left edge (the user, 2026-09-20).
+  strip.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;max-height:340px;"
+                      + "overflow:auto;padding:5px";
   folderDropZone(node, strip, key);
   st.sel ||= new Set();
   st.files.forEach((f, i) => {
@@ -402,7 +484,7 @@ export function batchStrip(node, key, host, opts = {}) {
                     + `background-image:url(${viewUrl(f)});cursor:pointer;`
                     + "border:2px solid " + (here ? "#4a8fe0" : failed ? "#b8283c"
                                              : done ? "#2f6b46" : "#2a2e35")
-                    + (picked ? ";outline:2px solid #4a8fe0;outline-offset:1px" : "");
+                    + (picked ? ";outline:2px solid #4a8fe0;outline-offset:2px" : "");
     t.title = `${i + 1}. ${f}`
             + (failed ? ` — ${st.why[i] || "would not run"}`
                : done ? " — done" : "")

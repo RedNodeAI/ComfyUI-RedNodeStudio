@@ -1775,6 +1775,10 @@ def parse_config(config_json):
             # does above, so refine_pipeline.parse_pipeline stays the only owner of
             # that schema instead of a second copy drifting here (KNOWN_TRAPS 13).
             "upscale": _upscale_cfg(data.get("upscale")),
+            # SAVED FOLDER BATCHES, per tab: {"upscale": {name: [files]}, ...}.
+            # Managed input names, so a saved folder is a list of pictures already
+            # copied in rather than a path on anybody's drive.
+            "batch_folders": _batch_folders(data.get("batch_folders")),
             "taps": _normalise_taps(data.get("taps")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
@@ -2376,6 +2380,29 @@ class _UpscaleHandled(Exception):
     An exception rather than a flag because the door is one try block, and this
     is the one way out of it that is not a failure.
     """
+
+
+def _batch_folders(raw):
+    """Saved folder batches, keyed by tab then by name.
+
+    Names are trimmed and capped, lists hold managed input filenames only. A
+    saved batch is not a path: the pictures were copied into ComfyUI's input
+    folder when they were taken, and this remembers which ones went together.
+    """
+    src = raw if isinstance(raw, dict) else {}
+    out = {}
+    for tab, saved in src.items():
+        if not isinstance(saved, dict):
+            continue
+        keep = {}
+        for name, files in list(saved.items())[:64]:
+            nm = str(name or "").strip()[:48]
+            if not nm or not isinstance(files, list):
+                continue
+            keep[nm] = [str(f) for f in files[:2000] if str(f or "").strip()]
+        if keep:
+            out[str(tab)[:32]] = keep
+    return out
 
 
 def _upscale_cfg(raw):
