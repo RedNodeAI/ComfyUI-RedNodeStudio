@@ -391,14 +391,19 @@ export function batchStrip(node, key, host, opts = {}) {
             + (failed ? ` — ${st.why[i] || "would not run"}`
                : done ? " — done" : "")
             + "\nClick to look at it, Ctrl-click to select it for a partial run.";
-    t.onclick = (ev) => {
-      if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
-        if (st.sel.has(i)) st.sel.delete(i);
-        else st.sel.add(i);
-      }
+    const toggle = () => {
+      if (st.sel.has(i)) st.sel.delete(i);
+      else st.sel.add(i);
       st.peek = i;
       render(node);
     };
+    t.onclick = (ev) => {
+      // ctrl-click still selects, for anyone who learned it that way
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey) { toggle(); return; }
+      st.peek = i;
+      render(node);
+    };
+    t.oncontextmenu = (ev) => { ev.preventDefault?.(); toggle(); };
     if (failed || done) {
       const mark = document.createElement("span");
       mark.textContent = failed ? "✕" : "✓";
@@ -432,8 +437,13 @@ export function batchStrip(node, key, host, opts = {}) {
     render(node);
   });
   tools.append(slab, sl);
+  const how = document.createElement("span");
+  how.className = "hint";
+  how.style.cssText = "font-size:11px;flex:none";
+  how.textContent = "Right-click a picture to select it";
+  tools.appendChild(how);
   btn(tools, st.sel.size ? `Unselect ${st.sel.size}` : "Select all",
-      "Ctrl-click a picture to select it on its own. This does all of them at once.",
+      "Right-click a picture to select it one at a time. This does all of them at once.",
       () => {
         if (st.sel.size) st.sel = new Set();
         else st.sel = new Set(st.files.map((_, i) => i));
@@ -490,6 +500,25 @@ export function batchStrip(node, key, host, opts = {}) {
         + "history for you.";
     arow.appendChild(why);
     box.appendChild(arow);
+
+    // NOTHING IS BEING KEPT. A finished picture is written to ComfyUI's temp
+    // folder, and the result history holds the last five, so a folder of two
+    // hundred with Save off leaves a hundred and ninety-five of them to be cleared
+    // out. Worth saying plainly rather than after the fact.
+    if (opts.saveKey && !flags[opts.saveKey]) {
+      const warn = document.createElement("div");
+      warn.className = "rn-ws-batchwarn";
+      warn.style.cssText = "font-size:12px;color:#f0c98a;background:#2e2413;"
+                         + "border:1px solid #6b5220;border-left:3px solid #d99a2b;"
+                         + "border-radius:4px;padding:6px 8px;line-height:1.45";
+      warn.textContent = st.files.length > 5
+        ? `Save is off, so none of these ${st.files.length} pictures is kept. They go `
+          + "to the temp folder and only the last five stay in the result history. "
+          + "Switch Save on unless you are trying settings out."
+        : "Save is off, so nothing is filed. The pictures go to the temp folder and "
+          + "are cleared out later; the result history keeps the last five.";
+      box.appendChild(warn);
+    }
   }
 
   host.appendChild(box);

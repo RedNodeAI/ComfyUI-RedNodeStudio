@@ -260,6 +260,7 @@ export function upscaleBody(node, body) {
            + "batch again."),
     onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
     flags: () => node._rnCfg.upscale.after,
+    saveKey: "save",
     after: [
       ["detailer", "Detailer",
        "Run the Detailer tab's passes on each upscaled picture, a face detailer "
