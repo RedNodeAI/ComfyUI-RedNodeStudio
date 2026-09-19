@@ -5,6 +5,7 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
+import { batchStrip, batchState } from "./rednode_ws_batch.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -125,10 +126,10 @@ async function upscaleGenerate(node, statusEl) {
  *  the same way the Paint tab's built-in pass does. An ordinary Queue carries no
  *  token, so it can never upscale or chain by accident.
  */
-async function queueUpscale(node, say, over) {
+async function queueUpscale(node, say, over, quiet) {
   const { output } = await app.graphToPrompt();
   const wsKey = promptKeyFor(output, node);
-  if (!wsKey) { alert("The Workspace is not in the queued graph."); return false; }
+  if (!wsKey) { alert("The Workspace is not in the queued graph."); return null; }
   const pruned = pruneToNode(output, wsKey);
   try {
     const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
@@ -137,7 +138,7 @@ async function queueUpscale(node, say, over) {
     pruned[wsKey].inputs.config = JSON.stringify(c);
   } catch (e) {
     alert("Could not stamp the run: " + e.message);
-    return false;
+    return null;
   }
   advanceSeeds(pruned, Object.keys(pruned));
   try {
@@ -154,12 +155,12 @@ async function queueUpscale(node, say, over) {
     // claim the run, or the finished picture updates lastResult and never reaches
     // this tab: only the tab that asked for a result is allowed to show it
     registerUpscaleRun(String(d.prompt_id || ""), node);
-    return true;
+    return String(d.prompt_id || "");
   } catch (err) {
     console.error("[RedNode Workspace] upscale queue failed:", err);
     say(`Could not queue it: ${err.message}`);
-    alert(`Could not queue it: ${err.message}`);
-    return false;
+    if (!quiet) alert(`Could not queue it: ${err.message}`);
+    return null;
   }
 }
 
@@ -226,6 +227,17 @@ export function upscaleBody(node, body) {
   const srcName = el("span", "hint", U.source || "nothing chosen yet");
   srcName.style.cssText = "font-size:11px;align-self:center";
   srcLine.append(thumb, srcBtns, srcName);
+
+  // THE BATCH, under the one picture: the same tab, a folder instead of a file.
+  // Each picture runs on its own queue with the settings below, so the whole tab
+  // means the same thing whether it is doing one or two hundred.
+  batchStrip(node, "upscale", body, {
+    runLabel: "Upscale them all",
+    onRun: async (file) => {
+      if (!node._rnCfg?.upscale?.on) throw new Error("the Upscale tab is off");
+      return queueUpscale(node, () => {}, { source: file }, true);
+    },
+  });
 
   // THE METHOD
   const { line: mLine } = card(body, "METHOD");
@@ -398,7 +410,7 @@ export function upscaleBody(node, body) {
       render(node);
       return;
     }
-    const ok = await queueUpscale(node, (t) => { node._rnFinalStatus = t; },
+      const ok = await queueUpscale(node, (t) => { node._rnFinalStatus = t; },
                                   { source: name, run_mode: "chain" });
     node._rnFinalStatus = ok
       ? "Queued: Detailer" + (cfgNow.post_on !== false ? ", Post" : "")

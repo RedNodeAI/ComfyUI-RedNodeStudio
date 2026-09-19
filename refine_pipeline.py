@@ -13,7 +13,8 @@ Two pass kinds, both taken from the shapes you already runs as subgraphs:
 Every pass carries the full sampler vocabulary: steps, CFG, sampler, scheduler, a
 denoise, and a start/end step window for the partial-schedule tricks detailer chains
 are built from. Anything left at its "rig" default inherits the rig's own settings
-(detailer passes take the rig's detailer_steps, sampler passes its steps), so the
+(every pass takes the rig's detailer_steps, its count for working over a picture
+that already exists rather than drawing from noise), so the
 Models tab stays the one place a model's numbers live.
 
 The prompt is the workspace's own when the box is empty: the pass looks up the
@@ -546,14 +547,22 @@ def _rig_settings(ws_cfg, name):
 def resolve_sampling(stage, rig):
     """The numbers this pass actually runs with: its own, else the rig's.
 
-    A detailer pass inherits the rig's detailer_steps, which is what that field has
-    always been for; a sampler pass inherits the rig's main steps. An unknown
-    sampler or scheduler degrades to the rig's, then to euler/simple, because an
-    unknown combo value fails queue validation blaming the wrong node.
+    EVERY pass here inherits the rig's detailer_steps, not its main steps. All of
+    them work on a picture that already exists: a sampler pass repaints the frame,
+    a tiled pass repaints it a tile at a time, a detailer pass repaints a crop.
+    The main step count is for drawing from noise, and a model that wants 30 steps
+    from nothing often wants 8 over a picture, which is the whole reason the rig
+    carries a second number at all. The rig's i2i sampler and scheduler already
+    take over on the same principle (workspace.py, "THE I2I PAIR takes over").
+
+    Until 2026-09-20 only a detailer pass took it and the others fell back to the
+    main steps, so a sampler pass or a tiled upscale left on "the rig's" ran at the
+    from-noise count.
+
+    An unknown sampler or scheduler degrades to the rig's, then to euler/simple,
+    because an unknown combo value fails queue validation blaming the wrong node.
     """
-    steps = stage["steps"] or (rig.get("detailer_steps", 8)
-                               if stage["type"] == "detailer"
-                               else rig.get("steps", 8))
+    steps = stage["steps"] or rig.get("detailer_steps") or rig.get("steps", 8)
     cfg = stage["cfg"] or rig.get("cfg", 1.0)
     sampler = stage["sampler"] or rig.get("sampler", "euler")
     if sampler not in comfy.samplers.KSampler.SAMPLERS:

@@ -1771,7 +1771,8 @@ function buildPanel(node, hostEl = null) {
         + "colours and groups."
       : d.stages.length
       ? "Top to bottom is the run order. Sampling boxes left empty inherit the "
-        + "rig's own settings from the Models tab. \u29c9 copies a pass; right-click "
+        + "rig's own settings from the Models tab, and the steps come from Detailer "
+        + "steps there, not the main ones. \u29c9 copies a pass; right-click "
         + "a card for colours and groups."
       : "No passes yet: the image goes straight through. Add a sampler refine or a "
         + "face detailer, as many as you want, in any order.";

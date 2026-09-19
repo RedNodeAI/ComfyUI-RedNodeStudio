@@ -11632,7 +11632,11 @@ function modelsBody(node, page) {
   }
   group(body, "Detailer", "What the Detailer passes on this rig take.");
   numRow("Detailer steps", "detailer_steps", 1,
-         "Steps for detailer passes, on its own output.");
+         "Steps for working over a picture that already exists: EVERY Detailer "
+         + "pass left on the rig's own numbers takes this, the sampler and tiled "
+         + "passes as well as the detailer ones. The steps above are for drawing "
+         + "from noise, and a model that wants thirty from nothing often wants "
+         + "eight over a picture, which is why this is a second number.");
   // LORA SET: which LoRAs-tab set this rig renders with. Main by default.
   // Detailer passes and the paint pass on this rig inherit the choice unless
   // they pick their own set.
