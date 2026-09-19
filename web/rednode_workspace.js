@@ -16784,6 +16784,11 @@ app.registerExtension({
           type: im.type || "temp",
           prompt_id: e?.detail?.prompt_id || "",
         };
+        // KEPT ON THE NODE, because this copy deliberately never becomes
+        // lastResult: it must not turn into the next editable Paint source. A tab
+        // that wants to SHOW it, as the Upscale tab's stage strip does, has
+        // nowhere else to find it.
+        pendingFinal.node._rnLastFinal = { ...finished, rand: (Math.random() * 1e9) | 0 };
         saveResultAsKeeper(finished).then(
           () => {
             notifySavePending(pendingFinal.saveNoticeId, "done");

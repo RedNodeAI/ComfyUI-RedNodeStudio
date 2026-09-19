@@ -214,7 +214,11 @@ function resetStages(node, sourceName) {
 
 /** Record whatever the last run produced, under the name of what made it. */
 function pushStage(node, label) {
-  const r = lastResultNow();
+  // a Post or Save copy never becomes the shared result, on purpose, so the node
+  // carries it instead; prefer it when one has just been made
+  const fin = node._rnLastFinal;
+  node._rnLastFinal = null;
+  const r = fin || lastResultNow();
   if (!r) return;
   const list = stages(node);
   const last = list[list.length - 1];
@@ -791,6 +795,14 @@ export function upscaleBody(node, body) {
     if (im.complete) draw();
     fileBytes(im.src).then((n) => { bytes = n; draw(); });
     col.append(cap, im, size);
+    // the status belongs UNDER the pane it is about. Off in the corner of the card
+    // it read as a label for the whole box (the user, 2026-09-20).
+    if (i === shown.length - 1 && node._rnFinalStatus) {
+      const said = el("div", "hint", node._rnFinalStatus);
+      said.style.cssText = "font-size:10.5px;text-align:center;line-height:1.35";
+      if (node._rnFinalFailed) said.style.color = "#fca5a5";
+      col.appendChild(said);
+    }
     strip.appendChild(col);
   });
   rLine.appendChild(strip);
@@ -799,8 +811,5 @@ export function upscaleBody(node, body) {
   // doing it already, and a button that repeats what just happened is a way to
   // do it twice by accident.
   if (node._rnCfg?.upscale?.after?.manual) rLine.appendChild(acts);
-  const rname = el("div", "hint", node._rnFinalStatus || "");
-  rname.style.cssText = "font-size:11px;width:100%";
-  if (node._rnFinalFailed) rname.style.color = "#fca5a5";
-  if (node._rnFinalStatus) rLine.appendChild(rname);
+
 }
