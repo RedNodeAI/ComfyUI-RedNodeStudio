@@ -294,10 +294,6 @@ export function batchStrip(node, key, host, opts = {}) {
     + "own input folder, so nothing on your drive is read by the server.",
     () => pickFolder(node, key), st.running);
   if (st.files.length && !st.running) {
-    btn(head, opts.runLabel || "Run All Batch",
-        "Run every picture in turn, one per queue. A picture that fails is marked "
-        + "and the rest carry on.",
-        () => runBatch(node, key, opts));
     btn(head, "Clear", "Forget this folder. The copies stay in the input folder.", () => {
       st.files = []; st.at = -1; st.done = []; st.failed = []; st.why = {};
       st.sel = new Set(); st.peek = -1; st.note = "";
@@ -316,14 +312,23 @@ export function batchStrip(node, key, host, opts = {}) {
   note.textContent = st.note || (st.files.length ? `${st.files.length} pictures`
                                                  : "No folder yet");
   head.appendChild(note);
-  // RUN SELECTED at the END of the row: it is the conditional one, so it should
-  // not push the buttons that are always there around as a selection comes and goes
-  if (st.files.length && !st.running && chosen().length) {
-    const only = btn(head, `Run Selected (${chosen().length})`,
-      "Run only the pictures you have ticked, in order.",
-      () => runBatch(node, key, opts, chosen()));
-    only.style.cssText += ";margin-left:auto;background:#2b3a4d;color:#cfe6ff;"
-                        + "border-color:#3d5570";
+  // THE RUNS LIVE AT THE RIGHT END OF THIS ROW, the way the single picture's own
+  // run sits with the picture it runs. Run Selected is the rightmost and only
+  // appears with a selection, so an empty selection cannot be confusing; Run All
+  // sits to its left and keeps its place whether or not one is showing.
+  const blue = ";background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
+  if (st.files.length && !st.running) {
+    const all = btn(head, opts.runLabel || "Run All Batch",
+      "Run every picture in turn, one per queue. A picture that fails is marked "
+      + "and the rest carry on.",
+      () => runBatch(node, key, opts));
+    all.style.cssText += ";margin-left:auto" + blue;
+    if (chosen().length) {
+      const only = btn(head, `Run Selected (${chosen().length})`,
+        "Run only the pictures you have ticked, in order.",
+        () => runBatch(node, key, opts, chosen()));
+      only.style.cssText += blue;
+    }
   }
   box.appendChild(head);
 

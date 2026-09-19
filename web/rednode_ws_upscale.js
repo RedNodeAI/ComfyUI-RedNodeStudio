@@ -5,8 +5,7 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
-import { batchStrip, batchState, runBatch, pickFolder,
-         afterRow } from "./rednode_ws_batch.js";
+import { batchStrip, batchState, afterRow } from "./rednode_ws_batch.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -339,7 +338,7 @@ export function upscaleBody(node, body) {
         const k = fit / Math.max(w0, h0);
         const r8 = (x) => Math.max(64, Math.round(x * k / 8) * 8);
         w = r8(w0); h = r8(h0);
-        line += ` → fit ${w} × ${h}`;
+        line += ` → resized ${w} × ${h}`;
       }
       if (S.type === "vosr2") {
         const mul = Math.max(1, Number(S.vosr2_scale) || 2);
@@ -380,7 +379,35 @@ export function upscaleBody(node, body) {
     };
     inp.click();
   };
-  srcBtns.append(useLast, pick);
+  const paste = el("button", "rn-ws-btn", "Paste");
+  paste.style.cssText = "width:auto;padding:3px 12px";
+  paste.title = "Take the picture on the clipboard. Ctrl+V anywhere on this tab does "
+              + "the same, so a screenshot goes straight in.";
+  paste.onclick = async () => {
+    try {
+      const items = await navigator.clipboard?.read?.();
+      for (const it of items || []) {
+        const type = (it.types || []).find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await it.getType(type);
+        await adoptPaintSource(node, new File([blob], `pasted_${Date.now()}.png`,
+                                              { type: blob.type || "image/png" }),
+                               "upscale");
+        return;
+      }
+      alert("There is no picture on the clipboard. Copy one, or press Ctrl+V on "
+          + "this tab.");
+    } catch (err) {
+      alert("The clipboard could not be read here. Press Ctrl+V on this tab "
+          + "instead, which always works.");
+    }
+  };
+  const clear = el("button", "rn-ws-btn", "Clear");
+  clear.style.cssText = "width:auto;padding:3px 12px";
+  clear.title = "Forget this picture. The file stays where it is.";
+  clear.disabled = !U.source;
+  clear.onclick = () => { U.source = ""; node._rnUpStat = null; wr(); };
+  srcBtns.append(useLast, pick, paste, clear);
   const srcCol = el("div");
   srcCol.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:0;"
                        + "align-self:center";
@@ -406,24 +433,6 @@ export function upscaleBody(node, body) {
   status.style.cssText = "font-size:11px;text-align:right";
   go.onclick = () => upscaleGenerate(node, status, batchOpts.afterEach);
   runBox.appendChild(go);
-
-  // the folder's run, here as well as on the batch card: one of these is the
-  // picture on the left, the other is every picture in the folder, and having
-  // them apart is what made that unclear
-  const bst = batchState(node, "upscale");
-  const bgo = el("button", "rn-ws-btn",
-                 bst.files.length ? `Run All Batch (${bst.files.length})`
-                                  : "Pick a batch folder");
-  bgo.style.cssText = "width:auto;padding:5px 16px";
-  bgo.disabled = bst.running;
-  bgo.title = bst.files.length
-    ? "Run every picture in the batch folder below, one at a time."
-    : "No folder yet. Drop one on the batch below, or press Pick a folder there.";
-  bgo.onclick = () => {
-    if (!bst.files.length) { pickFolder(node, "upscale"); return; }
-    runBatch(node, "upscale", batchOpts);
-  };
-  runBox.appendChild(bgo);
 
   runBox.appendChild(status);
   srcLine.appendChild(runBox);
@@ -490,17 +499,17 @@ export function upscaleBody(node, body) {
 
   // THE METHOD'S OWN DIALS. Field names are the Detailer stage's, on purpose.
   const { line: dLine } = card(body, "SETTINGS");
-  // FIT FIRST, above the method's own dials because it happens before them. A
-  // folder of mixed sizes comes out at one size this way, and the same resize the
-  // Paint tab works to is used, so a picture is the same size in either tab.
+  // RESIZE, above the method's own dials because it happens before them. A folder
+  // of mixed sizes comes out at one size this way, and it is the same resize the
+  // Paint tab works to, so a picture is the same size in either tab.
   dLine.append(
-    lab("Fit first"),
+    lab("Resize"),
     sel([["512", "512 long edge"], ["768", "768"], ["1024", "1024"], ["1280", "1280"],
          ["1536", "1536"], ["2048", "2048"]],
         U.pre_size ? String(U.pre_size) : "",
-        "Take the picture to this long edge BEFORE upscaling it, so a folder of "
-        + "mixed sizes all comes out the same. (as it is) upscales whatever arrives, "
-        + "which on a mixed folder means mixed results.",
+        "Resize the picture to this long edge BEFORE the method runs, so a folder "
+        + "of mixed sizes all comes out the same. (as it is) works on whatever "
+        + "arrives, which on a mixed folder means mixed results.",
         (v) => { U.pre_size = v ? parseInt(v, 10) : 0; wr(); }, "(as it is)"));
   const sep = el("span");
   sep.style.cssText = "width:1px;align-self:stretch;background:#2e333a;margin:0 2px";

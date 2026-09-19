@@ -14,6 +14,7 @@ import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
+import { batchStrip } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -10529,10 +10530,14 @@ function paintBody(node, body) {
     // as usable as a result. Declining on every other tab and on a clipboard with no
     // image leaves ComfyUI's own paste alone, including pasting copied NODES.
     panelPaste(host, (e) => {
-      if (node._rnTab !== "paint") return false;
+      // the Upscale tab takes a pasted picture the same way, into its own source:
+      // a screenshot is as good a thing to upscale as a render
+      const key = node._rnTab === "paint" ? "paint"
+                : node._rnTab === "upscale" ? "upscale" : null;
+      if (!key) return false;
       const file = clipboardImage(e);
       if (!file) return false;
-      adoptPaintSource(node, file).catch((err) => {
+      adoptPaintSource(node, file, key).catch((err) => {
         console.error("[RedNode Workspace] could not paste that picture:", err);
         alert(`Could not use that image: ${err.message}`);
       });
@@ -13609,7 +13614,43 @@ function i2iTabs(node, body) {
   if (!t.on && sub !== "source" && sub !== "auto"
       && !(sub === "swap" && t.swap?.target === "render")
       && !(sub === "reangle" && t.reangle?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
-  if (sub === "source") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
+  if (sub === "source") {
+    galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
+    // THE SAME FOLDER BATCH the Upscale tab uses, under the gallery it feeds. An
+    // Img2Img run is an ordinary Queue, so a batch is that queue once per picture
+    // with the gallery pointed at each in turn, in the QUEUED copy only.
+    batchStrip(node, "i2i", body, {
+      runLabel: "Run All Batch",
+      precheck: () => (cfg.tabs.i2i.on
+        ? "" : "Img2Img is switched off, so nothing would be rendered. Switch it on "
+             + "at the top of this tab, then run the batch again."),
+      onRun: async (file) => {
+        const { output } = await app.graphToPrompt();
+        const wsKey = promptKeyFor(output, node);
+        if (!wsKey) throw new Error("the Workspace is not in the queued graph");
+        const pruned = pruneToNode(output, wsKey);
+        const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
+        const t2 = (c.tabs ||= {}).i2i ||= {};
+        t2.on = true;
+        t2.images = [file];        // this picture, this queue
+        t2.sel = 0;
+        t2.random = false;         // the dice would undo the point of a batch
+        pruned[wsKey].inputs.config = JSON.stringify(c);
+        advanceSeeds(pruned, Object.keys(pruned));
+        const res = await api.fetchApi("/prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: pruned,
+                                 client_id: api.clientId ?? api.socket?.clientId }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d.error) {
+          throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
+        }
+        return String(d.prompt_id || "");
+      },
+    });
+  }
   else if (sub === "passes") passesTab(node, body);
   else if (sub === "auto") i2iAutoPage(node, body);
   else if (sub === "reangle") {

@@ -2407,9 +2407,9 @@ def _upscale_cfg(raw):
         # into the builtin chain instead, which is the tab's Send to Detailer
         "run_mode": ("chain" if str(d.get("run_mode") or "") == "chain"
                      else "upscale"),
-        # FIT FIRST: the long edge the picture is taken to BEFORE the upscaler
-        # sees it, so a folder of mixed sizes comes out at one size. 0 leaves it
-        # alone. Uses paint_render._fit, the same resize the Paint tab works to.
+        # RESIZE: the long edge the picture is taken to BEFORE the method runs,
+        # so a folder of mixed sizes comes out at one size. 0 leaves it alone.
+        # Uses paint_render._fit, the same resize the Paint tab works to.
         "pre_size": max(0, min(8192, int(d.get("pre_size") or 0)))
                     if str(d.get("pre_size") or "0").lstrip("-").isdigit() else 0,
         # what the batch does with each picture once it is made. Panel-driven, so
@@ -4807,7 +4807,7 @@ class RedNodeStudioWorkspace:
                     from .paint_render import _fit as _paint_fit
                     _b4 = (int(_ubase.shape[2]), int(_ubase.shape[1]))
                     _ubase = _paint_fit(_ubase, _upre)
-                    print("[RedNode Upscale] fitted %d x %d to a %d long edge: "
+                    print("[RedNode Upscale] resized %d x %d to a %d long edge: "
                           "%d x %d" % (_b4[0], _b4[1], _upre,
                                        int(_ubase.shape[2]), int(_ubase.shape[1])),
                           flush=True)
