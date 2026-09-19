@@ -162,6 +162,11 @@ css.textContent = `
 .rn-ls-cog{background:#111316;border:1px solid #33373d;border-radius:5px;color:#c2c7cd;cursor:pointer;font-size:14px;
   padding:0;width:34px;height:30px;flex:none;margin-left:auto}
 .rn-ls-cog:hover{color:#fff;border-color:#b8283c}
+.rn-ls-only{background:#111316;border:1px solid #33373d;border-radius:5px;color:#c2c7cd;cursor:pointer;
+  font-size:11px;padding:0 8px;height:30px;flex:none;white-space:nowrap}
+.rn-ls-only:hover{color:#fff;border-color:#b8283c}
+.rn-ls-only.on{background:#b8283c;border-color:#b8283c;color:#fff;font-weight:600}
+.rn-ls-none{font-size:11px;opacity:.55;padding:10px 4px;text-align:center}
 .rn-ls-panel{position:fixed;z-index:10002;width:270px;background:#1b1e23;border:1px solid #3a3d44;border-radius:7px;padding:10px;
   font:12px system-ui,sans-serif;color:#ddd;box-shadow:0 10px 30px #000c;display:flex;flex-direction:column;gap:8px}
 .rn-ls-panel h5{margin:0;font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.4px}
@@ -287,6 +292,36 @@ function groupMembers(node, titleIndex) {
     if (isTitle(node._rnSlots[i])) break;
     out.push(i);
   }
+  return out;
+}
+
+// "Only on": hide every row that is not enabled, so a long stack shows the
+// handful actually running. A VIEW choice, so it lives in node properties
+// rather than the stack JSON — it is not part of what a preset saves.
+const onlyOn = (node) => !!node.properties?.rn_ls_only_on;
+
+// The rows the list is DRAWING, in order. render() and anything that acts on a
+// range (Select all) both read this, because a button that reaches a row you
+// cannot see is how you delete a LoRA you meant to keep.
+function visibleRows(node) {
+  const out = [];
+  const only = onlyOn(node);
+  let hide = false;
+  (node._rnSlots || []).forEach((slot, i) => {
+    if (isTitle(slot)) {
+      hide = !!slot.folded;                    // a folded title swallows its group
+      // nothing on under it: the section box would be an empty frame
+      if (only && !groupMembers(node, i).some((j) => node._rnSlots[j]?.enabled)) {
+        hide = true;
+        return;
+      }
+      out.push(i);
+      return;
+    }
+    if (hide) return;
+    if (only && !slot.enabled) return;
+    out.push(i);
+  });
   return out;
 }
 
@@ -1436,8 +1471,10 @@ function buildSelBar(node) {
     return b;
   };
 
+  // the rows ON SCREEN, not every row: with Only on lit, or a group folded,
+  // "all" used to reach rows nobody could see and Delete took them with it
   const all = mk("Select all", () => {
-    (node._rnSlots || []).forEach((_, i) => sel.add(i));
+    visibleRows(node).forEach((i) => sel.add(i));
     render(node);
   });
 
@@ -1512,13 +1549,15 @@ export function render(node) {
     node._rnFromEl.title = f ? `these slots were loaded from "${f}" — edits are not saved back until you save again` : "";
   }
   list.replaceChildren();
-  let hideUntilTitle = false;
+  // which rows are drawn is worked out in one place, so the list and the buttons
+  // that act on a range can never disagree about what is on screen
+  const vis = new Set(visibleRows(node));
   // a title opens a section box and the LoRAs under it are appended INSIDE it, so where
   // one group ends and the next begins is visible rather than inferred
   let bucket = list;
   (node._rnSlots || []).forEach((slot, i) => {
     if (isTitle(slot)) {
-      hideUntilTitle = !!slot.folded;                  // a folded title swallows its group
+      if (!vis.has(i)) return;
       const sec = document.createElement("div");
       sec.className = "rn-ls-section";
       if (slot.color) sec.style.borderLeftColor = slot.color;
@@ -1527,9 +1566,17 @@ export function render(node) {
       bucket = sec;
       return;
     }
-    if (hideUntilTitle) return;
+    if (!vis.has(i)) return;
     bucket.appendChild(buildSlot(node, slot, i));
   });
+  // an empty list with a lit button looks like the stack was lost, so say it
+  if (onlyOn(node) && !list.children.length && (node._rnSlots || []).length) {
+    const none = document.createElement("div");
+    none.className = "rn-ls-none";
+    none.textContent = "Nothing is on. Turn Only on off to see the stack.";
+    list.appendChild(none);
+  }
+  if (node._rnOnlyEl) paintOnly(node, node._rnOnlyEl);
   // the bar's home is the LIST'S OWN CONTAINER: on the LoRA Stack node that is
   // the widget element, on the Workspace it is the LoRAs tab's host. Mounted
   // on node._rnWidget it landed at the top of the WHOLE workspace panel, above
@@ -1567,10 +1614,38 @@ function orderWidgets(node) {
   node.widgets?.sort((a, b) => rank(a) - rank(b));
 }
 
-// Build the panel's guts into any container: the list, and the add / cog row under
-// it. The node-specific plumbing (which widget holds the JSON, what "redraw" means)
-// stays with the caller.
-export function buildLoraPanel(node, container) {
+// The count reads either way round: it says how many LoRAs are running without
+// anyone scrolling to count them, which is half of what the button is for.
+function paintOnly(node, b) {
+  const on = onlyOn(node);
+  const n = (node._rnSlots || []).filter((s) => !isTitle(s) && s.enabled).length;
+  b.textContent = `Only on (${n})`;
+  b.classList.toggle("on", on);
+  b.title = on
+    ? `Showing the ${n} LoRA(s) that are on. Click to bring the whole stack back.`
+    : `Show only the ${n} LoRA(s) that are on, instead of scrolling past the rest.`;
+}
+
+function buildOnly(node) {
+  const b = document.createElement("button");
+  b.className = "rn-ls-only";
+  b.onclick = () => {
+    (node.properties ||= {}).rn_ls_only_on = !onlyOn(node);
+    // a row that just went off screen must not stay selected, or the select
+    // bar acts on something nobody can see
+    const sel = selSet(node);
+    const vis = new Set(visibleRows(node));
+    [...sel].forEach((i) => { if (!vis.has(i)) sel.delete(i); });
+    render(node);
+  };
+  paintOnly(node, b);
+  return b;
+}
+
+// The + / preset name / Only on / cog row. ONE builder: the node and the
+// Workspace tab both mount this, and a button added to one copy only is a
+// button that half the pack does not have.
+function buildHead(node) {
   const head = document.createElement("div");
   head.className = "rn-ls-head";
   const add = document.createElement("button");
@@ -1587,13 +1662,23 @@ export function buildLoraPanel(node, container) {
   from.className = "rn-ls-from";
   from.style.cssText = "font-size:10.5px;opacity:.55;flex:1;overflow:hidden;"
                      + "text-overflow:ellipsis;white-space:nowrap";
+  const only = buildOnly(node);
   const cog = document.createElement("button");
   cog.className = "rn-ls-cog";
   cog.textContent = "\u2699";
   cog.title = "stack settings: step size, reset all, check every LoRA for updates";
   cog.onclick = () => openCog(node, cog);
-  head.append(add, from, cog);
+  head.append(add, from, only, cog);
   node._rnFromEl = from;
+  node._rnOnlyEl = only;
+  return head;
+}
+
+// Build the panel's guts into any container: the list, and the add / cog row under
+// it. The node-specific plumbing (which widget holds the JSON, what "redraw" means)
+// stays with the caller.
+export function buildLoraPanel(node, container) {
+  const head = buildHead(node);
 
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:5px";
@@ -1622,28 +1707,7 @@ function build(node) {
   stopEvents(wrap);
   bindSliderWheel(wrap);      // wheel over a strength slider adjusts it
 
-  const head = document.createElement("div");
-  head.className = "rn-ls-head";
-  const add = document.createElement("button");
-  add.className = "rn-ls-add";
-  add.textContent = "+";
-  add.title = "Add a LoRA slot. It lands on screen with its search already open, so "
-            + "you can type or scroll the list straight away.";
-  add.onclick = () => {
-    node._rnFocusSlot = node._rnSlots.length;      // the index it is about to take
-    node._rnSlots.push(newSlot());
-    writeSlots(node); render(node);
-  };
-  const from = document.createElement("span");
-  from.className = "rn-ls-from";
-  from.style.cssText = "font-size:10.5px;opacity:.55;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
-  const cog = document.createElement("button");
-  cog.className = "rn-ls-cog";
-  cog.textContent = "⚙";
-  cog.title = "stack settings: step size, reset all, check every LoRA for updates";
-  cog.onclick = () => openCog(node, cog);
-  head.append(add, from, cog);
-  node._rnFromEl = from;
+  const head = buildHead(node);
 
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:5px";
