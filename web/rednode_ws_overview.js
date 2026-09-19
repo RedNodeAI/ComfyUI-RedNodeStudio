@@ -391,6 +391,7 @@ export function runNeeds(node, cfg) {
   const stages = (cfg.detailer?.stages || []).filter((s) => s.on && s.type !== "title");
   if (cfg.detailer_on) {
     if (stages.some((s) => s.type === "upscale")) wantPack("seedvr2", null, { tab: "detailer" });
+    if (stages.some((s) => s.type === "vosr2")) wantPack("vosr2", null, { tab: "detailer" });
     if (stages.some((s) => s.type === "usdu")) wantPack("usdu", null, { tab: "detailer" });
     if (stages.some((s) => s.type === "detailer")) {
       wantPack("sam3", "finding what a Detailer pass works on", { tab: "detailer" });

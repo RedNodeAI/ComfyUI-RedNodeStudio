@@ -32,6 +32,12 @@ export const EXTRA_PACKS = [
     what: "the SeedVR2 upscale on a Detailer pass",
     url: "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler",
     nodes: ["SeedVR2LoadDiTModel", "SeedVR2LoadVAEModel", "SeedVR2VideoUpscaler"] },
+  // on the Registry as "VOSR 2.0", publisher ylchen333, so Manager installs it
+  // like any other pack
+  { id: "vosr2", name: "ComfyUI-VOSR2",
+    what: "the VOSR 2.0 upscale on a Detailer pass",
+    url: "https://github.com/ylchen333/ComfyUI-VOSR2",
+    nodes: ["VOSR2ModelLoader", "VOSR2Upscale"] },
   { id: "usdu", name: "ComfyUI_UltimateSDUpscale",
     what: "the tiled upscale on a Detailer pass",
     url: "https://github.com/ssitu/ComfyUI_UltimateSDUpscale",

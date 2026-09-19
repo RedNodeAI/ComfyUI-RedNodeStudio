@@ -91,6 +91,7 @@ css.textContent = `
 .rn-adv .chip.detailer{background:#4a2d57;color:#e2b0ff}
 .rn-adv .chip.upscale{background:#1f4d3a;color:#9be7c0}
 .rn-adv .chip.usdu{background:#4d3a1f;color:#f0c98a}
+.rn-adv .chip.vosr2{background:#1f3a4d;color:#9bd2e7}
 .rn-adv select,.rn-adv input{background:#15171b;border:1px solid #33373d;
   border-radius:4px;color:#e8ecf1;font-size:12px;padding:3px 6px}
 .rn-adv input[type=number]{width:58px}
@@ -106,6 +107,10 @@ css.textContent = `
 .rn-adv .add{display:flex;gap:6px}
 .rn-adv .add button{flex:1;font-weight:600}
 .rn-adv .hint{font-size:11px;color:#7f8792}
+.rn-adv .miss{font-size:12px;color:#f0c98a;background:#2e2413;border:1px solid #6b5220;
+  border-left:3px solid #d99a2b;border-radius:4px;padding:6px 8px;margin-top:4px;
+  line-height:1.45}
+.rn-adv .miss b{color:#ffd591;font-weight:700}
 .rn-adv .card.run{border-color:#b8283c;box-shadow:inset 0 0 0 1px #b8283c}
 .rn-adv.simple .x-adv{display:none!important}
 .rn-adv .seg{display:inline-flex;flex:none;border:1px solid #3a3d44;border-radius:6px;overflow:hidden}
@@ -225,8 +230,8 @@ async function fetchLists() {
   const dit = await inputs("SeedVR2LoadDiTModel");
   const svae = await inputs("SeedVR2LoadVAEModel");
   const up = await inputs("SeedVR2VideoUpscaler");
-  // VOSR2's two nodes for the alt upscale card; it is not on the Registry, so
-  // absent is the NORMAL case and the card has to say how to get it
+  // VOSR2's two nodes for the alt upscale card; absent, the card says how to
+  // get it (Manager: it is on the Registry as "VOSR 2.0")
   const vld = await inputs("VOSR2ModelLoader");
   const vup = await inputs("VOSR2Upscale");
   // Ultimate SD Upscale for the tiled pass, and core's upscale model list
@@ -1251,9 +1256,10 @@ function buildPanel(node, hostEl = null) {
         card.appendChild(outg.box);
         if (LISTS && !L.seedvr) {
           const warn = document.createElement("div");
-          warn.className = "hint";
-          warn.textContent = "ComfyUI-SeedVR2_VideoUpscaler is not installed, so this pass "
-                           + "will say so and pass the picture through.";
+          warn.className = "miss";
+          warn.innerHTML = "<b>ComfyUI-SeedVR2_VideoUpscaler is not installed.</b> This pass "
+                         + "will say so and pass the picture through. The Overview tab, under "
+                         + "What this run needs, has the link.";
           card.appendChild(warn);
         }
       } else if (!isFolded && s.type === "vosr2") {
@@ -1308,11 +1314,11 @@ function buildPanel(node, hostEl = null) {
         card.appendChild(tl.box);
         if (LISTS && !L.vosr2) {
           const warn = document.createElement("div");
-          warn.className = "hint";
-          warn.textContent = "ComfyUI-VOSR2 is not installed, so this pass will say so "
-                           + "and pass the picture through. It is not on the Registry, "
-                           + "so Manager will not find it: clone ylchen333/ComfyUI-VOSR2 "
-                           + "into custom_nodes.";
+          warn.className = "miss";
+          warn.innerHTML = "<b>ComfyUI-VOSR2 is not installed.</b> This pass will say so and "
+                         + "pass the picture through. Install it in Manager, where it is "
+                         + "listed as VOSR 2.0. The Overview tab, under What this run needs, "
+                         + "has the link and says whether it is here.";
           card.appendChild(warn);
         }
       } else if (!isFolded) {

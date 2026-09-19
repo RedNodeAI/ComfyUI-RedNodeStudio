@@ -440,8 +440,7 @@ def _vosr2(image, s, seed):
         up_cls = maps.get("VOSR2Upscale")
         if ld_cls is None or up_cls is None:
             return None, ("ComfyUI-VOSR2 is not installed, and it is what upscales. "
-                          "It is not on the Registry, so Manager will not find it: "
-                          "clone ylchen333/ComfyUI-VOSR2 into custom_nodes.")
+                          "Install it in Manager: it is on the Registry as VOSR 2.0.")
 
         def fill(cls, values):
             kw = _defaults_for(cls)
