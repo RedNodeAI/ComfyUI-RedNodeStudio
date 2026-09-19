@@ -458,69 +458,76 @@ export function batchStrip(node, key, host, opts = {}) {
   cols.appendChild(right);
   box.appendChild(cols);
 
-  // WHAT TO DO WITH EACH ONE. A batch makes a picture at a time, so the follow-ups
-  // belong here rather than as two hundred presses on the result card.
-  if ((opts.after || []).length) {
-    const arow = document.createElement("div");
-    arow.className = "rn-ws-row";
-    arow.style.cssText = "gap:6px;flex-wrap:wrap;padding-top:2px;align-items:center";
-    const cap = document.createElement("span");
-    cap.className = "hint";
-    cap.style.cssText = "font-size:11px;flex:none";
-    cap.textContent = "With each one:";
-    arow.appendChild(cap);
-    const seg = document.createElement("div");
-    seg.style.cssText = "display:inline-flex;border:1px solid #3a3d44;border-radius:6px;"
-                      + "overflow:hidden;flex:none";
-    const flags = opts.flags?.() || {};
-    for (const [fkey, label, title] of opts.after) {
-      const b = document.createElement("button");
-      b.className = "rn-ws-btn";
-      b.textContent = label;
-      b.title = title;
-      b.disabled = st.running;
-      b.style.cssText = "width:auto;padding:4px 14px;border:0;border-radius:0;flex:none;"
-                      + (flags[fkey] ? "background:#2b3a4d;color:#cfe6ff" : "");
-      b.onclick = () => {
-        const f = opts.flags?.() || {};
-        f[fkey] = !f[fkey];
-        writeCfg(node);
-        render(node);
-      };
-      seg.appendChild(b);
-    }
-    arow.appendChild(seg);
-    const why = document.createElement("span");
-    why.className = "hint";
-    why.style.cssText = "font-size:11px;flex:1 1 260px;min-width:160px;line-height:1.35";
-    const on = opts.after.filter(([k]) => flags[k]).map(([, l]) => l);
-    why.textContent = on.length
-      ? `${on.join(" then ")} runs on each picture before the next one starts.`
-      : "Nothing else happens to them: each picture is made and left in the result "
-        + "history for you.";
-    arow.appendChild(why);
-    box.appendChild(arow);
-
-    // NOTHING IS BEING KEPT. A finished picture is written to ComfyUI's temp
-    // folder, and the result history holds the last five, so a folder of two
-    // hundred with Save off leaves a hundred and ninety-five of them to be cleared
-    // out. Worth saying plainly rather than after the fact.
-    if (opts.saveKey && !flags[opts.saveKey]) {
-      const warn = document.createElement("div");
-      warn.className = "rn-ws-batchwarn";
-      warn.style.cssText = "font-size:12px;color:#f0c98a;background:#2e2413;"
-                         + "border:1px solid #6b5220;border-left:3px solid #d99a2b;"
-                         + "border-radius:4px;padding:6px 8px;line-height:1.45";
-      warn.textContent = st.files.length > 5
-        ? `Save is off, so none of these ${st.files.length} pictures is kept. They go `
-          + "to the temp folder and only the last five stay in the result history. "
-          + "Switch Save on unless you are trying settings out."
-        : "Save is off, so nothing is filed. The pictures go to the temp folder and "
-          + "are cleared out later; the result history keeps the last five.";
-      box.appendChild(warn);
-    }
-  }
-
   host.appendChild(box);
   return box;
+}
+
+/** The "after a run" row: what happens to a picture once it has been made.
+ *
+ *  Its own function because it governs the single run AND the batch. Rendered
+ *  twice it would be two switches for one setting, and rendered only on the batch
+ *  card it would look as though a single run could not do it (the user,
+ *  2026-09-20).
+ */
+export function afterRow(node, host, opts = {}) {
+  if (!(opts.after || []).length) return null;
+  const arow = document.createElement("div");
+  arow.className = "rn-ws-row";
+  arow.style.cssText = "gap:6px;flex-wrap:wrap;padding-top:2px;align-items:center;width:100%";
+  const cap = document.createElement("span");
+  cap.className = "hint";
+  cap.style.cssText = "font-size:11px;flex:none";
+  cap.textContent = opts.caption || "After a run:";
+  arow.appendChild(cap);
+  const seg = document.createElement("div");
+  seg.style.cssText = "display:inline-flex;border:1px solid #3a3d44;border-radius:6px;"
+                    + "overflow:hidden;flex:none";
+  const flags = opts.flags?.() || {};
+  for (const [fkey, label, title] of opts.after) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-btn";
+    b.textContent = label;
+    b.title = title;
+    b.disabled = !!opts.busy;
+    b.style.cssText = "width:auto;padding:4px 14px;border:0;border-radius:0;flex:none;"
+                    + (flags[fkey] ? "background:#2b3a4d;color:#cfe6ff" : "");
+    b.onclick = () => {
+      const f = opts.flags?.() || {};
+      f[fkey] = !f[fkey];
+      writeCfg(node);
+      render(node);
+    };
+    seg.appendChild(b);
+  }
+  arow.appendChild(seg);
+  const why = document.createElement("span");
+  why.className = "hint";
+  why.style.cssText = "font-size:11px;flex:1 1 240px;min-width:150px;line-height:1.35";
+  const on = opts.after.filter(([k]) => flags[k]).map(([, l]) => l);
+  why.textContent = on.length
+    ? `${on.join(" then ")} runs on every picture this tab makes, one or a folder.`
+    : "Nothing else happens: each picture is made and left for you, with the "
+      + "buttons on the result to send it on.";
+  arow.appendChild(why);
+  host.appendChild(arow);
+
+  // NOTHING IS BEING KEPT. A finished picture is written to ComfyUI's temp folder
+  // and the result history holds the last five, so a folder of two hundred with
+  // Save off leaves a hundred and ninety-five to be cleared out.
+  if (opts.saveKey && !flags[opts.saveKey]) {
+    const st = batchState(node, opts.key || "upscale");
+    const warn = document.createElement("div");
+    warn.className = "rn-ws-batchwarn";
+    warn.style.cssText = "font-size:12px;color:#f0c98a;background:#2e2413;"
+                       + "border:1px solid #6b5220;border-left:3px solid #d99a2b;"
+                       + "border-radius:4px;padding:6px 8px;line-height:1.45;width:100%";
+    warn.textContent = st.files.length > 5
+      ? `Save is off, so none of these ${st.files.length} pictures is kept. They go `
+        + "to the temp folder and only the last five stay in the result history. "
+        + "Switch Save on unless you are trying settings out."
+      : "Save is off, so nothing is filed. A picture goes to the temp folder and is "
+        + "cleared out later; the result history keeps the last five.";
+    host.appendChild(warn);
+  }
+  return arow;
 }

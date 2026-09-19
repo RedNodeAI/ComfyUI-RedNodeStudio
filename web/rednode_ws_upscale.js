@@ -5,7 +5,8 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
-import { batchStrip, batchState, runBatch, pickFolder } from "./rednode_ws_batch.js";
+import { batchStrip, batchState, runBatch, pickFolder,
+         afterRow } from "./rednode_ws_batch.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -105,7 +106,7 @@ export function upscaleNodeKey(prompt) {
     (k) => prompt[k]?.class_type === "RedNodeUpscaleRender") || null;
 }
 
-async function upscaleGenerate(node, statusEl) {
+async function upscaleGenerate(node, statusEl, after) {
   const U = node._rnCfg?.upscale;
   const say = (t) => { if (statusEl) statusEl.textContent = t; };
   if (!U?.on) {
@@ -118,9 +119,19 @@ async function upscaleGenerate(node, statusEl) {
         + "pick one from disk.");
     return;
   }
-  say("Upscaling…");
-  if (await queueUpscale(node, say, {})) {
-    say("Queued. The picture appears below when it is done.");
+  say("Running…");
+  const pid = await queueUpscale(node, say, {});
+  if (!pid) return;
+  say("Queued. The picture appears below when it is done.");
+  // THE SAME FOLLOW-UPS THE BATCH USES. One picture or a folder, the After a run
+  // switches mean the same thing, so a single run must honour them too.
+  if (!after) return;
+  await waitForPrompt(pid);
+  try {
+    await after();
+  } catch (err) {
+    console.error("[RedNode Workspace] the follow-up failed:", err);
+    say(`Made, but the follow-up failed: ${err.message}`);
   }
 }
 
@@ -341,7 +352,7 @@ export function upscaleBody(node, body) {
            + "this tab, ready for Post, the Detailer or Save.";
   const status = el("span", "hint", "");
   status.style.cssText = "font-size:11px;text-align:right";
-  go.onclick = () => upscaleGenerate(node, status);
+  go.onclick = () => upscaleGenerate(node, status, batchOpts.afterEach);
   runBox.appendChild(go);
 
   // the folder's run, here as well as on the batch card: one of these is the
@@ -364,6 +375,17 @@ export function upscaleBody(node, body) {
 
   runBox.appendChild(status);
   srcLine.appendChild(runBox);
+  // AFTER A RUN, governing the single run and the batch alike: one setting, one
+  // place. On the batch card alone it read as though a single picture could not
+  // be sent on (the user, 2026-09-20).
+  afterRow(node, srcCard, {
+    caption: "After a run:",
+    key: "upscale",
+    saveKey: batchOpts.saveKey,
+    flags: batchOpts.flags,
+    after: batchOpts.after,
+    busy: batchState(node, "upscale").running,
+  });
 
   // THE BATCH, under the one picture: the same tab, a folder instead of a file.
   // Each picture runs on its own queue with the settings below, so the whole tab
