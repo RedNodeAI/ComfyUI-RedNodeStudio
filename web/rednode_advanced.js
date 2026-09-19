@@ -260,6 +260,81 @@ async function fetchLists() {
   return LISTS;
 }
 
+// THE SIZE THROUGH THE CHAIN, for the caps at either end of the list.
+//
+// The Overview already shows the canvas size and it is the number people look
+// for; the Detailer is where the size actually moves, so both caps carry it.
+// Every rule below mirrors refine_pipeline.py, and where it cannot the cap says
+// nothing rather than a number that is wrong:
+//   sampler   the scale sticks, ONCE (round_stage: later rounds refine in place,
+//             or with a per-round list the last value is the total)
+//   detailer  works a crop and hands the frame back at its own size
+//   usdu      multiplies by upscale_by, every round of a repeat
+//   vosr2     multiplies exactly, every round; a region leaves the frame alone
+//   upscale   goes to a pixel budget by upscale_short_edge; a region leaves the
+//             frame alone
+const SIZE_BUDGET = { "720p": 1280 * 720, "1080p": 1920 * 1080, "2K": 2048 * 1080,
+                      "1440p": 2560 * 1440, "4K": 3840 * 2160 };
+// _resize in refine_pipeline.py: round, floor to /8, never under 64
+const snap8 = (v) => Math.max(64, Math.floor(Math.round(v) / 8) * 8);
+
+// the canvas the Workspace in this graph starts from, or null when it cannot be
+// known here (a wired latent, a random size, or no Workspace at all)
+function workspaceCanvas() {
+  let found = null;
+  const walk = (graph) => {
+    for (const n of graph?._nodes || []) {
+      if (!found && n?.type === "RedNodeStudioWorkspace") {
+        try {
+          const cfgW = n.widgets?.find((w) => w.name === "config");
+          const cfg = JSON.parse(cfgW?.value || "{}");
+          const L = cfg.tabs?.latent || {};
+          if (L.on !== false && L.source !== "input" && !L.random && L.w && L.h) {
+            const eff = (v) => Math.floor(Number(v) * (L.scale || 1) / 8) * 8;
+            const w = eff(L.w), h = eff(L.h);
+            if (w > 0 && h > 0) found = { w, h };
+          }
+        } catch (e) { /* half-typed config */ }
+      }
+      if (n?.subgraph) walk(n.subgraph);
+    }
+  };
+  try { walk(app.graph); } catch (e) { return null; }
+  return found;
+}
+
+function sizeThrough(w, h, stages) {
+  for (const s of stages || []) {
+    if (!s || s.on === false || s.type === "title") continue;
+    const reps = Math.max(1, Math.min(10, Math.round(Number(s.repeat) || 1)));
+    if (s.type === "detailer") continue;
+    if (s.type === "sampler") {
+      let sc = Number(s.scale ?? 1) || 1;
+      if (s.scale_custom && Array.isArray(s.pass_scale) && s.pass_scale.length) {
+        sc = Number(s.pass_scale[Math.min(reps, s.pass_scale.length) - 1]) || sc;
+      }
+      if (Math.abs(sc - 1) > 1e-3) { w = snap8(w * sc); h = snap8(h * sc); }
+    } else if (s.type === "usdu") {
+      const by = Number(s.upscale_by ?? 2) || 2;
+      for (let r = 0; r < reps; r++) { w = snap8(w * by); h = snap8(h * by); }
+    } else if (s.type === "vosr2") {
+      if (s.region) continue;
+      const m = Math.max(1, Math.round(Number(s.vosr2_scale ?? 2) || 2));
+      for (let r = 0; r < reps; r++) { w *= m; h *= m; }
+    } else if (s.type === "upscale") {
+      if (s.region) continue;
+      const budget = SIZE_BUDGET[s.size] || SIZE_BUDGET["1080p"];
+      const f = Math.sqrt(budget / Math.max(1, w * h));
+      const shortEdge = Math.max(16, Math.round(f * Math.min(w, h) / 2) * 2);
+      const k = shortEdge / Math.max(1, Math.min(w, h));
+      w = Math.round(w * k); h = Math.round(h * k);
+    } else {
+      return null;                       // a kind this does not model: say nothing
+    }
+  }
+  return { w, h };
+}
+
 function rigNames() {
   const names = [];
   const seen = new Set();
@@ -534,12 +609,20 @@ function buildPanel(node, hostEl = null) {
                          attention: [], offloads: [], colorFixes: [],
                          usdu: false, usduModes: [], seamModes: [], upscaleModels: [] };
     wrap.replaceChildren();
-    const cap = (t) => {
+    const cap = (t, title) => {
       const c = document.createElement("div");
       c.className = "cap";
       c.textContent = t;
+      if (title) c.title = title;
       wrap.appendChild(c);
     };
+    // the size at either end, when this graph's Workspace says what it starts from
+    const startPx = workspaceCanvas();
+    const endPx = startPx ? sizeThrough(startPx.w, startPx.h, d.stages) : null;
+    const px = (o) => o ? `${o.w} \u00d7 ${o.h} \u00b7 ` : "";
+    const PX_WHY = "Worked out from the Workspace canvas and the passes above, the "
+                 + "same maths the run uses. A detailer pass works a crop and hands "
+                 + "the frame back at its own size, so it does not move this.";
     // THE PRESET ROW: premade layouts (starred) and your saved ones.
     // Picking replaces the whole list; Save stores the list under a name,
     // server-side like sampler profiles, so it survives browsers.
@@ -676,7 +759,7 @@ function buildPanel(node, hostEl = null) {
       }
       wrap.appendChild(srow);
     }
-    cap("START · the workspace's image arrives");
+    cap("START \u00b7 " + px(startPx) + "the workspace's image arrives", PX_WHY);
     const rigs = rigNames();
     const fmt2 = (v) => Number(v).toFixed(2);
     const fmtX = (v) => Number(v).toFixed(2) + "\u00d7";
@@ -1638,7 +1721,7 @@ function buildPanel(node, hostEl = null) {
       }
       wrap.appendChild(card);
     });
-    cap("END · onward to the post process");
+    cap("END \u00b7 " + px(endPx) + "onward to the post process", PX_WHY);
     const add = document.createElement("div");
     add.className = "add";
     const mk = (label, stage) => {
