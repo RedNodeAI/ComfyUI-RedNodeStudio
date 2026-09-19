@@ -13819,6 +13819,24 @@ const HERO_SUB = "rednode/heroes";
 const HERO_HAIR = ["Black", "Dark brown", "Brown", "Auburn", "Ginger", "Blonde",
                    "Platinum blonde", "Grey", "White", "Blue", "Pink", "Green",
                    "Purple", "Red"];
+// Appearance words the models respond to. A mix of ethnicities and nationalities
+// on purpose: "Korean" and "British" both shift a face, and which of the two a
+// word technically is does not change that.
+const HERO_ETHNIC = ["East Asian", "Korean", "Japanese", "Chinese",
+                     "Southeast Asian", "Indonesian", "Filipino", "Thai",
+                     "Vietnamese", "South Asian", "Indian", "Middle Eastern",
+                     "Arab", "Persian", "Turkish", "African", "West African",
+                     "East African", "African American", "Caribbean",
+                     "European", "Northern European", "Scandinavian", "British",
+                     "Irish", "Slavic", "Russian", "Mediterranean", "Italian",
+                     "Spanish", "Greek", "Latin American", "Mexican",
+                     "Brazilian", "Native American", "Pacific Islander",
+                     "Mixed heritage"];
+// Plain description rather than a scale. A number means nothing to the model and
+// nothing to the person reading the box.
+const HERO_SKIN = ["Very fair", "Fair", "Light", "Light olive", "Olive", "Tan",
+                   "Golden brown", "Light brown", "Medium brown", "Deep brown",
+                   "Very deep brown"];
 const HERO_EYES = ["Brown", "Dark brown", "Hazel", "Amber", "Green", "Blue",
                    "Pale blue", "Grey", "Violet"];
 // Plain words, not numbers. "35 years old" is a figure the model has no scale
@@ -13842,7 +13860,11 @@ const HERO_STYLE = {
 
 const heroExtraLine = (node) => {
   const e = (node.properties?.rn_hero_extra) || {};
+  // style, then WHO, then the details. What the picture is, then the person in
+  // it, then what that person looks like.
   return [HERO_STYLE[e.style] || "",
+          e.ethnic ? e.ethnic.toLowerCase() : "",
+          e.skin ? e.skin.toLowerCase() + " skin" : "",
           e.hair ? e.hair.toLowerCase() + " hair" : "",
           e.eyes ? e.eyes.toLowerCase() + " eyes" : "",
           e.age ? e.age.toLowerCase() : "",
@@ -14534,9 +14556,10 @@ function heroBody(node, body, sub) {
   styleRow.append(styleLab, styleSeg);
   ed.appendChild(styleRow);
 
-  const exRow = document.createElement("div");
+  let exRow = document.createElement("div");
   exRow.className = "rn-ws-row";
   exRow.style.flexWrap = "wrap";
+  ed.appendChild(exRow);
   const pick = (label, key, values) => {
     const lab = document.createElement("span");
     lab.className = "rn-ws-note";
@@ -14553,10 +14576,16 @@ function heroBody(node, body, sub) {
     selEl.onchange = () => { ex[key] = selEl.value; render(node); };
     exRow.append(lab, selEl);
   };
+  pick("Ethnicity", "ethnic", HERO_ETHNIC);
+  pick("Skin", "skin", HERO_SKIN);
+  const exRow2 = document.createElement("div");
+  exRow2.className = "rn-ws-row";
+  exRow2.style.flexWrap = "wrap";
+  ed.appendChild(exRow2);
+  exRow = exRow2;                 // the rest of the choices go on the second line
   pick("Hair", "hair", HERO_HAIR);
   pick("Eyes", "eyes", HERO_EYES);
   pick("Age", "age", HERO_AGE);
-  ed.appendChild(exRow);
 
   const free = document.createElement("input");
   free.type = "text";
