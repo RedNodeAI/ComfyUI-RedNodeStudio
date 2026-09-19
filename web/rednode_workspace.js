@@ -13811,6 +13811,8 @@ function identityTabs(node, body) {
 // The server decides the verdict, not the panel. Duplicating thresholds here is
 // KNOWN_TRAPS 13, the bug this pack keeps making, so the card shows what came
 // back from /rednode/hero rather than working anything out a second time.
+const HERO_SUB = "heroes";
+
 function heroBody(node, body, sub) {
   const t = node._rnCfg.tabs[sub];
   const S = () => (node._rnHero ||= {});
@@ -13818,10 +13820,25 @@ function heroBody(node, body, sub) {
   // so it survives a reload: the files outlive the session, so the panel should.
   const MADE = () => ((node.properties ||= {}).rn_hero_made ||= {});
   const state = S();
-  const pics = (t.images || []).filter((x) => String(x || "").trim());
+  // A hero is written to the "heroes" subfolder, and that IS the identifier: a
+  // picture made here is never offered as something to make one FROM. Sending a
+  // hero to the gallery used to put it back in this list, where cropping a crop
+  // is at best a no-op and at worst a second generation of the same face.
+  const pics = (t.images || []).filter((x) => String(x || "").trim())
+    .filter((x) => parseName(x).subfolder !== HERO_SUB);
 
   // Entries written before the render existed held one result. Read as the crop,
   // which is what they were.
+  // read fresh each time: the batch runs across renders and a captured rig would
+  // go stale the moment the Models tab changed under it
+  const rigNow = () => {
+    const c = node._rnCfg;
+    return (c.models?.rigs || [])[c.models?.active || 0] || {};
+  };
+  const idLoraNow = () => (node._rnCfg.loras?.slots || [])
+    .filter((sl) => sl && sl.type !== "title")
+    .find((sl) => sl.enabled && isIdentityLora(sl.name));
+
   const madeFor = (p) => {
     const m = MADE()[p];
     if (!m) return null;
@@ -13861,18 +13878,36 @@ function heroBody(node, body, sub) {
   }
   if (!pics.includes(state.source)) { state.source = pics[0]; load(pics[0]); }
 
+  const sel = () => (S().sel ||= []);
+  const toggleSel = (p) => {
+    const a = sel();
+    const i = a.indexOf(p);
+    if (i < 0) a.push(p); else a.splice(i, 1);
+    render(node);
+  };
+
   const grid = document.createElement("div");
   grid.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;padding:3px";
   for (const p of pics) {
     const on = p === state.source;
-    const done = !!madeFor(p);
+    const made = madeFor(p);
+    const done = !!made;
+    const picked = sel().includes(p);
+    // a wrapper only so the marks can sit ON the thumbnail; the image keeps the
+    // click, because that is what everything else in this panel puts it on
+    const cell = document.createElement("div");
+    cell.style.cssText = "position:relative;line-height:0";
     const im = document.createElement("img");
     im.src = thumbUrl(p, 120);
     im.alt = "";
-    im.title = parseName(p).filename + (done ? " (hero already made)" : "");
+    im.title = parseName(p).filename
+      + (made?.hero ? " (cropped)" : "") + (made?.front ? " (front-on made)" : "")
+      + "\nRight-click to select for a batch";
     im.style.cssText = "width:82px;height:82px;object-fit:cover;border-radius:6px;"
       + "cursor:pointer;background:#111;"
-      + (on ? "outline:2px solid #b8283c;outline-offset:1px" : "outline:1px solid #2a2e35")
+      + (picked ? "outline:2px solid #3b82f6;outline-offset:1px"
+                : on ? "outline:2px solid #b8283c;outline-offset:1px"
+                     : "outline:1px solid #2a2e35")
       + (done ? ";box-shadow:0 0 0 2px #1f9d55 inset" : "");
     im.onclick = () => {
       S().source = p;
@@ -13880,39 +13915,156 @@ function heroBody(node, body, sub) {
       load(p);                      // show what was made from THIS picture
       render(node);
     };
-    grid.appendChild(im);
+    im.oncontextmenu = (e) => {
+      e?.preventDefault?.();
+      toggleSel(p);
+      return false;
+    };
+    // one mark per stage, so which of the two has been made is visible without
+    // opening the picture. Lit means made.
+    const marks = document.createElement("div");
+    marks.style.cssText = "position:absolute;left:3px;bottom:3px;display:flex;gap:3px";
+    for (const [lab, has, col, what] of [
+      ["C", !!made?.hero, "#1f9d55", "Cropped"],
+      ["F", !!made?.front, "#3b82f6", "Front-on"]]) {
+      const b = document.createElement("span");
+      b.textContent = lab;
+      b.title = what + (has ? " made" : " not made yet");
+      b.style.cssText = "font-size:9px;font-weight:700;line-height:13px;width:13px;"
+        + "height:13px;border-radius:3px;text-align:center;color:#fff;"
+        + (has ? "background:" + col : "background:#00000088;opacity:.45");
+      marks.appendChild(b);
+    }
+    cell.append(im, marks);
+    grid.appendChild(cell);
   }
   src.appendChild(grid);
 
+  const props = (node.properties ||= {});
   const go = document.createElement("button");
   go.className = "rn-ws-btn go";
   go.textContent = state.busy === "hero" ? "Working..." : "Create hero";
   go.disabled = !!state.busy;
   go.title = "A hero already made from this picture is handed straight back.";
+  // One picture, both stages if asked. Returns the reason it stopped, or "".
+  const makeOne = async (p, rebuild) => {
+    try {
+      const res = await api.fetchApi("/rednode/hero", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: p, rebuild: !!rebuild }),
+      });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      const got = { hero: { result: d.result, report: d.report },
+                    front: rebuild ? null : (madeFor(p)?.front || null) };
+      MADE()[p] = got;
+      if (props.rn_hero_auto_front) {
+        const r2 = await api.fetchApi("/rednode/hero_front", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: p, unet: rigNow().unet || rigNow().checkpoint || "",
+            clip: rigNow().clip, vae: rigNow().vae, lora: idLoraNow()?.name || "",
+          }),
+        });
+        const d2 = await r2.json();
+        if (d2.error) throw new Error(d2.error);
+        got.front = { result: d2.result, report: d2.report };
+        MADE()[p] = got;
+      }
+      return "";
+    } catch (e) {
+      return String(e.message || e);
+    }
+  };
+
+  // Sequential, deliberately. Each one loads a segmenter and maybe a checkpoint,
+  // so running them at once would fight for the same card and report failures
+  // that were only contention.
+  const runBatch = async () => {
+    const list = sel().slice();
+    S().busy = "batch";
+    S().error = "";
+    S().batchAt = 0;
+    render(node);
+    const failed = [];
+    for (let i = 0; i < list.length; i++) {
+      S().batchAt = i + 1;
+      render(node);
+      const why = await makeOne(list[i], false);
+      if (why) failed.push(parseName(list[i]).filename + ": " + why);
+    }
+    S().busy = "";
+    S().batchAt = 0;
+    if (failed.length) {
+      // named, not counted: "3 failed" cannot be acted on
+      S().error = "Could not make " + failed.length + " of " + list.length + ". "
+        + failed.join("  |  ");
+      S().errorAt = "hero";
+    }
+    load(S().source);
+    render(node);
+  };
+
   go.onclick = async (opts) => {
     S().busy = "hero";
     S().error = "";
     render(node);
-    try {
-      const res = await api.fetchApi("/rednode/hero", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: S().source, rebuild: !!opts?.rebuild }),
-      });
-      const d = await res.json();
-      if (d.error) throw new Error(d.error);
-      S().hero = { result: d.result, report: d.report };
-      // a fresh crop makes the old render stale: it was built from the other one
-      if (opts?.rebuild) { S().front = null; S().pick = "hero"; }
-      MADE()[S().source] = { hero: S().hero, front: S().front };
-    } catch (e) {
-      S().hero = null;
-      S().error = String(e.message || e);
+    const why = await makeOne(S().source, !!opts?.rebuild);
+    if (why) {
+      S().error = why;
       S().errorAt = "hero";
     }
+    load(S().source);
+    if (opts?.rebuild) S().pick = "hero";
     S().busy = "";
     render(node);
   };
-  src.appendChild(go);
+  const tools = document.createElement("div");
+  tools.className = "rn-ws-row";
+  tools.appendChild(go);
+
+  // Automatic is an OPTION and it defaults off. It spends GPU and it generates a
+  // face, neither of which should happen because a button was pressed for the
+  // lossless half.
+  const autoSw = document.createElement("button");
+  autoSw.className = "rn-ws-sw" + (props.rn_hero_auto_front ? " on" : "");
+  autoSw.dataset.choice = "hero_auto_front";   // named, like every other switch here
+  autoSw.title = "Run the front-on render straight after the crop, without asking. "
+    + "It generates the face, so it is off unless you switch it on.";
+  autoSw.onclick = () => {
+    props.rn_hero_auto_front = !props.rn_hero_auto_front;
+    render(node);
+  };
+  const autoLab = document.createElement("span");
+  autoLab.className = "rn-ws-note";
+  autoLab.textContent = "Also render front-on";
+  tools.append(autoSw, autoLab);
+
+  if (sel().length) {
+    const batch = document.createElement("button");
+    batch.className = "rn-ws-btn";
+    batch.style.background = "#1d3f6e";
+    batch.textContent = state.busy === "batch"
+      ? `Making ${state.batchAt || 0} of ${sel().length}...`
+      : `Create ${sel().length} selected`;
+    batch.disabled = !!state.busy;
+    batch.title = "Run every selected picture in turn. Each result is kept with its "
+      + "own picture, so clicking one afterwards shows what it made.";
+    batch.onclick = () => runBatch();
+    const clear = document.createElement("button");
+    clear.className = "rn-ws-btn";
+    clear.textContent = "Clear selection";
+    clear.disabled = !!state.busy;
+    clear.onclick = () => { S().sel = []; render(node); };
+    tools.append(batch, clear);
+  } else {
+    const hint = document.createElement("span");
+    hint.className = "rn-ws-note";
+    hint.style.opacity = ".6";
+    hint.textContent = "Right-click pictures to select a batch";
+    tools.appendChild(hint);
+  }
+  src.appendChild(tools);
   if (state.error && state.errorAt !== "front") {
     const e = document.createElement("div");
     e.className = "rn-ws-note warn";
@@ -14054,9 +14206,8 @@ function heroBody(node, body, sub) {
   rep.appendChild(what);
 
   const cfg = node._rnCfg;
-  const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
-  const slots = (cfg.loras?.slots || []).filter((sl) => sl && sl.type !== "title");
-  const idLora = slots.find((sl) => sl.enabled && isIdentityLora(sl.name));
+  const rig = rigNow();
+  const idLora = idLoraNow();
   const modelName = rig.unet || rig.checkpoint || "";
   const issues = [];
   if (!modelName || !rig.clip || !rig.vae) {
