@@ -35,6 +35,19 @@ const COLORS = [
 // whole-frame pass. Rigs stay unset because rig names are per-workspace: the
 // LAST TWO passes belong on the official Krea 2 Turbo rig, where identity
 // LoRAs actually fire - merged models will not answer them.
+// MIRRORS refine_pipeline.EXPRESSIONS. Kept in step by
+// tests/test_vosr2_pass.py, which compares the two lists.
+export const EXPRESSIONS = [
+  "neutral expression", "soft smile", "warm smile", "broad smile", "laughing",
+  "grinning", "smirking", "serious expression", "thoughtful expression",
+  "sad expression", "crying", "angry expression", "scowling",
+  "surprised expression", "wide eyed", "frightened expression",
+  "worried expression", "tired expression", "sleepy, half closed eyes",
+  "determined expression", "confident expression", "shy expression",
+  "blushing", "pouting", "disgusted expression", "shouting",
+  "eyes closed", "looking away", "looking at the viewer",
+];
+
 const PREMADES = {
   "Face identity chain": [
     { type: "sampler", on: true, rig: "", steps: 4, denoise: 0.09, scale: 1.5,
@@ -840,6 +853,7 @@ function buildPanel(node, hostEl = null) {
         has("Seam fix", (s.seam_mode || "None") !== "None"); has("Tiled decode", !!s.tiled_decode);
       }
       has("LoRA set", !!s.lora_set); has("Pass LoRA", !!(s.lora && s.lora !== "None"));
+      has("Expression", !!s.expression); has("Words", s.words === "subject");
       has("Prompt row", !!s.prompt_row); has("Prompt", !!String(s.prompt || "").trim());
       return out;
     };
@@ -1709,6 +1723,42 @@ function buildPanel(node, hostEl = null) {
                    + "text the main render used. Typed text still wins.";
         rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
         bottom.append(...A(lab("Prompt"), rsel));
+        // WHERE THE WORDS COME FROM. The Subject tab's caption describes the
+        // person; the row describes the whole picture. A face pass usually wants
+        // the first, which is also what prompt_frame.py says Subject is for.
+        if (s.type === "detailer") {
+          const wsel = document.createElement("select");
+          for (const [v, l] of [["row", "The row above"], ["subject", "Subject words"]]) {
+            const o = document.createElement("option");
+            o.value = v; o.textContent = l;
+            o.selected = v === (s.words === "subject" ? "subject" : "row");
+            wsel.appendChild(o);
+          }
+          wsel.title = "Subject words takes the Subject tab's caption, which describes "
+                     + "the person rather than the whole scene. It is worked out while "
+                     + "the Workspace renders, so a Detailer node wired up on its own "
+                     + "has none and falls back to the row. Typed text still wins.";
+          wsel.onchange = () => { s.words = wsel.value; writeCfg(node, d); };
+          bottom.append(...A(lab("From"), wsel));
+          // THE EXPRESSION, in front of whatever prompt the pass ends up with: a
+          // face pass is usually run to change what the face is doing, and typing
+          // the same six words every time is what this saves.
+          const esel = document.createElement("select");
+          const cur = String(s.expression || "");
+          const eopts = [["", "(none)"], ...EXPRESSIONS.map((x) => [x, x])];
+          if (cur && !EXPRESSIONS.includes(cur)) eopts.push([cur, cur]);
+          for (const [v, l] of eopts) {
+            const o = document.createElement("option");
+            o.value = v; o.textContent = l; o.selected = v === cur;
+            esel.appendChild(o);
+          }
+          esel.title = "Put an expression at the FRONT of this pass's prompt. The head "
+                     + "of a prompt is read hardest, and a face pass that says it after "
+                     + "forty words of scene has said it too late. Anything else still "
+                     + "goes in the box beside it.";
+          esel.onchange = () => { s.expression = esel.value; writeCfg(node, d); };
+          bottom.append(lab("Expression"), esel);
+        }
         const pr = document.createElement("input");
         pr.type = "text";
         pr.placeholder = "Prompt: empty uses the row picked";

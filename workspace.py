@@ -4911,7 +4911,8 @@ class RedNodeStudioWorkspace:
                     from .refine_pipeline import RedNodeStudioDetailer
                     _dout = RedNodeStudioDetailer().run(
                         rig_image, config=json.dumps(cfg["detailer"]), prompt=prompt,
-                        unique_id=unique_id, **_custom_rigs)
+                        unique_id=unique_id,
+                        subject_words=prompts.get("subject") or "", **_custom_rigs)
                     if _dout and _dout[0] is not None and torch.is_tensor(_dout[0]):
                         rig_image = _dout[0]
                     _chain.mark("detailer")

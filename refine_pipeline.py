@@ -171,6 +171,13 @@ def parse_pipeline(config_json):
             # linked to its rig, else a Prompts-tab row by name, or "#N" for
             # the Nth row when it has no name
             "prompt_row": str(s.get("prompt_row") or "")[:64],
+            # A FACE PASS usually runs to change what the face is doing, so the
+            # expression rides in front of whatever prompt the pass ends up with.
+            "expression": str(s.get("expression") or "").strip()[:64],
+            # "row" is the Prompts-tab row this pass reads; "subject" takes the
+            # Subject tab's caption instead, which describes the person rather
+            # than the whole scene
+            "words": ("subject" if str(s.get("words") or "") == "subject" else "row"),
             # A SEEDVR2 UPSCALE PASS: its size and the loader dials the workflow
             # sets by hand. "" on a combo is the loader's own default.
             "size": str(s.get("size") or "1080p"),
@@ -506,6 +513,52 @@ def _upscaler(kind):
     return globals()[UPSCALERS[kind]]
 
 
+# EXPRESSIONS a detailer pass can put in front of its prompt. Short phrases, not
+# a style vocabulary: a face pass is usually run to change what the face is doing,
+# and typing the same six words each time is the thing this saves. Anything else
+# still goes in the pass's own prompt box.
+EXPRESSIONS = [
+    "neutral expression", "soft smile", "warm smile", "broad smile", "laughing",
+    "grinning", "smirking", "serious expression", "thoughtful expression",
+    "sad expression", "crying", "angry expression", "scowling",
+    "surprised expression", "wide eyed", "frightened expression",
+    "worried expression", "tired expression", "sleepy, half closed eyes",
+    "determined expression", "confident expression", "shy expression",
+    "blushing", "pouting", "disgusted expression", "shouting",
+    "eyes closed", "looking away", "looking at the viewer",
+]
+
+
+def pass_words(ws_cfg, s, seed, subject_words=""):
+    """The words a pass renders with: its own box, else the source it names,
+    with its expression in front.
+
+    The expression goes FIRST because it is the thing being asked for; a model
+    reads the head of a prompt hardest, and a face pass that says "soft smile"
+    after forty words of scene has said it too late.
+
+    `words` = "subject" takes the Subject tab's caption, which is what the face
+    in the picture is, rather than the whole scene. It is a runtime caption, so it
+    arrives from the Workspace; a Detailer node wired up on its own has none and
+    falls back to the row, which is the old behaviour.
+    """
+    text = str(s.get("prompt") or "")
+    if not text.strip() and str(s.get("words") or "") == "subject":
+        text = str(subject_words or "")
+    if not text.strip():
+        row = _pass_prompt_row(ws_cfg, s)
+        if row is not None:
+            try:
+                from .prompt_frame import expand as _pf_expand
+                text = _pf_expand(row["text"], seed, True)
+            except Exception:
+                text = row["text"]
+    ex = str(s.get("expression") or "").strip()
+    if not ex:
+        return text
+    return ("%s, %s" % (ex, text.strip())) if text.strip() else ex
+
+
 def _pass_prompt_row(ws_cfg, s):
     """The Prompts-tab row a pass reads: the one it names, else its rig's.
 
@@ -796,9 +849,11 @@ class RedNodeStudioDetailer:
                                   "Detailer: text encoder unloaded before sampling "
                                   "(holding the limit)", "unload")
 
+    _rn_subject_words = ""          # set per run; a bare node never has them
+
     @_run_events.tracked("detailer", "Detailer")
     def run(self, image, config="{}", prompt=None, unique_id=None,
-            chain_step="detailer", **_custom_rigs):
+            chain_step="detailer", subject_words="", **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
         #
         # chain_step: which builtin-chain step this counts as. The Workspace marks
@@ -807,6 +862,10 @@ class RedNodeStudioDetailer:
         # method for its one pass and passes None, because it is a door of its own
         # and must still run on a queue where the Workspace already did its passes.
         self._rn_prompt = prompt              # a rig's own sampler chain reads it
+        # the Subject tab's caption is worked out while the Workspace renders, so
+        # it is handed over rather than read from the config, where it does not
+        # exist. Without it a "subject" pass falls back to its row and says so.
+        self._rn_subject_words = str(subject_words or "")
         from . import builtin_chain as _chain
         if chain_step and _chain.done(chain_step):
             _run_events.skip("detailer", "Detailer", "done inside the Workspace")
@@ -979,15 +1038,7 @@ class RedNodeStudioDetailer:
             # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
             # the same text the main render used, wildcards rolled on this seed.
             # Typed text in the pass wins, the standing rule.
-            text = s["prompt"]
-            if not text.strip():
-                row = _pass_prompt_row(ws_cfg, s)
-                if row is not None:
-                    try:
-                        from .prompt_frame import expand as _pf_expand
-                        text = _pf_expand(row["text"], seed + i, True)
-                    except Exception:
-                        text = row["text"]
+            text = pass_words(ws_cfg, s, seed + i, self._rn_subject_words)
             # THE REFERENCES, for a Krea 2 rig: any of the three toggles routes
             # this pass through the Studio encode with the tab images loaded, the
             # identity system instead of plain text. On any other rig they are
@@ -1418,15 +1469,7 @@ class RedNodeStudioDetailer:
         for key in ("steps", "cfg", "sampler", "scheduler"):
             if s[key]:
                 eff[key] = s[key]
-        text = s["prompt"]
-        if not text.strip():
-            row = _pass_prompt_row(ws_cfg, s)
-            if row is not None:
-                try:
-                    from .prompt_frame import expand as _pf_expand
-                    text = _pf_expand(row["text"], seed, True)
-                except Exception:
-                    text = row["text"]
+        text = pass_words(ws_cfg, s, seed, self._rn_subject_words)
         lines = []
         out = image
         reps = int(s.get("repeat", 1))
