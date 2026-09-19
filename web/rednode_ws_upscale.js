@@ -5,7 +5,7 @@ import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
          openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
-import { batchStrip, batchState } from "./rednode_ws_batch.js";
+import { batchStrip, batchState, runBatch, pickFolder } from "./rednode_ws_batch.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -203,6 +203,47 @@ export function upscaleBody(node, body) {
   row.style.cssText += ";padding-bottom:8px;border-bottom:1px solid #2a2e35";
   body.appendChild(row);
 
+  // named, because the button beside the picture and the batch card's own
+  // button have to start exactly the same run
+  const batchOpts = {
+    runLabel: "Upscale them all",
+    // checked ONCE, before the first picture: a switched-off tab fails every
+    // picture in the folder, and two hundred ticks of nothing is not an answer
+    precheck: () => (node._rnCfg?.upscale?.on
+      ? "" : "The Upscale tab is switched off, so nothing would be upscaled. "
+           + "Switch it on with the switch at the top of this tab, then run the "
+           + "batch again."),
+    onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
+    flags: () => node._rnCfg.upscale.after,
+    saveKey: "save",
+    after: [
+      ["detailer", "Detailer",
+       "Run the Detailer tab's passes on each upscaled picture, a face detailer "
+       + "for instance, before the next one starts."],
+      ["post", "Post",
+       "Apply the Post tab's grading to each picture."],
+      ["save", "Save",
+       "File each picture through the Save tab, named and filed the usual way."],
+    ],
+    afterEach: async () => {
+      const A = node._rnCfg.upscale.after || {};
+      if (!A.detailer && !A.post && !A.save) return;
+      const r = lastResultNow();
+      if (!r) throw new Error("no picture came back to pass on");
+      const name = await copyResultToInput(r);
+      if (!name) throw new Error("the picture could not be taken across");
+      // the Workspace's builtin chain IS Detailer then Post then Save, each on its
+      // own switch, so the three buttons are those switches for this run only
+      const pid = await queueUpscale(node, () => {},
+                                     { source: name, run_mode: "chain" }, true,
+                                     { detailer_on: !!A.detailer,
+                                       post_on: !!A.post,
+                                       save_on: !!A.save });
+      if (!pid) throw new Error("the follow-up would not queue");
+      await waitForPrompt(pid);
+    },
+  };
+
   // THE PICTURE
   const { card: srcCard, line: srcLine } = card(body, "PICTURE");
   const thumb = el("div");
@@ -247,47 +288,57 @@ export function upscaleBody(node, body) {
   srcName.style.cssText = "font-size:11px;align-self:center";
   srcLine.append(thumb, srcBtns, srcName);
 
+  // THE RUN, beside the picture it works on. It used to sit in a card of its own
+  // at the bottom called RUN, under the batch and the method, which read as if it
+  // ran whatever was above it (the user, 2026-09-20). Next to the one picture it
+  // is plainly about the one picture, and the folder's own button is beside it so
+  // the difference is visible rather than remembered.
+  const runBox = el("div");
+  runBox.style.cssText = "margin-left:auto;display:flex;flex-direction:column;gap:6px;"
+                       + "align-items:flex-end;flex:none";
+  const go = el("button", "rn-ws-btn", "Upscale this picture");
+  go.style.cssText = "width:auto;padding:6px 18px;font-weight:600;"
+                   + "background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
+  go.title = "Upscale the one picture on the left. The result appears at the bottom "
+           + "of this tab, ready for Post, the Detailer or Save.";
+  const status = el("span", "hint", "");
+  status.style.cssText = "font-size:11px;text-align:right";
+  go.onclick = () => upscaleGenerate(node, status);
+  runBox.appendChild(go);
+
+  // the folder's run, here as well as on the batch card: one of these is the
+  // picture on the left, the other is every picture in the folder, and having
+  // them apart is what made that unclear
+  const bst = batchState(node, "upscale");
+  const bgo = el("button", "rn-ws-btn",
+                 bst.files.length ? `Upscale them all (${bst.files.length})`
+                                  : "Upscale a folder");
+  bgo.style.cssText = "width:auto;padding:5px 16px";
+  bgo.disabled = bst.running;
+  bgo.title = bst.files.length
+    ? "Run every picture in the batch folder below, one at a time."
+    : "No folder yet. Drop one on the batch below, or press Pick a folder there.";
+  bgo.onclick = () => {
+    if (!bst.files.length) { pickFolder(node, "upscale"); return; }
+    runBatch(node, "upscale", batchOpts.onRun, batchOpts.precheck, batchOpts.afterEach);
+  };
+  runBox.appendChild(bgo);
+
+  const seedRow = el("div");
+  seedRow.style.cssText = "display:flex;align-items:center;gap:6px";
+  const seedRand = el("button", "rn-ws-sw" + (U.seed_random !== false ? " on" : ""));
+  seedRand.title = "A fresh seed each run. Off pins the seed beside it.";
+  seedRand.onclick = () => { U.seed_random = U.seed_random === false; wr(); };
+  seedRow.append(lab("Random seed"), seedRand,
+                 num(U.seed || 0, 1, "The seed a pass runs on when Random seed is off.",
+                     (v) => { U.seed = Math.max(0, Math.round(v)); w(); }));
+  runBox.append(seedRow, status);
+  srcLine.appendChild(runBox);
+
   // THE BATCH, under the one picture: the same tab, a folder instead of a file.
   // Each picture runs on its own queue with the settings below, so the whole tab
   // means the same thing whether it is doing one or two hundred.
-  batchStrip(node, "upscale", body, {
-    runLabel: "Upscale them all",
-    // checked ONCE, before the first picture: a switched-off tab fails every
-    // picture in the folder, and two hundred ticks of nothing is not an answer
-    precheck: () => (node._rnCfg?.upscale?.on
-      ? "" : "The Upscale tab is switched off, so nothing would be upscaled. "
-           + "Switch it on with the switch at the top of this tab, then run the "
-           + "batch again."),
-    onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
-    flags: () => node._rnCfg.upscale.after,
-    saveKey: "save",
-    after: [
-      ["detailer", "Detailer",
-       "Run the Detailer tab's passes on each upscaled picture, a face detailer "
-       + "for instance, before the next one starts."],
-      ["post", "Post",
-       "Apply the Post tab's grading to each picture."],
-      ["save", "Save",
-       "File each picture through the Save tab, named and filed the usual way."],
-    ],
-    afterEach: async () => {
-      const A = node._rnCfg.upscale.after || {};
-      if (!A.detailer && !A.post && !A.save) return;
-      const r = lastResultNow();
-      if (!r) throw new Error("no picture came back to pass on");
-      const name = await copyResultToInput(r);
-      if (!name) throw new Error("the picture could not be taken across");
-      // the Workspace's builtin chain IS Detailer then Post then Save, each on its
-      // own switch, so the three buttons are those switches for this run only
-      const pid = await queueUpscale(node, () => {},
-                                     { source: name, run_mode: "chain" }, true,
-                                     { detailer_on: !!A.detailer,
-                                       post_on: !!A.post,
-                                       save_on: !!A.save });
-      if (!pid) throw new Error("the follow-up would not queue");
-      await waitForPrompt(pid);
-    },
-  });
+  batchStrip(node, "upscale", body, batchOpts);
 
   // THE METHOD
   const { line: mLine } = card(body, "METHOD");
@@ -379,22 +430,6 @@ export function upscaleBody(node, body) {
   }
 
   // GO
-  const { line: gLine } = card(body, "RUN");
-  const go = el("button", "rn-ws-btn", "Generate");
-  go.style.cssText = "width:auto;padding:5px 22px;font-weight:600";
-  go.title = "Upscale the picture above. The result lands in the result pane, ready "
-           + "for Post and Save.";
-  const status = el("span", "hint", "");
-  status.style.cssText = "font-size:11px";
-  go.onclick = () => upscaleGenerate(node, status);
-  const seedRand = el("button", "rn-ws-sw" + (U.seed_random !== false ? " on" : ""));
-  seedRand.title = "A fresh seed each run. Off pins the seed below.";
-  seedRand.onclick = () => { U.seed_random = U.seed_random === false; wr(); };
-  gLine.append(go, lab("Random seed"), seedRand,
-               num(U.seed || 0, 1, "The seed this pass runs on when Random seed is off.",
-                   (v) => { U.seed = Math.max(0, Math.round(v)); w(); }),
-               status);
-
   // THE RESULT, on this tab. The upscale runs through the Workspace's own door,
   // so the finished picture comes back on the executed event like any other run
   // and there is nowhere else to go looking for it.
