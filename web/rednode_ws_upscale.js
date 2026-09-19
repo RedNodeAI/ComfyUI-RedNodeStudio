@@ -126,7 +126,7 @@ async function upscaleGenerate(node, statusEl) {
  *  the same way the Paint tab's built-in pass does. An ordinary Queue carries no
  *  token, so it can never upscale or chain by accident.
  */
-async function queueUpscale(node, say, over, quiet) {
+async function queueUpscale(node, say, over, quiet, top) {
   const { output } = await app.graphToPrompt();
   const wsKey = promptKeyFor(output, node);
   if (!wsKey) { alert("The Workspace is not in the queued graph."); return null; }
@@ -135,6 +135,9 @@ async function queueUpscale(node, say, over, quiet) {
     const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
     c.upscale = { ...(c.upscale || {}), ...over };
     c.upscale.run_token = `upscale-${Date.now()}`;
+    // the follow-up chain says which of the three steps it wants, in the queued
+    // copy only, so the tab's own switches are left where you set them
+    if (top) Object.assign(c, top);
     pruned[wsKey].inputs.config = JSON.stringify(c);
   } catch (e) {
     alert("Could not stamp the run: " + e.message);
@@ -258,29 +261,30 @@ export function upscaleBody(node, body) {
     onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),
     flags: () => node._rnCfg.upscale.after,
     after: [
-      ["detailer", "Send to Detailer",
-       "Run the Detailer tab's passes on each upscaled picture, then Post and Save "
-       + "if those are on, before the next picture starts."],
+      ["detailer", "Detailer",
+       "Run the Detailer tab's passes on each upscaled picture, a face detailer "
+       + "for instance, before the next one starts."],
+      ["post", "Post",
+       "Apply the Post tab's grading to each picture."],
       ["save", "Save",
-       "File each upscaled picture in Save as it is. Leave this off if Send to "
-       + "Detailer is on, because the chain saves it at the end anyway."],
+       "File each picture through the Save tab, named and filed the usual way."],
     ],
     afterEach: async () => {
       const A = node._rnCfg.upscale.after || {};
+      if (!A.detailer && !A.post && !A.save) return;
       const r = lastResultNow();
       if (!r) throw new Error("no picture came back to pass on");
-      if (A.detailer) {
-        const name = await copyResultToInput(r);
-        if (!name) throw new Error("the picture could not be taken across");
-        const pid = await queueUpscale(node, () => {},
-                                       { source: name, run_mode: "chain" }, true);
-        if (!pid) throw new Error("the Detailer run would not queue");
-        await waitForPrompt(pid);
-      } else if (A.save) {
-        // the chain already files it when Send to Detailer is on, so this is the
-        // other way round rather than both
-        await runPaintFinal(node, r, false);
-      }
+      const name = await copyResultToInput(r);
+      if (!name) throw new Error("the picture could not be taken across");
+      // the Workspace's builtin chain IS Detailer then Post then Save, each on its
+      // own switch, so the three buttons are those switches for this run only
+      const pid = await queueUpscale(node, () => {},
+                                     { source: name, run_mode: "chain" }, true,
+                                     { detailer_on: !!A.detailer,
+                                       post_on: !!A.post,
+                                       save_on: !!A.save });
+      if (!pid) throw new Error("the follow-up would not queue");
+      await waitForPrompt(pid);
     },
   });
 

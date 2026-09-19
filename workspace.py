@@ -2406,6 +2406,7 @@ def _upscale_cfg(raw):
         # what the batch does with each picture once it is made. Panel-driven, so
         # the server only has to carry it rather than act on it.
         "after": {"detailer": bool((d.get("after") or {}).get("detailer")),
+                  "post": bool((d.get("after") or {}).get("post")),
                   "save": bool((d.get("after") or {}).get("save"))},
         "stage": st,
         "seed": seed,

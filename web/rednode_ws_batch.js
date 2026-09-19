@@ -23,6 +23,7 @@ export const IMAGE_RE = /\.(png|jpe?g|webp|bmp)$/i;
 export function batchState(node, key) {
   const all = node._rnBatch ||= {};
   return all[key] ||= { files: [], at: -1, done: [], failed: [], why: {},
+                        sel: new Set(), peek: -1, thumb: 58,
                         running: false, stop: false, note: "" };
 }
 
@@ -169,9 +170,11 @@ export function folderDropZone(node, el, key) {
  *  two hundred pictures failed one at a time, each with only a console line, is
  *  not an error message. It is what this did when the tab was switched off.
  */
-export async function runBatch(node, key, queueOne, precheck, afterEach) {
+export async function runBatch(node, key, queueOne, precheck, afterEach, only) {
   const st = batchState(node, key);
   if (st.running || !st.files.length) return;
+  // a partial run works the same way, just over fewer of them
+  const order = (only && only.length) ? only.slice() : st.files.map((_, i) => i);
   const stopper = precheck?.();
   if (stopper) {
     st.note = stopper;
@@ -186,10 +189,11 @@ export async function runBatch(node, key, queueOne, precheck, afterEach) {
   st.why = {};
   render(node);
   try {
-    for (let i = 0; i < st.files.length; i++) {
-      if (st.stop) { st.note = `Stopped at ${i} of ${st.files.length}`; break; }
+    for (let n = 0; n < order.length; n++) {
+      const i = order[n];
+      if (st.stop) { st.note = `Stopped after ${n} of ${order.length}`; break; }
       st.at = i;
-      st.note = `Picture ${i + 1} of ${st.files.length}`;
+      st.note = `Picture ${n + 1} of ${order.length}`;
       render(node);
       let promptId = null;
       let queueWhy = "";
@@ -251,7 +255,8 @@ const viewUrl = (name) => {
 /** The batch strip: the folder's pictures, which one is running, which failed.
  *
  *  `onRun` queues one picture and returns its prompt id. Everything else, the
- *  counter, the stop, the marks, belongs here so both tabs behave the same.
+ *  counter, the stop, the marks, the selection, belongs here so every tab that
+ *  uses a folder behaves the same way.
  */
 export function batchStrip(node, key, host, opts = {}) {
   const st = batchState(node, key);
@@ -264,7 +269,7 @@ export function batchStrip(node, key, host, opts = {}) {
   ttl.textContent = "BATCH FOLDER";
   head.appendChild(ttl);
 
-  const btn = (label, title, fn, disabled) => {
+  const btn = (into, label, title, fn, disabled) => {
     const b = document.createElement("button");
     b.className = "rn-ws-btn";
     b.style.cssText = "width:auto;padding:3px 12px;flex:none";
@@ -272,28 +277,36 @@ export function batchStrip(node, key, host, opts = {}) {
     b.title = title;
     b.disabled = !!disabled;
     b.onclick = fn;
-    head.appendChild(b);
+    into.appendChild(b);
     return b;
   };
-  btn("Pick a folder", "Choose a folder. Its pictures are copied into ComfyUI's own "
-    + "input folder, so nothing on your drive is read by the server.",
+  const chosen = () => [...(st.sel || [])].sort((a, b) => a - b);
+  btn(head, "Pick a folder", "Choose a folder. Its pictures are copied into ComfyUI's "
+    + "own input folder, so nothing on your drive is read by the server.",
     () => pickFolder(node, key), st.running);
   if (st.files.length && !st.running) {
-    btn(opts.runLabel || "Run the batch",
+    btn(head, opts.runLabel || "Run the batch",
         "Run every picture in turn, one per queue. A picture that fails is marked "
         + "and the rest carry on.",
         () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach));
-    btn("Clear", "Forget this folder. The copies stay in the input folder.", () => {
-      st.files = []; st.at = -1; st.done = []; st.failed = []; st.note = "";
+    if (chosen().length) {
+      const only = btn(head, `Run ${chosen().length} selected`,
+        "Run only the pictures you have ticked, in order.",
+        () => runBatch(node, key, opts.onRun, opts.precheck, opts.afterEach,
+                       chosen()));
+      only.style.cssText += ";background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
+    }
+    btn(head, "Clear", "Forget this folder. The copies stay in the input folder.", () => {
+      st.files = []; st.at = -1; st.done = []; st.failed = []; st.why = {};
+      st.sel = new Set(); st.peek = -1; st.note = "";
       writeCfg(node);
       render(node);
     });
   }
   if (st.running) {
-    const stop = btn(st.stop ? "Stopping…" : "Stop",
-                     "Finish the picture that is running, then stop.",
-                     () => { st.stop = true; render(node); }, st.stop);
-    stop.className = "rn-ws-btn primary";
+    btn(head, st.stop ? "Stopping…" : "Stop",
+        "Finish the picture that is running, then stop.",
+        () => { st.stop = true; render(node); }, st.stop);
   }
   const note = document.createElement("span");
   note.className = "hint";
@@ -316,25 +329,76 @@ export function batchStrip(node, key, host, opts = {}) {
     return box;
   }
 
+  // A CLOSER LOOK, beside the strip. Deliberately not the full screen viewer: this
+  // is for checking which picture a thumbnail is while you tick your way through a
+  // folder, not for inspecting a finished result.
+  const cols = document.createElement("div");
+  cols.style.cssText = "display:flex;gap:10px;align-items:flex-start";
+  const peek = document.createElement("div");
+  peek.style.cssText = "width:168px;flex:none;display:flex;flex-direction:column;gap:4px";
+  const at = Number.isInteger(st.peek) && st.peek >= 0 && st.peek < st.files.length
+    ? st.peek : -1;
+  const pimg = document.createElement("div");
+  pimg.style.cssText = "width:168px;height:168px;border-radius:6px;background:#15171b "
+                     + "center/contain no-repeat;border:1px solid #2a2e35";
+  if (at >= 0) pimg.style.backgroundImage = `url(${viewUrl(st.files[at])})`;
+  else {
+    pimg.textContent = "Click a picture";
+    pimg.style.cssText += ";display:flex;align-items:center;justify-content:center;"
+                        + "font-size:11px;color:#7f8792";
+  }
+  const pstate = document.createElement("div");
+  pstate.className = "hint";
+  pstate.style.cssText = "font-size:11px;line-height:1.35";
+  if (at >= 0) {
+    const bits = [`${at + 1} of ${st.files.length}`];
+    if (st.at === at) bits.push("running now");
+    else if (st.failed.includes(at)) bits.push(`failed: ${st.why[at] || "would not run"}`);
+    else if (st.done.includes(at)) bits.push("done");
+    else bits.push("not run yet");
+    if (st.sel?.has(at)) bits.push("selected");
+    pstate.textContent = bits.join(" · ");
+  } else {
+    pstate.textContent = "The thumbnails tick as they finish.";
+  }
+  peek.append(pimg, pstate);
+  cols.appendChild(peek);
+
+  const right = document.createElement("div");
+  right.style.cssText = "flex:1;min-width:0;display:flex;flex-direction:column;gap:6px";
+  const size = Math.max(40, Math.min(140, Number(st.thumb) || 58));
   const strip = document.createElement("div");
   strip.className = "rn-ws-batchstrip";
-  strip.style.cssText = "display:flex;flex-wrap:wrap;gap:6px";
+  strip.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;max-height:320px;overflow:auto";
   folderDropZone(node, strip, key);
+  st.sel ||= new Set();
   st.files.forEach((f, i) => {
     const t = document.createElement("div");
     const failed = st.failed.includes(i);
     const done = st.done.includes(i);
     const here = st.at === i;
+    const picked = st.sel.has(i);
     t.className = "rn-ws-batchthumb"
-                + (here ? " here" : "") + (failed ? " failed" : "") + (done ? " done" : "");
-    t.style.cssText = "width:58px;height:58px;border-radius:5px;flex:none;position:relative;"
-                    + "background:#15171b center/cover no-repeat;"
-                    + `background-image:url(${viewUrl(f)});`
+                + (here ? " here" : "") + (failed ? " failed" : "") + (done ? " done" : "")
+                + (picked ? " picked" : "");
+    t.style.cssText = `width:${size}px;height:${size}px;border-radius:5px;flex:none;`
+                    + "position:relative;background:#15171b center/cover no-repeat;"
+                    + `background-image:url(${viewUrl(f)});cursor:pointer;`
                     + "border:2px solid " + (here ? "#4a8fe0" : failed ? "#b8283c"
-                                             : done ? "#2f6b46" : "#2a2e35");
+                                             : done ? "#2f6b46" : "#2a2e35")
+                    + (picked ? ";outline:2px solid #4a8fe0;outline-offset:1px" : "");
     t.title = `${i + 1}. ${f}`
             + (failed ? ` — ${st.why[i] || "would not run"}`
-               : done ? " — done" : "");
+               : done ? " — done" : "")
+            + "\nClick to look at it, Ctrl-click to select it for a partial run.";
+    t.onclick = (ev) => {
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+        if (st.sel.has(i)) st.sel.delete(i);
+        else st.sel.add(i);
+      }
+      st.peek = i;
+      render(node);
+    };
     if (failed || done) {
       const mark = document.createElement("span");
       mark.textContent = failed ? "✕" : "✓";
@@ -345,37 +409,86 @@ export function batchStrip(node, key, host, opts = {}) {
     }
     strip.appendChild(t);
   });
-  box.appendChild(strip);
+  right.appendChild(strip);
+
+  // SIZE, and the selection controls beside it
+  const tools = document.createElement("div");
+  tools.className = "rn-ws-row";
+  tools.style.cssText = "gap:8px;flex-wrap:wrap";
+  const slab = document.createElement("span");
+  slab.className = "hint";
+  slab.style.cssText = "font-size:11px;flex:none";
+  slab.textContent = "Thumbnail size";
+  const sl = document.createElement("input");
+  sl.type = "range";
+  sl.min = "40";
+  sl.max = "140";
+  sl.step = "2";
+  sl.value = String(size);
+  sl.style.cssText = "width:130px;flex:none";
+  sl.title = "How big the pictures show here. This is the panel only.";
+  sl.addEventListener("change", () => {
+    st.thumb = Math.max(40, Math.min(140, parseInt(sl.value, 10) || 58));
+    render(node);
+  });
+  tools.append(slab, sl);
+  btn(tools, st.sel.size ? `Unselect ${st.sel.size}` : "Select all",
+      "Ctrl-click a picture to select it on its own. This does all of them at once.",
+      () => {
+        if (st.sel.size) st.sel = new Set();
+        else st.sel = new Set(st.files.map((_, i) => i));
+        render(node);
+      });
+  if (st.failed.length) {
+    btn(tools, `Select the ${st.failed.length} that failed`,
+        "Tick the pictures that would not run, so you can try just those again.",
+        () => { st.sel = new Set(st.failed); render(node); });
+  }
+  right.appendChild(tools);
+  cols.appendChild(right);
+  box.appendChild(cols);
 
   // WHAT TO DO WITH EACH ONE. A batch makes a picture at a time, so the follow-ups
   // belong here rather than as two hundred presses on the result card.
   if ((opts.after || []).length) {
     const arow = document.createElement("div");
     arow.className = "rn-ws-row";
-    arow.style.cssText = "gap:8px;flex-wrap:wrap;padding-top:2px";
+    arow.style.cssText = "gap:6px;flex-wrap:wrap;padding-top:2px;align-items:center";
     const cap = document.createElement("span");
     cap.className = "hint";
     cap.style.cssText = "font-size:11px;flex:none";
     cap.textContent = "With each one:";
     arow.appendChild(cap);
+    const seg = document.createElement("div");
+    seg.style.cssText = "display:inline-flex;border:1px solid #3a3d44;border-radius:6px;"
+                      + "overflow:hidden;flex:none";
     const flags = opts.flags?.() || {};
     for (const [fkey, label, title] of opts.after) {
-      const sw = document.createElement("button");
-      sw.className = "rn-ws-sw" + (flags[fkey] ? " on" : "");
-      sw.title = title;
-      sw.disabled = st.running;
-      sw.onclick = () => {
+      const b = document.createElement("button");
+      b.className = "rn-ws-btn";
+      b.textContent = label;
+      b.title = title;
+      b.disabled = st.running;
+      b.style.cssText = "width:auto;padding:4px 14px;border:0;border-radius:0;flex:none;"
+                      + (flags[fkey] ? "background:#2b3a4d;color:#cfe6ff" : "");
+      b.onclick = () => {
         const f = opts.flags?.() || {};
         f[fkey] = !f[fkey];
         writeCfg(node);
         render(node);
       };
-      const lbl = document.createElement("span");
-      lbl.className = "hint";
-      lbl.style.cssText = "font-size:11px;flex:none";
-      lbl.textContent = label;
-      arow.append(sw, lbl);
+      seg.appendChild(b);
     }
+    arow.appendChild(seg);
+    const why = document.createElement("span");
+    why.className = "hint";
+    why.style.cssText = "font-size:11px;flex:1 1 260px;min-width:160px;line-height:1.35";
+    const on = opts.after.filter(([k]) => flags[k]).map(([, l]) => l);
+    why.textContent = on.length
+      ? `${on.join(" then ")} runs on each picture before the next one starts.`
+      : "Nothing else happens to them: each picture is made and left in the result "
+        + "history for you.";
+    arow.appendChild(why);
     box.appendChild(arow);
   }
 
