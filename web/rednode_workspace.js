@@ -13953,9 +13953,12 @@ function heroBody(node, body, sub) {
     send.className = "rn-ws-btn go";
     send.textContent = "Send to Subject gallery";
     send.onclick = () => {
-      const p = state.result;
-      t.images = [...(t.images || []),
-                  p.subfolder ? `${p.subfolder}/${p.filename}` : p.filename];
+      // resultEntry, not a hand rolled join: a hero lands in the OUTPUT folder
+      // and parseName reads a suffix-less entry as an input, so the gallery got
+      // a row pointing at a file that was never there.
+      const entry = resultEntry(S().result);
+      const have = t.images || [];
+      if (!have.includes(entry)) t.images = [...have, entry];
       writeCfg(node);
       render(node);
     };
