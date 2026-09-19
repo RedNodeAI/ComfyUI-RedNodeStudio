@@ -14530,11 +14530,37 @@ function heroBody(node, body, sub) {
   free.onchange = () => { ex.free = free.value; render(node); };
   ed.appendChild(free);
 
+  // OVERRIDE: the words in this card become the whole prompt. The framing
+  // clause and the system prompt both go, so it stops being a headshot tool and
+  // becomes a plain render off the front-on picture.
+  const ovRow = document.createElement("div");
+  ovRow.className = "rn-ws-row";
+  const ovSw = document.createElement("button");
+  ovSw.className = "rn-ws-sw" + (ex.override ? " on" : "");
+  ovSw.dataset.choice = "hero_override";
+  ovSw.title = "Send only what is in this card. Without it the words are added to "
+    + "the front-on framing; with it they replace it entirely.";
+  ovSw.onclick = () => { ex.override = !ex.override; render(node); };
+  const ovLab = document.createElement("span");
+  ovLab.className = "rn-ws-note";
+  ovLab.textContent = "Override the base prompt";
+  ovRow.append(ovSw, ovLab);
+  ed.appendChild(ovRow);
+  if (ex.override) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.style.opacity = ".7";
+    n.textContent = "Your words are the whole prompt. Nothing asks for a front-on "
+      + "headshot any more, so the result may not be one, and if it has no head in "
+      + "it the picture is kept whole rather than cropped.";
+    ed.appendChild(n);
+  }
+
   const line = heroExtraLine(node);
   if (line) {
     const n = document.createElement("div");
     n.className = "rn-ws-note";
-    n.textContent = "Changing: " + line;
+    n.textContent = (ex.override ? "Prompt: " : "Changing: ") + line;
     ed.appendChild(n);
     const clearEx = document.createElement("button");
     clearEx.className = "rn-ws-btn";
@@ -14592,7 +14618,9 @@ function heroBody(node, body, sub) {
           base, extra: want, source: parseName(from).filename,
           // a different seed each time, or the same words would hand back the
           // same picture and "apply" would look like it had done nothing
-          seed: (Date.now() % 2000000000) || 1, ...rigArgs(),
+          seed: (Date.now() % 2000000000) || 1,
+          override: !!(node.properties?.rn_hero_extra || {}).override,
+          ...rigArgs(),
         }),
       });
       const d = await res.json();

@@ -427,7 +427,7 @@ def _make_hero(source, sam_model, enlarge):
 
 
 def make_edit(base_entry, want, unet="", clip="", vae="", lora="", sam_model="",
-              source="hero", seed=0):
+              source="hero", seed=0, override=False):
     """A changed version of an already finished hero.
 
     Runs on the FRONT-ON picture, not on the source photograph and not folded
@@ -452,31 +452,50 @@ def make_edit(base_entry, want, unet="", clip="", vae="", lora="", sam_model="",
         raise ValueError("make the front-on picture first: a change is made from it.")
 
     try:
-        return _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed)
+        return _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed,
+                     bool(override))
     except Exception as exc:
         # a traceback keeps the frame that holds the models alive
         _settle()
         raise ValueError(str(exc) or exc.__class__.__name__) from None
 
 
-def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed):
+def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed,
+          override=False):
     with progress_safe():
         base = _ws.load_image("%s/%s" % (base_entry.get("subfolder", ""),
                                          base_entry["filename"]), 0)
-        # the change goes FIRST, then the framing. What is asked for has to lead:
-        # the clauses that failed to bite in testing were always the later ones.
-        prompt = "%s, %s" % (str(want).strip(), FRONT)
-        render = _render_front(base, prompt, unet, clip, vae, lora, seed=seed)
-        flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
+        # OVERRIDE means override. The framing clause goes, and so does the
+        # system prompt: leaving "a plain front-facing studio headshot" in place
+        # while claiming the words are yours would be steering from behind.
+        prompt = str(want).strip() if override             else "%s, %s" % (str(want).strip(), FRONT)
+        render = _render_front(base, prompt, unet, clip, vae, lora, seed=seed,
+                               system="" if override else None)
+        try:
+            flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
+        except ValueError:
+            # An override can produce something with no head in it, and that is
+            # the point of it. Erroring there would punish the feature for doing
+            # what it was asked; the raw picture is handed back instead.
+            if not override:
+                raise
+            flat = render[0]
+            head = hair = occ = None
+            head_box = None
+            used = "no crop: the override's picture was kept whole"
         render = None
         _settle()
 
     side = min(int(flat.shape[0]), int(flat.shape[1]))
-    en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
+    if head is None:
+        en, rep, hair_ratio, cover = [], [], 0.0, 0.0
+    else:
+        en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, side)
     out = {
         "crop_side": side, "hair_ratio": hair_ratio, "cover": cover,
         "enlarge": en, "repair": rep, "enlarged": "", "segmenter": used,
         "below_floor": False, "route": "edit", "generated": True,
+        "override": bool(override),
         "extra": str(want).strip(), "prompt": prompt, "seed": seed,
     }
     return _save_hero(flat, source, "edit", out), out
@@ -551,7 +570,8 @@ try:
                                       str(data.get("lora") or ""),
                                       str(data.get("sam_model") or ""),
                                       str(data.get("source") or "hero"),
-                                      int(data.get("seed") or 0))
+                                      int(data.get("seed") or 0),
+                                      bool(data.get("override")))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
@@ -716,7 +736,7 @@ def _settle():
         pass
 
 
-def _render_front(base, want, unet, clip, vae, lora, seed=7000):
+def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
     """The render, in a frame of its own, returning only the picture.
 
     Its own function so that EVERY handle it takes on a model, a CLIP, a VAE, a
@@ -746,7 +766,8 @@ def _render_front(base, want, unet, clip, vae, lora, seed=7000):
     pos = Krea2IdentityEdit().encode(
         clip=cl, prompt=want, vae=va, image=base, grounding_px=side,
         ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST, target_latent=latent,
-        fit_mode="fit", ref_t0_modulation=False, system_prompt=SYSTEM)[0]
+        fit_mode="fit", ref_t0_modulation=False,
+        system_prompt=SYSTEM if system is None else system)[0]
     neg = _run("CLIPTextEncode", clip=cl, text="")[0]
     out = _run("KSampler", model=model, seed=int(seed) or 7000,
                steps=FRONT_STEPS, cfg=FRONT_CFG,
