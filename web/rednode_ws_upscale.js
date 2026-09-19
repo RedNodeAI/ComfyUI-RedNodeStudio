@@ -3,7 +3,8 @@ const { app } = _appmod;
 import { api } from "../../scripts/api.js";
 import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
-         runPaintFinal, copyResultToInput } from "./rednode_workspace.js";
+         runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
+         openPaintViewer } from "./rednode_workspace.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -341,13 +342,19 @@ export function upscaleBody(node, body) {
     rLine.appendChild(none);
     return;
   }
-  const shot = el("div");
-  shot.style.cssText = "width:190px;height:190px;border:1px solid #2a2e35;border-radius:6px;"
-                     + "background:#15171b center/contain no-repeat;flex:none";
-  const rq = new URLSearchParams({ filename: r.filename, subfolder: r.subfolder || "",
-                                   type: r.type || "temp" });
-  shot.style.backgroundImage = `url(${api.apiURL(`/view?${rq}&r=${r.rand || 0}`)})`;
-  shot.title = "The last picture a run produced.";
+  // THE SAME PREVIEW EVERY OTHER RESULT USES: resultUrl for the address,
+  // openPaintViewer for full screen, openResultMenu for the right-click actions.
+  // A picture drawn some other way here would be a second result system to keep
+  // in step, and would quietly lose Copy, Copy prompt, Rerun and the history.
+  const shot = document.createElement("img");
+  shot.src = resultUrl(r);
+  shot.style.cssText = "max-width:190px;max-height:190px;border:1px solid #2a2e35;"
+                     + "border-radius:6px;background:#15171b;flex:none;cursor:zoom-in;"
+                     + "object-fit:contain";
+  shot.title = "The last picture a run produced. Click for full size, right-click "
+             + "for Copy, Copy prompt and the rest.";
+  shot.onclick = () => openPaintViewer(node, r);
+  shot.oncontextmenu = (ev) => { ev.preventDefault(); openResultMenu(node, r, ev); };
   const acts = el("div");
   acts.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:none";
   const act = (label, title, fn) => {

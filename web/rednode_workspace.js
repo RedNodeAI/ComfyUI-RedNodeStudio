@@ -2525,7 +2525,7 @@ function undoPaintAutoPrompt(node) {
 /** Right-click on the result pane: what to DO with the picture being shown. The old
  *  behaviour, click adopts it for painting, spent the whole surface on one action;
  *  a menu holds as many as the pane earns, and drag-to-paint keeps the fast path. */
-function openResultMenu(node, r, ev) {
+export function openResultMenu(node, r, ev) {
   ev.preventDefault();
   ev.stopPropagation();
   document.querySelector(".rn-ws-menu")?.remove();
@@ -6951,7 +6951,7 @@ function syncPaintBatchUi(node) {
   }
 }
 
-function resultUrl(r) {
+export function resultUrl(r) {
   return api.apiURL(`/view?filename=${encodeURIComponent(r.filename)}`
     + `&type=${r.type || "output"}&subfolder=${encodeURIComponent(r.subfolder || "")}`
     + `&rand=${r.rand || 0}`);
