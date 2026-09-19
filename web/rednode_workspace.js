@@ -13813,111 +13813,159 @@ function identityTabs(node, body) {
 // back from /rednode/hero rather than working anything out a second time.
 function heroBody(node, body, sub) {
   const t = node._rnCfg.tabs[sub];
-  const state = (node._rnHero ||= {});
-
-  const intro = document.createElement("div");
-  intro.className = "rn-ws-note";
-  intro.textContent = "Make a clean subject reference from a photograph. The head is "
-    + "found, cropped above the clothing, cut out on white and enlarged if it is small. "
-    + "Nothing here goes through a sampler, so nothing here can soften a face.";
-  body.appendChild(intro);
-
+  // Read through a getter rather than capturing the object. A handler that holds
+  // a reference keeps writing to it after anything replaces node._rnHero, and
+  // then the panel and the handler disagree about which state is live.
+  const S = () => (node._rnHero ||= {});
+  const state = S();
   const pics = (t.images || []).filter((x) => String(x || "").trim());
+
+  // ---- SOURCE: pick by looking, not by reading a filename in a dropdown ----
+  const src = document.createElement("div");
+  src.className = "rn-ws-card";
+  const sh = document.createElement("div");
+  sh.className = "ch";
+  sh.textContent = "SOURCE";
+  src.appendChild(sh);
+
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.textContent = "The head is found, cropped above the clothing, cut out on white "
+    + "and enlarged if it is small. Nothing here goes through a sampler, so nothing "
+    + "here can soften a face.";
+  src.appendChild(note);
+
   if (!pics.length) {
     const none = document.createElement("div");
     none.className = "rn-ws-note";
     none.textContent = "No pictures on the Subject gallery yet. Add one there and it "
-      + "will be offered here.";
-    body.appendChild(none);
+      + "will show up here.";
+    src.appendChild(none);
+    body.appendChild(src);
     return;
   }
-
-  const row = document.createElement("div");
-  row.className = "rn-ws-row";
-  const lab = document.createElement("span");
-  lab.className = "rn-ws-note";
-  lab.textContent = "Picture";
-  const pick = document.createElement("select");
-  for (const p of pics) {
-    const o = document.createElement("option");
-    o.value = p;
-    o.textContent = String(p).split(/[\\/]/).pop();
-    o.selected = p === state.source;
-    pick.appendChild(o);
-  }
   if (!pics.includes(state.source)) state.source = pics[0];
-  pick.onchange = () => { state.source = pick.value; render(node); };
+
+  const grid = document.createElement("div");
+  grid.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;padding:3px";
+  for (const p of pics) {
+    const im = document.createElement("img");
+    im.src = thumbUrl(p, 120);
+    im.alt = "";
+    im.title = parseName(p).filename;
+    const on = p === state.source;
+    // outline, not border: a border would resize the tile as the choice moves
+    im.style.cssText = "width:82px;height:82px;object-fit:cover;border-radius:6px;"
+      + "cursor:pointer;background:#111;"
+      + (on ? "outline:2px solid #b8283c;outline-offset:1px" : "outline:1px solid #2a2e35");
+    im.onclick = () => {
+      const st = S();
+      st.source = p;
+      st.result = null;                 // a new source, so the old hero is not its result
+      st.report = null;
+      render(node);
+    };
+    grid.appendChild(im);
+  }
+  src.appendChild(grid);
 
   const go = document.createElement("button");
   go.className = "rn-ws-btn go";
-  go.textContent = "Create hero";
-  row.append(lab, pick, go);
-  body.appendChild(row);
+  go.textContent = state.busy ? "Working…" : "Create hero";
+  go.disabled = !!state.busy;
+  src.appendChild(go);
+  if (state.error) {
+    const e = document.createElement("div");
+    e.className = "rn-ws-note warn";
+    e.textContent = state.error;
+    src.appendChild(e);
+  }
+  body.appendChild(src);
 
-  const out = document.createElement("div");
-  out.className = "rn-ws-note";
-  body.appendChild(out);
-
-  if (state.report) {
-    const r = state.report;
+  // ---- RESULT: the source and the hero side by side, so the crop is judgeable
+  if (state.result) {
     const card = document.createElement("div");
-    card.className = "rn-ws-status";
-    for (const text of [
-      `Route: ${r.route === "crop only" ? "Crop only" : r.route === "enlarge" ? "Enlarged" : "Needs repair"}`,
-      `Crop: ${r.crop_side} px`,
-      r.enlarged ? `Enlarge: ${r.enlarged}` : "",
-      `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`,
-    ]) {
+    card.className = "rn-ws-card";
+    const rh = document.createElement("div");
+    rh.className = "ch";
+    rh.textContent = "HERO";
+    card.appendChild(rh);
+
+    const pair = document.createElement("div");
+    pair.style.cssText = "display:flex;gap:8px;align-items:flex-start";
+    for (const [url, cap] of [[thumbUrl(state.source, 320), "Source"],
+                              [resultUrl(state.result), "Hero"]]) {
+      const col = document.createElement("div");
+      col.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center";
+      const im = document.createElement("img");
+      im.src = url;
+      im.style.cssText = "width:160px;border-radius:6px;background:#fff";
+      const c = document.createElement("span");
+      c.className = "rn-ws-note";
+      c.textContent = cap;
+      col.append(im, c);
+      pair.appendChild(col);
+    }
+    card.appendChild(pair);
+
+    const r = state.report || {};
+    const bar = document.createElement("div");
+    bar.className = "rn-ws-status";
+    const route = r.route === "crop only" ? "Crop only"
+                : r.route === "enlarge" ? "Enlarged" : "Needs repair";
+    for (const text of [`Route: ${route}`, `Crop: ${r.crop_side} px`,
+                        r.enlarged ? `Enlarge: ${r.enlarged}` : "",
+                        `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`]) {
       if (!text) continue;
       const c = document.createElement("span");
       c.className = "rn-ws-chip";
       c.textContent = text;
-      card.appendChild(c);
+      bar.appendChild(c);
     }
-    body.appendChild(card);
+    card.appendChild(bar);
 
-    // Every reason the crop could not win on its own, in the server's words. A
-    // repair means REGENERATING the face, which costs likeness, so it is said
-    // plainly rather than done quietly.
+    // Every reason the crop could not win alone, in the SERVER's words. Repeating
+    // the thresholds here would be KNOWN_TRAPS 13, the bug this pack keeps making.
     for (const why of (r.repair || [])) {
       const n = document.createElement("div");
       n.className = "rn-ws-note warn";
-      n.textContent = "Cannot be fixed by cropping: " + why
-        + ". A front-on regeneration would be needed, and that rebuilds the face.";
-      body.appendChild(n);
+      n.textContent = "Cropping cannot fix this: " + why + ". A front-on regeneration "
+        + "would be needed, and that rebuilds the face rather than keeping it.";
+      card.appendChild(n);
     }
     if (r.below_floor) {
       const n = document.createElement("div");
       n.className = "rn-ws-note warn";
-      n.textContent = "This face is small in the source. A regenerated version would "
-        + "drift away from the person, so the crop is the better reference here.";
-      body.appendChild(n);
+      n.textContent = "This face is small in the source, so a regenerated version would "
+        + "drift away from the person. The crop is the better reference here.";
+      card.appendChild(n);
     }
-  }
 
-  if (state.result) {
-    const img = document.createElement("img");
-    img.src = resultUrl(state.result);
-    img.style.cssText = "max-width:260px;border-radius:6px;display:block;margin:8px 0";
-    body.appendChild(img);
-
+    const acts = document.createElement("div");
+    acts.className = "rn-ws-row";
     const send = document.createElement("button");
-    send.className = "rn-ws-btn";
+    send.className = "rn-ws-btn go";
     send.textContent = "Send to Subject gallery";
     send.onclick = () => {
-      const entry = state.result.subfolder
-        ? `${state.result.subfolder}/${state.result.filename}` : state.result.filename;
-      t.images = [...(t.images || []), entry];
+      const p = state.result;
+      t.images = [...(t.images || []),
+                  p.subfolder ? `${p.subfolder}/${p.filename}` : p.filename];
       writeCfg(node);
       render(node);
     };
-    body.appendChild(send);
+    const open = document.createElement("button");
+    open.className = "rn-ws-btn";
+    open.textContent = "Open full size";
+    open.onclick = () => window.open(resultUrl(state.result), "_blank");
+    acts.append(send, open);
+    card.appendChild(acts);
+    body.appendChild(card);
   }
 
   go.onclick = async () => {
-    go.disabled = true;
-    go.textContent = "Working…";
-    out.textContent = "";
+    S().busy = true;
+    S().error = "";
+    render(node);
     try {
       const res = await api.fetchApi("/rednode/hero", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -13925,15 +13973,14 @@ function heroBody(node, body, sub) {
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);
-      state.result = d.result;
-      state.report = d.report;
+      S().result = d.result;
+      S().report = d.report;
     } catch (e) {
-      state.result = null;
-      state.report = null;
-      out.textContent = String(e.message || e);
+      S().result = null;
+      S().report = null;
+      S().error = String(e.message || e);
     }
-    go.disabled = false;
-    go.textContent = "Create hero";
+    S().busy = false;
     render(node);
   };
 }
