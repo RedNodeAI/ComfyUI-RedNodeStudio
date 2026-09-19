@@ -1431,10 +1431,22 @@ class RedNodeStudioDetailer:
         # stops depending on how large the face happened to be in frame.
         if s.get("crop_res"):
             f = s["crop_res"] / max(crop.shape[1], crop.shape[2])
-            work = self._resize(crop, f)
-            _say("%s crop %d x %d, working at %d x %d"
-                 % (s["target"], crop.shape[2], crop.shape[1],
-                    work.shape[2], work.shape[1]))
+            # A FLOOR, NEVER A CAP. Res used to pin the working size both ways, so
+            # a face crop already larger than it was shrunk, redrawn and stretched
+            # back, and the pass came out softer than the picture it started from
+            # (the user, 2026-09-20). Spending FEWER pixels on a face is never what
+            # a detail pass is for; the whole-frame Res above still shrinks on
+            # purpose, because a 4K frame at denoise 1 really is fuzz.
+            if f <= 1.0:
+                _say("%s crop %d x %d is already past the %d working size, so it is "
+                     "left at its own size" % (s["target"], crop.shape[2],
+                                               crop.shape[1], int(s["crop_res"])))
+                work = crop
+            else:
+                work = self._resize(crop, f)
+                _say("%s crop %d x %d, working at %d x %d"
+                     % (s["target"], crop.shape[2], crop.shape[1],
+                        work.shape[2], work.shape[1]))
         else:
             work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
         if encode_for is not None:

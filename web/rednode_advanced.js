@@ -1210,12 +1210,13 @@ function buildPanel(node, hostEl = null) {
           top.append(...A(lab("Res"),
                      sel(["512", "768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",
-                         "The working resolution for the crop: its long edge "
-                         + "is resized to this before rendering, and the result "
-                         + "goes back at the crop's own size. (crop) renders at "
-                         + "whatever size the box happens to be, times Scale. "
-                         + "1024 is the classic detailer sweet spot; higher "
-                         + "costs more VRAM for finer faces.",
+                         "The SMALLEST working size for the crop: a face smaller "
+                         + "than this is rendered up to it, and the result goes "
+                         + "back at the crop's own size. A face already bigger is "
+                         + "left alone, because shrinking it and stretching it "
+                         + "back is what makes a detail pass come out softer than "
+                         + "the picture it started from. (crop) renders at whatever "
+                         + "size the box happens to be, times Scale.",
                          (v) => {
                            s.crop_res = v ? parseInt(v, 10) : 0;
                            writeCfg(node, d);
