@@ -119,13 +119,16 @@ async function upscaleGenerate(node, statusEl, after) {
     return;
   }
   say("Running…");
+  resetStages(node, U.source);
   const pid = await queueUpscale(node, say, {});
   if (!pid) return;
   say("Queued. The picture appears below when it is done.");
+  await waitForPrompt(pid);
+  pushStage(node, methodLabel(node));
+  render(node);
   // THE SAME FOLLOW-UPS THE BATCH USES. One picture or a folder, the After a run
   // switches mean the same thing, so a single run must honour them too.
   if (!after) return;
-  await waitForPrompt(pid);
   try {
     await after();
   } catch (err) {
@@ -184,6 +187,43 @@ async function queueUpscale(node, say, over, quiet, top) {
     if (!quiet) alert(`Could not queue it: ${err.message}`);
     return null;
   }
+}
+
+/** THE STAGES OF ONE RUN, one entry per step that actually made a picture.
+ *
+ *  Not a fixed set of four panes: a run with no upscaler has no upscale pane, and
+ *  on Manual nothing appears until the button is pressed. A pane that is always
+ *  there and sometimes empty teaches nothing (the user, 2026-09-20).
+ */
+function stages(node) {
+  return node._rnUpStages ||= [];
+}
+
+function methodLabel(node) {
+  const kind = node._rnCfg?.upscale?.stage?.type || "vosr2";
+  const found = UPSCALE_METHODS.find((m) => m[0] === kind);
+  return kind === "none" ? "Resized" : (found ? found[1] : "Upscale");
+}
+
+function resetStages(node, sourceName) {
+  node._rnUpStages = [];
+  if (sourceName) {
+    node._rnUpStages.push({ label: "Raw", input: sourceName });
+  }
+}
+
+/** Record whatever the last run produced, under the name of what made it. */
+function pushStage(node, label) {
+  const r = lastResultNow();
+  if (!r) return;
+  const list = stages(node);
+  const last = list[list.length - 1];
+  // the same picture twice means the step made nothing of its own
+  if (last && last.result && last.result.filename === r.filename
+      && (last.result.subfolder || "") === (r.subfolder || "")) {
+    return;
+  }
+  list.push({ label, result: { ...r }, ms: node._rnUpStat?.ms || 0 });
 }
 
 /** The address of a picture in ComfyUI's input folder. */
@@ -307,6 +347,11 @@ export function upscaleBody(node, body) {
                                        save_on: !!A.save });
       if (!pid) throw new Error("the follow-up would not queue");
       await waitForPrompt(pid);
+      // one queue runs all the chosen steps, so the pane is named for all of them
+      const ran = [A.detailer && "Detailer", A.post && "Post", A.save && "Saved"]
+        .filter(Boolean);
+      pushStage(node, ran.join(" + ") || "Chain");
+      render(node);
     },
   };
 
@@ -594,30 +639,26 @@ export function upscaleBody(node, body) {
   // and there is nowhere else to go looking for it.
   const r = lastResultNow();
   const { line: rLine } = card(body, "RESULT");
-  if (!r) {
+  // the recorded stages stand on their own: a run that happened is still worth
+  // showing when the shared result has since moved on to somebody else's queue
+  if (!r && !stages(node).length) {
     const none = el("span", "hint",
-      "Nothing yet. Press Generate and the upscaled picture appears here.");
+      "Nothing yet. Press Run this Image and the steps appear here, one pane each.");
     none.style.cssText = "font-size:11px";
     rLine.appendChild(none);
     return;
   }
-  // THE SAME PREVIEW EVERY OTHER RESULT USES: resultUrl for the address,
-  // openPaintViewer for full screen, openResultMenu for the right-click actions.
-  // A picture drawn some other way here would be a second result system to keep
-  // in step, and would quietly lose Copy, Copy prompt, Rerun and the history.
-  const shot = document.createElement("img");
-  shot.src = resultUrl(r);
-  shot.style.cssText = "max-width:300px;max-height:300px;border:1px solid #2a2e35;"
-                     + "border-radius:6px;background:#15171b;flex:none;cursor:zoom-in;"
-                     + "object-fit:contain";
-  shot.title = "The last picture a run produced. Click for full size, right-click "
-             + "for Copy, Copy prompt and the rest.";
-  shot.onclick = () => openPaintViewer(node, r);
-  shot.oncontextmenu = (ev) => { ev.preventDefault(); openResultMenu(node, r, ev); };
+  // Each pane below builds its own picture through resultUrl / openPaintViewer /
+  // openResultMenu, so every one of them has full screen and the right-click menu
+  // rather than only the last.
   const acts = el("div");
   acts.style.cssText = "display:flex;flex-direction:column;gap:8px;flex:none;width:180px;"
                      + "padding-top:18px";
+  // the latest picture this tab has, live or recorded. With none, the buttons are
+  // not built at all rather than built and dead.
+  const actOn = r || stages(node).filter((x) => x.result).pop()?.result;
   const act = (label, title, fn) => {
+    if (!actOn) return null;
     const b = el("button", "rn-ws-btn", label);
     b.style.cssText = "width:100%;padding:8px 18px;font-size:13px;text-align:center";
     b.title = title;
@@ -628,8 +669,11 @@ export function upscaleBody(node, body) {
   };
   act("Send to Post", "Apply the Post tab to this picture and file the finished copy "
                     + "in Save.", async () => {
-    try { await runPaintFinal(node, r, true); }
-    catch (err) { alert(`Post and Save failed: ${err.message}`); }
+    try {
+      await runPaintFinal(node, actOn, true);
+      pushStage(node, "Post");
+      render(node);
+    } catch (err) { alert(`Post and Save failed: ${err.message}`); }
   });
   // SEND TO DETAILER: the Detailer tab's passes on this picture, then Post if the
   // Post tab is on, then Save if Save is on. The builtin chain does all three, so
@@ -648,7 +692,7 @@ export function upscaleBody(node, body) {
     render(node);
     // the picture is a temp preview; the server reads the input folder, so it has
     // to be copied there before the run can load it by name
-    const name = await copyResultToInput(r);
+    const name = await copyResultToInput(actOn);
     if (!name) {
       node._rnFinalStatus = "Could not take that picture across";
       node._rnFinalFailed = true;
@@ -662,83 +706,88 @@ export function upscaleBody(node, body) {
         + (cfgNow.save_on ? ", Save" : "")
       : node._rnFinalStatus;
     node._rnFinalFailed = !ok;
+    if (ok) {
+      await waitForPrompt(ok);
+      pushStage(node, "Detailer");
+    }
     render(node);
   });
   act("Send to Paint", "Put this picture on the Paint tab, ready to paint on.", () => {
-    adoptResult(node, r, "sent from the Upscale tab", "paint");
+    adoptResult(node, actOn, "sent from the Upscale tab", "paint");
     node._rnTab = "paint";
     render(node);
   });
   act("Save", "File this picture in Save exactly as it is, with no Post.", async () => {
-    try { await runPaintFinal(node, r, false); }
-    catch (err) { alert(`Save failed: ${err.message}`); }
+    try {
+      await runPaintFinal(node, actOn, false);
+      pushStage(node, "Saved");
+      render(node);
+    } catch (err) { alert(`Save failed: ${err.message}`); }
   });
-  // BEFORE AND AFTER, side by side. One picture on its own said nothing about
-  // what the run had done to it, and the numbers alone are not the same as seeing
-  // it (the user, 2026-09-20). The left is what went in, the right what came out,
-  // and the right follows a Send to Post or a Save because those make a new one.
-  rLine.style.cssText += ";align-items:flex-start;gap:14px";
-  const pane = (title) => {
+  // THE RUN AS IT HAPPENED, one pane per step that actually made a picture.
+  // Raw, then whatever ran: no upscale pane on a run with no upscaler, nothing
+  // after it until a step has been taken. Small on purpose, because four full
+  // pictures is a screenful and the point here is the shape of the run, not the
+  // detail of any one frame; a click opens the full screen viewer for that.
+  rLine.style.cssText += ";align-items:flex-start;gap:12px;flex-wrap:wrap";
+  const list = stages(node);
+  // a pane needs a picture: with no run recorded yet, show what there is rather
+  // than an empty frame where the source would have been
+  const shown = (list.length ? list
+    : [{ label: "Raw", input: U.source }, { label: methodLabel(node), result: r }])
+    .filter((stg) => stg && (stg.input || stg.result));
+  const strip = el("div");
+  strip.style.cssText = "display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;"
+                      + "flex:1 1 auto;min-width:0";
+  shown.forEach((stg, i) => {
     const col = el("div");
-    col.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;"
-                      + "flex:none";
-    const cap = el("div", "hint", title);
-    cap.style.cssText = "font-size:10px;font-weight:700;letter-spacing:.08em;"
-                      + "color:#8a919b";
-    col.appendChild(cap);
-    return col;
-  };
-  const up = node._rnUpStat;
-  const beforeCol = pane("BEFORE");
-  const beforeName = up?.src || U.source || "";
-  if (beforeName) {
-    const bimg = document.createElement("img");
-    bimg.src = viewInput(beforeName);
-    bimg.style.cssText = "max-width:300px;max-height:300px;border:1px solid #2a2e35;"
-                       + "border-radius:6px;background:#15171b;object-fit:contain";
-    bimg.title = `What went in: ${beforeName}`;
-    const bsize = el("div", "hint", "");
-    bsize.style.cssText = "font-size:11px";
-    bimg.addEventListener("load", () => {
-      bsize.textContent = `${bimg.naturalWidth} × ${bimg.naturalHeight}`;
-    });
-    beforeCol.append(bimg, bsize);
-  } else {
-    const none = el("div", "hint", "nothing recorded");
-    none.style.cssText = "font-size:11px";
-    beforeCol.appendChild(none);
-  }
-
-  const afterCol = pane("AFTER");
-  const stat = el("div", "");
-  stat.style.cssText = "font-size:12px;letter-spacing:.02em;color:#c8ccd2;"
-                     + "background:#15171b;border:1px solid #2a2e35;border-radius:5px;"
-                     + "padding:4px 10px;text-align:center;line-height:1.45";
-  // FROZEN on the first draw after a run: read at render time it would climb for
-  // as long as the panel stayed open, which is a clock, not a measurement
-  if (up && up.t0 && !up.ms) up.ms = Date.now() - up.t0;
-  // the three numbers arrive at different times: the size when the picture loads,
-  // the file size from a HEAD, the duration already known. One function draws
-  // whatever is in hand, and each arrival calls it again.
-  let bytes = 0;
-  const drawStat = () => {
-    const w = Number(shot.naturalWidth) || 0;
-    const h = Number(shot.naturalHeight) || 0;
-    if (!w || !h) return;
-    const bits = [`${w} × ${h}`];
-    if (bytes) {
-      bits.push(bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-                                    : `${Math.round(bytes / 1024)} KB`);
+    col.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:5px;"
+                      + "flex:none;max-width:190px";
+    const cap = el("div", "rn-ws-stagecap", stg.label);
+    cap.style.cssText = "font-size:10.5px;font-weight:700;letter-spacing:.07em;"
+                      + "color:" + (i === shown.length - 1 ? "#cfe6ff" : "#8a919b");
+    const im = document.createElement("img");
+    im.src = stg.input ? viewInput(stg.input) : resultUrl(stg.result);
+    im.style.cssText = "max-width:170px;max-height:230px;border-radius:6px;"
+                     + "background:#15171b;object-fit:contain;border:1px solid "
+                     + (i === shown.length - 1 ? "#3d5570" : "#2a2e35");
+    const size = el("div", "hint", "");
+    size.style.cssText = "font-size:10.5px;text-align:center;line-height:1.4";
+    if (stg.result) {
+      im.style.cursor = "zoom-in";
+      im.title = `${stg.label}. Click for full size, right-click for the usual menu.`;
+      im.onclick = () => openPaintViewer(node, stg.result);
+      im.oncontextmenu = (ev) => { ev.preventDefault?.(); openResultMenu(node, stg.result, ev); };
+    } else {
+      im.title = `${stg.label}: what went in.`;
     }
-    if (up?.ms) bits.push(`${(up.ms / 1000).toFixed(1)}s`);
-    stat.textContent = bits.join(" · ");
-  };
-  shot.addEventListener("load", drawStat);
-  if (shot.complete) drawStat();
-  fileBytes(resultUrl(r)).then((n) => { bytes = n; drawStat(); });
+    let bytes = 0;
+    const draw = () => {
+      const w = Number(im.naturalWidth) || 0;
+      const h = Number(im.naturalHeight) || 0;
+      if (!w || !h) return;
+      const bits = [`${w} × ${h}`];
+      if (bytes) {
+        bits.push(bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+                                      : `${Math.round(bytes / 1024)} KB`);
+      }
+      if (stg.ms) bits.push(`${(stg.ms / 1000).toFixed(1)}s`);
+      size.textContent = bits.join(" · ");
+    };
+    im.addEventListener("load", draw);
+    if (im.complete) draw();
+    fileBytes(im.src).then((n) => { bytes = n; draw(); });
+    col.append(cap, im, size);
+    strip.appendChild(col);
+  });
+  rLine.appendChild(strip);
+
+  // THE BUTTONS ARE FOR MANUAL. With a step chosen under After a run the tab is
+  // doing it already, and a button that repeats what just happened is a way to
+  // do it twice by accident.
+  if (node._rnCfg?.upscale?.after?.manual) rLine.appendChild(acts);
   const rname = el("div", "hint", node._rnFinalStatus || "");
-  rname.style.cssText = "font-size:11px;text-align:center";
+  rname.style.cssText = "font-size:11px;width:100%";
   if (node._rnFinalFailed) rname.style.color = "#fca5a5";
-  afterCol.append(shot, stat, rname);
-  rLine.append(beforeCol, afterCol, acts);
+  if (node._rnFinalStatus) rLine.appendChild(rname);
 }
