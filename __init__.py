@@ -669,6 +669,7 @@ from .postprocess import RedNodePostProcess, RedNodePostFX  # noqa: E402
 from .stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
 from .custom_rig import RedNodeRigModel, RedNodeRigInputs, RedNodeRigResult  # noqa: E402
 from .paint_render import RedNodePaintRender  # noqa: E402
+from .upscale_render import RedNodeUpscaleRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
 from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
@@ -730,6 +731,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeStageTap": RedNodeStageTap,
     "RedNodeStageView": RedNodeStageView,
     "RedNodePaintRender": RedNodePaintRender,
+    "RedNodeUpscaleRender": RedNodeUpscaleRender,
     "RedNodeRigModel": RedNodeRigModel,
     "RedNodeRigInputs": RedNodeRigInputs,
     "RedNodeRigResult": RedNodeRigResult,
@@ -791,6 +793,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeRigInputs": "RedNode Rig Inputs",
     "RedNodeRigResult": "RedNode Rig Result",
     "RedNodePaintRender": "RedNode Paint Render",
+    "RedNodeUpscaleRender": "RedNode Upscale",
 }
 
 # The Krea 2 nodes, registered only when this ComfyUI can run them. Listing a node that

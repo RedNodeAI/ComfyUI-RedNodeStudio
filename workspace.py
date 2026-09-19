@@ -1770,6 +1770,11 @@ def parse_config(config_json):
             "post_on": data.get("post_on") is not False,
             "save_on": bool(data.get("save_on")),
             "save": data.get("save") if isinstance(data.get("save"), dict) else {},
+            # THE UPSCALE TAB: one Detailer pass of an upscale kind, run on its own
+            # by RedNodeUpscaleRender. The stage rides RAW, exactly as "detailer"
+            # does above, so refine_pipeline.parse_pipeline stays the only owner of
+            # that schema instead of a second copy drifting here (KNOWN_TRAPS 13).
+            "upscale": _upscale_cfg(data.get("upscale")),
             "taps": _normalise_taps(data.get("taps")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
@@ -2356,6 +2361,38 @@ def blank_frame(size=BLANK_EDGE):
     visible in the result instead of hidden inside a plausible-looking image.
     """
     return torch.ones((1, size, size, 3), dtype=torch.float32)
+
+
+UPSCALE_METHODS = ("upscale", "vosr2", "usdu")
+
+
+def _upscale_cfg(raw):
+    """The Upscale tab: a source picture and ONE Detailer pass to run on it.
+
+    The pass itself is not clamped here. It is handed to
+    `refine_pipeline.parse_pipeline` when it runs, which is the only place that
+    schema is allowed to live; a second copy in this file is exactly the drift
+    KNOWN_TRAPS 13 is about.
+    """
+    d = raw if isinstance(raw, dict) else {}
+    st = d.get("stage") if isinstance(d.get("stage"), dict) else {}
+    kind = str(st.get("type") or "")
+    if kind not in UPSCALE_METHODS:
+        st = dict(st, type="vosr2")
+    try:
+        seed = max(0, int(d.get("seed", 0)))
+    except (TypeError, ValueError):
+        seed = 0
+    return {
+        "on": bool(d.get("on")),
+        # the managed filename of the picture being upscaled, the same convention
+        # cfg.paint["source"] uses
+        "source": str(d.get("source") or ""),
+        "stage": st,
+        "seed": seed,
+        "seed_random": (True if d.get("seed_random") is None
+                        else bool(d.get("seed_random"))),
+    }
 
 
 def load_image_or_blank(name, target, who):

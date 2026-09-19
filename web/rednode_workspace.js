@@ -13,6 +13,7 @@ import { postBody, looksSection, openPostCog, refreshPostPresets,
 import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
+import { upscaleBody } from "./rednode_ws_upscale.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -1446,6 +1447,19 @@ export function readCfg(node) {
   d.models.active = Math.max(0, Math.min(
     typeof d.models.active === "number" ? Math.round(d.models.active) : 0,
     Math.max(0, d.models.rigs.length - 1)));
+  // THE UPSCALE TAB: a picture and ONE Detailer pass to run on it. The pass is
+  // left alone here on purpose. refine_pipeline.py owns that schema, and a
+  // second set of defaults in this file is exactly the drift KNOWN_TRAPS 13 is
+  // about; the panel writes only the fields it shows, the server clamps the rest.
+  d.upscale = d.upscale && typeof d.upscale === "object" ? d.upscale : {};
+  if (typeof d.upscale.on !== "boolean") d.upscale.on = false;
+  if (typeof d.upscale.source !== "string") d.upscale.source = "";
+  if (typeof d.upscale.seed !== "number") d.upscale.seed = 0;
+  if (typeof d.upscale.seed_random !== "boolean") d.upscale.seed_random = true;
+  if (!d.upscale.stage || typeof d.upscale.stage !== "object") d.upscale.stage = {};
+  if (!["vosr2", "upscale", "usdu"].includes(d.upscale.stage.type)) {
+    d.upscale.stage.type = "vosr2";
+  }
   // the Prompts tab: named prompts, each linked to a rig by the rig's name
   d.prompts = d.prompts && typeof d.prompts === "object" ? d.prompts : {};
   if (!Array.isArray(d.prompts.rows)) d.prompts.rows = [];
@@ -2094,14 +2108,15 @@ async function copyResultToInput(r) {
 /** The durable upgrade, after the fact: same picture, new address, so the strokes
  *  key follows it and nothing painted meanwhile is lost. Skipped silently if the
  * user already moved to another picture while the copy was in flight. */
-function upgradeSourceDurability(node, r) {
+function upgradeSourceDurability(node, r, key = "paint") {
   const wanted = resultEntry(r);
   (async () => {
     const up = await copyResultToInput(r);
     if (!up) return;                       // temp already gone, or upload refused
-    const P = node._rnCfg?.paint;
+    const P = node._rnCfg?.[key];
     if (!P || P.source !== wanted) return; // they moved on, nothing to upgrade
     P.source = up;
+    if (key !== "paint") { writeCfg(node); render(node); return; }
     if (node._rnStrokesFor === wanted) node._rnStrokesFor = up;
     // The durable address names the same pixels. Carry the decoded image across the
     // rename so the background upload cannot introduce an empty-canvas frame.
@@ -2230,8 +2245,8 @@ export function openPaintViewer(node, shown) {
   reviewFullscreen(paintViewerHost(node, shown || resultHistory[0]));
 }
 
-function adoptResult(node, r, why = "unknown") {
-  const P = node._rnCfg?.paint;
+export function adoptResult(node, r, why = "unknown", key = "paint") {
+  const P = node._rnCfg?.[key];
   if (!P || !r) return;
   // SAYS WHO CHANGED THE PICTURE, every time. Reported as results still landing on the
   // canvas by themselves, and every call site here is a deliberate press, so either
@@ -2240,10 +2255,10 @@ function adoptResult(node, r, why = "unknown") {
   console.log(`[RedNode Workspace] paint source <- ${resultEntry(r)} (${why}; `
             + `run ${r.prompt_id || "none"})`);
   P.source = resultEntry(r);
-  node._rnStrokes = [];
+  if (key === "paint") node._rnStrokes = [];
   writeCfg(node);
   render(node);
-  upgradeSourceDurability(node, r);
+  upgradeSourceDurability(node, r, key);
 }
 
 /** File a result through the same keeper path used by the result-pane menu.
@@ -6758,6 +6773,8 @@ function workspacePrefs(node, body) {
 // edit_mask / output_latent / denoise sockets the rest of the node uses. So the
 // inpaint runs on whatever sampler chain you already have, with nothing rewired.
 let lastResult = null;                               // {filename, subfolder, type}
+// the last picture any run produced, for a tab that wants to start from it
+export const lastResultNow = () => lastResult;
 // the same run's picture before Post FX, when the Workspace ran Post itself
 // (rn_before_post on its executed event); the tab can start from it instead
 let lastBeforePost = null;
@@ -6947,7 +6964,7 @@ const resultEntry = (r) =>
 // Take a picture into the Paint tab from a drop or a file picker. It lands in the
 // same managed folder the masks do, so the tab is self-contained: you can paint on
 // something that never came out of this workflow at all.
-async function adoptPaintSource(node, file) {
+export async function adoptPaintSource(node, file, key = "paint") {
   if (!file || !file.type?.startsWith("image/")) return;
   const { blob, name } = await normalisedUpload(file);
   const body = new FormData();
@@ -6957,9 +6974,9 @@ async function adoptPaintSource(node, file) {
   const res = await api.fetchApi("/upload/image", { method: "POST", body });
   const d = await res.json();
   if (!d.name) throw new Error("the upload returned no name");
-  const P = node._rnCfg.paint;
+  const P = node._rnCfg[key];
   P.source = d.subfolder ? `${d.subfolder}/${d.name}` : d.name;
-  node._rnStrokes = [];
+  if (key === "paint") node._rnStrokes = [];
   writeCfg(node);
   render(node);
 }
@@ -7026,7 +7043,7 @@ function clipboardImage(e) {
   return null;
 }
 
-function paintDropZone(node, el) {
+export function paintDropZone(node, el, key = "paint") {
   el.addEventListener("dragover", (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -7044,7 +7061,7 @@ function paintDropZone(node, el) {
         adoptResult(node, JSON.parse(inApp), "dragged onto the canvas");
         return;
       }
-      await adoptPaintSource(node, (e.dataTransfer?.files || [])[0]);
+      await adoptPaintSource(node, (e.dataTransfer?.files || [])[0], key);
     } catch (err) {
       console.error("[RedNode Workspace] could not take that picture:", err);
       alert(`Could not use that image: ${err.message}`);
@@ -7103,7 +7120,7 @@ async function uploadMask(node, canvas) {
  * entry. Being deliberately conservative about the last one: guessing between two
  * Paint Renders would silently drive the wrong one.
  */
-function promptKeyFor(prompt, node) {
+export function promptKeyFor(prompt, node) {
   if (!prompt || !node) return "";
   const id = String(node.id);
   if (prompt[id]) return id;
@@ -7124,7 +7141,7 @@ function promptKeyFor(prompt, node) {
   return typed[0] || "";
 }
 
-function pruneToNode(prompt, targetId) {
+export function pruneToNode(prompt, targetId) {
   const keep = new Set();
   const walk = (id) => {
     if (keep.has(id) || !prompt[id]) return;
@@ -7387,7 +7404,7 @@ function seedSamplerDials(cfg) {
 // convention: a KSampler takes up to 2^64, plenty of API nodes take 2^32 or less, and
 // handing one of those a number past its max gets the whole prompt thrown out with
 // "outputs failed validation" before a single node runs.
-function advanceSeeds(prompt, keptIds) {
+export function advanceSeeds(prompt, keptIds) {
   for (const id of keptIds) {
     const gnode = nodeById(id);
     const widgets = gnode?.widgets || [];
@@ -15645,6 +15662,7 @@ export const tabLit = (cfg, id) =>
   : id === "moodboard" ? cfg.tabs.moodboard.on && cfg.tabs.moodboard.sel.length
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)
   : id === "paint" ? cfg.paint?.on
+  : id === "upscale" ? cfg.upscale?.on
   : id === "post" ? cfg.post_on !== false && POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
   : id === "latent" ? cfg.latent.on
   : id === "models" ? !!cfg.models?.rigs?.some?.((r) =>
@@ -15861,6 +15879,7 @@ export function render(node) {
     postBody(node, body, { cogHost: bar });
   }
   else if (cur === "paint") paintBody(node, body);
+  else if (cur === "upscale") upscaleBody(node, body);
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
   else if (cur === "overview") overviewBody(node, body);
@@ -15872,7 +15891,8 @@ export function render(node) {
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
-  if (!["overview", "i2i", "identity", "moodboard", "run", "detailer"].includes(cur)) {
+  if (!["overview", "i2i", "identity", "moodboard", "run", "detailer",
+        "upscale"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

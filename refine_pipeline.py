@@ -788,11 +788,18 @@ class RedNodeStudioDetailer:
                                   "(holding the limit)", "unload")
 
     @_run_events.tracked("detailer", "Detailer")
-    def run(self, image, config="{}", prompt=None, unique_id=None, **_custom_rigs):
+    def run(self, image, config="{}", prompt=None, unique_id=None,
+            chain_step="detailer", ws_config=None, **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
+        #
+        # chain_step: which builtin-chain step this counts as. The Workspace marks
+        # "detailer" when it runs these passes itself, and this node then stands
+        # aside rather than running them twice. The Upscale tab borrows this same
+        # method for its one pass and passes None, because it is a door of its own
+        # and must still run on a queue where the Workspace already did its passes.
         self._rn_prompt = prompt              # a rig's own sampler chain reads it
         from . import builtin_chain as _chain
-        if _chain.done("detailer"):
+        if chain_step and _chain.done(chain_step):
             _run_events.skip("detailer", "Detailer", "done inside the Workspace")
             return (image, "the Workspace already ran the Detailer passes; passed through")
         # A paint-door run or an external-sampler workspace hands over no image
@@ -810,8 +817,13 @@ class RedNodeStudioDetailer:
         if not stages:
             _run_events.skip("detailer", "Detailer", "no passes switched on")
             return (image, "no passes configured")
+        # ws_config: the Workspace settings handed over directly, for a caller
+        # whose queued prompt does not carry the Workspace node. The Upscale tab
+        # queues its own node alone, so the graph walk below would find nothing
+        # and a tiled pass would lose its rig.
         try:
-            ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
+            ws_cfg = _ws.parse_config(ws_config if isinstance(ws_config, str)
+                                      else json.dumps(_workspace_cfg(prompt)))
         except Exception:
             ws_cfg = _ws.parse_config("{}")
         self._rn_ws_cfg = ws_cfg              # the VRAM hold reads it before each pass

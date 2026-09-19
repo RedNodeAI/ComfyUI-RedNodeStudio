@@ -91,6 +91,8 @@ export const TAB_ORDER = [
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },
   { id: "paint", label: "Paint", group: "canvas" },
+  // one upscale on one picture, straight to the result pane (rednode_ws_upscale.js)
+  { id: "upscale", label: "Upscale", group: "canvas" },
   { id: "moodboard", label: "Moodboard", group: "mood" },
   // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
