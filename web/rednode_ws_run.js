@@ -684,7 +684,12 @@ export function plannedStages(node, cfg) {
   if (node?._rnRunKind === "upscale") {
     const U = cfg.upscale || {};
     const A = U.after || {};
-    out.push(["upscale", (U.stage?.type === "none") ? "Resize" : "Upscale"]);
+    if (U.pre_size) out.push(["resize", "Resize"]);
+    if (U.stage?.type !== "none") {
+      out.push(["upscale", "Upscale"]);
+    } else if (!U.pre_size) {
+      out.push(["upscale", "Pass through"]);
+    }
     if (!A.manual) {
       if (A.detailer) out.push(["detailer", "Detailer"]);
       if (A.post) out.push(["post", "Post FX"]);
@@ -1173,8 +1178,13 @@ const STATE_TEXT = { waiting: "Waiting", start: "Running", progress: "Running", 
  *  Exported so the Upscale tab can carry the same strip: two readings of the same
  *  run, computed twice, would disagree the moment one of them was forgotten.
  */
-export function runStageRows(node) {
-  return stageRows(node);
+export function runStageRows(node, forceKind) {
+  if (!forceKind) return stageRows(node);
+  // the Upscale tab's own strip is always about an upscale, running or not: an
+  // idle one was showing Encode, the passes and Decode, which that tab never does
+  const was = node._rnRunKind;
+  node._rnRunKind = forceKind;
+  try { return stageRows(node); } finally { node._rnRunKind = was; }
 }
 
 function stageRows(node) {

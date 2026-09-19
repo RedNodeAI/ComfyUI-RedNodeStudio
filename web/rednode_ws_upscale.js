@@ -214,6 +214,42 @@ function resetStages(node, sourceName) {
   }
 }
 
+/** The stages of one automatic run, built from what the server published.
+ *
+ *  One queue makes all of them now, so they are read off that run rather than
+ *  accumulated a queue at a time: what the upscaler was fed, what it made, the
+ *  picture after the Detailer, and the finished one.
+ */
+function autoStages(node, U, r) {
+  const parts = node._rnUpParts || {};
+  const A = U.after || {};
+  const out = [];
+  const asRes = (im) => (im ? { filename: im.filename, subfolder: im.subfolder || "",
+                                type: im.type || "temp" } : null);
+  const src = U.source || node._rnUpStat?.src || "";
+  if (parts.fed) out.push({ label: "Resized", result: asRes(parts.fed) });
+  else if (src) out.push({ label: "Raw", input: src });
+  if (parts.up && U.stage?.type !== "none") {
+    out.push({ label: methodLabel(node), result: asRes(parts.up),
+               ms: node._rnUpStat?.ms || 0 });
+  }
+  if (parts.detailed && A.detailer) {
+    out.push({ label: "Detailer", result: asRes(parts.detailed) });
+  }
+  if (r) {
+    const done = [A.detailer && !parts.detailed && "Detailer", A.post && "Post",
+                  A.save && "Saved"].filter(Boolean);
+    out.push({ label: done.join(" + ") || methodLabel(node), result: { ...r } });
+  }
+  // the same picture twice says the step made nothing of its own
+  return out.filter((x, i) => {
+    const prev = out[i - 1];
+    return !(prev?.result && x.result
+             && prev.result.filename === x.result.filename
+             && (prev.result.subfolder || "") === (x.result.subfolder || ""));
+  });
+}
+
 /** Record whatever the last run produced, under the name of what made it. */
 function pushStage(node, label) {
   // a Post or Save copy never becomes the shared result, on purpose, so the node
@@ -638,7 +674,11 @@ export function upscaleBody(node, body) {
     const { line: pLine } = card(body, "PIPELINE");
     pLine.style.cssText += ";gap:6px;flex-wrap:wrap";
     let rows = [];
-    try { rows = runStageRows(node) || []; } catch (e) { rows = []; }
+    // FORCED to the upscale shape: this strip is on the Upscale tab, so it is
+    // about an upscale whether one is running or not. Left to the general plan an
+    // idle tab showed Encode, the passes and Decode, none of which it ever does
+    // (the user, 2026-09-20).
+    try { rows = runStageRows(node, "upscale") || []; } catch (e) { rows = []; }
     if (!rows.length) {
       const none = el("span", "hint", "The steps of a run show here as it goes.");
       none.style.cssText = "font-size:11px";
@@ -680,9 +720,13 @@ export function upscaleBody(node, body) {
     rLine.appendChild(off);
     return;
   }
-  // the recorded stages stand on their own: a run that happened is still worth
-  // showing when the shared result has since moved on to somebody else's queue
-  if (!r && !stages(node).length) {
+  // an automatic run publishes its own stages, all from ONE queue; Manual builds
+  // them a press at a time, so the recorded list wins when it has more to say
+  const auto = autoStages(node, U, r);
+  const list = stages(node).length > auto.length ? stages(node) : auto;
+  // the stages stand on their own: a run that happened is still worth showing
+  // when the shared result has since moved on to somebody else's queue
+  if (!r && !list.length) {
     const none = el("span", "hint",
       "Nothing yet. Press Run this Image and the steps appear here, one pane each.");
     none.style.cssText = "font-size:11px";
@@ -771,7 +815,6 @@ export function upscaleBody(node, body) {
   // pictures is a screenful and the point here is the shape of the run, not the
   // detail of any one frame; a click opens the full screen viewer for that.
   rLine.style.cssText += ";align-items:flex-start;gap:12px;flex-wrap:wrap";
-  const list = stages(node);
   // a pane needs a picture: with no run recorded yet, show what there is rather
   // than an empty frame where the source would have been
   const shown = (list.length ? list

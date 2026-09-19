@@ -16810,6 +16810,15 @@ app.registerExtension({
       const upscaler = promptId && upscaleRuns.get(promptId);
       if (upscaler) {
         upscaleRuns.delete(promptId);
+        // THE RUN'S OWN STAGES, published by the door and the chain: what the
+        // upscaler saw after a resize, what it made, and the picture after the
+        // Detailer but before Post. One run, four pictures.
+        const o = e?.detail?.output || {};
+        upscaler._rnUpParts = {
+          fed: (o.rn_upscale_in || [])[0] || null,
+          up: (o.rn_upscale_images || [])[0] || null,
+          detailed: (o.rn_before_post || [])[0] || null,
+        };
         lastResult.upscale = true;               // this tab asked for it, so it may show it
         lastUpscaleOwner = upscaler;
         // the full screen viewer reads the history and nothing else, so a result

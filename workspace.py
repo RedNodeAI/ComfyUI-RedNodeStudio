@@ -4849,6 +4849,13 @@ class RedNodeStudioWorkspace:
                           "%d x %d" % (_b4[0], _b4[1], _upre,
                                        int(_ubase.shape[2]), int(_ubase.shape[1])),
                           flush=True)
+                    # the picture the upscaler actually saw. The tab showed the
+                    # original beside the result, which is not what went in when a
+                    # resize came first (the user, 2026-09-20).
+                    _uin = keep_before_post(_ubase)
+                    if _uin:
+                        ui_extra = dict(ui_extra or {})
+                        ui_extra["rn_upscale_in"] = _uin
                 if _ukind == "none":
                     # NO UPSCALER, on purpose: the picture as it arrived, fitted if
                     # asked. It still has to come back as a result, because what
@@ -4874,11 +4881,19 @@ class RedNodeStudioWorkspace:
                     from .paint_render import _out as _paint_out
                     _ur = _paint_out(_uout, _ucarry)
                     if isinstance(_ur, dict) and isinstance(_ur.get("ui"), dict):
-                        # the same private key the paint door uses: the result pane
-                        # reads it off the executed event, and core's own preview
+                        ui_extra = dict(ui_extra or {})
+                        # THE UPSCALER'S OWN OUTPUT, as its own pane. Published
+                        # apart from the result because the chain below may carry
+                        # on and make a different picture; rn_paint_images outranks
+                        # the final one, so claiming it here would have shown the
+                        # upscale where the finished picture belongs.
+                        ui_extra["rn_upscale_images"] = _ur["ui"].get("images") or []
+                        # with nothing following, the upscale IS the result, so it
+                        # takes the key the result pane reads. Core's own preview
                         # system has never heard of it, so the panel does not get a
-                        # second giant copy of the picture drawn under the node
-                        ui_extra = {"rn_paint_images": _ur["ui"].get("images") or []}
+                        # second giant copy drawn under the node.
+                        if not _uafter:
+                            ui_extra["rn_paint_images"] = ui_extra["rn_upscale_images"]
                 _run.end("upscale", "Upscale")
             except _UpscaleHandled:
                 _run.end("upscale", "Upscale")
