@@ -13812,6 +13812,27 @@ function identityTabs(node, body) {
 // KNOWN_TRAPS 13, the bug this pack keeps making, so the card shows what came
 // back from /rednode/hero rather than working anything out a second time.
 const HERO_SUB = "heroes";
+// What the front-on render can be asked to change. Only offered there, because
+// changing a person is only possible where the face is being rebuilt: the crop
+// is real pixels and nothing can be asked of it.
+const HERO_HAIR = ["Black", "Dark brown", "Brown", "Auburn", "Ginger", "Blonde",
+                   "Platinum blonde", "Grey", "White", "Blue", "Pink", "Green",
+                   "Purple", "Red"];
+const HERO_EYES = ["Brown", "Dark brown", "Hazel", "Amber", "Green", "Blue",
+                   "Pale blue", "Grey", "Violet"];
+// Plain words, not numbers. "35 years old" is a figure the model has no scale
+// for; "a man in his thirties" is a description it has seen a great deal of.
+const HERO_AGE = ["A baby", "A young child", "A teenager", "In their twenties",
+                  "In their thirties", "In their forties", "In their fifties",
+                  "In their sixties", "Elderly", "Very old and deeply wrinkled"];
+
+const heroExtraLine = (node) => {
+  const e = (node.properties?.rn_hero_extra) || {};
+  return [e.hair ? e.hair.toLowerCase() + " hair" : "",
+          e.eyes ? e.eyes.toLowerCase() + " eyes" : "",
+          e.age ? e.age.toLowerCase() : "",
+          String(e.free || "").trim()].filter(Boolean).join(", ");
+};
 
 function heroBody(node, body, sub) {
   const t = node._rnCfg.tabs[sub];
@@ -13964,6 +13985,7 @@ function heroBody(node, body, sub) {
           body: JSON.stringify({
             source: p, unet: rigNow().unet || rigNow().checkpoint || "",
             clip: rigNow().clip, vae: rigNow().vae, lora: idLoraNow()?.name || "",
+            extra: heroExtraLine(node),
           }),
         });
         const d2 = await r2.json();
@@ -14239,6 +14261,70 @@ function heroBody(node, body, sub) {
     rep.appendChild(n);
   }
 
+  // ---- Change: what to ask of the rebuild --------------------------------
+  // Assembled HERE and sent as one line. The server owns the base instruction
+  // and the repair clauses; the panel owns only what was asked for, so neither
+  // has to know the other's wording.
+  const ex = (props.rn_hero_extra ||= {});
+  const exRow = document.createElement("div");
+  exRow.className = "rn-ws-row";
+  exRow.style.flexWrap = "wrap";
+  const pick = (label, key, values) => {
+    const lab = document.createElement("span");
+    lab.className = "rn-ws-note";
+    lab.textContent = label;
+    const selEl = document.createElement("select");
+    selEl.dataset.choice = "hero_" + key;
+    for (const v of ["", ...values]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v || "No change";
+      o.selected = v === (ex[key] || "");
+      selEl.appendChild(o);
+    }
+    selEl.onchange = () => { ex[key] = selEl.value; render(node); };
+    exRow.append(lab, selEl);
+  };
+  pick("Hair", "hair", HERO_HAIR);
+  pick("Eyes", "eyes", HERO_EYES);
+  pick("Age", "age", HERO_AGE);
+  rep.appendChild(exRow);
+
+  const free = document.createElement("input");
+  free.type = "text";
+  free.dataset.choice = "hero_free";
+  free.placeholder = "Anything else to change, in your own words";
+  free.value = ex.free || "";
+  free.style.cssText = "width:100%;box-sizing:border-box";
+  free.onchange = () => { ex.free = free.value; };
+  rep.appendChild(free);
+
+  const extraLine = () => heroExtraLine(node);
+  if (extraLine()) {
+    // what it will send, not a lecture about what that means. Modifying is the
+    // point of the step; the only useful thing to show is the words going out.
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.textContent = "Changing: " + extraLine();
+    rep.appendChild(n);
+    const clearEx = document.createElement("button");
+    clearEx.className = "rn-ws-btn";
+    clearEx.textContent = "Clear the changes";
+    clearEx.onclick = () => { node.properties.rn_hero_extra = {}; render(node); };
+    rep.appendChild(clearEx);
+  }
+  // Eye colour is a small region and this runs at CFG 1.0 in 8 steps, which is
+  // the same weak guidance that ignored "no swim cap" until the pose rebuild
+  // restructured the picture. Said once, where it is chosen.
+  if (ex.eyes) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.style.opacity = ".7";
+    n.textContent = "Eye colour is a small area and the render is only lightly guided, "
+      + "so it may not take. Hair and age are far more reliable.";
+    rep.appendChild(n);
+  }
+
   const frontBtn = document.createElement("button");
   frontBtn.className = "rn-ws-btn go";
   frontBtn.textContent = state.busy === "front" ? "Rendering..."
@@ -14254,6 +14340,7 @@ function heroBody(node, body, sub) {
         body: JSON.stringify({
           source: S().source, unet: rig.unet || rig.checkpoint || "",
           clip: rig.clip, vae: rig.vae, lora: idLora?.name || "",
+          extra: extraLine(),
         }),
       });
       const d = await res.json();

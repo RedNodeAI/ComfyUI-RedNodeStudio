@@ -391,7 +391,8 @@ try:
                                        str(data.get("clip") or ""),
                                        str(data.get("vae") or ""),
                                        str(data.get("lora") or ""),
-                                       str(data.get("sam_model") or ""))
+                                       str(data.get("sam_model") or ""),
+                                       str(data.get("extra") or ""))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
@@ -424,15 +425,18 @@ FRONT_STEPS = 8
 FRONT_CFG = 1.0
 
 
-def front_prompt(repair):
-    """The instruction, built from the reasons the crop lost.
+def front_prompt(repair, extra=""):
+    """The instruction, built from the reasons the crop lost, plus anything asked.
 
     Naming the actual job beats one generic studio line: "no swim cap" belongs in
     the prompt only when there IS one. The hair clause describes HAIR and never
     the absence of a hat, because "bare head" reads as bare scalp and came back
     shaved.
     """
-    bits = []
+    # What was ASKED for goes first. Later clauses were the ones that failed to
+    # bite in testing, and a change of hair or age that quietly did not happen is
+    # worse than one that did: the picture looks fine and is not what was wanted.
+    bits = [str(extra).strip()] if str(extra or "").strip() else []
     for r in repair or []:
         if "hair" in r:
             bits.append("a full head of natural hair, hairline visible, hair covering "
@@ -516,7 +520,7 @@ def _render_front(base, want, unet, clip, vae, lora):
     return _run("VAEDecode", samples=out, vae=va)[0]
 
 
-def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
+def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""):
     """Rebuild the head front on, then crop and cut the render.
 
     Step 6 is not optional. A full regeneration reinvents clothing every time, so
@@ -533,7 +537,7 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
 
     entry, report = make_hero(source, sam_model, True)
     try:
-        return _front(entry, report, source, unet, clip, vae, lora, sam_model)
+        return _front(entry, report, source, unet, clip, vae, lora, sam_model, extra)
     except Exception as exc:
         # a traceback keeps the frame that holds the models alive, so the reason
         # is carried out and the traceback is dropped
@@ -541,11 +545,11 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model=""):
         raise ValueError(str(exc) or exc.__class__.__name__) from None
 
 
-def _front(entry, report, source, unet, clip, vae, lora, sam_model):
+def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
     with progress_safe():
         base = _ws.load_image("%s/%s [output]" % (entry["subfolder"], entry["filename"]), 0)
 
-        render = _render_front(base, front_prompt(report.get("repair")),
+        render = _render_front(base, front_prompt(report.get("repair"), extra),
                                unet, clip, vae, lora)
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
@@ -560,5 +564,6 @@ def _front(entry, report, source, unet, clip, vae, lora, sam_model):
         "below_floor": report.get("crop_side", 0) < FLOOR,
         "route": "front-on render", "generated": True,
         "from_crop": report.get("crop_side"),
-        "prompt": front_prompt(report.get("repair")),
+        "prompt": front_prompt(report.get("repair"), extra),
+        "extra": str(extra or "").strip(),
     }
