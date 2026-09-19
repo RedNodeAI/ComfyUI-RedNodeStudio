@@ -13813,19 +13813,29 @@ function identityTabs(node, body) {
 // back from /rednode/hero rather than working anything out a second time.
 function heroBody(node, body, sub) {
   const t = node._rnCfg.tabs[sub];
-  // Read through a getter rather than capturing the object. A handler that holds
-  // a reference keeps writing to it after anything replaces node._rnHero, and
-  // then the panel and the handler disagree about which state is live.
   const S = () => (node._rnHero ||= {});
-  // What has already been made, keyed by the picture it came from. The server
-  // caches the work, but the panel was throwing the RESULT away on every change
-  // of thumbnail, so coming back to a picture showed nothing. In properties, so
-  // it is still there after a reload: the files outlive the session.
+  // What has already been made, keyed by the picture it came from, in properties
+  // so it survives a reload: the files outlive the session, so the panel should.
   const MADE = () => ((node.properties ||= {}).rn_hero_made ||= {});
   const state = S();
   const pics = (t.images || []).filter((x) => String(x || "").trim());
 
-  // ---- SOURCE: pick by looking, not by reading a filename in a dropdown ----
+  // Entries written before the render existed held one result. Read as the crop,
+  // which is what they were.
+  const madeFor = (p) => {
+    const m = MADE()[p];
+    if (!m) return null;
+    return (m.hero || m.front) ? m : { hero: { result: m.result, report: m.report } };
+  };
+  const load = (p) => {
+    const m = madeFor(p);
+    const st = S();
+    st.hero = m?.hero || null;
+    st.front = m?.front || null;
+    st.pick = st.front ? "front" : "hero";
+  };
+
+  // ---- SOURCE ------------------------------------------------------------
   const src = document.createElement("div");
   src.className = "rn-ws-card";
   const sh = document.createElement("div");
@@ -13836,8 +13846,8 @@ function heroBody(node, body, sub) {
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = "The head is found, cropped above the clothing, cut out on white "
-    + "and enlarged if it is small. Nothing here goes through a sampler, so nothing "
-    + "here can soften a face.";
+    + "and enlarged if it is small. Nothing in that is a sampler, so nothing in it "
+    + "can soften a face.";
   src.appendChild(note);
 
   if (!pics.length) {
@@ -13849,30 +13859,25 @@ function heroBody(node, body, sub) {
     body.appendChild(src);
     return;
   }
-  if (!pics.includes(state.source)) state.source = pics[0];
+  if (!pics.includes(state.source)) { state.source = pics[0]; load(pics[0]); }
 
   const grid = document.createElement("div");
   grid.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;padding:3px";
   for (const p of pics) {
+    const on = p === state.source;
+    const done = !!madeFor(p);
     const im = document.createElement("img");
     im.src = thumbUrl(p, 120);
     im.alt = "";
-    const on = p === state.source;
-    const done = !!MADE()[p];
     im.title = parseName(p).filename + (done ? " (hero already made)" : "");
-    // outline, not border: a border would resize the tile as the choice moves
     im.style.cssText = "width:82px;height:82px;object-fit:cover;border-radius:6px;"
       + "cursor:pointer;background:#111;"
       + (on ? "outline:2px solid #b8283c;outline-offset:1px" : "outline:1px solid #2a2e35")
       + (done ? ";box-shadow:0 0 0 2px #1f9d55 inset" : "");
     im.onclick = () => {
-      const st = S();
-      st.source = p;
-      st.error = "";
-      // show what was made from THIS picture, not the last one looked at
-      const was = MADE()[p];
-      st.result = was?.result || null;
-      st.report = was?.report || null;
+      S().source = p;
+      S().error = "";
+      load(p);                      // show what was made from THIS picture
       render(node);
     };
     grid.appendChild(im);
@@ -13881,15 +13886,10 @@ function heroBody(node, body, sub) {
 
   const go = document.createElement("button");
   go.className = "rn-ws-btn go";
-  go.textContent = state.busy ? "Working…" : "Create hero";
+  go.textContent = state.busy === "hero" ? "Working..." : "Create hero";
   go.disabled = !!state.busy;
-  go.title = "A hero already made from this picture is handed straight back. "
-    + "Making one runs the segmenter four times and often an upscale, so the "
-    + "second press costs nothing.";
+  go.title = "A hero already made from this picture is handed straight back.";
   src.appendChild(go);
-  // shown under the button that CAUSED it. The render's failure was landing in
-  // this card, above the button that had just been pressed and often off screen,
-  // so a failed render read as a button that did nothing.
   if (state.error && state.errorAt !== "front") {
     const e = document.createElement("div");
     e.className = "rn-ws-note warn";
@@ -13897,194 +13897,214 @@ function heroBody(node, body, sub) {
     src.appendChild(e);
   }
   body.appendChild(src);
+  if (!state.hero) return;
 
-  // ---- RESULT: the source and the hero side by side, so the crop is judgeable
-  if (state.result) {
-    const card = document.createElement("div");
-    card.className = "rn-ws-card";
-    const rh = document.createElement("div");
-    rh.className = "ch";
-    rh.textContent = "HERO";
-    card.appendChild(rh);
+  // ---- HERO: the three stages, and which one goes to the gallery ----------
+  const card = document.createElement("div");
+  card.className = "rn-ws-card";
+  const rh = document.createElement("div");
+  rh.className = "ch";
+  rh.textContent = "HERO";
+  card.appendChild(rh);
 
-    const pair = document.createElement("div");
-    pair.style.cssText = "display:flex;gap:8px;align-items:flex-start";
-    for (const [url, cap] of [[thumbUrl(state.source, 320), "Source"],
-                              [resultUrl(state.result), "Hero"]]) {
-      const col = document.createElement("div");
-      col.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center";
-      const im = document.createElement("img");
-      im.src = url;
-      im.style.cssText = "width:160px;border-radius:6px;background:#fff";
-      const c = document.createElement("span");
-      c.className = "rn-ws-note";
-      c.textContent = cap;
-      col.append(im, c);
-      pair.appendChild(col);
-    }
-    card.appendChild(pair);
-
-    const r = state.report || {};
-    const bar = document.createElement("div");
-    bar.className = "rn-ws-status";
-    const route = r.route === "crop only" ? "Crop only"
-                : r.route === "enlarge" ? "Enlarged" : "Needs repair";
-    for (const text of [`Route: ${route}`, `Crop: ${r.crop_side} px`,
-                        r.enlarged ? `Enlarge: ${r.enlarged}` : "",
-                        `Hair: ${Math.round((r.hair_ratio || 0) * 100)}%`,
-                        // shown, never silent: a reused hero that looked freshly
-                        // made would hide a stale one for ever
-                        r.reused ? "Reused" : ""]) {
-      if (!text) continue;
-      const c = document.createElement("span");
-      c.className = "rn-ws-chip";
-      c.textContent = text;
-      bar.appendChild(c);
-    }
-    card.appendChild(bar);
-
-    // Every reason the crop could not win alone, in the SERVER's words. Repeating
-    // the thresholds here would be KNOWN_TRAPS 13, the bug this pack keeps making.
-    for (const why of (r.repair || [])) {
-      const n = document.createElement("div");
-      n.className = "rn-ws-note warn";
-      n.textContent = "Cropping cannot fix this: " + why + ". A front-on regeneration "
-        + "would be needed, and that rebuilds the face rather than keeping it.";
-      card.appendChild(n);
-    }
-    if (r.below_floor) {
-      const n = document.createElement("div");
-      n.className = "rn-ws-note warn";
-      n.textContent = "This face is small in the source, so a regenerated version would "
-        + "drift away from the person. The crop is the better reference here.";
-      card.appendChild(n);
-    }
-
-    const acts = document.createElement("div");
-    acts.className = "rn-ws-row";
-    const send = document.createElement("button");
-    send.className = "rn-ws-btn go";
-    send.textContent = "Send to Subject gallery";
-    send.onclick = () => {
-      // resultEntry, not a hand rolled join: a hero lands in the OUTPUT folder
-      // and parseName reads a suffix-less entry as an input, so the gallery got
-      // a row pointing at a file that was never there.
-      const entry = resultEntry(S().result);
-      const have = t.images || [];
-      if (!have.includes(entry)) t.images = [...have, entry];
-      writeCfg(node);
-      render(node);
-    };
-    const open = document.createElement("button");
-    open.className = "rn-ws-btn";
-    open.textContent = "Open full size";
-    open.onclick = () => window.open(resultUrl(state.result), "_blank");
-    const again = document.createElement("button");
-    again.className = "rn-ws-btn";
-    again.textContent = "Make again";
-    again.title = "Ignore the one already made and run it fresh. Worth it only "
-      + "after changing the picture behind this slot.";
-    again.onclick = () => go.onclick({ rebuild: true });
-    acts.append(send, open, again);
-    card.appendChild(acts);
-    body.appendChild(card);
-
-    // ---- the front-on render -------------------------------------------------
-    // The crop is lossless and most pictures stop there. This REBUILDS the head:
-    // the cap goes, the pose comes front on, and the face is generated rather
-    // than kept. Offered even when the crop was fine, because a turned head is a
-    // reason to want it that no measurement of mine detects.
-    const rep = document.createElement("div");
-    rep.className = "rn-ws-card";
-    const rph = document.createElement("div");
-    rph.className = "ch";
-    rph.textContent = "FRONT-ON RENDER";
-    rep.appendChild(rph);
-
-    const what = document.createElement("div");
-    what.className = "rn-ws-note";
-    what.textContent = "Rebuild the head facing the camera, taking off a cap, goggles "
-      + "or a hand on the way. This GENERATES the face rather than keeping it, so it "
-      + "is the one step here that can cost a likeness.";
-    rep.appendChild(what);
-
-    const cfg = node._rnCfg;
-    const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
-    const slots = (cfg.loras?.slots || []).filter((sl) => sl && sl.type !== "title");
-    const idLora = slots.find((sl) => sl.enabled && isIdentityLora(sl.name));
-    const modelName = rig.unet || rig.checkpoint || "";
-    const issues = [];
-    if (!modelName || !rig.clip || !rig.vae) {
-      issues.push("The active rig needs a model, a text encoder and a VAE. Set them "
-                  + "on the Models tab.");
-    }
-    if (!idLora) {
-      issues.push("No Krea 2 edit LoRA is switched on in the LoRAs tab. The render "
-                  + "works through it, and without one the face comes back a stranger.");
-    }
-    // The recipe was proved on the OFFICIAL turbo. A finetune was tried and barely
-    // moved, and the raw base bare came back blank, so this is a warning worth
-    // making rather than a preference.
-    if (modelName && !/krea2turbooffical|krea2turboofficial/i.test(modelName)) {
-      issues.push("This was proved on the official Krea 2 turbo. The rig is running "
-                  + `"${modelName}", and a finetune or a raw base may come back `
-                  + "distorted or blank.");
-    }
-    for (const t0 of issues) {
-      const n = document.createElement("div");
-      n.className = "rn-ws-note warn";
-      n.textContent = t0;
-      rep.appendChild(n);
-    }
-    if (r.below_floor) {
-      const n = document.createElement("div");
-      n.className = "rn-ws-note warn";
-      n.textContent = `The crop is ${r.crop_side} px, under the ${400} px that a `
-        + "rebuild needs to hold a likeness. It will run if you ask, and the face "
-        + "that comes back may not be the same person.";
-      rep.appendChild(n);
-    }
-
-    const frontBtn = document.createElement("button");
-    frontBtn.className = "rn-ws-btn go";
-    frontBtn.textContent = state.busy ? "Rendering…" : "Make front-facing";
-    frontBtn.disabled = !!state.busy || !modelName || !rig.clip || !rig.vae || !idLora;
-    frontBtn.onclick = async () => {
-      S().busy = true;
-      S().error = "";
-      render(node);
-      try {
-        const res = await api.fetchApi("/rednode/hero_front", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            source: S().source, unet: rig.unet || rig.checkpoint || "",
-            clip: rig.clip, vae: rig.vae, lora: idLora?.name || "",
-          }),
-        });
-        const d = await res.json();
-        if (d.error) throw new Error(d.error);
-        S().result = d.result;
-        S().report = d.report;
-        MADE()[S().source] = { result: d.result, report: d.report };
-      } catch (e) {
-        S().error = String(e.message || e);
-        S().errorAt = "front";
-      }
-      S().busy = false;
-      render(node);
-    };
-    rep.appendChild(frontBtn);
-    if (state.error && state.errorAt === "front") {
-      const e = document.createElement("div");
-      e.className = "rn-ws-note warn";
-      e.textContent = state.error;
-      rep.appendChild(e);
-    }
-    body.appendChild(rep);
+  // The source is shown to judge the others AGAINST, not to send: it is already
+  // in the gallery, so choosing it would be a button that does nothing.
+  const stages = [
+    { id: "source", cap: "Source", url: thumbUrl(state.source, 320), pickable: false },
+    { id: "hero", cap: "Cropped", url: state.hero ? resultUrl(state.hero.result) : "",
+      pickable: !!state.hero },
+    { id: "front", cap: "Front-on", url: state.front ? resultUrl(state.front.result) : "",
+      pickable: !!state.front },
+  ];
+  if (!stages.find((x) => x.id === state.pick && x.pickable)) {
+    state.pick = state.front ? "front" : "hero";
   }
 
+  const strip = document.createElement("div");
+  strip.style.cssText = "display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap";
+  for (const st of stages) {
+    const col = document.createElement("div");
+    col.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center";
+    const chosen = st.pickable && st.id === state.pick;
+    let im;
+    if (st.url) {
+      im = document.createElement("img");
+      im.src = st.url;
+      im.style.cssText = "width:150px;border-radius:6px;background:#fff;";
+    } else {
+      im = document.createElement("div");
+      im.textContent = "Not made yet";
+      im.style.cssText = "width:150px;height:150px;border-radius:6px;background:#15171b;"
+        + "display:flex;align-items:center;justify-content:center;font-size:11px;"
+        + "color:#6b7280;box-sizing:border-box;";
+    }
+    im.style.cssText += (st.pickable ? "cursor:pointer;" : "")
+      + (chosen ? "outline:2px solid #b8283c;outline-offset:2px"
+                : "outline:1px solid #2a2e35");
+    if (st.pickable) im.onclick = () => { S().pick = st.id; render(node); };
+    const c = document.createElement("span");
+    c.className = "rn-ws-note";
+    c.textContent = st.cap + (chosen ? " (sending)" : "");
+    col.append(im, c);
+    strip.appendChild(col);
+  }
+  card.appendChild(strip);
+
+  // the chips describe the one that is CHOSEN, not whichever ran last
+  const r = (state.pick === "front" ? state.front : state.hero)?.report || {};
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const route = r.route === "crop only" ? "Crop only"
+              : r.route === "enlarge" ? "Enlarged"
+              : r.route === "front-on render" ? "Generated" : "Needs repair";
+  for (const text of ["Route: " + route, "Crop: " + r.crop_side + " px",
+                      r.enlarged ? "Enlarge: " + r.enlarged : "",
+                      "Hair: " + Math.round((r.hair_ratio || 0) * 100) + "%",
+                      r.reused ? "Reused" : ""]) {
+    if (!text) continue;
+    const c = document.createElement("span");
+    c.className = "rn-ws-chip";
+    c.textContent = text;
+    bar.appendChild(c);
+  }
+  card.appendChild(bar);
+
+  if (state.pick === "front") {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = "This one is GENERATED. The occluder is gone and the pose is front "
+      + "on, but the face was rebuilt rather than kept.";
+    card.appendChild(n);
+  }
+  // in the SERVER's words. Repeating its thresholds here would be KNOWN_TRAPS 13.
+  for (const why of (state.hero?.report?.repair || [])) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = "Cropping cannot fix this: " + why + ".";
+    card.appendChild(n);
+  }
+
+  const acts = document.createElement("div");
+  acts.className = "rn-ws-row";
+  const send = document.createElement("button");
+  send.className = "rn-ws-btn go";
+  send.textContent = "Send " + (state.pick === "front" ? "the front-on one" : "the crop")
+    + " to the gallery";
+  send.onclick = () => {
+    const chosen = S().pick === "front" ? S().front : S().hero;
+    // resultEntry, not a hand rolled join: a hero lands in the OUTPUT folder and
+    // parseName reads a suffix-less entry as an input.
+    const entry = resultEntry(chosen.result);
+    const have = t.images || [];
+    if (!have.includes(entry)) t.images = [...have, entry];
+    writeCfg(node);
+    render(node);
+  };
+  const open = document.createElement("button");
+  open.className = "rn-ws-btn";
+  open.textContent = "Open full size";
+  open.onclick = () => {
+    const chosen = S().pick === "front" ? S().front : S().hero;
+    window.open(resultUrl(chosen.result), "_blank");
+  };
+  const again = document.createElement("button");
+  again.className = "rn-ws-btn";
+  again.textContent = "Make again";
+  again.title = "Ignore the crop already made and run it fresh.";
+  again.onclick = () => go.onclick({ rebuild: true });
+  acts.append(send, open, again);
+  card.appendChild(acts);
+  body.appendChild(card);
+
+  // ---- FRONT-ON RENDER ----------------------------------------------------
+  const rep = document.createElement("div");
+  rep.className = "rn-ws-card";
+  const rph = document.createElement("div");
+  rph.className = "ch";
+  rph.textContent = "FRONT-ON RENDER";
+  rep.appendChild(rph);
+  const what = document.createElement("div");
+  what.className = "rn-ws-note";
+  what.textContent = "Rebuild the head facing the camera, taking off a cap, goggles or "
+    + "a hand on the way. This GENERATES the face rather than keeping it, so it is the "
+    + "one step here that can cost a likeness.";
+  rep.appendChild(what);
+
+  const cfg = node._rnCfg;
+  const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
+  const slots = (cfg.loras?.slots || []).filter((sl) => sl && sl.type !== "title");
+  const idLora = slots.find((sl) => sl.enabled && isIdentityLora(sl.name));
+  const modelName = rig.unet || rig.checkpoint || "";
+  const issues = [];
+  if (!modelName || !rig.clip || !rig.vae) {
+    issues.push("The active rig needs a model, a text encoder and a VAE. Set them on "
+                + "the Models tab.");
+  }
+  if (!idLora) {
+    issues.push("No Krea 2 edit LoRA is switched on in the LoRAs tab. The render works "
+                + "through it, and without one the face comes back a stranger.");
+  }
+  // Proved on the OFFICIAL turbo. A finetune barely moved and the raw base bare
+  // came back blank, so this is a warning worth making rather than a preference.
+  if (modelName && !/krea2turboofficial/i.test(modelName.replace(/[^a-z0-9]/gi, ""))) {
+    issues.push("This was proved on the official Krea 2 turbo. The rig is running "
+                + JSON.stringify(modelName) + ", and a finetune or a raw base may come "
+                + "back distorted or blank.");
+  }
+  for (const t0 of issues) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = t0;
+    rep.appendChild(n);
+  }
+  if (state.hero?.report?.below_floor) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = "The crop is " + state.hero.report.crop_side + " px, small enough "
+      + "that a rebuild may not come back the same person. It will run if you ask.";
+    rep.appendChild(n);
+  }
+
+  const frontBtn = document.createElement("button");
+  frontBtn.className = "rn-ws-btn go";
+  frontBtn.textContent = state.busy === "front" ? "Rendering..."
+    : state.front ? "Render again" : "Make front-facing";
+  frontBtn.disabled = !!state.busy || !modelName || !rig.clip || !rig.vae || !idLora;
+  frontBtn.onclick = async () => {
+    S().busy = "front";
+    S().error = "";
+    render(node);
+    try {
+      const res = await api.fetchApi("/rednode/hero_front", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: S().source, unet: rig.unet || rig.checkpoint || "",
+          clip: rig.clip, vae: rig.vae, lora: idLora?.name || "",
+        }),
+      });
+      const d = await res.json();
+      if (d.error) throw new Error(d.error);
+      S().front = { result: d.result, report: d.report };
+      S().pick = "front";
+      MADE()[S().source] = { hero: S().hero, front: S().front };
+    } catch (e) {
+      S().error = String(e.message || e);
+      S().errorAt = "front";
+    }
+    S().busy = "";
+    render(node);
+  };
+  rep.appendChild(frontBtn);
+  if (state.error && state.errorAt === "front") {
+    const e = document.createElement("div");
+    e.className = "rn-ws-note warn";
+    e.textContent = state.error;
+    rep.appendChild(e);
+  }
+  body.appendChild(rep);
+
   go.onclick = async (opts) => {
-    S().busy = true;
+    S().busy = "hero";
     S().error = "";
     render(node);
     try {
@@ -14094,16 +14114,16 @@ function heroBody(node, body, sub) {
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);
-      S().result = d.result;
-      S().report = d.report;
-      MADE()[S().source] = { result: d.result, report: d.report };
+      S().hero = { result: d.result, report: d.report };
+      // a fresh crop makes the old render stale: it was built from the other one
+      if (opts?.rebuild) { S().front = null; S().pick = "hero"; }
+      MADE()[S().source] = { hero: S().hero, front: S().front };
     } catch (e) {
-      S().result = null;
-      S().report = null;
+      S().hero = null;
       S().error = String(e.message || e);
       S().errorAt = "hero";
     }
-    S().busy = false;
+    S().busy = "";
     render(node);
   };
 }
