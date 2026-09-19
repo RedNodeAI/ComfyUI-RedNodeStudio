@@ -2366,6 +2366,14 @@ def blank_frame(size=BLANK_EDGE):
 UPSCALE_METHODS = ("upscale", "vosr2", "usdu")
 
 
+class _UpscaleHandled(Exception):
+    """The upscale door is finished early: Send to Detailer has nothing to upscale.
+
+    An exception rather than a flag because the door is one try block, and this
+    is the one way out of it that is not a failure.
+    """
+
+
 def _upscale_cfg(raw):
     """The Upscale tab: a source picture and ONE Detailer pass to run on it.
 
@@ -2391,6 +2399,10 @@ def _upscale_cfg(raw):
         # stamped into the QUEUED copy by the tab's Generate, never saved: an
         # ordinary queue has no token and so never upscales by accident
         "run_token": str(d.get("run_token") or ""),
+        # "upscale" runs the pass; "chain" skips it and sends the picture straight
+        # into the builtin chain instead, which is the tab's Send to Detailer
+        "run_mode": ("chain" if str(d.get("run_mode") or "") == "chain"
+                     else "upscale"),
         "stage": st,
         "seed": seed,
         "seed_random": (True if d.get("seed_random") is None
@@ -2766,6 +2778,13 @@ class RedNodeStudioWorkspace:
         # nodes (rn_rig_<id>). They only order the run; the records are read by name.
         latent_in = latent
         cfg = parse_config(config)
+        # the Upscale tab's own run, read EARLY: the rig load below happens long
+        # before the doors, and an upscale must not drag a model onto the card
+        _urt = str(cfg["upscale"].get("run_token") or "")
+        # Send to Detailer: an upscale-tab run that skips the upscale and lets the
+        # builtin chain have the picture, so Detailer, Post and Save run on it
+        # exactly as they would on an ordinary render
+        _uchain = bool(_urt and cfg["upscale"].get("run_mode") == "chain")
         # the Run tab's feed (run_events.py): a new run, then each stage as it goes
         from . import run_events as _run
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
@@ -2836,7 +2855,19 @@ class RedNodeStudioWorkspace:
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
         # prompt's CLIP gen and everything after read `clip`, so a fill that arrived
         # just before the LoRA block left them seeing None. A wired input always wins.
-        rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg, prompt=prompt)
+        if _urt:
+            # AN UPSCALE RUN LOADS NOTHING HERE. Only a tiled pass wants a rig at
+            # all, and the Detailer loads its own per pass
+            # (refine_pipeline.py, load_active_rig inside the pass loop), so a
+            # SeedVR2 or VOSR2 press must not pull a whole model onto the card
+            # first and then never touch it. The name is still read, because the
+            # log lines and the run record below say which rig the run belongs to.
+            _rigs = cfg["models"].get("rigs") or [{}]
+            _at = max(0, min(int(cfg["models"].get("active", 0)), len(_rigs) - 1))
+            rig_name = str(_rigs[_at].get("name") or "") or "Rig %d" % (_at + 1)
+            rig_model = rig_clip = rig_vae = None
+        else:
+            rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg, prompt=prompt)
         if model is None and rig_model is not None:
             model = rig_model
         if clip is None and rig_clip is not None:
@@ -4108,7 +4139,6 @@ class RedNodeStudioWorkspace:
                 pass
 
         _prt = str(cfg["paint"].get("run_token") or "")
-        _urt = str(cfg["upscale"].get("run_token") or "")
         # EITHER TAB'S OWN RUN. The Paint and Upscale tabs both queue THIS
         # node with a token stamped into their own config block, and neither
         # wants the ordinary render underneath it. Every guard below reads
@@ -4708,6 +4738,12 @@ class RedNodeStudioWorkspace:
                 _ubase = (image_in if image_in is not None
                           else load_image_or_blank(_up.get("source") or "", 0,
                                                    "RedNode Upscale"))
+                if _uchain:
+                    # Send to Detailer: no upscale, the picture goes straight on
+                    # and the builtin chain below does the work
+                    rig_image = _ubase
+                    print("[RedNode Upscale] sent to the Detailer chain", flush=True)
+                    raise _UpscaleHandled
                 _ustage = dict(_up.get("stage") or {})
                 _ustage["on"] = True
                 _ucfg = {"stages": [_ustage], "seed": _up.get("seed", 0),
@@ -4728,13 +4764,15 @@ class RedNodeStudioWorkspace:
                         # system has never heard of it, so the panel does not get a
                         # second giant copy of the picture drawn under the node
                         ui_extra = {"rn_paint_images": _ur["ui"].get("images") or []}
+            except _UpscaleHandled:
+                pass
             except Exception as exc:
                 print("[RedNode Workspace] built-in upscale failed: %s" % exc,
                       flush=True)
         # THE BUILT-IN CHAIN, on a normal render: the Detailer passes, then Post FX,
         # then the save, each only when switched on here. The image output carries
         # the finished picture, and a separate node after this one steps aside.
-        if rig_image is not None and not _norun:
+        if rig_image is not None and (not _norun or _uchain):
             from . import builtin_chain as _chain
             if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
                 try:

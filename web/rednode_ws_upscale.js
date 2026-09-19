@@ -3,7 +3,7 @@ const { app } = _appmod;
 import { api } from "../../scripts/api.js";
 import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
-         runPaintFinal } from "./rednode_workspace.js";
+         runPaintFinal, copyResultToInput } from "./rednode_workspace.js";
 
 // The Upscale tab: one upscale pass on one picture, nothing else.
 //
@@ -112,25 +112,33 @@ async function upscaleGenerate(node, statusEl) {
         + "pick one from disk.");
     return;
   }
-  // THE WORKSPACE'S OWN DOOR, exactly as the Paint tab's built-in pass works: this
-  // node is queued with a token stamped into the QUEUED copy of the config only.
-  // Nothing is wired, no second node exists, and an ordinary Queue has no token so
-  // it can never upscale by accident.
+  say("Upscaling…");
+  if (await queueUpscale(node, say, {})) {
+    say("Queued. The picture appears below when it is done.");
+  }
+}
+
+/** Queue THIS Workspace with an Upscale-tab token in the queued copy only.
+ *
+ *  Nothing is wired and no second node exists: the Workspace runs the tab itself,
+ *  the same way the Paint tab's built-in pass does. An ordinary Queue carries no
+ *  token, so it can never upscale or chain by accident.
+ */
+async function queueUpscale(node, say, over) {
   const { output } = await app.graphToPrompt();
   const wsKey = promptKeyFor(output, node);
-  if (!wsKey) { alert("The Workspace is not in the queued graph."); return; }
+  if (!wsKey) { alert("The Workspace is not in the queued graph."); return false; }
   const pruned = pruneToNode(output, wsKey);
   try {
     const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
-    c.upscale = c.upscale || {};
+    c.upscale = { ...(c.upscale || {}), ...over };
     c.upscale.run_token = `upscale-${Date.now()}`;
     pruned[wsKey].inputs.config = JSON.stringify(c);
   } catch (e) {
-    alert("Could not stamp the upscale run: " + e.message);
-    return;
+    alert("Could not stamp the run: " + e.message);
+    return false;
   }
   advanceSeeds(pruned, Object.keys(pruned));
-  say("Upscaling…");
   try {
     const res = await api.fetchApi("/prompt", {
       method: "POST",
@@ -142,11 +150,12 @@ async function upscaleGenerate(node, statusEl) {
     if (!res.ok || d.error) {
       throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
     }
-    say("Queued. The picture appears below when it is done.");
+    return true;
   } catch (err) {
     console.error("[RedNode Workspace] upscale queue failed:", err);
     say(`Could not queue it: ${err.message}`);
-    alert(`Could not queue the upscale: ${err.message}`);
+    alert(`Could not queue it: ${err.message}`);
+    return false;
   }
 }
 
@@ -354,6 +363,39 @@ export function upscaleBody(node, body) {
                     + "in Save.", async () => {
     try { await runPaintFinal(node, r, true); }
     catch (err) { alert(`Post and Save failed: ${err.message}`); }
+  });
+  // SEND TO DETAILER: the Detailer tab's passes on this picture, then Post if the
+  // Post tab is on, then Save if Save is on. The builtin chain does all three, so
+  // a face detailer set up on the Detailer tab just runs, with nothing rewired.
+  act("Send to Detailer",
+      "Run the Detailer tab's passes on this picture. Post and Save follow if "
+      + "those are switched on, the same as they would on an ordinary render.",
+      async () => {
+    const cfgNow = node._rnCfg || {};
+    if (!cfgNow.detailer_on || !((cfgNow.detailer?.stages || []).some((x) => x?.on))) {
+      alert("The Detailer has no passes switched on, so this would change nothing. "
+          + "Add a pass on the Detailer tab first.");
+      return;
+    }
+    node._rnFinalStatus = "Sending to the Detailer…";
+    render(node);
+    // the picture is a temp preview; the server reads the input folder, so it has
+    // to be copied there before the run can load it by name
+    const name = await copyResultToInput(r);
+    if (!name) {
+      node._rnFinalStatus = "Could not take that picture across";
+      node._rnFinalFailed = true;
+      render(node);
+      return;
+    }
+    const ok = await queueUpscale(node, (t) => { node._rnFinalStatus = t; },
+                                  { source: name, run_mode: "chain" });
+    node._rnFinalStatus = ok
+      ? "Queued: Detailer" + (cfgNow.post_on !== false ? ", Post" : "")
+        + (cfgNow.save_on ? ", Save" : "")
+      : node._rnFinalStatus;
+    node._rnFinalFailed = !ok;
+    render(node);
   });
   act("Send to Paint", "Put this picture on the Paint tab, ready to paint on.", () => {
     adoptResult(node, r, "sent from the Upscale tab", "paint");

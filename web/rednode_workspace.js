@@ -2087,7 +2087,7 @@ function openFullscreen(node) {
  *  paint source holding a temp address dies with the session, reported from the
  *  field as "the image is not in the input folder any more" the run after a
  *  restart. The copy gets the same home dropped files get. */
-async function copyResultToInput(r) {
+export async function copyResultToInput(r) {
   try {
     const res = await fetch(resultUrl(r));
     if (!res.ok) return null;
