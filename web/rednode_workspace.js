@@ -14561,24 +14561,101 @@ function heroBody(node, body, sub, page) {
   if (page === "headshot") colR.appendChild(card);
 
   if (page === "redesign") {
+    const top = document.createElement("div");
+    top.style.cssText = "display:flex;gap:12px;align-items:stretch";
+
+    // WHAT EVERY REDESIGN IS MADE FROM. A rail, not a panel: it never changes
+    // while this page is open, so it only has to be identifiable.
     const from = document.createElement("div");
     from.className = "rn-ws-card";
+    from.style.cssText = "flex:0 0 176px;min-width:0";
     const fh = document.createElement("div");
     fh.className = "ch";
     fh.textContent = "WORKING FROM";
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;gap:10px;align-items:center";
     const im = document.createElement("img");
-    im.src = heroThumb((state.front || state.crop).result, 192);
-    im.style.cssText = "width:96px;border-radius:6px;background:#fff;"
+    im.src = heroThumb((state.front || state.crop).result, 256);
+    im.style.cssText = "width:100%;border-radius:6px;background:#fff;"
       + "outline:1px solid #2a2e35";
     const who = document.createElement("div");
     who.className = "rn-ws-note";
-    who.textContent = parseName(state.source).filename
-      + (state.front ? " \u2014 headshot" : " \u2014 crop only, no headshot yet");
-    row.append(im, who);
-    from.append(fh, row);
-    colL.appendChild(from);
+    who.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    who.textContent = parseName(state.source).filename;
+    who.title = parseName(state.source).filename;
+    const what = document.createElement("div");
+    what.className = "rn-ws-note";
+    what.style.opacity = ".6";
+    what.textContent = state.front ? "Headshot" : "Crop only, no headshot yet";
+    from.append(fh, im, who, what);
+
+    // THE CHOSEN ONE, larger, with the words that made it. Which redesign is
+    // which was only answerable by opening the file, and what produced one was
+    // not answerable at all.
+    const prev = document.createElement("div");
+    prev.className = "rn-ws-card";
+    prev.style.cssText = "flex:1 1 auto;min-width:0";
+    const ph = document.createElement("div");
+    ph.className = "ch";
+    ph.textContent = "PREVIEW";
+    prev.appendChild(ph);
+    const chosen = picked();
+    if (!chosen) {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note";
+      n.textContent = "Click one below to see it here.";
+      prev.appendChild(n);
+    } else {
+      const pr = chosen.report || {};
+      const body2 = document.createElement("div");
+      body2.style.cssText = "display:flex;gap:12px;align-items:flex-start;min-width:0";
+      const big = document.createElement("img");
+      big.src = heroThumb(chosen.result, 512);
+      big.style.cssText = "width:190px;flex:none;border-radius:6px;background:#fff;"
+        + "outline:1px solid #2a2e35;cursor:pointer";
+      big.title = "Open full size";
+      big.onclick = () => window.open(resultUrl(chosen.result), "_blank");
+      const facts = document.createElement("div");
+      facts.style.cssText = "flex:1 1 auto;min-width:0;display:flex;"
+        + "flex-direction:column;gap:4px";
+      const fact = (k, v, mono) => {
+        if (!v) return;
+        const r2 = document.createElement("div");
+        r2.style.cssText = "display:flex;gap:8px;font-size:11.5px;min-width:0";
+        const kk = document.createElement("span");
+        kk.style.cssText = "flex:none;width:64px;opacity:.6";
+        kk.textContent = k;
+        const vv = document.createElement("span");
+        vv.style.cssText = "flex:1 1 auto;min-width:0;color:#e8ecf1;"
+          + "word-break:break-word" + (mono ? ";font-family:ui-monospace,monospace" : "");
+        vv.textContent = v;
+        r2.append(kk, vv);
+        facts.appendChild(r2);
+      };
+      fact("Asked for", pr.extra || "(nothing, the base instruction alone)");
+      fact("Size", pr.crop_side ? pr.crop_side + " px" : "");
+      fact("Seed", pr.seed ? String(pr.seed) : "");
+      if (pr.override) fact("Prompt", "yours alone, the base was replaced");
+      if (pr.seen) fact("Read", pr.seen);
+      // the WHOLE instruction, because "why did this one come out like that" is
+      // the question, and a summary of a prompt is not an answer to it
+      if (pr.prompt) {
+        const pl = document.createElement("div");
+        pl.className = "rn-ws-note";
+        pl.style.cssText = "margin-top:2px;opacity:.6";
+        pl.textContent = "The instruction that made it";
+        const box = document.createElement("div");
+        box.style.cssText = "background:#15171b;border:1px solid #33373d;"
+          + "border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.45;"
+          + "max-height:104px;overflow:auto;white-space:pre-wrap;word-break:break-word";
+        box.textContent = pr.prompt;
+        box.title = "Select and copy it to reuse elsewhere";
+        facts.append(pl, box);
+      }
+      body2.append(big, facts);
+      prev.appendChild(body2);
+    }
+
+    top.append(from, prev);
+    colL.appendChild(top);
   }
 
   // ---- REDESIGNS: their own box, because there are many and they keep coming --
