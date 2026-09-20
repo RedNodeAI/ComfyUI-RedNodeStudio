@@ -306,7 +306,23 @@ def _client_transport(url, payload=None, timeout=TIMEOUT):
               "keep_alive": p.get("keep_alive")}
         if p.get("format") is not None:
             kw["format"] = p["format"]
-        got = client.chat(**kw)
+        try:
+            got = client.chat(**kw)
+        except TypeError:
+            # A JSON schema as `format` needs a recent client library, and an
+            # older one again takes no `format` at all. Step down rather than
+            # fail the call: the generate branch drops `think` the same way.
+            # Without this the whole assistant answered nothing, silently, on
+            # any install whose only transport is an older ollama package.
+            if isinstance(kw.get("format"), dict):
+                kw["format"] = "json"
+            else:
+                kw.pop("format", None)
+            try:
+                got = client.chat(**kw)
+            except TypeError:
+                kw.pop("format", None)
+                got = client.chat(**kw)
         message = got.get("message", {}) if isinstance(got, dict) else got.message
         content = message.get("content", "") if isinstance(message, dict) else message.content
         return {"message": {"role": "assistant", "content": content or ""}}
@@ -466,7 +482,10 @@ def ollama_chat(model, messages, url=OLLAMA_URL, options=None, format=None,
     try:
         data = transport(f"{url.rstrip('/')}/api/chat", payload, TIMEOUT)
         return _strip_think(str(data.get("message", {}).get("content") or ""))
-    except Exception:
+    except Exception as e:
+        # the panel can only say the reply was empty; the reason belongs in the
+        # console, the way every other Ollama failure in this pack is reported
+        print(f"[RedNode AutoPrompt] Ollama chat failed ({e})", flush=True)
         return ""
 
 

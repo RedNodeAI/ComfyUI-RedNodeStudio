@@ -196,8 +196,14 @@ def context_records(snapshot):
     selected = _prompt_row(models, prompts, prompt_rows)
     def row_name(row):
         return scalar(row.get("name") or f"Prompt {prompt_rows.index(row) + 1}")
-    add("prompts", f"Active rig {rig_name}: Configured prompt row "
-        + (row_name(selected) if selected is not None else "None with text") + ".", priority=0)
+    # A sentence, not a field with a blank in it. "Configured prompt row None
+    # with text" was read back by a model as a row NAMED None, and the answer
+    # then explained that row at length. Where a name can be absent, say the
+    # absence rather than leaving a value-shaped hole.
+    add("prompts", (f"Active rig {rig_name}: Configured prompt row {row_name(selected)}."
+                    if selected is not None
+                    else f"Active rig {rig_name}: No configured prompt row holds text for it."),
+        priority=0)
     if selected is None:
         warn(f"No configured prompt row with text serves {rig_name}. Captions or wired text may supply words at queue time.")
     for row in prompt_rows:
@@ -372,7 +378,12 @@ def trim_history(history):
 def local_ollama_url():
     parts = urlsplit(autoprompt.OLLAMA_URL)
     if parts.scheme not in ("http", "https") or parts.hostname not in ("localhost", "127.0.0.1", "::1") or parts.username or parts.password:
-        raise ValueError("Assistant requires Ollama on localhost in the server settings.")
+        # Stricter than the caption engines on purpose: they send one picture,
+        # this sends the whole Workspace setup, so it does not leave the machine
+        # even when OLLAMA_HOST names a box on the LAN.
+        raise ValueError("Assistant requires Ollama on localhost. It sends your whole "
+                         "Workspace setup to the model, so it will not use a LAN "
+                         "OLLAMA_HOST that the caption engines accept.")
     return autoprompt.OLLAMA_URL
 
 
