@@ -14460,8 +14460,36 @@ function heroBody(node, body, sub, page) {
       url: resultUrl(ed.result), pickable: true,
     }))));
 
+    // Send and Open live HERE too. They used to sit only in the HERO card, which
+    // is on the other page, so a redesign could be chosen and then not sent.
+    if (String(state.pick || "").startsWith("edit:")) {
+      const acts2 = document.createElement("div");
+      acts2.className = "rn-ws-row";
+      const send2 = document.createElement("button");
+      send2.className = "rn-ws-btn go";
+      send2.textContent = "Send this redesign to the gallery";
+      send2.onclick = () => {
+        const chosen = picked();
+        if (!chosen) return;
+        const entry = resultEntry(chosen.result);
+        const have = t.images || [];
+        if (!have.includes(entry)) t.images = [...have, entry];
+        writeCfg(node);
+        render(node);
+      };
+      const open2 = document.createElement("button");
+      open2.className = "rn-ws-btn";
+      open2.textContent = "Open full size";
+      open2.onclick = () => {
+        const c0 = picked();
+        if (c0) window.open(resultUrl(c0.result), "_blank");
+      };
+      acts2.append(send2, open2);
+      gal.appendChild(acts2);
+    }
+
     // Delete lives HERE, with the things it deletes. There is one crop and one
-    // front-on and remaking either replaces it, so there is nothing to prune in
+    // headshot and remaking either replaces it, so there is nothing to prune in
     // the other box.
     if (String(state.pick || "").startsWith("edit:")) {
       const del = document.createElement("button");
