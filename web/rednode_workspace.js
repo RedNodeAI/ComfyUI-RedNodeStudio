@@ -13763,7 +13763,7 @@ function identityTabs(node, body) {
   const offWarn = officialWarn(cfg);
   if (offWarn) body.appendChild(offWarn);
 
-  if (sub === "masks") { masksBody(node, body); return; }
+  if (sub === "hero") { heroTabs(node, body); return; }
   // Subject and Scene: the same inner tabs, Gallery, Boosts, Auto prompt, Converter
   const t = cfg.tabs[sub];
   const innerSubs = [
@@ -13775,7 +13775,6 @@ function identityTabs(node, body) {
   // Hero Creator makes a reference OUT of a photograph, so it belongs to the
   // Subject, which is the tab whose references are people. The Scene tab has
   // nothing to crop a head from.
-  if (sub === "subject") innerSubs.push(["hero", "HERO CREATOR", false]);
   const ikey = "rn_identity_" + sub;
   let inner = (node._rnIdInner ||= {})[sub] || props[ikey] || "gallery";
   if (!innerSubs.some(([id]) => id === inner)) inner = "gallery";
@@ -13795,10 +13794,14 @@ function identityTabs(node, body) {
   }
   body.appendChild(istrip);
   if (!t.on && inner !== "gallery") body.appendChild(tabOffNote(sub === "subject" ? "Subject" : "Scene"));
-  if (inner === "gallery") galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
+  if (inner === "gallery") {
+    galleryBody(node, body, sub, IMAGE_TABS[sub], { layout: "tabs" });
+    // Masks used to be a tab of its own, two clicks from the pictures they are
+    // painted over. They belong under the gallery, and this page has the room.
+    if (sub === "subject") masksBody(node, body);
+  }
   else if (inner === "boosts") dialSection(node, body, sub, { flat: true });
   else if (inner === "auto") autoSection(node, body, sub, { flat: true });
-  else if (inner === "hero") heroBody(node, body, sub);
   else converterSection(node, body, sub, { flat: true });
 }
 
@@ -13898,7 +13901,33 @@ function heroSet(node, p) {
   return { crop, front: m.front || null, edits: m.edits || [] };
 }
 
-function heroBody(node, body, sub) {
+// Hero Creator is two pages, not one. HEADSHOT makes the clean picture, and
+// stops; REDESIGN takes that picture somewhere else. They were one scroll and the
+// controls for the second sat below the results of the first.
+function heroTabs(node, body) {
+  const props = (node.properties ||= {});
+  let page = node._rnHeroSub || props.rn_hero_sub || "headshot";
+  if (page !== "redesign") page = "headshot";
+  node._rnHeroSub = page;
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub inner";
+  for (const [id, label] of [["headshot", "HEADSHOT"], ["redesign", "REDESIGN"]]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === page ? " cur" : "");
+    b.dataset.inner = id;
+    const lt = document.createElement("span");
+    lt.className = "lt";
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnHeroSub = id; props.rn_hero_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+  heroBody(node, body, "subject", page);
+}
+
+function heroBody(node, body, sub, page) {
   const t = node._rnCfg.tabs[sub];
   const S = () => (node._rnHero ||= {});
   const MADE = () => ((node.properties ||= {}).rn_hero_made ||= {});
@@ -13977,11 +14006,11 @@ function heroBody(node, body, sub) {
     }
     if (btns.front) {
       btns.front.textContent = st.busy === "front" ? "Rendering..."
-        : st.front ? "Render again" : "Make front-facing";
+        : st.front ? "Render again" : "Make the headshot";
       btns.front.disabled = busy || btns.frontBlocked;
     }
     if (btns.edit) {
-      btns.edit.textContent = st.busy === "edit" ? "Rendering..." : "Render change";
+      btns.edit.textContent = st.busy === "edit" ? "Rendering..." : "Render redesign";
       btns.edit.disabled = busy || btns.editBlocked;
     }
     if (btns.batch) {
@@ -14189,7 +14218,7 @@ function heroBody(node, body, sub) {
   };
   const autoLab = document.createElement("span");
   autoLab.className = "rn-ws-note";
-  autoLab.textContent = "Also render front-on";
+  autoLab.textContent = "Also make the headshot";
   tools.append(autoSw, autoLab);
 
   if (sel().length) {
@@ -14259,8 +14288,17 @@ function heroBody(node, body, sub) {
     e.textContent = state.error;
     src.appendChild(e);
   }
-  body.appendChild(src);
-  if (!state.crop) return;
+  if (page === "headshot") body.appendChild(src);
+  if (!state.crop) {
+    if (page === "redesign") {
+      const n = document.createElement("div");
+      n.className = "rn-ws-note warn";
+      n.textContent = "Nothing has been cropped yet. Make a headshot first, on the "
+        + "Headshot page, and its redesigns land here.";
+      body.appendChild(n);
+    }
+    return;
+  }
 
   // ---- HERO: every stage this picture has, and which one is sent ----------
   const card = document.createElement("div");
@@ -14276,7 +14314,7 @@ function heroBody(node, body, sub) {
     { id: "", cap: "Source", url: thumbUrl(state.source, 320), pickable: false },
     { id: "crop", cap: "Cropped",
       url: state.crop ? resultUrl(state.crop.result) : "", pickable: !!state.crop },
-    { id: "front", cap: "Front-on",
+    { id: "front", cap: "Headshot",
       url: state.front ? resultUrl(state.front.result) : "", pickable: !!state.front },
   ];
   // the changes are NOT in here. There are three hero shots and they are fixed;
@@ -14359,7 +14397,7 @@ function heroBody(node, body, sub) {
   const send = document.createElement("button");
   send.className = "rn-ws-btn go";
   // names the choice, because the picture it sends may be in the OTHER box now
-  send.textContent = "Send " + (String(state.pick).startsWith("edit:") ? "this change"
+  send.textContent = "Send " + (String(state.pick).startsWith("edit:") ? "this redesign"
     : state.pick === "front" ? "the front-on" : "the crop") + " to the gallery";
   send.onclick = () => {
     const chosen = picked();
@@ -14386,15 +14424,36 @@ function heroBody(node, body, sub) {
   again.onclick = () => go.onclick({ rebuild: true });
   acts.appendChild(again);
   card.appendChild(acts);
-  body.appendChild(card);
+  if (page === "headshot") body.appendChild(card);
 
-  // ---- CHANGES: their own box, because there are many and they keep coming --
-  if ((state.edits || []).length) {
+  if (page === "redesign") {
+    const from = document.createElement("div");
+    from.className = "rn-ws-card";
+    const fh = document.createElement("div");
+    fh.className = "ch";
+    fh.textContent = "WORKING FROM";
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;align-items:center";
+    const im = document.createElement("img");
+    im.src = resultUrl((state.front || state.crop).result);
+    im.style.cssText = "width:96px;border-radius:6px;background:#fff;"
+      + "outline:1px solid #2a2e35";
+    const who = document.createElement("div");
+    who.className = "rn-ws-note";
+    who.textContent = parseName(state.source).filename
+      + (state.front ? " \u2014 headshot" : " \u2014 crop only, no headshot yet");
+    row.append(im, who);
+    from.append(fh, row);
+    body.appendChild(from);
+  }
+
+  // ---- REDESIGNS: their own box, because there are many and they keep coming --
+  if (page === "redesign" && (state.edits || []).length) {
     const gal = document.createElement("div");
     gal.className = "rn-ws-card";
     const gh = document.createElement("div");
     gh.className = "ch";
-    gh.textContent = "CHANGES (" + state.edits.length + ")";
+    gh.textContent = "REDESIGNS (" + state.edits.length + ")";
     gal.appendChild(gh);
     gal.appendChild(buildStrip(state.edits.map((ed, i) => ({
       id: "edit:" + i, cap: ed.report?.extra || "Changed",
@@ -14407,7 +14466,7 @@ function heroBody(node, body, sub) {
     if (String(state.pick || "").startsWith("edit:")) {
       const del = document.createElement("button");
       del.className = "rn-ws-btn danger";
-      del.textContent = "Delete this change";
+      del.textContent = "Delete this redesign";
       del.title = "Removes it from this picture's set and deletes the file.";
       del.onclick = async () => {
         const i = Number(S().pick.slice(5));
@@ -14474,7 +14533,7 @@ function heroBody(node, body, sub) {
   rep.className = "rn-ws-card";
   const rph = document.createElement("div");
   rph.className = "ch";
-  rph.textContent = "FRONT-ON RENDER";
+  rph.textContent = "HEADSHOT";
   rep.appendChild(rph);
   const what = document.createElement("div");
   what.className = "rn-ws-note";
@@ -14536,7 +14595,7 @@ function heroBody(node, body, sub) {
   }
   const frontBtn = document.createElement("button");
   frontBtn.className = "rn-ws-btn go";
-  frontBtn.textContent = state.front ? "Render again" : "Make front-facing";
+  frontBtn.textContent = state.front ? "Render again" : "Make the headshot";
   btns.frontBlocked = blocked;
   btns.front = frontBtn;
   frontBtn.disabled = !!state.busy || blocked;
@@ -14577,19 +14636,19 @@ function heroBody(node, body, sub) {
     e.textContent = state.error;
     rep.appendChild(e);
   }
-  body.appendChild(rep);
+  if (page === "headshot") body.appendChild(rep);
 
-  // ---- CHANGE: a stage of its own, run on the front-on picture -------------
+  // ---- REDESIGN: a stage of its own, run on the front-on picture -------------
   const ed = document.createElement("div");
   ed.className = "rn-ws-card";
   const edh = document.createElement("div");
   edh.className = "ch";
-  edh.textContent = "CHANGE";
+  edh.textContent = "REDESIGN";
   ed.appendChild(edh);
   const edNote = document.createElement("div");
   edNote.className = "rn-ws-note";
-  edNote.textContent = "Made from the front-on picture, which is the cleanest one in "
-    + "the chain. Every change is kept, so they can be compared rather than replacing "
+  edNote.textContent = "Made from the headshot, which is the cleanest picture in the "
+    + "chain. Every redesign is kept, so they can be compared rather than replacing "
     + "each other.";
   ed.appendChild(edNote);
 
@@ -14706,31 +14765,31 @@ function heroBody(node, body, sub) {
   if (blocked) {
     const n = document.createElement("div");
     n.className = "rn-ws-note warn";
-    n.textContent = "The rig above is not ready, so a change cannot render either.";
+    n.textContent = "The rig is not ready, so a redesign cannot render.";
     ed.appendChild(n);
   } else if (!state.front) {
     const n = document.createElement("div");
     n.className = "rn-ws-note warn";
-    n.textContent = "Make the front-on picture first. A change is made from it.";
+    n.textContent = "Make the headshot first. A redesign is made from it.";
     ed.appendChild(n);
   } else if (!line) {
     const n = document.createElement("div");
     n.className = "rn-ws-note";
     n.style.opacity = ".7";
-    n.textContent = "Pick a hair, eye or age change, or type one, to enable this.";
+    n.textContent = "Pick something to change, or type it, to enable this.";
     ed.appendChild(n);
   }
 
   const editBtn = document.createElement("button");
   editBtn.className = "rn-ws-btn go";
-  editBtn.textContent = "Render change";
+  editBtn.textContent = "Render redesign";
   btns.editBlocked = blocked || !state.front || !line;
   btns.edit = editBtn;
   editBtn.disabled = !!state.busy || btns.editBlocked;
-  editBtn.title = blocked ? "The rig above is not ready, so a change cannot render."
-    : !state.front ? "Make the front-on picture first: a change is made from it."
+  editBtn.title = blocked ? "The rig is not ready, so a redesign cannot render."
+    : !state.front ? "Make the headshot first: a redesign is made from it."
     : !line ? "Pick something to change first."
-    : "Render a changed version. Every one is kept.";
+    : "Render a redesigned version. Every one is kept.";
   editBtn.onclick = async () => {
     const from = S().source;
     const base = S().front?.result;
@@ -14771,7 +14830,7 @@ function heroBody(node, body, sub) {
     e.textContent = state.error;
     ed.appendChild(e);
   }
-  body.appendChild(ed);
+  if (page === "redesign") body.appendChild(ed);
 }
 
 // ---- the Detailer tab -------------------------------------------------------------
@@ -16694,6 +16753,10 @@ function applyTuck(node) {
 
 export const tabLit = (cfg, id) =>
   id === "overview" ? false                        // a view of the run, never a stage
+  // Hero Creator MAKES references, it is not one: it has no cfg.tabs entry to
+  // read and nothing about it belongs in a run. Without this it fell through to
+  // cfg.tabs.hero.on and took the whole panel down with it.
+  : id === "hero" ? false
   : id === "identity" ? IDENTITY_SUBS.some((s) => tabLit(cfg, s.id))
   : id === "people" ? (cfg.tabs.subject2.on && cfg.tabs.subject2.images.length) ||
                     (cfg.tabs.subject3.on && cfg.tabs.subject3.images.length)
@@ -16731,6 +16794,11 @@ export const tabLit = (cfg, id) =>
                            || cfg.tabs.i2i.prompt_only))
                       || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render")
                       || (cfg.tabs.i2i.reangle?.on && cfg.tabs.i2i.reangle.target === "render"))
+  // The boost mask lives on the Subject page now, so Subject is what it lights.
+  // Taking masks out of IDENTITY_SUBS quietly stopped a painted mask lighting
+  // the Krea 2 Identity tab at all, which is the whole point of the dot.
+  : id === "subject" ? !!((cfg.tabs.subject.on && cfg.tabs.subject.images.length)
+                          || cfg.tabs.boost_mask?.on)
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the

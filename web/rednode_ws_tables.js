@@ -109,8 +109,8 @@ export const TAB_ORDER = [
 // People tab is part of Subject now.
 export const IDENTITY_SUBS = [
   { id: "subject", label: "SUBJECT", tip: "The people to preserve, picked in order in one gallery: the first is the main subject." },
+  { id: "hero", label: "HERO CREATOR", tip: "Make a clean headshot out of a gallery picture, then redesign it." },
   { id: "scene", label: "SCENE", tip: "The place: the setting the people are put into." },
-  { id: "masks", label: "MASKS", tip: "The subject boost and edit masks, painted in place." },
 ];
 
 // The gallery tabs and their headings.
