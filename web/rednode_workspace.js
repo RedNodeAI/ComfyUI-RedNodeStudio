@@ -1122,6 +1122,15 @@ const TEXT_TABS_META = {
 };
 const MULTI_TAB_IDS = ["moodboard", ...TEXT_TAB_IDS];
 export const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
+// INJECT INTO, stored as "follow the rig" rather than as a row's name, so the
+// choice still points at the right words after the rig is switched. Resolved by
+// injectTarget() here and by prompt_row_for() at queue time, the same rule the
+// run itself uses to pick which row renders.
+export const AUTO_ROW = "(auto)";
+// and the tabs that get it by default. NOT the three Image to text galleries:
+// their auto switch is the tab's own switch and is on for everyone, so a default
+// there would wire up every install's captions without anyone asking.
+const INJECT_DEFAULT_TABS = ["subject", "scene", "moodboard", "i2i"];
 const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", ...TEXT_TAB_IDS]);
 // Galleries are grouped into named COLLECTIONS ("red dress", "castle set"…). The legacy
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py
@@ -1134,7 +1143,7 @@ const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_styl
                             "i2i", "style", "people"]);
 // what Ollama is asked when the Question box is empty, matching autoprompt.py
 const DEFAULT_QUESTION = "Describe this image.";
-function normaliseAutoUi(value, defaultMode) {
+function normaliseAutoUi(value, defaultMode, tabId) {
   const a = value && typeof value === "object" ? value : {};
   a.on = !!a.on;
   a.ollama = a.ollama === undefined ? true : !!a.ollama;
@@ -1149,7 +1158,51 @@ function normaliseAutoUi(value, defaultMode) {
   a.clipgen = !!a.clipgen;
   a.florence = !!a.florence;
   a.rewrite = !!a.rewrite;
+  // WHERE THE CAPTION GOES. "" was the untouched value rather than a decision,
+  // and it meant the caption went nowhere but this tab's own output socket: you
+  // switched the auto prompt on, watched it caption, and the render used none of
+  // it until you found this box. It now starts on the row the run will render.
+  // inject_set remembers that the question has been answered, so picking
+  // "nothing" sticks instead of being defaulted away on the next load.
+  if (typeof a.inject_row !== "string") a.inject_row = "";
+  if (!a.inject_set && !a.inject_row && INJECT_DEFAULT_TABS.includes(tabId)) {
+    a.inject_row = AUTO_ROW;
+  }
+  a.inject_set = !!a.inject_set || !!a.inject_row;
   return a;
+}
+
+// THE ROW THE RUN WILL RENDER, by the queue's own rule: the row picked on the
+// Prompts tab when it serves the active rig and has words, else the first row
+// linked to that rig with words, else the first unlinked row with words. Mirrors
+// prompt_row_for() in workspace.py; the two must agree or the panel names one
+// row and the caption lands in another.
+function rowThatRuns(cfg) {
+  const rows = cfg.prompts?.rows || [];
+  const rigs = cfg.models?.rigs || [];
+  const rig = rigs.length
+    ? (rigs[Math.max(0, Math.min(cfg.models?.active || 0, rigs.length - 1))]?.name || "")
+    : "";
+  const links = (r) => (Array.isArray(r.rigs) ? r.rigs : (r.rig ? [r.rig] : []))
+    .filter((x) => String(x || "").trim());
+  const words = (r) => String(r.text || "").trim().length > 0;
+  const pick = Number.isInteger(cfg.prompts?.active) ? rows[cfg.prompts.active] : null;
+  if (pick && words(pick) && (links(pick).includes(rig) || !links(pick).length)) return pick;
+  return rows.find((r) => links(r).includes(rig) && words(r))
+      || rows.find((r) => !links(r).length && words(r))
+      // a row with no words yet is still the one this caption belongs in: that
+      // IS the usual setup, where the caption is meant to be the whole prompt
+      || rows[0] || null;
+}
+function rowLabel(cfg, row) {
+  const rows = cfg.prompts?.rows || [];
+  return row ? (row.name || `Prompt ${rows.indexOf(row) + 1}`) : "";
+}
+// The row a tab's Inject choice points at right now: its own answer, or whatever
+// the rig is running. "" means the caption is not injected anywhere.
+export function injectTarget(cfg, auto) {
+  const v = String(auto?.inject_row || "");
+  return v === AUTO_ROW ? rowLabel(cfg, rowThatRuns(cfg)) : v;
 }
 function normSel(name, sel, imagesLen) {
   if (MULTI_TAB_IDS.includes(name)) {
@@ -1198,7 +1251,7 @@ export function readCfg(node) {
     const autoMode = name === "scene" || name === "text_scene" ? "scene_view"
                    : name === "moodboard" || name === "text_style" ? "style"
                    : name === "i2i" ? "i2i" : "subject";
-    t.auto = normaliseAutoUi(t.auto, autoMode);
+    t.auto = normaliseAutoUi(t.auto, autoMode, name);
     if (TEXT_TAB_IDS.includes(name)) t.auto.on = !!t.on;   // the tab's switch runs it
     if (name === "swap_ref") t.on = true;                  // Swap's switch decides
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
@@ -1750,7 +1803,8 @@ export function setupProblems(node, cfg) {
   const fed = new Set();
   for (const name of AUTO_TAB_IDS) {
     const t = cfg.tabs?.[name];
-    if (t?.on && t.auto?.on && t.auto.inject_row) fed.add(t.auto.inject_row);
+    const into = injectTarget(cfg, t?.auto);
+    if (t?.on && t.auto?.on && into) fed.add(into);
   }
   const hasText = (row) => String(row.text || "").trim()
     || fed.has(row.name || `Prompt ${rows.indexOf(row) + 1}`);
@@ -4296,7 +4350,6 @@ function injectRowUI(node, sect, tabName) {
   const cfg = node._rnCfg;
   const a = cfg.tabs[tabName]?.auto;
   if (!a) return;
-  if (typeof a.inject_row !== "string") a.inject_row = "";
   const defSlot = { subject: "subject", scene: "surroundings",
                     moodboard: "light_and_colour", i2i: "subject",
                     text_style: "style", text_subject: "subject", text_scene: "surroundings" };
@@ -4312,17 +4365,31 @@ function injectRowUI(node, sect, tabName) {
   const rowSel = document.createElement("select");
   rowSel.className = "rn-ws-res";
   const names = (cfg.prompts?.rows || []).map((r, i) => r.name || `Prompt ${i + 1}`);
-  for (const n of ["", ...names]) {
+  const running = rowLabel(cfg, rowThatRuns(cfg));
+  for (const n of [AUTO_ROW, "", ...names]) {
     const o = document.createElement("option");
     o.value = n;
-    o.textContent = n || "nothing (just the output)";
+    o.textContent = n === AUTO_ROW
+      // named, so it is obvious which words this is about to join, and it
+      // re-reads on every render as the rig or the chosen row changes
+      ? "The prompt the rig runs" + (running ? ` (${running})` : " (none yet)")
+      : n || "nothing (just the output)";
     o.selected = n === a.inject_row;
     rowSel.appendChild(o);
   }
   rowSel.title = "This tab's caption lands in the named prompt automatically when "
-               + "the queue runs, joined after whatever is typed there. Leave it "
-               + "empty and the caption only rides this tab's own output, as before.";
-  rowSel.onchange = () => { a.inject_row = rowSel.value; writeCfg(node); };
+               + "the queue runs, joined after whatever is typed there. The default "
+               + "follows the rig: whichever row that rig renders is the one it "
+               + "joins. Pick nothing and the caption only rides this tab's own "
+               + "output socket.";
+  rowSel.onchange = () => {
+    a.inject_row = rowSel.value;
+    // answered on purpose now, including "nothing", so the default never comes
+    // back over it on the next load
+    a.inject_set = true;
+    writeCfg(node);
+    render(node);
+  };
   const slotPick = (cur, onPick, title) => {
     const sel = document.createElement("select");
     sel.className = "rn-ws-res";
@@ -5477,7 +5544,8 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
         const on = m.auto === undefined ? k === 0 : !!m.auto;
         return on ? (m.name || `Person ${k + 1}`) : null;
       }).filter(Boolean);
-      const target = a.inject_row ? `Into ${a.inject_row}` : "The subject prompt";
+      const into = injectTarget(cfg, a);
+      const target = into ? `Into ${into}` : "The subject prompt";
       res.appendChild(flowRow(
         onPeople,
         a.rewrite ? "Rewrite with Ollama" : "Joined by name",
@@ -5504,7 +5572,7 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       rw.className = "rn-ws-swlabel";
       rw.style.cssText = "display:flex;align-items:center;gap:6px";
       res.appendChild(rw);
-      if (a.rewrite && !a.inject_row) {
+      if (a.rewrite && !into) {
         const wn = document.createElement("div");
         wn.className = "rn-ws-note rn-ws-peoplewarn";
         wn.textContent = "Pick a prompt row under Inject into, in step 1, for the "
@@ -5552,7 +5620,8 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       lab.className = "rn-ws-note";
       lab.style.fontWeight = "600";
       lab.textContent = rwPrev
-        ? `Rewrite preview${a.inject_row ? ` for ${a.inject_row}` : ""}: the next queue uses this`
+        ? `Rewrite preview${injectTarget(cfg, a) ? ` for ${injectTarget(cfg, a)}` : ""}`
+          + ": the next queue uses this"
         : "Preview from the captions above: the next queue sends this";
       res.appendChild(lab);
     }
@@ -5613,16 +5682,17 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     rrow.appendChild(recall);
     if (tabName === "subject" && a.rewrite) {
       // the rewrite, asked now: same merge, same cache, so the queue reuses the answer
+      const into2 = injectTarget(cfg, a);
       const rowText = (cfg.prompts?.rows || []).find((r, i) =>
-        (r.name || `Prompt ${i + 1}`) === a.inject_row)?.text || "";
+        (r.name || `Prompt ${i + 1}`) === into2)?.text || "";
       const pv = document.createElement("button");
       pv.className = "rn-ws-btn rn-ws-rwprev rn-ws-bigbtn";
       pv.style.cssText = "width:auto;padding:0 10px";
       pv.textContent = rwPrev ? "Rewrite again" : "Preview rewrite";
-      pv.disabled = !!node._rnAutoBusy || !a.inject_row || !people.length;
-      pv.title = !a.inject_row ? "Pick a prompt row under Inject into first."
+      pv.disabled = !!node._rnAutoBusy || !into2 || !people.length;
+      pv.title = !into2 ? "Pick a prompt row under Inject into first."
         : !people.length ? "Caption at least one switched-on person first (Generate)."
-        : "Ask Ollama now to merge " + (a.inject_row) + " with these people, and show it "
+        : "Ask Ollama now to merge " + into2 + " with these people, and show it "
           + "here. The queue reuses this answer while the text and people stay the same.";
       pv.onclick = async () => {
         node._rnAutoBusy = "rewrite";
@@ -13487,7 +13557,7 @@ function i2iAutoPage(node, body) {
   bar.append(on, nm);
   for (const text of [
     `${t.sel.length} of ${t.images.length} Picked`,
-    t.auto?.inject_row ? `Into ${t.auto.inject_row}` : "Not injected",
+    injectTarget(cfg, t.auto) ? `Into ${injectTarget(cfg, t.auto)}` : "Not injected",
   ]) {
     const c = document.createElement("span");
     c.className = "rn-ws-chip";
@@ -16641,7 +16711,7 @@ function sceneSendRow(node, cfg) {
   card.appendChild(r);
   const n = document.createElement("div");
   n.className = "rn-ws-note";
-  const fed = S.auto?.on && S.auto?.inject_row;
+  const fed = S.auto?.on && !!injectTarget(cfg, S.auto);
   n.textContent = !S.words_only
     ? "The strongest way in: the model treats the Scene picture as the picture it edits. "
       + "Use the dials below, or Words only, to loosen it."

@@ -474,6 +474,10 @@ IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard",
               "swap_ref") + TEXT_TABS
 # the tabs with an auto prompt, and the ones whose selection is a list
 AUTO_TABS = ("subject", "scene", "moodboard", "i2i") + TEXT_TABS
+# Inject into, stored as "follow the rig": the caption joins whichever row this
+# rig renders, so switching rigs moves it with them instead of leaving it aimed
+# at another rig's words. The panel writes this; prompt_row_for resolves it.
+AUTO_ROW = "(auto)"
 MULTI_TABS = ("moodboard",) + TEXT_TABS
 
 
@@ -3707,17 +3711,33 @@ class RedNodeStudioWorkspace:
         injections = {}
         rewrite_people = {}          # row name -> the named people to merge into it
         injections_before = {}       # the same, for captions that go ahead of the typed words
+        def _inject_row_of(_a):
+            """The row this tab's caption joins: its own answer, or the rig's.
+
+            Resolved once per tab here rather than stored, so a rig switch moves
+            every caption with it; an unresolvable one is "nowhere", never the
+            first row, because guessing would put words in a stranger's prompt.
+            """
+            _r = str(_a.get("inject_row") or "")
+            if _r != AUTO_ROW:
+                return _r
+            _t = prompt_row_for(cfg["models"], cfg["prompts"])
+            if _t is None and cfg["prompts"]["rows"]:
+                _t = cfg["prompts"]["rows"][0]
+            return str((_t or {}).get("name") or "")
+
         for _tn in AUTO_TABS:
             _a = tabs[_tn].get("auto") or {}
             _cap = (prompts.get(_tn) or "").strip()
-            if (_tn == "subject" and _a.get("on") and _a.get("inject_row")
+            _irow = _inject_row_of(_a)
+            if (_tn == "subject" and _a.get("on") and _irow
                     and _a.get("rewrite") and subject_people):
-                rewrite_people[_a["inject_row"]] = (subject_people, bool(_a.get("fixed", True)))
+                rewrite_people[_irow] = (subject_people, bool(_a.get("fixed", True)))
                 continue
-            if not (_a.get("on") and _a.get("inject_row") and _cap):
+            if not (_a.get("on") and _irow and _cap):
                 continue
             _into = (injections_before if _a.get("inject_pos") == "before"
-                     else injections).setdefault(_a["inject_row"], {})
+                     else injections).setdefault(_irow, {})
             if _tn == "moodboard" and mood_parts:
                 # each read lands in its own slot: the look as Style, the person as
                 # Subject, what is happening as Surroundings
