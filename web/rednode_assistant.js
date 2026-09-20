@@ -187,6 +187,30 @@ function writeLive(workspace) {
   app.graph?.setDirtyCanvas?.(true, true);
 }
 
+// EVERY KEY PRESSED INSIDE THIS PANEL STOPS HERE. The node is selected while you
+// are typing in it, so without this Delete deletes the node, Ctrl+A selects every
+// node on the graph, and a stray letter fires a canvas shortcut. Window capture,
+// because whoever else is listening, this decides first: stopping it lower down
+// is too late for a handler bound on document. Propagation only, never
+// preventDefault, or the letters would not reach the box either.
+export function onPanelKey(event) {
+  let el = event.target, node = null;
+  for (let hops = 0; el && hops < 12; hops++, el = el.parentElement || el._parent) {
+    if (el._rnAssistantNode) { node = el._rnAssistantNode; break; }
+  }
+  if (!node) return false;
+  event.stopPropagation?.();
+  event.stopImmediatePropagation?.();
+  // ENTER SENDS, Shift+Enter starts a line. The question is nearly always one
+  // line, and reaching for the mouse to ask it was the whole friction.
+  if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey
+      && event.target?._rnAssistantAsk) {
+    event.preventDefault?.();
+    ask(node, event.target.value);
+  }
+  return true;
+}
+
 function fingerprint(target, words) {
   // Compare full live state as well as connections, including paths omitted from the snapshot.
   const snap = snapshotOf(target, words);
@@ -305,6 +329,13 @@ export async function ask(node, question, contextOnly = false) {
   } finally {
     if (id === s.generation) { s.pending = null; renderAssistant(node); }
   }
+}
+
+let keyGuard = false;
+function installKeyGuard() {
+  if (keyGuard || typeof window === "undefined") return;
+  keyGuard = true;
+  window.addEventListener("keydown", onPanelKey, true);
 }
 
 function installStyle() {
@@ -453,14 +484,12 @@ export function renderAssistant(node) {
     details.append(summary, el("pre", s.context)); root.append(details);
   }
   if (target) {
-    const question = el("textarea"); question.placeholder = "Ask about the Workspace";
+    const question = el("textarea");
+    question.placeholder = "Ask about the Workspace. Enter sends, Shift+Enter for a new line.";
     question.value = s.draft; question.maxLength = 4000;
     question.oninput = () => { s.draft = question.value; };
-    question.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault(); ask(node, question.value);
-      }
-    });
+    question._rnAssistantAsk = true;
+    question._rnAssistantNode = node;
     root.append(expandable(question, "Assistant question", (value) => { s.draft = value; }));
     const actions = el("div", undefined, "rn-as-toolbar");
     const send = button("Ask", () => ask(node, question.value)); send.disabled = !!s.pending;
@@ -485,11 +514,13 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function () {
       created?.apply(this, arguments);
       installStyle();
+      installKeyGuard();
       const w = widget(this);
       if (w) { w.type = "hidden"; w.hidden = true; w.computeSize = () => [0, -4]; }
       const root = el("div", undefined, "rn-assistant rn-ws");
       for (const name of ["pointerdown", "pointerup", "click", "keydown", "contextmenu", "wheel"])
         root.addEventListener(name, (event) => event.stopPropagation());
+      root._rnAssistantNode = this;
       this._rnAssistantRoot = root;
       this.addDOMWidget?.("rednode_assistant_ui", "rednode_assistant_ui", root,
         { serialize: false, getMinHeight: () => 360 });
