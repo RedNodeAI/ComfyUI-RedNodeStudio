@@ -14395,7 +14395,11 @@ function heroBody(node, body, sub, page) {
   const stepLine = document.createElement("div");
   stepLine.className = "rn-ws-note";
   prog.append(bar, stepLine);
-  src.appendChild(prog);
+  // it goes wherever the button that starts a render is. It used to be built
+  // into the Source card unconditionally, and the Source card is only on the
+  // Headshot page, so a redesign rendered behind a dead button with nothing
+  // moving and no step named.
+  if (page === "headshot") src.appendChild(prog);
   if (!document.getElementById("rn-hero-anim")) {
     const st = document.createElement("style");
     st.id = "rn-hero-anim";
@@ -15154,6 +15158,7 @@ function heroBody(node, body, sub, page) {
     render(node);
   };
   ed.appendChild(editBtn);
+  if (page === "redesign") ed.appendChild(prog);
   if (state.error && state.errorAt === "edit") {
     const e = document.createElement("div");
     e.className = "rn-ws-note warn";
