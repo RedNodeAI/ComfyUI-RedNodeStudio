@@ -21,6 +21,10 @@ const NODE_NAME = "RedNodeSave";
 const MIN_PANEL_H = 430;
 
 const DEFAULTS = {
+  // EXTRA COPIES of the run at earlier stages, each in a level of its own under
+  // the same folder. Off, because a run that writes three files when it used to
+  // write one is a surprise, and disk is the user's.
+  stage_raw: false, stage_prepost: false,
   root: "", subfolder: "%date%/%preset%", name: "%date%_%time%",
   numbering: "counter", pad: 4, split_drafts: true, keep: false,
   write_text: true, write_json: false, embed_png: true, prompts_folder: "",
@@ -810,6 +814,29 @@ function render(node) {
            "Which side this run lands on. Drafts can be promoted later from the list "
            + "below, so leaving this on draft costs nothing."));
   where.appendChild(split);
+
+  // The finished picture is what Save has always written. These two add the
+  // earlier ones beside it, so a Detailer pass or a grade can be judged against
+  // what it was given rather than remembered.
+  const stages = document.createElement("div");
+  stages.className = "rn-sv-toggles";
+  stages.append(
+    toggle(node, cfg, "stage_raw", "Also: raw output",
+           "The render before the Detailer touches it, into a raw level under the "
+           + "same folder."),
+    toggle(node, cfg, "stage_prepost", "Also: before Post FX",
+           "The picture as it goes into Post FX, into a before_post level. "
+           + "With no Detailer that is the raw picture again, so it is not "
+           + "written twice."));
+  where.appendChild(stages);
+  if (cfg.stage_raw || cfg.stage_prepost) {
+    const n = document.createElement("div");
+    n.className = "rn-sv-note";
+    n.textContent = "The finished picture still saves where it always has. These "
+      + "are extra copies, and they follow the Save switch: with Save off nothing "
+      + "is written at all.";
+    where.appendChild(n);
+  }
   wrap.appendChild(where);
 
   const naming = section("Name");

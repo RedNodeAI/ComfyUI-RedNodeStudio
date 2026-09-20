@@ -4906,6 +4906,35 @@ class RedNodeStudioWorkspace:
         # the finished picture, and a separate node after this one steps aside.
         if rig_image is not None and (not _norun or _uchain or _uafter):
             from . import builtin_chain as _chain
+
+            def _stage_save(img, level):
+                """An extra copy of the run at an earlier stage, one level down.
+
+                Writes through the same Save the finished picture uses, so the
+                naming, the format and the metadata are whatever the Save panel
+                says: an extra copy that did not match the real one would be
+                worse than none. Never fatal, because a picture that failed to
+                save an EARLIER stage must not cost the finished one.
+                """
+                if img is None:
+                    return
+                try:
+                    from .save_node import RedNodeSave as _SaveCls
+                    _scfg = dict(cfg["save"])
+                    _base = str(_scfg.get("subfolder") or "").strip()
+                    _scfg["subfolder"] = (_base + "/" + level) if _base else level
+                    _SaveCls().save(img, config=json.dumps(_scfg), seed=run_seed,
+                                    prompt=prompt, extra_pnginfo=extra_pnginfo)
+                except Exception as exc:
+                    print("[RedNode Workspace] the %s copy did not save: %s"
+                          % (level, exc), flush=True)
+
+            _stages_on = cfg["save"] if isinstance(cfg.get("save"), dict) else {}
+            _want_raw = bool(cfg["save_on"] and _stages_on.get("stage_raw"))
+            _want_det = bool(cfg["save_on"] and _stages_on.get("stage_prepost"))
+            _ran_detailer = False
+            if _want_raw:
+                _stage_save(rig_image, "raw")
             if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
                 try:
                     from .refine_pipeline import RedNodeStudioDetailer
@@ -4915,10 +4944,15 @@ class RedNodeStudioWorkspace:
                         subject_words=prompts.get("subject") or "", **_custom_rigs)
                     if _dout and _dout[0] is not None and torch.is_tensor(_dout[0]):
                         rig_image = _dout[0]
+                        _ran_detailer = True
                     _chain.mark("detailer")
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in Detailer failed: %s; the "
                           "render goes on without it" % exc, flush=True)
+            # BEFORE POST, whatever got it here. With no Detailer that is the
+            # raw picture again, so writing both would be one file under two names.
+            if _want_det and (_ran_detailer or not _want_raw):
+                _stage_save(rig_image, "before_post")
             if cfg["post_on"] and postprocess.active_fx(post_cfg):
                 _pre = keep_before_post(rig_image)
                 if _pre:
