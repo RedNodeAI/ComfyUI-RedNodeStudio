@@ -923,6 +923,18 @@ class RedNodeStudioDetailer:
             _run_events.progress("detailer", "Detailer", current=i, of=len(stages),
                                  what=name)
             tag = "pass %d of %d, %s" % (i, len(stages), name)
+            # Said once per PASS, not per repeat: three copies of the same warning
+            # is how a warning becomes noise. Under a tenth still runs, because a
+            # whisper of a pass is a real choice; it just says so, since the
+            # difference between 0.05 and 0 is invisible in the result.
+            _bl = float(s.get("blend", 1.0))
+            if s["type"] == "detailer" and _bl < 0.10:
+                _say("%s: blend is %s, so %s" % (
+                    tag, "0" if _bl <= 0 else "%.2f" % _bl,
+                    "this pass cannot change the picture at all and is skipped"
+                    if _bl <= 0 else
+                    "almost none of what it renders will show. Raise blend if that "
+                    "is not deliberate."))
             nimg = int(out.shape[0])
             _say("%s started%s" % (tag, " on %d images" % nimg if nimg > 1 else ""))
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
@@ -1420,6 +1432,16 @@ class RedNodeStudioDetailer:
 
     def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
                 scheduler, start, end, encode_for=None):
+        # BLEND 0 MEANS NOTHING LANDS. _paste scales the matte by it, so at zero
+        # the merge is the crop exactly as it arrived. The pass still found the
+        # face, still sampled it, still showed it in the live preview, and then
+        # multiplied the whole result by nothing: sixty eight seconds of work and
+        # an unchanged picture, with not a word about why (the user, 2026-09-20).
+        # Said out loud and skipped, because rendering it first changes nothing
+        # except how long it takes to find out.
+        if float(s.get("blend", 1.0)) <= 0.0:
+            return image, ("blend is 0, so nothing this pass rendered could be "
+                           "applied; raise it above 0 for the pass to do anything")
         mask, box, why = self._locate(image, s)
         if why is not None:
             return image, why
