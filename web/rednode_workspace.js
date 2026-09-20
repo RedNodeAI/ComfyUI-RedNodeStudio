@@ -1286,6 +1286,8 @@ export function readCfg(node) {
       if (typeof RL.on !== "boolean") RL.on = false;
       if (typeof RL.lora !== "string") RL.lora = "";
       if (typeof RL.strength !== "number") RL.strength = 1;
+      if (typeof RL.loras !== "boolean") RL.loras = true;
+      if (typeof RL.lora_set !== "string") RL.lora_set = "";
       if (typeof RL.prompt !== "string") RL.prompt = REALISM_WANT;
       if (typeof RL.system !== "string") RL.system = REALISM_SYSTEM;
       if (typeof RL.boost !== "number") RL.boost = 1;
@@ -16084,7 +16086,7 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   const open = (node._rnRealismOpen ||= { words: false, engine: false });
   const card = sectionCard("REALISM", "#8ad2f0",
     !R.on ? "off" : (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
-            + " \u00b7 boost " + R.boost,
+            + " \u00b7 boost " + R.boost + (R.loras ? " \u00b7 with the stack" : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
 
   const row0 = document.createElement("div");
@@ -16165,6 +16167,23 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         "The source is fitted inside this before converting, and snapped to 16 so the "
         + "latent grid lines up. Not to 512, which is what turns a portrait square.");
     card.appendChild(grid);
+
+    // THE RIG'S OWN STACK. On by default, because a conversion that dropped it
+    // would come out a different look from the render beside it.
+    const lr = document.createElement("div");
+    lr.className = "rn-ws-row";
+    const lrsw = document.createElement("div");
+    lrsw.className = "rn-ws-sw" + (R.loras ? " on" : "");
+    lrsw.dataset.choice = "realism_loras";
+    lrsw.title = "On: this pass runs the LoRAs tab's stack as well, with the "
+               + "conversion LoRA on top, which is how the workflow this came from "
+               + "is wired. Off: the conversion LoRA alone.";
+    lrsw.onclick = () => { R.loras = !R.loras; writeCfg(node); render(node); };
+    const lrl = document.createElement("span");
+    lrl.className = "rn-ws-swlabel";
+    lrl.textContent = "Run the rig's LoRA stack too";
+    lr.append(lrsw, lrl);
+    card.appendChild(lr);
 
     const sk = document.createElement("div");
     sk.className = "rn-ws-row";

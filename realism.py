@@ -60,6 +60,12 @@ def parse(raw):
         # user's own download and naming one here would age badly.
         "lora": str(r.get("lora") or ""),
         "strength": num("strength", 1.0, 0.0, 2.0),
+        # THE RIG'S OWN STACK, on by default. Everywhere else in the pack a rig
+        # arrives carrying its LoRAs, and the workflow this came from stacks the
+        # conversion LoRA on top of one; a pass that quietly dropped it would
+        # convert into a different look than the render beside it.
+        "loras": bool(r.get("loras", True)),
+        "lora_set": str(r.get("lora_set") or "")[:48],   # "" = the rig's own set
         "prompt": str(r.get("prompt") if r.get("prompt") is not None else WANT)[:500],
         "system": str(r.get("system") if r.get("system") is not None else SYSTEM)[:2000],
         # 1.0 works with the instruction above; 1.5 holds the illustration
@@ -123,6 +129,25 @@ def _call(name, **kw):
     return fn(**kw)
 
 
+def sampler_for(node_id, label):
+    """core's common_ksampler, streaming a frame a step to the Live Preview and
+    the Run tab under `node_id`, the way Re-angle does it. Plain when there is
+    no node to stream under.
+
+    The decode is this pack's own (live_preview.py), through the tiny decoder in
+    models/vae_approx that matches the latent format: lighttaew2_1 for Krea 2.
+    Without that file the frames fall back to latent2rgb rather than stopping.
+    """
+    import nodes as _core
+    if node_id is None:
+        return _core.common_ksampler
+    try:
+        from . import live_preview as _live
+        return _live.sampled(node_id, _core.common_ksampler, label=label)
+    except Exception:
+        return _core.common_ksampler
+
+
 def render(rc, source, cfg, seed, node_id=None):
     """IMAGE [1,H,W,3]: the source as a photograph. Cached by what made it."""
     with torch.inference_mode():
@@ -139,7 +164,8 @@ def _render(rc, source, cfg, seed, node_id=None):
     key = json.dumps({"src": _source_key(source), "seed": int(seed), "rc":
                       {k: rc[k] for k in ("lora", "strength", "prompt", "system",
                                           "boost", "steps", "cfg", "desaturate",
-                                          "max_side")}}, sort_keys=True)
+                                          "max_side", "loras", "lora_set")}},
+                     sort_keys=True)
     for k, img in _RESULT_CACHE:
         if k == key:
             print("[RedNode Realism] from the cache", flush=True)
@@ -158,8 +184,29 @@ def _render(rc, source, cfg, seed, node_id=None):
     scheduler = str(rec.get("scheduler") or "simple")
 
     src = _prepared(source, rc)
-    model = _call("LoraLoaderModelOnly", model=model, lora_name=rc["lora"],
-                  strength_model=rc["strength"])[0]
+    # the rig's stack first, then the conversion LoRA on top of it: the order the
+    # workflow this came from wires, and the order the Detailer's passes use
+    if rc["loras"]:
+        try:
+            import json as _json
+            from . import lora_stack as _lora
+            lc = _ws.lora_set_cfg(cfg, rc["lora_set"] or _ws.rig_lora_set(cfg),
+                                  "Realism") or {}
+            slots = lc.get("slots") or []
+            if slots and lc.get("on", True):
+                model, _c2, _w, applied = _lora.apply_stack(
+                    model, clip, _lora.CUSTOM_SENTINEL,
+                    _json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
+                    int(lc.get("seed", 0) or 0), None, tag="Realism LoRAs")
+                clip = _c2 if _c2 is not None else clip
+                print("[RedNode Realism] rig stack applied: %s" % applied, flush=True)
+        except Exception as exc:
+            print("[RedNode Realism] the rig's LoRA stack could not be applied (%s); "
+                  "the conversion LoRA runs alone" % exc, flush=True)
+    # model AND clip, because that is what the workflow's stack node does and a
+    # file with no text-encoder keys is unaffected either way
+    model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
+                        strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
     latent = {"samples": vae.encode(src)}
     # ref_t0_modulation is TRUE and is not a setting: it is the reference method
     # the conversion runs on, and without it this pass returns the illustration
@@ -171,11 +218,15 @@ def _render(rc, source, cfg, seed, node_id=None):
         ref_boost=rc["boost"], ref_boost_a=rc["boost"], target_latent=latent,
         fit_mode="fit", ref_t0_modulation=True, system_prompt=rc["system"])[0]
     negative = _call("CLIPTextEncode", clip=clip, text="")[0]
-    print("[RedNode Realism] %s on %s, boost %.2f, %d steps" %
-          (rc["lora"], rig_name or "the active rig", rc["boost"], steps), flush=True)
-    out = _call("KSampler", model=model, seed=int(seed), steps=steps, cfg=guide,
-                sampler_name=sampler, scheduler=scheduler, positive=positive,
-                negative=negative, latent_image=latent, denoise=1.0)[0]
+    print("[RedNode Realism] %s on %s, boost %.2f, %d steps, rig stack %s" %
+          (rc["lora"], rig_name or "the active rig", rc["boost"], steps,
+           "on" if rc["loras"] else "off"), flush=True)
+    # through common_ksampler rather than the KSampler node, because that is
+    # what the live stream wraps: a pass you cannot watch is a pass you cannot
+    # tell from a hang.
+    out = sampler_for(node_id, "realism")(
+        model, int(seed), steps, guide, sampler, scheduler, positive, negative,
+        latent, denoise=1.0)[0]
     img = _call("VAEDecode", samples=out, vae=vae)[0]
     # out of inference mode, so nothing downstream trips over a tensor whose
     # version counter is not tracked (the Hero Creator learned this one)
