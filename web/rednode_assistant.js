@@ -1,0 +1,329 @@
+import { app } from "../../scripts/app.js";
+import { api } from "../../scripts/api.js";
+import { allNodes } from "./rednode_graph.js";
+import { readCfg, setupProblems, sectionCard, expandable } from "./rednode_workspace.js";
+import { makePicker } from "./rednode_picker.js";
+
+const TYPE = "RedNodeStudioAssistant";
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const widget = (node) => node.widgets?.find((w) => w.name === "config");
+const el = (tag, text, cls) => {
+  const e = document.createElement(tag);
+  if (text !== undefined) e.textContent = text;
+  if (cls) e.className = cls;
+  return e;
+};
+const button = (text, fn) => {
+  const b = el("button", text);
+  b.type = "button";
+  b.onclick = fn;
+  return b;
+};
+
+export function targets(root = app.graph) {
+  const found = [], seen = new Set();
+  const walk = (graph, path) => {
+    if (!graph || seen.has(graph)) return;
+    seen.add(graph);
+    for (const node of graph._nodes || graph.nodes || []) {
+      const key = `${path}/${node.id}`;
+      if (node.type === "RedNodeStudioWorkspace") found.push({ node, key });
+      if (node.subgraph) walk(node.subgraph, key);
+    }
+  };
+  walk(root, "Root");
+  return found;
+}
+
+function chosen(node) {
+  const available = targets();
+  const key = node.properties?.rn_assistant_target;
+  return available.find((t) => t.key === key) || (!key && available.length === 1 ? available[0] : null);
+}
+
+export function snapshotOf(target) {
+  const node = target.node;
+  // Normalisation works on a detached widget when the panel has no cached config yet.
+  const cfg = node._rnCfg ? clone(node._rnCfg)
+    : readCfg({ widgets: [{ name: "config", value: widget(node)?.value || "{}" }] });
+  const diagnostics = setupProblems(node, clone(cfg));
+  const graph = node.graph;
+  const connections = (node.inputs || []).map((input) => {
+    const links = graph?.links || graph?._links;
+    const link = links?.get?.(input.link) || links?.[input.link];
+    const source = (graph?._nodes || graph?.nodes || []).find((n) => n.id === link?.origin_id);
+    return { input: input.name, connected: input.link != null, from: source?.type || "Unknown node" };
+  });
+  // Counts and selections are enough; gallery filenames are not part of Stage 1.
+  for (const tab of Object.values(cfg.tabs || {})) {
+    if (!tab || typeof tab !== "object") continue;
+    if (Array.isArray(tab.images)) tab.images = tab.images.map(() => null);
+    for (const key of ["mask", "src", "pic_meta", "people_meta", "collections"]) delete tab[key];
+  }
+  delete cfg.auto?.url;
+  const outside = allNodes().filter((n) => n !== node && n.type !== TYPE)
+    .map((n) => ({ type: n.type, title: n.title || n.type }));
+  return { target: { node_id: node.id, title: node.title || "Workspace", key: target.key },
+    taken_at: new Date().toISOString(), config: cfg, connections, diagnostics, outside };
+}
+
+function fingerprint(target) {
+  // Compare full live state as well as connections, including paths omitted from the snapshot.
+  const snap = snapshotOf(target);
+  return JSON.stringify([widget(target.node)?.value, target.node._rnCfg,
+    snap.connections, snap.outside, snap.diagnostics]);
+}
+
+function state(node) {
+  if (node._rnAssistant) return node._rnAssistant;
+  let saved;
+  try { saved = JSON.parse(widget(node)?.value || "{}"); } catch { saved = {}; }
+  const transcript = Array.isArray(saved?.transcript) ? saved.transcript.filter((t) =>
+    t && ["user", "assistant"].includes(t.role) && typeof t.content === "string") : [];
+  return (node._rnAssistant = { transcript, model: typeof saved?.model === "string" ? saved.model : "",
+    notice: "Read only. Ask about settings or inspect the context without running a model.",
+    models: [], draft: "", pending: null, context: "", generation: 0 });
+}
+
+function saveOwn(node) {
+  const s = state(node);
+  let removed = 0;
+  while (s.transcript.length > 20 || JSON.stringify(s.transcript).length > 32000) {
+    s.transcript.shift(); removed++;
+  }
+  if (removed) s.notice = `Transcript: ${removed} oldest turns removed from the saved conversation.`;
+  const w = widget(node);
+  if (w) w.value = JSON.stringify({ model: s.model, transcript: s.transcript });
+  node.graph?.change?.();
+}
+
+function stop(node, message) {
+  const s = state(node);
+  s.generation++;
+  s.pending?.controller.abort();
+  s.pending = null;
+  s.notice = message;
+  renderAssistant(node);
+}
+
+export function refreshTargets(node) {
+  const s = state(node), available = targets();
+  if (s.pending && !available.some((t) => t.node === s.pending.target.node)) {
+    stop(node, "Target deleted. Request cancelled. Choose a Workspace and ask again.");
+  }
+  const signature = JSON.stringify(available.map((t) => [t.key, t.node.title]));
+  if (signature !== s.targetSignature) {
+    s.targetSignature = signature;
+    renderAssistant(node);
+  }
+}
+
+export async function ask(node, question, contextOnly = false) {
+  const s = state(node), target = chosen(node);
+  if (!target || s.pending) return;
+  if (!contextOnly && (!question?.trim() || question.length > 4000)) {
+    s.notice = "Ask a question of 1 to 4000 characters."; renderAssistant(node); return;
+  }
+  let snapshot, before;
+  try { snapshot = snapshotOf(target); before = fingerprint(target); }
+  catch {
+    s.notice = "Workspace settings could not be read. Reopen its panel and try again.";
+    renderAssistant(node); return;
+  }
+  const model = s.model || snapshot.config.auto?.model || "";
+  if (!contextOnly && !model) {
+    s.notice = "Choose an installed Ollama model first."; renderAssistant(node); return;
+  }
+  const id = ++s.generation, controller = new AbortController();
+  s.pending = { id, controller, target, fingerprint: before };
+  s.lastQuestion = question;
+  s.notice = contextOnly ? "Building context..." : "Waiting for local Ollama...";
+  const history = s.transcript.filter((t) => t.target?.key === target.key && !t.stale)
+    .map((t) => ({ role: t.role, content: t.content }));
+  if (!contextOnly) {
+    s.transcript.push({ role: "user", content: question, target: snapshot.target, taken_at: snapshot.taken_at });
+    s.draft = "";
+    saveOwn(node);
+  }
+  renderAssistant(node);
+  try {
+    const response = await api.fetchApi(`/rednode/assistant/${contextOnly ? "context" : "chat"}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+      body: JSON.stringify(contextOnly ? { snapshot } : { snapshot, question, history, model }),
+    });
+    const result = await response.json();
+    if (id !== s.generation) return;
+    if (response.ok === false || result.error) throw new Error(result.error || "Assistant request failed.");
+    const live = chosen(node);
+    if (!live || live.node !== target.node) {
+      s.notice = "Target changed or was deleted. Reply discarded. Choose a Workspace and ask again.";
+      return;
+    }
+    if (result.target?.key !== snapshot.target.key || result.taken_at !== snapshot.taken_at) {
+      throw new Error("Reply did not match the requested Workspace snapshot.");
+    }
+    const stale = fingerprint(live) !== s.pending.fingerprint;
+    s.context = result.context || result.text || "";
+    s.contextStamp = `${snapshot.target.title} (${snapshot.target.key}), ${snapshot.taken_at}`;
+    s.notice = [stale ? "Workspace changed. This answer describes an earlier state. Ask again for current settings."
+      : "Snapshot: " + s.contextStamp, ...(result.notices || []), result.count_method || ""].join("\n");
+    if (!contextOnly) {
+      s.transcript.push({ role: "assistant", content: result.answer || "No reply returned.",
+        target: snapshot.target, taken_at: snapshot.taken_at, stale, notices: result.notices || [] });
+      saveOwn(node);
+    }
+  } catch (error) {
+    if (id === s.generation) s.notice = error.name === "AbortError" ? "Request cancelled." : "Error: " + error.message;
+  } finally {
+    if (id === s.generation) { s.pending = null; renderAssistant(node); }
+  }
+}
+
+function installStyle() {
+  if (document.getElementById("rn-assistant-css")) return;
+  const style = el("style"); style.id = "rn-assistant-css";
+  style.textContent = `.rn-assistant {height:100%;overflow:auto;box-sizing:border-box;padding:10px;
+    display:flex;flex-direction:column;gap:10px;background:#15171b;color:#dde1e8;font:15px sans-serif}
+  .rn-assistant button,.rn-assistant select,.rn-assistant input,.rn-assistant textarea {
+    color:#dde1e8;background:#242830;border:1px solid #414957;border-radius:6px;font:inherit;padding:7px;min-width:0}
+  .rn-assistant button {cursor:pointer} .rn-assistant button:disabled {opacity:.45;cursor:default}
+  .rn-assistant .rn-as-toolbar {display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .rn-assistant .rn-as-transcript {display:flex;flex-direction:column;gap:10px}
+  .rn-assistant .rn-as-message {padding:9px;background:#20242b;border-radius:7px;white-space:pre-wrap;overflow-wrap:anywhere}
+  .rn-assistant .rn-as-stamp {color:#9aa9bd;font-size:13px;margin-bottom:5px}
+  .rn-assistant .rn-as-notice {white-space:pre-wrap;color:#b8c8dd;font-size:13px;overflow-wrap:anywhere}
+  .rn-assistant textarea {min-height:80px;resize:vertical;width:100%;box-sizing:border-box}
+  .rn-assistant pre {white-space:pre-wrap;overflow-wrap:anywhere;font:13px sans-serif}`;
+  document.head.appendChild(style);
+}
+
+export function renderAssistant(node) {
+  const root = node._rnAssistantRoot;
+  if (!root) return;
+  const s = state(node), available = targets(), target = chosen(node);
+  // Hidden config never exposes a phantom connection socket.
+  node.inputs = (node.inputs || []).filter((i) => !(i.name === "config" && i.link == null));
+  root.replaceChildren();
+  const head = sectionCard("Studio Assistant", "#8fb4ff", "Read only");
+  const tools = el("div", undefined, "rn-as-toolbar");
+  if (available.length > 1 || (available.length && !target)) {
+    const picker = el("select"); picker.title = "Workspace";
+    const blank = el("option", "Choose a Workspace"); blank.value = ""; picker.append(blank);
+    for (const t of available) {
+      const option = el("option", `${t.node.title || "Workspace"} (${t.key})`);
+      option.value = t.key; option.selected = t.key === target?.key; picker.append(option);
+    }
+    picker.value = target?.key || "";
+    picker.onchange = () => {
+      (node.properties ||= {}).rn_assistant_target = picker.value;
+      node.graph?.change?.();
+      stop(node, "Workspace selected. Earlier replies retain their snapshot labels.");
+    };
+    tools.append(picker);
+  } else tools.append(el("span", target ? target.node.title || "Workspace" : "No Workspace on the canvas."));
+  head.append(tools);
+  if (target) {
+    const modelLine = el("div", undefined, "rn-as-toolbar");
+    modelLine.append(el("span", "Model"));
+    const model = el("input"); model.type = "text"; model.title = "Ollama model";
+    model.value = s.model || target.node._rnCfg?.auto?.model || readCfg(target.node).auto?.model || "";
+    model.placeholder = "Workspace model";
+    makePicker(model, () => s.models, (value) => { s.model = value; saveOwn(node); },
+      { current: () => model.value, allowNew: false });
+    model.onchange = () => { s.model = model.value.trim(); saveOwn(node); };
+    const reload = button("Refresh models", async () => {
+      try {
+        const response = await api.fetchApi("/rednode/assistant/models");
+        const got = await response.json();
+        s.models = got.models || [];
+        s.notice = got.error || got.note || `${s.models.length} installed models available.`;
+      } catch { s.notice = "Ollama could not be reached."; }
+      renderAssistant(node);
+    });
+    reload.disabled = !!s.pending;
+    modelLine.append(model, reload); head.append(modelLine);
+  }
+  root.append(head);
+  const transcript = el("div", undefined, "rn-as-transcript");
+  for (const turn of s.transcript) {
+    const block = el("div", undefined, "rn-as-message");
+    block.append(el("div", `${turn.role === "user" ? "You" : "Assistant"}: ${turn.target?.title || "Workspace"} `
+      + `(${turn.target?.key || "Earlier target"}), ${turn.taken_at || "Earlier snapshot"}`
+      + (turn.stale ? " | Earlier state; ask again" : ""), "rn-as-stamp"));
+    block.append(el("div", turn.content));
+    if (turn.notices?.length) block.append(el("div", turn.notices.join("\n"), "rn-as-notice"));
+    transcript.append(block);
+  }
+  root.append(transcript);
+  root.append(el("div", s.notice, "rn-as-notice"));
+  if (s.context) {
+    const details = el("details"), summary = el("summary", "Context: " + s.contextStamp);
+    details.append(summary, el("pre", s.context)); root.append(details);
+  }
+  if (target) {
+    const question = el("textarea"); question.placeholder = "Ask about the Workspace";
+    question.value = s.draft; question.maxLength = 4000;
+    question.oninput = () => { s.draft = question.value; };
+    question.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault(); ask(node, question.value);
+      }
+    });
+    root.append(expandable(question, "Assistant question", (value) => { s.draft = value; }));
+    const actions = el("div", undefined, "rn-as-toolbar");
+    const send = button("Ask", () => ask(node, question.value)); send.disabled = !!s.pending;
+    const inspect = button("Show context", () => ask(node, "", true)); inspect.disabled = !!s.pending;
+    actions.append(send, inspect);
+    if (s.pending) actions.append(button("Cancel", () => stop(node, "Request cancelled. Ollama may finish its current call.")));
+    else if (s.lastQuestion) actions.append(button("Ask again", () => ask(node, s.lastQuestion)));
+    root.append(actions);
+  }
+  root.append(button("Clear conversation", () => {
+    stop(node, "Conversation cleared.");
+    s.transcript = []; s.context = ""; s.lastQuestion = ""; saveOwn(node); renderAssistant(node);
+  }));
+  root.append(el("div", "Conversation is saved with this node. Clear it before sharing the workflow.", "rn-as-notice"));
+}
+
+app.registerExtension({
+  name: "RedNode.Assistant",
+  async beforeRegisterNodeDef(nodeType, nodeData) {
+    if (nodeData?.name !== TYPE) return;
+    const created = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+      created?.apply(this, arguments);
+      installStyle();
+      const w = widget(this);
+      if (w) { w.type = "hidden"; w.hidden = true; w.computeSize = () => [0, -4]; }
+      const root = el("div", undefined, "rn-assistant rn-ws");
+      for (const name of ["pointerdown", "pointerup", "click", "keydown", "contextmenu", "wheel"])
+        root.addEventListener(name, (event) => event.stopPropagation());
+      this._rnAssistantRoot = root;
+      this.addDOMWidget?.("rednode_assistant_ui", "rednode_assistant_ui", root,
+        { serialize: false, getMinHeight: () => 360 });
+      this.size = [Math.max(this.size?.[0] || 0, 480), Math.max(this.size?.[1] || 0, 520)];
+      refreshTargets(this);
+    };
+    const configured = nodeType.prototype.onConfigure;
+    nodeType.prototype.onConfigure = function () {
+      configured?.apply(this, arguments);
+      this._rnAssistant?.pending?.controller.abort();
+      if (this._rnAssistant) this._rnAssistant.generation++;
+      this._rnAssistant = null;
+      renderAssistant(this);
+    };
+    const drawn = nodeType.prototype.onDrawForeground;
+    nodeType.prototype.onDrawForeground = function () {
+      drawn?.apply(this, arguments);
+      if (performance.now() > (this._rnAssistantNext || 0)) {
+        this._rnAssistantNext = performance.now() + 500;
+        refreshTargets(this);
+      }
+    };
+    const removed = nodeType.prototype.onRemoved;
+    nodeType.prototype.onRemoved = function () {
+      if (this._rnAssistant) { this._rnAssistant.generation++; this._rnAssistant.pending?.controller.abort(); }
+      removed?.apply(this, arguments);
+    };
+  },
+});

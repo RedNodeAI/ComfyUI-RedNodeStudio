@@ -267,7 +267,7 @@ def _client_transport(url, payload=None, timeout=TIMEOUT):
     library: /api/tags is a model list, /api/generate is one completion."""
     import ollama
     host = url
-    for suffix in ("/api/generate", "/api/tags"):
+    for suffix in ("/api/generate", "/api/tags", "/api/chat"):
         if host.endswith(suffix):
             host = host[:-len(suffix)]
     client = ollama.Client(host=host.rstrip("/"), timeout=timeout)
@@ -299,6 +299,17 @@ def _client_transport(url, payload=None, timeout=TIMEOUT):
         if text is None and isinstance(got, dict):
             text = got.get("response")
         return {"response": text or ""}
+    if url.endswith("/api/chat"):
+        p = payload or {}
+        kw = {"model": p.get("model"), "messages": p.get("messages") or [],
+              "stream": False, "options": p.get("options") or None,
+              "keep_alive": p.get("keep_alive")}
+        if p.get("format") is not None:
+            kw["format"] = p["format"]
+        got = client.chat(**kw)
+        message = got.get("message", {}) if isinstance(got, dict) else got.message
+        content = message.get("content", "") if isinstance(message, dict) else message.content
+        return {"message": {"role": "assistant", "content": content or ""}}
     raise ValueError("unknown Ollama endpoint: %s" % url)
 
 
@@ -442,6 +453,20 @@ def ollama_generate(model, system, prompt, image_bytes=None, url=OLLAMA_URL,
     except Exception as e:
         print(f"[RedNode AutoPrompt] Ollama unavailable ({e}); continuing without it",
               flush=True)
+        return ""
+
+
+def ollama_chat(model, messages, url=OLLAMA_URL, options=None, format=None,
+                keep_alive=0, transport=_http_json):
+    """Text conversation through the existing transport; empty on unavailable Ollama."""
+    payload = {"model": model, "messages": messages, "stream": False,
+               "options": options or {}, "keep_alive": f"{max(0, int(keep_alive))}s"}
+    if format is not None:
+        payload["format"] = format
+    try:
+        data = transport(f"{url.rstrip('/')}/api/chat", payload, TIMEOUT)
+        return _strip_think(str(data.get("message", {}).get("content") or ""))
+    except Exception:
         return ""
 
 

@@ -8,7 +8,7 @@ the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
-**60 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**61 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -89,6 +89,23 @@ and your own KSampler does the sampling, which is exactly what every workflow di
 built-in one existed.
 
 ## The Workspace
+
+**RedNode Studio Assistant** sits beside the Workspace under RedNode/Control. Choose a
+Workspace when several are present, then press **Show context** to inspect its settings
+without loading a model. **Ask** explains that snapshot through a local Ollama model,
+using the Workspace's model choice unless another is selected. **Refresh models** lists
+installed models. Ollama must run on localhost through the existing optional transport.
+
+This first stage is read only. It explains configured settings, wired inputs whose values
+are unknown, and setup warnings. It does not change settings or run the queue. Gallery
+context contains counts and selections. Replies identify their Workspace and snapshot;
+a reply about settings changed during the request is marked as an earlier state.
+
+The assistant can request two section expansions per question. Summary, expansion,
+history and reply budgets use Unicode character counts divided by four, rounded up;
+these are budget units, not model token counts. Omitted material is named in the panel.
+The conversation saves with the assistant node. Use **Clear conversation** before sharing
+a workflow. **Cancel** stops waiting; an Ollama call already running may finish.
 
 Fourteen tabs, in four groups, with an Overview in front of them. The strip sits on the panel and the panel sits on the node; press
 the full screen button and the same panel takes the whole window. The socket tuck, the plug on the

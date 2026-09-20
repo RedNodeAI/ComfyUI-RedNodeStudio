@@ -12422,7 +12422,7 @@ function promptsBody(node, body) {
 // SOURCE / PASS / RE-ANGLE like AUTO PROMPT). The head toggles it; the state
 // lives on node._rnCardFolds[key] so a re-render keeps it. Everything after the
 // head hides when folded.
-function sectionCard(title, accent, summary, fold) {
+export function sectionCard(title, accent, summary, fold) {
   const card = document.createElement("div");
   const a = accent || "#8fa8c8";
   card.style.cssText = "display:flex;flex-direction:column;gap:7px;"
@@ -12513,7 +12513,7 @@ function openBigEdit(title, value, onSave) {
 
 // Wraps a textarea so it can grow: an expand glyph in the corner, and a
 // double-click anywhere in the box, both open the big editor.
-function expandable(ta, title, onSave) {
+export function expandable(ta, title, onSave) {
   // THE WRAPPER MUST CARRY THE TEXTAREA'S SIZING ( "the
   // prompt box is the wrong size, not wide enough"). These boxes sit in flex
   // rows and size themselves with flex:1, but wrapping one in a plain block

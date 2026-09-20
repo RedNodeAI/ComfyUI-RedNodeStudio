@@ -684,10 +684,12 @@ from . import lora_info  # noqa: F401,E402  (registers the Civitai lookup route)
 # whole workspace chain load earlier than it used to. Every module here is
 # already loaded by this point, so hero cannot move anyone's turn.
 from . import hero as _rednode_hero  # noqa: F401,E402  (registers the hero routes)
+from .assistant import RedNodeStudioAssistant  # noqa: E402 (registers the assistant routes)
 
 WEB_DIRECTORY = "./web"
 
 NODE_CLASS_MAPPINGS = {
+    "RedNodeStudioAssistant": RedNodeStudioAssistant,
     "RedNodePromptCombine": RedNodePromptCombine,
     "RedNodeTextCombine": RedNodeTextCombine,
     "RedNodePromptSwap": RedNodePromptSwap,
@@ -740,6 +742,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeRigResult": RedNodeRigResult,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "RedNodeStudioAssistant": "RedNode Studio Assistant",
     "RedNodePromptCombine": "RedNode Prompt Combine",
     "RedNodeTextCombine": "RedNode Text Combine",
     "RedNodePromptSwap": "RedNode Prompt Converter",
