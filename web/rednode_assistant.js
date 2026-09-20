@@ -13,6 +13,13 @@ const el = (tag, text, cls) => {
   if (cls) e.className = cls;
   return e;
 };
+// what was left out, as a count you can open rather than a wall you cannot close
+const foldedNotices = (notices, label) => {
+  const wrap = el("details", undefined, "rn-as-notice");
+  wrap.append(el("summary", `${notices.length} ${label}`),
+              el("pre", notices.join("\n")));
+  return wrap;
+};
 const button = (text, fn) => {
   const b = el("button", text);
   b.type = "button";
@@ -54,6 +61,36 @@ export function snapshotOf(target) {
     const source = (graph?._nodes || graph?.nodes || []).find((n) => n.id === link?.origin_id);
     return { input: input.name, connected: input.link != null, from: source?.type || "Unknown node" };
   });
+  // YOUR WRITTEN WORDS, OFF BY DEFAULT. Prompt rows, the frame fields behind a
+  // Krea 2 row, the camera paragraph and the caption instructions are things
+  // you typed, and the assistant can do its job without reading them: it can
+  // still say a row has words, which rig it serves, which row renders and where
+  // a caption lands. Switch Include my words on when you want it to read them,
+  // and they go no further than Ollama on this machine. Stripped HERE rather
+  // than in Python, so what is not wanted is never sent at all.
+  cfg.words_included = !!state(node).words;
+  if (!cfg.words_included) {
+    for (const row of cfg.prompts?.rows || []) {
+      if (!row || typeof row !== "object") continue;
+      // the flags keep every has-text decision working with the words gone
+      row.has_text = !!String(row.text || "").trim();
+      row.has_negative = !!String(row.negative || "").trim();
+      row.text = ""; row.negative = "";
+      if (row.frame && typeof row.frame === "object") {
+        row.frame_filled = Object.keys(row.frame)
+          .filter((k) => String(row.frame[k] || "").trim());
+        delete row.frame;
+      }
+    }
+    for (const key of ["instruction", "system", "question", "prompt", "exclude_tags"]) {
+      if (typeof cfg.auto?.[key] === "string") cfg.auto[key] = "";
+    }
+    // the camera's dials are settings and stay; the paragraph it writes is
+    // prompt wording, and anything that long in there is that paragraph
+    for (const [key, value] of Object.entries(cfg.camera || {})) {
+      if (typeof value === "string" && value.length > 40) cfg.camera[key] = "";
+    }
+  }
   // Counts and selections are enough; gallery filenames are not part of Stage 1.
   for (const tab of Object.values(cfg.tabs || {})) {
     if (!tab || typeof tab !== "object") continue;
@@ -81,6 +118,7 @@ function state(node) {
   const transcript = Array.isArray(saved?.transcript) ? saved.transcript.filter((t) =>
     t && ["user", "assistant"].includes(t.role) && typeof t.content === "string") : [];
   return (node._rnAssistant = { transcript, model: typeof saved?.model === "string" ? saved.model : "",
+    words: !!saved?.words,
     notice: "Read only. Ask about settings or inspect the context without running a model.",
     models: [], draft: "", pending: null, context: "", generation: 0 });
 }
@@ -93,7 +131,7 @@ function saveOwn(node) {
   }
   if (removed) s.notice = `Transcript: ${removed} oldest turns removed from the saved conversation.`;
   const w = widget(node);
-  if (w) w.value = JSON.stringify({ model: s.model, transcript: s.transcript });
+  if (w) w.value = JSON.stringify({ model: s.model, words: !!s.words, transcript: s.transcript });
   node.graph?.change?.();
 }
 
@@ -231,6 +269,22 @@ export function renderAssistant(node) {
     makePicker(model, () => s.models, (value) => { s.model = value; saveOwn(node); },
       { current: () => model.value, allowNew: false });
     model.onchange = () => { s.model = model.value.trim(); saveOwn(node); };
+    const words = el("label", undefined, "rn-as-words");
+    const box = el("input"); box.type = "checkbox"; box.checked = !!s.words;
+    box.onchange = () => {
+      s.words = box.checked;
+      saveOwn(node);
+      s.notice = box.checked
+        ? "Including your words. Prompt text, frame fields and caption instructions "
+          + "now go to Ollama on this machine with each question."
+        : "Your words are held back. The assistant sees that rows have text, not what it says.";
+      renderAssistant(node);
+    };
+    box.title = "Off: the assistant knows a prompt row has words but never reads them. "
+      + "On: your prompt text, Prompt Frame fields and caption instructions are included "
+      + "in what it is asked about, on this machine only.";
+    words.append(box, el("span", "Include my words"));
+    modelLine.append(words);
     const reload = button("Refresh models", async () => {
       try {
         const response = await api.fetchApi("/rednode/assistant/models");
@@ -251,11 +305,18 @@ export function renderAssistant(node) {
       + `(${turn.target?.key || "Earlier target"}), ${turn.taken_at || "Earlier snapshot"}`
       + (turn.stale ? " | Earlier state; ask again" : ""), "rn-as-stamp"));
     block.append(el("div", turn.content));
-    if (turn.notices?.length) block.append(el("div", turn.notices.join("\n"), "rn-as-notice"));
+    // ONE LINE, OPENABLE. Every turn was printing its whole omission list, and
+    // on a real workflow that is fifteen lines of what the answer does not
+    // cover, under every answer, with the same list again at the bottom. The
+    // disclosure has to be there; it does not have to be the loudest thing on
+    // the panel.
+    if (turn.notices?.length) block.append(foldedNotices(turn.notices, "Detail not shown"));
     transcript.append(block);
   }
   root.append(transcript);
-  root.append(el("div", s.notice, "rn-as-notice"));
+  const [stamp, ...rest] = String(s.notice || "").split("\n").filter(Boolean);
+  if (stamp) root.append(el("div", stamp, "rn-as-notice"));
+  if (rest.length) root.append(foldedNotices(rest, "Detail not shown"));
   if (s.context) {
     const details = el("details"), summary = el("summary", "Context: " + s.contextStamp);
     details.append(summary, el("pre", s.context)); root.append(details);
