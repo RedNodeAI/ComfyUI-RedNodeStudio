@@ -643,8 +643,6 @@ from . import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers
 from .camera_studio import RedNodeCameraStudio, RedNodeCameraLoRAs, RedNodeCameraMultiAngle  # noqa: E402
 from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
-# after refine_pipeline and automask, which it calls into
-from . import hero as _rednode_hero  # noqa: E402,F401  (registers the hero route)
 from .rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
 from .selector import RedNodeSelector  # noqa: E402
 from .combo_control import RedNodeComboControl  # noqa: E402
@@ -681,6 +679,11 @@ from .group_rules import RedNodeGroupRules  # noqa: E402  (also registers its ro
 from .subgraph_bridge import (RedNodeSubgraphSend,  # noqa: E402
                               RedNodeSubgraphReceive, RedNodeChannelConvert)
 from . import lora_info  # noqa: F401,E402  (registers the Civitai lookup route)
+# LAST, and that matters. hero.py pulls in workspace, automask and
+# refine_pipeline at import, so importing it partway down this list made the
+# whole workspace chain load earlier than it used to. Every module here is
+# already loaded by this point, so hero cannot move anyone's turn.
+from . import hero as _rednode_hero  # noqa: F401,E402  (registers the hero routes)
 
 WEB_DIRECTORY = "./web"
 
