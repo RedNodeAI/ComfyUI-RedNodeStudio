@@ -235,11 +235,16 @@ how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same s
 
 ![The Auto prompt page: the caption it wrote, six caption engines, and where the words go](images/auto-prompt.webp)
 
-**Img2Img.** A source picture, the pass over it, and two edit stages of one shape. Denoise is a
+**Img2Img.** A source picture, the pass over it, and three edit stages. Denoise is a
 full-width bar, and with several passes each one can have its own denoise and its own scale.
 RE-ANGLE re-shoots the picture from another viewpoint with the multi-angle edit model, from three
-bands or from the Camera tab's studio. SWAP puts a face, head or whole person onto the picture:
-the Subject's, another picked person's, or a picture from Swap's own gallery. Both work on the
+bands or from the Camera tab's studio. REALISM converts an illustration into a photograph before
+the pass, on the Models tab's own rig plus a conversion LoRA you choose, so it needs no second
+model in VRAM and no extra node pack; the reference boost is the dial that decides how far it
+goes, and the source is desaturated a little first because an illustration's colour otherwise
+lands in real skin. SWAP puts a face, head or whole person onto the picture:
+the Subject's, another picked person's, or a picture from Swap's own gallery. The three run in that order, so the medium is converted
+after the viewpoint is settled and before a face lands on it. Re-angle and Swap work on the
 Img2Img source before its pass, or on the new render, a Latent tab render too with Img2Img off
 if you like, where a polish pass by the rig follows the edit; on the source, both carry Skip the
 i2i pass, which sends the edited picture straight to the image output so the rig never enters

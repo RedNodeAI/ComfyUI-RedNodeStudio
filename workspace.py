@@ -1192,6 +1192,9 @@ def parse_config(config_json):
             # RE-ANGLE: the viewpoint stage that runs before the i2i pass
             from . import reangle as _re_parse
             tabs[name]["reangle"] = _re_parse.parse(t.get("reangle"))
+            # REALISM: the medium stage, between the viewpoint and the character
+            from . import realism as _rl_parse
+            tabs[name]["realism"] = _rl_parse.parse(t.get("realism"))
             # SWAP: the character stage that runs after Re-angle, before the pass
             from . import swap as _sw_parse
             tabs[name]["swap"] = _sw_parse.parse(t.get("swap"))
@@ -3215,6 +3218,35 @@ class RedNodeStudioWorkspace:
             except Exception as exc:
                 _run.end("reangle", "Re-angle", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
+                      % exc, flush=True)
+        # REALISM: an illustration becomes a photograph before the pass, through
+        # the Models tab's own rig and a conversion LoRA. AFTER Re-angle, so the
+        # final viewpoint is what gets converted, and BEFORE Swap, so a face
+        # lands on a photograph rather than on cel shading. The result IS the
+        # i2i source from here on, exactly like Re-angle's.
+        _rl = it.get("realism") or {}
+        if (it["on"] and not it["prompt_only"] and _rl.get("on") and i2i_img is not None):
+            try:
+                from . import realism as _rl_mod
+                _rseed2 = int(run_seed if _rl["seed_random"] else _rl["seed"])
+                _run.begin("realism", "Realism", steps=int(_rl["steps"] or rig_steps))
+                i2i_img = _rl_mod.render(_rl, i2i_img, cfg, _rseed2, node_id=unique_id)
+                _run.end("realism", "Realism")
+                _tap("realism", "Realism result", i2i_img)
+                print("[RedNode Workspace] realism: the i2i source is now a photograph "
+                      "(%d x %d)" % (i2i_img.shape[2], i2i_img.shape[1]), flush=True)
+                if _rl.get("skip_pass"):
+                    if cfg["models"]["sampler_mode"] == "internal":
+                        _stage_only = True
+                        _stage_only_by = "realism"
+                    else:
+                        print("[RedNode Workspace] realism: Skip the i2i pass only "
+                              "applies to the built-in sampler; the external one runs "
+                              "as wired, with the converted picture on i2i_image",
+                              flush=True)
+            except Exception as exc:
+                _run.end("realism", "Realism", "error", error=str(exc)[:200])
+                print("[RedNode Workspace] realism failed: %s; the source is used as it is"
                       % exc, flush=True)
         # SWAP: the Subject onto the person in the
         # picture, in the engine where a swap lands - Qwen-Image-Edit + the BFS

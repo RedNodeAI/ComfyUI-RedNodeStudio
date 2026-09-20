@@ -837,6 +837,7 @@ css.textContent = `
 .s-passes{--rn-s:#e0435a}
 .s-auto{--rn-s:#4a8fe0}
 .s-reangle{--rn-s:#f0c58a}
+.s-realism{--rn-s:#8ad2f0}
 .s-swap{--rn-s:#e08fb0}
 .s-converter{--rn-s:#22a39f}
 .rn-ws-subt.tint{position:relative;overflow:hidden}
@@ -1115,6 +1116,15 @@ export const vramLimitName = (cfg) => (cfg?.vram_gb ? `${cfg.vram_gb} GB` : "fre
 // IMAGE TO TEXT, under Img2Img's Auto prompt: galleries that are only captioned, never
 // sent to the model, so they work on any rig (matching workspace.py)
 export const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
+// Realism's words, mirroring realism.py. The instruction names the CHANGE
+// rather than describing the picture, which is what lets the reference boost
+// stay at 1.0; see A2R_FINDINGS.md in the hub.
+export const REALISM_WANT = "transform the image to realistic photograph";
+export const REALISM_SYSTEM = "Describe the key features of the input image (color, "
+  + "shape, size, texture, objects, background), then explain how the user's text "
+  + "instruction should alter or modify the image. Generate a new image that meets "
+  + "the user's requirements while maintaining consistency with the original input "
+  + "where appropriate.";
 const TEXT_TABS_META = {
   text_style: { label: "Style", hint: "Pictures whose look is described in words." },
   text_subject: { label: "Subject", hint: "Pictures whose person is described in words." },
@@ -1268,6 +1278,24 @@ export function readCfg(node) {
     if (name === "i2i") {
       t.prompt_only = !!t.prompt_only;
       if (typeof t.denoise !== "number") t.denoise = 0.7;
+      // REALISM, the medium stage between the viewpoint and the character
+      // (server: realism.py parse). Defaults mirror it exactly, because this
+      // schema is written twice with nothing to hold the two halves together.
+      if (!t.realism || typeof t.realism !== "object") t.realism = {};
+      const RL = t.realism;
+      if (typeof RL.on !== "boolean") RL.on = false;
+      if (typeof RL.lora !== "string") RL.lora = "";
+      if (typeof RL.strength !== "number") RL.strength = 1;
+      if (typeof RL.prompt !== "string") RL.prompt = REALISM_WANT;
+      if (typeof RL.system !== "string") RL.system = REALISM_SYSTEM;
+      if (typeof RL.boost !== "number") RL.boost = 1;
+      if (typeof RL.steps !== "number") RL.steps = 0;
+      if (typeof RL.cfg !== "number") RL.cfg = 0;
+      if (typeof RL.seed !== "number") RL.seed = 0;
+      if (typeof RL.seed_random !== "boolean") RL.seed_random = true;
+      if (typeof RL.desaturate !== "number") RL.desaturate = 20;
+      if (typeof RL.max_side !== "number") RL.max_side = 1536;
+      if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
       // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
       if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
       const R = t.reangle;
@@ -13317,7 +13345,8 @@ function viewKeyOf(node, cur) {
 // section is doing anything, and a status bar that stays put. The sections are the
 // same builders the stacked layout used; `flat` drops their own fold.
 const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PROMPT"],
-                  ["reangle", "RE-ANGLE"], ["swap", "SWAP"], ["converter", "CONVERTER"]];
+                  ["reangle", "RE-ANGLE"], ["realism", "REALISM"], ["swap", "SWAP"],
+                  ["converter", "CONVERTER"]];
 
 const capFirst = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
 
@@ -13364,6 +13393,10 @@ function i2iSubLit(cfg, id) {
   if (id === "reangle") {
     // a re-shot of the render runs whatever the pass mode; on the source it needs the pass
     return !!(t.reangle?.on && (t.reangle.target === "render" || (t.on && !t.prompt_only)));
+  }
+  if (id === "realism") {
+    // it converts the SOURCE, so it needs the tab on and a pass to run at all
+    return !!(t.realism?.on && t.on && !t.prompt_only);
   }
   if (id === "swap") {
     // a swap on the render runs whatever the pass mode; a source swap needs the pass
@@ -13734,6 +13767,9 @@ function i2iTabs(node, body) {
     // a re-shot of the render runs under Prompt only too, so its page stays
     if (t.prompt_only && (t.reangle?.target || "source") !== "render") onlyNote("Re-angle");
     else reangleSection(node, body, "i2i", { flat: true });
+  } else if (sub === "realism") {
+    if (t.prompt_only) onlyNote("Realism");
+    else realismSection(node, body, "i2i", { flat: true });
   } else if (sub === "swap") {
     // a swap on the render runs under Prompt only too, so its page stays
     if (t.prompt_only && (t.swap?.target || "source") !== "render") onlyNote("Swap");
@@ -16032,6 +16068,159 @@ function editSkipRow(node, card, X, tag, what) {
   sl.textContent = "Skip the i2i pass";
   srow.append(ssw, sl);
   card.appendChild(srow);
+}
+
+// REALISM: an illustration becomes a photograph before the i2i pass. The whole
+// feature is one LoRA plus Krea 2's own reference system, so the page is a LoRA
+// picker, the words, and one dial that actually changes the answer. What the
+// pass runs on is the Models tab's rig, already loaded for the render.
+function realismSection(node, body, tabName, { flat = false } = {}) {
+  if (tabName !== "i2i") return;
+  const t = node._rnCfg.tabs.i2i;
+  if (t.prompt_only) return;
+  const R = t.realism;
+  if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+  const L = MODEL_LISTS || {};
+  const open = (node._rnRealismOpen ||= { words: false, engine: false });
+  const card = sectionCard("REALISM", "#8ad2f0",
+    !R.on ? "off" : (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
+            + " \u00b7 boost " + R.boost,
+    flat ? null : { node, key: "i2i_realism", open: !!R.on });
+
+  const row0 = document.createElement("div");
+  row0.className = "rn-ws-row";
+  const sw = document.createElement("div");
+  sw.className = "rn-ws-sw" + (R.on ? " on" : "");
+  sw.title = "On: the Img2Img source is converted to a photograph before the pass "
+           + "runs on it, through the Models tab's rig and the LoRA below. Off: the "
+           + "source goes to the pass as it is.";
+  sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = !R.on
+    ? "Anything to real: convert the source, then paint over it."
+    : R.skip_pass
+      ? "The source is converted and goes straight to the image output."
+      : "The source is converted, then the i2i pass runs on it at the denoise above.";
+  row0.append(sw, lab);
+  card.appendChild(row0);
+
+  if (R.on) {
+    const grid = document.createElement("div");
+    grid.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;"
+      + "align-items:center;margin-top:6px";
+    const lrow = document.createElement("span");
+    lrow.className = "rn-ws-note";
+    lrow.textContent = "Conversion LoRA";
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-select";
+    sel.dataset.choice = "realism_lora";
+    const names = [...new Set([...(L.loras || []), ...(R.lora ? [R.lora] : [])])];
+    for (const n of ["", ...names]) {
+      const op = document.createElement("option");
+      op.value = n;
+      op.textContent = n || "Choose a LoRA";
+      op.selected = n === (R.lora || "");
+      sel.appendChild(op);
+    }
+    sel.title = "The LoRA that does the converting. This is the whole feature: without "
+              + "one the pass has nothing to convert with, and it says so rather than "
+              + "rendering the picture back at you.";
+    sel.onchange = () => { R.lora = sel.value; writeCfg(node); render(node); };
+    grid.append(lrow, sel);
+
+    const num = (label, key, min, max, step, tip) => {
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.textContent = label;
+      const inp = document.createElement("input");
+      inp.type = "number";
+      inp.min = min; inp.max = max; inp.step = step;
+      inp.value = String(R[key]);
+      inp.title = tip;
+      inp.dataset.choice = "realism_" + key;
+      inp.style.cssText = "width:84px;background:#101216;border:1px solid #2a2e34;"
+        + "border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+      inp.onchange = () => {
+        const v = Number(inp.value);
+        if (Number.isFinite(v)) R[key] = Math.max(min, Math.min(max, v));
+        writeCfg(node); render(node);
+      };
+      inp.addEventListener("wheel", () => inp.blur(), { passive: true });
+      grid.append(l, inp);
+    };
+    num("Strength", "strength", 0, 2, 0.05, "The LoRA's own strength. 1.0 is where it "
+        + "was trained.");
+    // the one dial that decides whether this works at all
+    num("Reference boost", "boost", 0, 3, 0.05,
+        "How hard the model is told to keep what it was shown. Keeping the picture and "
+        + "changing its medium pull against each other, so this is the dial that decides "
+        + "whether the conversion happens: 1.0 converts, 1.5 holds the illustration. "
+        + "Measured 2026-09-21.");
+    num("Desaturate first", "desaturate", 0, 100, 5,
+        "Per cent of colour taken out of the source before converting. An illustration "
+        + "is oversaturated and a full regeneration carries that into skin. 20 is a "
+        + "nudge, not a grade.");
+    num("Largest side", "max_side", 512, 2048, 64,
+        "The source is fitted inside this before converting, and snapped to 16 so the "
+        + "latent grid lines up. Not to 512, which is what turns a portrait square.");
+    card.appendChild(grid);
+
+    const sk = document.createElement("div");
+    sk.className = "rn-ws-row";
+    const sksw = document.createElement("div");
+    sksw.className = "rn-ws-sw" + (R.skip_pass ? " on" : "");
+    sksw.dataset.choice = "realism_skip";
+    sksw.title = "On: the converted picture IS the output and the i2i pass is skipped, "
+               + "so the rig never samples. Off: the pass runs on it at the tab's denoise.";
+    sksw.onclick = () => { R.skip_pass = !R.skip_pass; writeCfg(node); render(node); };
+    const skl = document.createElement("span");
+    skl.className = "rn-ws-swlabel";
+    skl.textContent = "Skip the i2i pass";
+    sk.append(sksw, skl);
+    card.appendChild(sk);
+
+    // THE WORDS, folded: they have a working default and are the last thing
+    // anyone needs to touch
+    const wh = document.createElement("button");
+    wh.className = "rn-ws-on";
+    wh.style.cssText = "width:auto;padding:0 10px";
+    wh.textContent = (open.words ? "\u25be" : "\u25b8") + " Words";
+    wh.onclick = () => { open.words = !open.words; render(node); };
+    card.appendChild(wh);
+    if (open.words) {
+      const box = (label, key, tip, rows) => {
+        const l = document.createElement("div");
+        l.className = "rn-ws-note";
+        l.textContent = label;
+        const ta = document.createElement("textarea");
+        ta.value = R[key];
+        ta.rows = rows;
+        ta.title = tip;
+        ta.dataset.choice = "realism_" + key;
+        ta.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
+          + "border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;"
+          + "padding:4px 6px;resize:vertical";
+        ta.onchange = () => { R[key] = ta.value; writeCfg(node); };
+        card.append(l, ta);
+      };
+      box("Ask for", "prompt", "What the conversion is asked to do.", 2);
+      box("How to read the picture", "system",
+          "What the encoder is told to BE. This one matters more than it looks: an "
+          + "instruction that only describes the picture forces the reference boost "
+          + "down to 0.4 before anything converts, while one that names the CHANGE "
+          + "works at 1.0.", 5);
+    }
+
+    if (!R.lora) {
+      const warn = document.createElement("div");
+      warn.className = "rn-ws-note warn";
+      warn.textContent = "No conversion LoRA is chosen, so this pass would leave the "
+        + "picture as it is. Pick one above.";
+      card.appendChild(warn);
+    }
+  }
+  body.appendChild(card);
 }
 
 function reangleSection(node, body, tabName, { flat = false } = {}) {
