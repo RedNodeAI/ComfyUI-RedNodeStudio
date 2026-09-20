@@ -130,11 +130,12 @@ def render(rc, source, cfg, seed, node_id=None):
 
 
 def _render(rc, source, cfg, seed, node_id=None):
-    from . import workspace as _ws
-
+    # WHAT CAN BE REFUSED WITHOUT LOADING ANYTHING comes first, so the answer to
+    # "no LoRA chosen" does not depend on the pack being importable as a package
     if not str(rc["lora"] or "").strip():
         raise ValueError("no realism LoRA is chosen on the Img2Img tab, and the "
                          "conversion is the LoRA's doing: pick one first.")
+    from . import workspace as _ws
     key = json.dumps({"src": _source_key(source), "seed": int(seed), "rc":
                       {k: rc[k] for k in ("lora", "strength", "prompt", "system",
                                           "boost", "steps", "cfg", "desaturate",
