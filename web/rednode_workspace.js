@@ -13834,6 +13834,16 @@ function identityTabs(node, body) {
 // the gallery is backed by input: a hero written to the output folder looked
 // like a gallery picture until a restart, and then the slot pointed at nothing.
 const HERO_SUB = "rednode/heroes";
+
+/** A hero at THUMBNAIL size. The stage strips were loading the full pictures,
+ *  which are 1024 square and often larger, three or four at a time, and every
+ *  click that redrew the panel fetched and decoded them all again. The rand from
+ *  the result travels, because crop.png keeps its name when it is remade and a
+ *  cached thumbnail of the previous one would be worse than a slow one. */
+const heroThumb = (r, px) => api.apiURL(
+  `/rednode/thumb?filename=${encodeURIComponent(r.filename)}`
+  + `&type=${r.type || "input"}&subfolder=${encodeURIComponent(r.subfolder || "")}`
+  + `&px=${px || 320}&rand=${r.rand || 0}`);
 // What the change stage can be asked for.
 const HERO_HAIR = ["Black", "Dark brown", "Brown", "Auburn", "Ginger", "Blonde",
                    "Platinum blonde", "Grey", "White", "Blue", "Pink", "Green",
@@ -13920,6 +13930,71 @@ function heroSet(node, p) {
 // Hero Creator is two pages, not one. HEADSHOT makes the clean picture, and
 // stops; REDESIGN takes that picture somewhere else. They were one scroll and the
 // controls for the second sat below the results of the first.
+/** The right-click menu on a hero tile. Built here rather than reusing the
+ *  gallery's because the actions differ: a hero can be sent, opened or, when it
+ *  is a redesign, deleted, and only a redesign can be. */
+function heroTileMenu(node, st, ev) {
+  document.querySelector(".rn-hero-menu")?.remove();
+  const m = document.createElement("div");
+  m.className = "rn-hero-menu rn-ws-card";
+  m.style.cssText = "position:fixed;z-index:10020;padding:5px;display:flex;"
+    + "flex-direction:column;gap:3px;min-width:200px";
+  const t = node._rnCfg.tabs.subject;
+  const S = () => (node._rnHero ||= {});
+  const close = () => m.remove();
+  const item = (label, fn, danger) => {
+    const b = document.createElement("button");
+    b.className = "rn-ws-btn" + (danger ? " danger" : "");
+    b.style.cssText = "text-align:left;padding:6px 10px;font-size:12px";
+    b.textContent = label;
+    b.onclick = async () => { close(); await fn(); };
+    m.appendChild(b);
+  };
+  item("Open full size", () => window.open(resultUrl(st.res), "_blank"));
+  item("Send to the gallery", () => {
+    const entry = resultEntry(st.res);
+    const have = t.images || [];
+    if (!have.includes(entry)) t.images = [...have, entry];
+    writeCfg(node);
+    render(node);
+  });
+  if (String(st.id).startsWith("edit:")) {
+    item("Delete this redesign", async () => {
+      const i = Number(String(st.id).slice(5));
+      const ed = S().edits?.[i];
+      if (!ed) return;
+      try {
+        await api.fetchApi("/rednode/hero_drop", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: ed.result.filename,
+                                 subfolder: ed.result.subfolder }),
+        });
+      } catch (e) { /* already gone; the entry still goes */ }
+      const set = heroSet(node, S().source) || { edits: [] };
+      set.edits = (set.edits || []).filter((_, j) => j !== i);
+      ((node.properties ||= {}).rn_hero_made ||= {})[S().source] = set;
+      const gone = resultEntry(ed.result);
+      if ((t.images || []).includes(gone)) {
+        t.images = t.images.filter((x) => x !== gone);
+        writeCfg(node);
+      }
+      S().crop = set.crop || null;
+      S().front = set.front || null;
+      S().edits = set.edits || [];
+      S().pick = S().edits.length ? "edit:" + (S().edits.length - 1)
+               : S().front ? "front" : "crop";
+      render(node);
+    }, true);
+  }
+  document.body.appendChild(m);
+  m.style.left = Math.min(ev?.clientX ?? 40, (window.innerWidth || 900) - 220) + "px";
+  m.style.top = Math.min(ev?.clientY ?? 40, (window.innerHeight || 700) - 160) + "px";
+  const away = (e) => {
+    if (!m.contains(e.target)) { close(); document.removeEventListener("pointerdown", away, true); }
+  };
+  setTimeout(() => document.addEventListener("pointerdown", away, true), 0);
+}
+
 function heroTabs(node, body) {
   const props = (node.properties ||= {});
   let page = node._rnHeroSub || props.rn_hero_sub || "headshot";
@@ -14163,7 +14238,10 @@ function heroBody(node, body, sub, page) {
       if (props.rn_hero_auto_front) {
         const r2 = await api.fetchApi("/rednode/hero_front", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: p, ...rigArgs() }),
+          body: JSON.stringify({ source: p, ...rigArgs(),
+            max_side: (node.properties || {}).rn_hero_max_side || 1024,
+            look_model: (node.properties || {}).rn_hero_look
+              ? String(node._rnCfg.tabs?.subject?.auto?.model || "") : "" }),
         });
         const d2 = await r2.json();
         if (d2.error) throw new Error(d2.error);
@@ -14329,9 +14407,11 @@ function heroBody(node, body, sub, page) {
   const stages = [
     { id: "", cap: "Source", url: thumbUrl(state.source, 320), pickable: false },
     { id: "crop", cap: "Cropped",
-      url: state.crop ? resultUrl(state.crop.result) : "", pickable: !!state.crop },
+      url: state.crop ? heroThumb(state.crop.result, 320) : "",
+      pickable: !!state.crop, res: state.crop?.result },
     { id: "front", cap: "Headshot",
-      url: state.front ? resultUrl(state.front.result) : "", pickable: !!state.front },
+      url: state.front ? heroThumb(state.front.result, 320) : "",
+      pickable: !!state.front, res: state.front?.result },
   ];
   // the changes are NOT in here. There are three hero shots and they are fixed;
   // the changes are a growing set and belong in a box of their own.
@@ -14371,6 +14451,18 @@ function heroBody(node, body, sub, page) {
       + (isPick ? "outline:2px solid #b8283c;outline-offset:1px"
                 : "outline:1px solid #2a2e35");
     if (st.pickable) im.onclick = () => { S().pick = st.id; render(node); };
+    // Right click acts on the tile under the pointer, not on whatever happens to
+    // be chosen: a menu that quietly worked on something else is how the wrong
+    // picture gets deleted.
+    if (st.pickable && st.res) {
+      im.oncontextmenu = (e) => {
+        e?.preventDefault?.();
+        S().pick = st.id;
+        heroTileMenu(node, st, e);
+        return false;
+      };
+      im.title = st.cap + "  (right-click for more)";
+    }
     const c = document.createElement("span");
     c.className = "rn-ws-note";
     c.style.cssText = "text-align:center;overflow:hidden;text-overflow:ellipsis;"
@@ -14451,7 +14543,7 @@ function heroBody(node, body, sub, page) {
     const row = document.createElement("div");
     row.style.cssText = "display:flex;gap:10px;align-items:center";
     const im = document.createElement("img");
-    im.src = resultUrl((state.front || state.crop).result);
+    im.src = heroThumb((state.front || state.crop).result, 192);
     im.style.cssText = "width:96px;border-radius:6px;background:#fff;"
       + "outline:1px solid #2a2e35";
     const who = document.createElement("div");
@@ -14473,7 +14565,7 @@ function heroBody(node, body, sub, page) {
     gal.appendChild(gh);
     gal.appendChild(buildStrip(state.edits.map((ed, i) => ({
       id: "edit:" + i, cap: ed.report?.extra || "Changed",
-      url: resultUrl(ed.result), pickable: true,
+      url: heroThumb(ed.result, 320), pickable: true, res: ed.result,
     }))));
 
     // Send and Open live HERE too. They used to sit only in the HERO card, which
@@ -14637,6 +14729,62 @@ function heroBody(node, body, sub, page) {
       + "that a rebuild may not come back the same person. It will run if you ask.";
     rep.appendChild(n);
   }
+  // SIZE. Nothing bounded this before: a crop already over the working size
+  // rendered at its own size, so a big portrait meant a 2000px render on
+  // whatever card was in the machine. 1024 is the default because it is the one
+  // every measurement of this pass was taken at.
+  const sizeRow = document.createElement("div");
+  sizeRow.className = "rn-ws-row";
+  const sizeLab = document.createElement("span");
+  sizeLab.className = "rn-ws-note";
+  sizeLab.textContent = "Render at most";
+  const sizeSel = document.createElement("select");
+  sizeSel.dataset.choice = "hero_max_side";
+  for (const px of [768, 1024, 1280, 1536, 2048]) {
+    const o = document.createElement("option");
+    o.value = String(px);
+    o.textContent = px + " px" + (px === 1024 ? " (tested)" : px >= 1536 ? " (heavy)" : "");
+    o.selected = px === (props.rn_hero_max_side || 1024);
+    sizeSel.appendChild(o);
+  }
+  sizeSel.title = "The square the headshot renders at. A smaller crop is still "
+    + "enlarged to the working size first; this only caps the top. Lower it on a "
+    + "card with little VRAM.";
+  sizeSel.onchange = () => {
+    props.rn_hero_max_side = parseInt(sizeSel.value, 10) || 1024;
+    render(node);
+  };
+  sizeRow.append(sizeLab, sizeSel);
+  rep.appendChild(sizeRow);
+
+  // READ THE FACE. The headshot is a full regeneration, so anything the prompt
+  // does not say is the model's to invent, and skin tone was drifting for
+  // exactly that reason. Off by default: it is another model load and another
+  // wait, and it is only worth it when the drift matters.
+  const lookRow = document.createElement("div");
+  lookRow.className = "rn-ws-row";
+  const lookSw = document.createElement("button");
+  lookSw.className = "rn-ws-sw" + (props.rn_hero_look ? " on" : "");
+  lookSw.dataset.choice = "hero_look";
+  lookSw.title = "Ask the Ollama vision model to read the crop first, and put what "
+    + "it sees into the prompt: skin tone, hair and eye colour, apparent age. "
+    + "Without it the render invents them.";
+  lookSw.onclick = () => { props.rn_hero_look = !props.rn_hero_look; render(node); };
+  const lookLab = document.createElement("span");
+  lookLab.className = "rn-ws-note";
+  lookLab.textContent = "Read the face first";
+  lookRow.append(lookSw, lookLab);
+  rep.appendChild(lookRow);
+  const lookModel = String(node._rnCfg.tabs?.subject?.auto?.model || "");
+  if (props.rn_hero_look && !lookModel) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note warn";
+    n.textContent = "No Ollama model is chosen on the Subject tab's Auto Prompt "
+      + "section, so there is nothing to read the face with. The render still runs "
+      + "and invents what it is not told.";
+    rep.appendChild(n);
+  }
+
   const frontBtn = document.createElement("button");
   frontBtn.className = "rn-ws-btn go";
   frontBtn.textContent = state.front ? "Render again" : "Make the headshot";
@@ -14658,7 +14806,9 @@ function heroBody(node, body, sub, page) {
     try {
       const res = await api.fetchApi("/rednode/hero_front", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: from, ...rigArgs() }),
+        body: JSON.stringify({ source: from, ...rigArgs(),
+                               max_side: props.rn_hero_max_side || 1024,
+                               look_model: props.rn_hero_look ? lookModel : "" }),
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);

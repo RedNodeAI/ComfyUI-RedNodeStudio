@@ -49,6 +49,13 @@ OCCLUDERS = "hand, goggles, swim cap, hat, headdress, sunglasses, visor"
 GARMENT = "shirt, dress, costume, swimsuit, collar, necklace, strap"
 
 WORKING = 768          # under this on the short edge, the crop is enlarged
+# And a CEILING on what the headshot renders at. Nothing bounded it before: a
+# crop already over the working size rendered at its own size, so a 2000 px crop
+# meant a 2000 px render, on whatever card happened to be in the machine. Every
+# measurement taken of this pass was at 1024, which is why that is the default
+# rather than the largest thing that fits.
+MAX_SIDE = 1024
+SIDE_CHOICES = (768, 1024, 1280, 1536, 2048)
 FLOOR = 400            # under this, a regenerated face drifts; say so, do not hide it
 NECK = 0.15            # how far below the chin to cut, as a fraction of FACE height
 SIDE_PAD = 0.08        # breathing room beside the ears
@@ -590,7 +597,9 @@ try:
                                        str(data.get("vae") or ""),
                                        str(data.get("lora") or ""),
                                        str(data.get("sam_model") or ""),
-                                       str(data.get("extra") or ""))
+                                       str(data.get("extra") or ""),
+                                       int(data.get("max_side") or 0),
+                                       str(data.get("look_model") or ""))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
@@ -781,7 +790,8 @@ def _settle():
         pass
 
 
-def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
+def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None,
+                  side=0):
     """The render, in a frame of its own, returning only the picture.
 
     Its own function so that EVERY handle it takes on a model, a CLIP, a VAE, a
@@ -808,7 +818,7 @@ def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
     cl = _run("CLIPLoader", clip_name=clip, type="krea2")[0]
     va = _run("VAELoader", vae_name=vae)[0]
 
-    side = int(base.shape[1])
+    side = int(side or base.shape[1])
     latent = _run("EmptyLatentImage", width=side, height=side, batch_size=1)[0]
     pos = Krea2IdentityEdit().encode(
         clip=cl, prompt=want, vae=va, image=base, grounding_px=side,
@@ -824,7 +834,71 @@ def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
     return _plain(_run("VAEDecode", samples=out, vae=va)[0])
 
 
-def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""):
+# What a vision model is asked about the crop. NARROW on purpose: the render
+# already knows it wants a front-on headshot, and a description that also
+# describes the pose or the background would fight it. Only the things that were
+# observed to drift are asked for.
+LOOK_SYSTEM = ("You describe a person's fixed features from a photograph, for an "
+               "artist who will draw them. Answer with a short comma separated "
+               "list and nothing else. No sentences, no preamble, no opinions, "
+               "nothing about the pose, the background, the lighting or the "
+               "clothing. If something is not visible, leave it out rather than "
+               "guessing.")
+LOOK_ASK = ("List only: skin tone, hair colour, hair length, eye colour, apparent "
+            "age range, and facial hair if any.")
+
+
+def look_at(image, model, url=None):
+    """A short description of the person, from a vision model, or "".
+
+    The headshot is a full regeneration, so anything the prompt does not say is
+    the model's to invent, and skin tone was drifting for exactly that reason.
+    This is not a caption: it asks for the handful of fixed features that a
+    rebuild gets wrong, and asks for them as a list so they land in the prompt
+    the same way every other clause does.
+
+    Fails soft and silently returns "": a headshot without a description is the
+    behaviour this had all along, and it is not worth refusing a render over.
+    """
+    try:
+        import base64
+        from . import autoprompt as _ap
+
+        arr = (np.clip(image[0].detach().cpu().numpy(), 0, 1) * 255).astype(np.uint8)
+        buf = io.BytesIO()
+        Image.fromarray(arr, "RGB").save(buf, format="PNG")
+        say("Reading the face", model)
+        out = _ap.ollama_generate(
+            model, LOOK_SYSTEM, LOOK_ASK,
+            image_bytes=base64.b64encode(buf.getvalue()).decode("ascii"),
+            url=url or _ap.OLLAMA_URL,
+            options={"temperature": 0.1, "num_predict": 120}, keep_alive=0)
+        out = " ".join(str(out or "").split())
+        # a model that answers in prose has not done what was asked, and a
+        # paragraph in the prompt would drown every other clause
+        if len(out) > 300:
+            out = out[:300].rsplit(",", 1)[0]
+        if out:
+            say("Read the face", out)
+        return out.strip(" .")
+    except Exception as exc:
+        print("[RedNode Hero] the face could not be read: %s" % exc, flush=True)
+        return ""
+
+
+def _side_for(px, cap):
+    """The square the render runs at: bounded, and a multiple of eight.
+
+    EmptyLatentImage floor divides by eight, so an odd size decoded one pixel
+    short of what grounding_px had been told. One pixel is harmless and two
+    halves disagreeing about a number is not.
+    """
+    cap = int(cap) if int(cap or 0) in SIDE_CHOICES else MAX_SIDE
+    return max(256, (min(int(px), cap) // 8) * 8)
+
+
+def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra="",
+               max_side=0, look_model=""):
     """Rebuild the head front on, then crop and cut the render.
 
     Step 6 is not optional. A full regeneration reinvents clothing every time, so
@@ -841,7 +915,8 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""
 
     entry, report = make_hero(source, sam_model, True)
     try:
-        return _front(entry, report, source, unet, clip, vae, lora, sam_model, extra)
+        return _front(entry, report, source, unet, clip, vae, lora, sam_model, extra,
+                      max_side, look_model)
     except Exception as exc:
         # a traceback keeps the frame that holds the models alive, so the reason
         # is carried out and the traceback is dropped
@@ -849,12 +924,15 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""
         raise ValueError(str(exc) or exc.__class__.__name__) from None
 
 
-def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
+def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra="",
+           max_side=0, look_model=""):
     with progress_safe():
         base = _ws.load_image("%s/%s" % (entry["subfolder"], entry["filename"]), 0)
 
-        render = _render_front(base, front_prompt(report.get("repair")),
-                               unet, clip, vae, lora)
+        seen = look_at(base, look_model) if look_model else ""
+        render = _render_front(base, front_prompt(report.get("repair"), seen),
+                               unet, clip, vae, lora, side=_side_for(base.shape[1],
+                                                                    max_side))
         say("Cleaning up the render")
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
@@ -869,7 +947,9 @@ def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
         "below_floor": report.get("crop_side", 0) < FLOOR,
         "route": "front-on render", "generated": True,
         "from_crop": report.get("crop_side"),
-        "prompt": front_prompt(report.get("repair"), extra),
+        "prompt": front_prompt(report.get("repair"), seen),
         "extra": str(extra or "").strip(),
+        "render_side": _side_for(base.shape[1], max_side),
+        "seen": seen,
     }
     return _save_hero(flat, source, "front", out), out
