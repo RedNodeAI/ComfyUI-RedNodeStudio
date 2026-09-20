@@ -260,9 +260,12 @@ def _render(rc, source, cfg, seed, node_id=None):
     # through common_ksampler rather than the KSampler node, because that is
     # what the live stream wraps: a pass you cannot watch is a pass you cannot
     # tell from a hang.
+    # sample_with_dials hands back the LATENT ITSELF, not core's one-tuple: it
+    # unwraps common_ksampler on the way through. Indexing [0] here asked a dict
+    # for key 0 and the pass failed with the message "0".
     out = sampler_for(node_id, "realism")(
         model, int(seed), steps, guide, sampler, scheduler, positive, negative,
-        latent, denoise=1.0)[0]
+        latent, denoise=1.0)
     img = _call("VAEDecode", samples=out, vae=vae)[0]
     # out of inference mode, so nothing downstream trips over a tensor whose
     # version counter is not tracked (the Hero Creator learned this one)
