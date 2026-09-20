@@ -1536,6 +1536,13 @@ try:
         cfg["format"] = os.path.splitext(name)[1].lstrip(".").lower() or "png"
         if cfg["format"] == "jpg":
             cfg["format"] = "jpeg"
+        # An optional LEVEL under the usual folder, for the copies the Save tab's
+        # stage toggles ask for. Scrubbed to one plain segment: this arrives from
+        # the browser and the path is built from it.
+        level = re.sub(r"[^A-Za-z0-9_-]+", "", str(body.get("level") or ""))[:32]
+        if level:
+            base = str(cfg.get("subfolder") or "").strip("/")
+            cfg["subfolder"] = (base + "/" + level) if base else level
         ctx = {"when": time.time(), "keep": True, "preset": "paint"}
         out_dir = folder_paths.get_output_directory()
         folder, stem = build_path(cfg, ctx)

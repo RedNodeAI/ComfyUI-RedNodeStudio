@@ -2290,10 +2290,13 @@ export function adoptResult(node, r, why = "unknown", key = "paint") {
  *
  *  If the queue already filed this prompt, promote that file. Otherwise the result
  *  is a TEMP preview and the server copies it into the organised keepers tree. */
-async function saveResultAsKeeper(r) {
+async function saveResultAsKeeper(r, level) {
+  // A LEVEL means "an extra copy of an earlier stage", so the promote path is
+  // skipped: promoting moves the one already filed, and this is meant to be a
+  // second file beside it rather than the same one renamed.
   const q = new URLSearchParams({ prompt_id: r.prompt_id || "", index: "0" });
-  const res = await api.fetchApi(`/rednode/saved_for?${q}`);
-  const found = await res.json();
+  const res = level ? null : await api.fetchApi(`/rednode/saved_for?${q}`);
+  const found = res ? await res.json() : null;
   if (found?.found) {
     const pr = await api.fetchApi("/rednode/promote", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -2308,7 +2311,8 @@ async function saveResultAsKeeper(r) {
   const fr = await api.fetchApi("/rednode/keep_result", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: r.filename, subfolder: r.subfolder || "",
-                           type: r.type || "temp", prompt_id: r.prompt_id || "" }),
+                           type: r.type || "temp", prompt_id: r.prompt_id || "",
+                           level: level || "" }),
   });
   const fd = await fr.json();
   if (fd.error) throw new Error(fd.error);
@@ -2395,6 +2399,18 @@ export async function runPaintFinal(node, r, withPost) {
   }
   try {
     if (withPost) {
+      // The paint result IS the before-Post picture, and this path never touches
+      // the built-in chain, so the Save tab's toggle has to be honoured here as
+      // well or it would mean two different things on two routes. Not gated on
+      // the Save switch: the button that was just pressed IS the ask.
+      if (node._rnCfg?.save?.stage_prepost) {
+        try {
+          await saveResultAsKeeper(r, "before_post");
+        } catch (e) {
+          // the finished picture matters more than its earlier copy
+          console.warn("[RedNode Workspace] the before_post copy did not save:", e);
+        }
+      }
       await queuePostProcessedKeeper(node, r, saveNoticeId);
       return; // the executed event completes the save and clears busy
     }
