@@ -14039,7 +14039,8 @@ function heroBody(node, body, sub) {
   };
 
   const grid = document.createElement("div");
-  grid.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;padding:3px";
+  // room for the selection ring, which is drawn outside the tile
+  grid.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;padding:5px";
   for (const p of pics) {
     const on = p === state.source;
     const set = heroSet(node, p);
@@ -14286,8 +14287,12 @@ function heroBody(node, body, sub) {
 
   const buildStrip = (list) => {
     const strip = document.createElement("div");
-    strip.style.cssText = "display:flex;gap:8px;align-items:flex-start;overflow-x:auto;"
-      + "padding:2px 2px 6px";
+    // An outline draws OUTSIDE the element, and this strip scrolls, so the scroll
+    // container clips whatever hangs over. The ring needs its width plus its
+    // offset on every side: 2 + 2 here, so 6 leaves room and does not touch.
+    // Exactly the bug fixed on the LoRA strip, carried in here with the code.
+    strip.style.cssText = "display:flex;gap:10px;align-items:flex-start;overflow-x:auto;"
+      + "padding:6px 6px 8px";
     for (const st of list) strip.appendChild(buildTile(st));
     return strip;
   };
@@ -14309,7 +14314,7 @@ function heroBody(node, body, sub) {
         + "color:#6b7280;box-sizing:border-box;";
     }
     im.style.cssText += (st.pickable ? "cursor:pointer;" : "")
-      + (isPick ? "outline:2px solid #b8283c;outline-offset:2px"
+      + (isPick ? "outline:2px solid #b8283c;outline-offset:1px"
                 : "outline:1px solid #2a2e35");
     if (st.pickable) im.onclick = () => { S().pick = st.id; render(node); };
     const c = document.createElement("span");
