@@ -599,8 +599,7 @@ try:
                                        str(data.get("sam_model") or ""),
                                        str(data.get("extra") or ""),
                                        int(data.get("max_side") or 0),
-                                       str(data.get("look_model") or ""),
-                                       str(data.get("look_url") or ""))
+                                       str(data.get("look_model") or ""))
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         except Exception as e:
@@ -899,7 +898,7 @@ def _side_for(px, cap):
 
 
 def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra="",
-               max_side=0, look_model="", look_url=""):
+               max_side=0, look_model=""):
     """Rebuild the head front on, then crop and cut the render.
 
     Step 6 is not optional. A full regeneration reinvents clothing every time, so
@@ -917,7 +916,7 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""
     entry, report = make_hero(source, sam_model, True)
     try:
         return _front(entry, report, source, unet, clip, vae, lora, sam_model, extra,
-                      max_side, look_model, look_url)
+                      max_side, look_model)
     except Exception as exc:
         # a traceback keeps the frame that holds the models alive, so the reason
         # is carried out and the traceback is dropped
@@ -926,11 +925,11 @@ def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""
 
 
 def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra="",
-           max_side=0, look_model="", look_url=""):
+           max_side=0, look_model=""):
     with progress_safe():
         base = _ws.load_image("%s/%s" % (entry["subfolder"], entry["filename"]), 0)
 
-        seen = look_at(base, look_model, look_url) if look_model else ""
+        seen = look_at(base, look_model) if look_model else ""
         render = _render_front(base, front_prompt(report.get("repair"), seen),
                                unet, clip, vae, lora, side=_side_for(base.shape[1],
                                                                     max_side))

@@ -14180,10 +14180,12 @@ function heroBody(node, body, sub, page) {
   // from tabs.subject.auto (the per-tab on/off and mode) found nothing, so the
   // panel said no model was chosen while one plainly was, and the render went
   // ahead inventing the face it had been told to read.
+  // The MODEL travels and the address does not: the server uses its own
+  // OLLAMA_HOST for every call in this pack, so a workflow cannot send one
+  // machine's captioning to another's.
   const lookArgs = () => ({
     look_model: (node.properties || {}).rn_hero_look
       ? String(node._rnCfg.auto?.model || "") : "",
-    look_url: String(node._rnCfg.auto?.url || ""),
   });
   const rigArgs = () => ({
     unet: rigNow().unet || rigNow().checkpoint || "",
