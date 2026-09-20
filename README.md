@@ -8,7 +8,7 @@ the saving, the stage comparison, exists to keep the canvas small around that.
 
 ![The whole rig: one Workspace, a Detailer, live previews, the post chain and Save](images/graph.webp)
 
-**61 nodes · No pip dependencies · Advanced Krea 2 tools included**
+**62 nodes · No pip dependencies · Advanced Krea 2 tools included**
 
 - Build and control complex workflows without filling the canvas with utility wires.
 - Paint, compare, grade and review images without leaving the workspace panel.
@@ -618,6 +618,7 @@ what they did. Treat them as legacy.
 | RedNode Text Combine | The plain string joiner: same rows, no prompt flag. |
 | RedNode Prompt Converter | Word-boundary gender and style swaps for captions. |
 | RedNode Prompt Keywords | The global @keyword library that every Prompt Box reads. |
+| RedNode Wildcards | Write a __wildcard__ from the canvas: a name, a value per line, Save. A plain .txt in ComfyUI's wildcards folder, so every wildcard node reads it. |
 | RedNode Selector | A dropdown of your own choices, output as a string. |
 | RedNode Note | A canvas label with big glowing text, a colour and a font. Unselected it is just the sign, with no title bar and no settings. |
 | RedNode Note Panel | Every RedNode Note in the workflow in one list, with its size, font, colour and glow. Drives them live, and can restyle all of them at once. |

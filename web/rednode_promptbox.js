@@ -29,6 +29,7 @@ const KEYWORD_RE = /(?<![A-Za-z0-9_])@[A-Za-z0-9_]+/g;
 let KNOWN = new Set();       // saved @keyword names, for highlight validation
 const BOXES = new Set();     // live render callbacks, re-colored on library change
 const KWCOMBOS = new Set();  // "insert keyword" combo refreshers
+const WCCOMBOS = new Set();  // "insert wildcard" combo refreshers
 
 async function refreshKnown() {
   try {
@@ -40,6 +41,9 @@ async function refreshKnown() {
   for (const upd of KWCOMBOS) { try { upd(); } catch (e) {} }
 }
 window.addEventListener("rednode-prompts-dirty", refreshKnown);
+window.addEventListener("rednode-wildcards-dirty", () => {
+  for (const upd of WCCOMBOS) { try { upd(); } catch (e) {} }
+});
 
 const STYLE = `
 .rn-pb-wrap {
@@ -241,10 +245,16 @@ function buildBox(node) {
   }, { values: [""] });
   wcW.serialize = false;                 // workflow file
   wcW.options.serialize = false;         // API prompt
-  fetch("/rednode/wildcards").then((r) => r.json()).then((j) => {
-    wcW.options.values = [""].concat(j.names || []);
-    node.setDirtyCanvas(true, true);
-  }).catch(() => {});
+  const refreshWildcards = () => fetch("/rednode/wildcards")
+    .then((r) => r.json())
+    .then((j) => {
+      wcW.options.values = [""].concat(j.names || []);
+      node.setDirtyCanvas(true, true);
+    }).catch(() => {});
+  refreshWildcards();
+  // the Wildcards node fires this when it writes one, the way the keyword
+  // manager already does: a name you just saved is in the list straight away
+  WCCOMBOS.add(refreshWildcards);
 
   // "insert keyword" dropdown — lists saved @keywords, drops @name at the caret
   const kwW = node.addWidget("combo", "＋ keyword", "", (v) => {

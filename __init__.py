@@ -652,7 +652,7 @@ from .note_panel import RedNodeNotePanel  # noqa: E402
 from .report import RedNodeReport  # noqa: E402
 from .group_modes import RedNodeGroupModes  # noqa: E402
 from .prompt_library import RedNodePromptKeywords  # noqa: E402  (also registers the HTTP API)
-from . import wildcards as _rednode_wildcards  # noqa: E402,F401  (registers the wildcard HTTP API)
+from .wildcards import RedNodeWildcards  # noqa: E402  (also registers the wildcard HTTP API)
 from .refiner import RedNodeRefineCrop, RedNodeRefinePaste  # noqa: E402
 from .lora_stack import RedNodeLoraStack, RedNodeLoraStackSave  # noqa: E402
 from .group_control import RedNodeGroupControl  # noqa: E402
@@ -710,6 +710,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodeReport": RedNodeReport,
     "RedNodeGroupModes": RedNodeGroupModes,
     "RedNodePromptKeywords": RedNodePromptKeywords,
+    "RedNodeWildcards": RedNodeWildcards,
     "RedNodeRefineCrop": RedNodeRefineCrop,
     "RedNodeRefinePaste": RedNodeRefinePaste,
     "RedNodeLoraStack": RedNodeLoraStack,
@@ -763,6 +764,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodeReport": "RedNode Report",
     "RedNodeGroupModes": "RedNode Group Modes",
     "RedNodePromptKeywords": "RedNode Prompt Keywords",
+    "RedNodeWildcards": "RedNode Wildcards",
     "RedNodeRefineCrop": "RedNode Refine Crop",
     "RedNodeRefinePaste": "RedNode Refine Paste",
     "RedNodeLoraStack": "RedNode LoRA Stack",
