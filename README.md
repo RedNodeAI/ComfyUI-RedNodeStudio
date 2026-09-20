@@ -98,10 +98,22 @@ installed models. Ollama must run on this machine, through the existing optional
 The caption engines accept an `OLLAMA_HOST` on the LAN and the assistant does not: it sends
 your whole Workspace setup to the model, so it stays on the machine you are sitting at.
 
-This first stage is read only. It explains configured settings, wired inputs whose values
-are unknown, and setup warnings. It does not change settings or run the queue. Gallery
-context contains counts and selections. Replies identify their Workspace and snapshot;
-a reply about settings changed during the request is marked as an earlier state.
+It explains configured settings, wired inputs whose values are unknown, and setup
+warnings. Ask it to change something and it proposes the change instead of making it: the
+panel shows the setting, what it is now and what it would become, and nothing moves until
+you press **Apply**. **Undo last change** puts the Workspace back, ten steps deep. It can
+only name settings from a fixed list, so a change it invents is refused rather than
+written, and a setting you moved yourself while it was thinking is left alone and said so.
+It never queues a render.
+
+**Include my words** is off. With it off the assistant knows that a prompt row holds text,
+which rig it serves and which row will render, but never reads the words: your prompt text,
+Prompt Frame fields and caption instructions do not leave the browser. Turn it on when you
+want it to read them, and they go no further than Ollama on this machine. Gallery context
+is counts and selections; filenames never leave the browser either way.
+
+Replies identify their Workspace and snapshot; a reply about settings changed during the
+request is marked as an earlier state, and a proposal built against one is not offered.
 
 The assistant can request two section expansions per question. Summary, expansion,
 history and reply budgets use Unicode character counts divided by four, rounded up;

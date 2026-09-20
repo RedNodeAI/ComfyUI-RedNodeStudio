@@ -104,6 +104,85 @@ export function snapshotOf(target) {
     taken_at: new Date().toISOString(), config: cfg, connections, diagnostics, outside };
 }
 
+// WHERE A CHANGE REACHES THE WORKFLOW, and the only place. The server decided
+// the change is a real setting and carries a legal value; this walks the path it
+// validated and writes the leaf. It re-reads the live value first: a proposal is
+// built from a snapshot, and between reading it and pressing Apply you may have
+// moved the same dial yourself. A value that has moved is left alone and said so,
+// rather than being quietly overwritten by an older idea of it.
+function applyChange(cfg, change) {
+  if (change.op === "prompt_add") {
+    const rows = (cfg.prompts ||= {}).rows ||= [];
+    rows.push(clone(change.value));
+    return { ok: true, what: `${change.label} added` };
+  }
+  const parts = [];
+  for (const chunk of String(change.path).split(".")) {
+    const [name, ...rest] = chunk.split("[");
+    if (name) parts.push(name);
+    for (const piece of rest) parts.push(Number(piece.replace("]", "")));
+  }
+  let node = cfg;
+  for (const part of parts.slice(0, -1)) {
+    if (node == null || typeof node !== "object") return { ok: false, what: "the setting moved" };
+    node = node[part];
+  }
+  const leaf = parts[parts.length - 1];
+  if (node == null || typeof node !== "object") return { ok: false, what: "the setting moved" };
+  const live = shownValue(node[leaf]);
+  if (live !== change.before && change.before !== "(your words, not shown)") {
+    return { ok: false, what: `it is ${live} now, not ${change.before}` };
+  }
+  node[leaf] = change.value;
+  return { ok: true, what: `${change.label}: ${change.before} to ${change.after}` };
+}
+// the panel's own rendering of a value, so "already changed" compares like for
+// like against what the server put in the proposal
+const shownValue = (value) => typeof value === "boolean" ? (value ? "On" : "Off")
+  : value === undefined || value === null ? "Not set" : String(value);
+
+function applyAll(node, target, changes) {
+  const s = state(node);
+  const live = target.node;
+  const cfg = live._rnCfg || (live._rnCfg = readCfg(live));
+  // one snapshot of everything, before anything moves, so Undo is one step
+  (s.undo ||= []).push({ at: new Date().toLocaleTimeString(), config: clone(cfg),
+                         count: changes.length });
+  while (s.undo.length > 10) s.undo.shift();
+  const done = [], refused = [];
+  for (const change of changes) {
+    const result = applyChange(cfg, change);
+    (result.ok ? done : refused).push(result.what);
+  }
+  if (!done.length) s.undo.pop();
+  writeLive(live);
+  s.notice = [done.length ? `Applied: ${done.join("; ")}.` : "Nothing was applied.",
+    refused.length ? `Left alone, changed since: ${refused.join("; ")}.` : ""]
+    .filter(Boolean).join("\n");
+  renderAssistant(node);
+}
+
+function undoLast(node) {
+  const s = state(node);
+  const target = chosen(node);
+  const step = s.undo?.pop();
+  if (!step || !target) { s.notice = "Nothing to undo."; renderAssistant(node); return; }
+  target.node._rnCfg = clone(step.config);
+  writeLive(target.node);
+  s.notice = `Undone: the ${step.count} change(s) applied at ${step.at}.`;
+  renderAssistant(node);
+}
+
+// the Workspace's own write path, so its panel re-reads exactly as it would
+// after any other edit
+function writeLive(workspace) {
+  const w = widget(workspace);
+  if (w) w.value = JSON.stringify(workspace._rnCfg);
+  workspace.graph?.change?.();
+  workspace.onConfigure?.();
+  app.graph?.setDirtyCanvas?.(true, true);
+}
+
 function fingerprint(target) {
   // Compare full live state as well as connections, including paths omitted from the snapshot.
   const snap = snapshotOf(target);
@@ -116,7 +195,10 @@ function state(node) {
   let saved;
   try { saved = JSON.parse(widget(node)?.value || "{}"); } catch { saved = {}; }
   const transcript = Array.isArray(saved?.transcript) ? saved.transcript.filter((t) =>
-    t && ["user", "assistant"].includes(t.role) && typeof t.content === "string") : [];
+    t && ["user", "assistant"].includes(t.role) && typeof t.content === "string")
+    // a proposal is about the state it was made against, so it does not come
+    // back live after a reload: the answer stays, the buttons do not
+    .map((t) => (t.changes?.length ? { ...t, applied: true } : t)) : [];
   return (node._rnAssistant = { transcript, model: typeof saved?.model === "string" ? saved.model : "",
     words: !!saved?.words,
     notice: "Read only. Ask about settings or inspect the context without running a model.",
@@ -207,7 +289,10 @@ export async function ask(node, question, contextOnly = false) {
       : "Snapshot: " + s.contextStamp, ...(result.notices || []), result.count_method || ""].join("\n");
     if (!contextOnly) {
       s.transcript.push({ role: "assistant", content: result.answer || "No reply returned.",
-        target: snapshot.target, taken_at: snapshot.taken_at, stale, notices: result.notices || [] });
+        target: snapshot.target, taken_at: snapshot.taken_at, stale,
+        // a proposal built from a state that has already moved is not offered:
+        // the numbers in it describe a workflow that no longer exists
+        changes: stale ? [] : (result.changes || []), notices: result.notices || [] });
       saveOwn(node);
     }
   } catch (error) {
@@ -285,6 +370,11 @@ export function renderAssistant(node) {
       + "in what it is asked about, on this machine only.";
     words.append(box, el("span", "Include my words"));
     modelLine.append(words);
+    const undo = button("Undo last change", () => undoLast(node));
+    undo.disabled = !state(node).undo?.length;
+    undo.title = undo.disabled ? "Nothing has been applied yet."
+      : `Put the Workspace back as it was before the change at ${state(node).undo.at(-1).at}.`;
+    modelLine.append(undo);
     const reload = button("Refresh models", async () => {
       try {
         const response = await api.fetchApi("/rednode/assistant/models");
@@ -310,6 +400,34 @@ export function renderAssistant(node) {
     // cover, under every answer, with the same list again at the bottom. The
     // disclosure has to be there; it does not have to be the loudest thing on
     // the panel.
+    if (turn.changes?.length && !turn.applied) {
+      const box = el("div", undefined, "rn-as-diff");
+      box.append(el("div", `${turn.changes.length} change(s) proposed. Nothing is set until you press Apply.`));
+      for (const change of turn.changes) {
+        box.append(el("div", change.op === "prompt_add"
+          ? `${change.label}: ${change.detail}`
+          : `${change.label} (${change.path}): ${change.before} to ${change.after}`
+            + (change.note ? ` — ${change.note}` : "")));
+      }
+      const row = el("div", undefined, "rn-as-toolbar");
+      const target = chosen(node);
+      const apply = button("Apply", () => {
+        turn.applied = true; saveOwn(node); applyAll(node, target, turn.changes);
+      });
+      apply.disabled = !target;
+      apply.title = target ? "Write these into the Workspace. Undo puts them back."
+        : "Choose a Workspace first.";
+      row.append(apply, button("Dismiss", () => {
+        turn.applied = true; saveOwn(node);
+        state(node).notice = "Proposal dismissed. Nothing was changed.";
+        renderAssistant(node);
+      }));
+      box.append(row);
+      block.append(box);
+    } else if (turn.changes?.length) {
+      block.append(el("div", `${turn.changes.length} change(s) proposed, already handled.`,
+                      "rn-as-diff"));
+    }
     if (turn.notices?.length) block.append(foldedNotices(turn.notices, "Detail not shown"));
     transcript.append(block);
   }
