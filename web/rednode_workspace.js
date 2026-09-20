@@ -14019,6 +14019,23 @@ function heroTabs(node, body) {
 }
 
 function heroBody(node, body, sub, page) {
+  // TWO COLUMNS, and the tab strips above them stay where they are. The page was
+  // a single stack down the middle with the width unused either side, so the
+  // pictures were small and the controls were a scroll away from the results
+  // they change.
+  const cols = document.createElement("div");
+  cols.style.cssText = "display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap";
+  const colL = document.createElement("div");
+  // the wider side holds the PICTURES on both pages, because comparing faces is
+  // the whole job and a 150px tile is not enough to judge a likeness on
+  colL.style.cssText = "flex:1 1 560px;min-width:360px;display:flex;"
+    + "flex-direction:column;gap:12px";
+  const colR = document.createElement("div");
+  colR.style.cssText = "flex:0 1 400px;min-width:320px;display:flex;"
+    + "flex-direction:column;gap:12px";
+  cols.append(colL, colR);
+  body.appendChild(cols);
+
   const t = node._rnCfg.tabs[sub];
   const S = () => (node._rnHero ||= {});
   const MADE = () => ((node.properties ||= {}).rn_hero_made ||= {});
@@ -14382,14 +14399,14 @@ function heroBody(node, body, sub, page) {
     e.textContent = state.error;
     src.appendChild(e);
   }
-  if (page === "headshot") body.appendChild(src);
+  if (page === "headshot") colL.appendChild(src);
   if (!state.crop) {
     if (page === "redesign") {
       const n = document.createElement("div");
       n.className = "rn-ws-note warn";
       n.textContent = "Nothing has been cropped yet. Make a headshot first, on the "
         + "Headshot page, and its redesigns land here.";
-      body.appendChild(n);
+      colL.appendChild(n);
     }
     return;
   }
@@ -14408,10 +14425,12 @@ function heroBody(node, body, sub, page) {
     { id: "", cap: "Source", url: thumbUrl(state.source, 320), pickable: false },
     { id: "crop", cap: "Cropped",
       url: state.crop ? heroThumb(state.crop.result, 320) : "",
-      pickable: !!state.crop, res: state.crop?.result },
+      pickable: !!state.crop, res: state.crop?.result,
+      px: state.crop?.report?.crop_side },
     { id: "front", cap: "Headshot",
       url: state.front ? heroThumb(state.front.result, 320) : "",
-      pickable: !!state.front, res: state.front?.result },
+      pickable: !!state.front, res: state.front?.result,
+      px: state.front?.report?.render_side || state.front?.report?.crop_side },
   ];
   // the changes are NOT in here. There are three hero shots and they are fixed;
   // the changes are a growing set and belong in a box of their own.
@@ -14470,6 +14489,13 @@ function heroBody(node, body, sub, page) {
     c.textContent = st.cap + (isPick ? " (sending)" : "");
     c.title = st.cap;
     col.append(im, c);
+    if (st.res && st.px) {
+      const dim = document.createElement("span");
+      dim.className = "rn-ws-note";
+      dim.style.cssText = "opacity:.55;font-size:10.5px";
+      dim.textContent = st.px + " px";
+      col.appendChild(dim);
+    }
     return col;
   };
   card.appendChild(buildStrip(stages));
@@ -14532,7 +14558,7 @@ function heroBody(node, body, sub, page) {
   again.onclick = () => go.onclick({ rebuild: true });
   acts.appendChild(again);
   card.appendChild(acts);
-  if (page === "headshot") body.appendChild(card);
+  if (page === "headshot") colR.appendChild(card);
 
   if (page === "redesign") {
     const from = document.createElement("div");
@@ -14552,7 +14578,7 @@ function heroBody(node, body, sub, page) {
       + (state.front ? " \u2014 headshot" : " \u2014 crop only, no headshot yet");
     row.append(im, who);
     from.append(fh, row);
-    body.appendChild(from);
+    colL.appendChild(from);
   }
 
   // ---- REDESIGNS: their own box, because there are many and they keep coming --
@@ -14566,6 +14592,7 @@ function heroBody(node, body, sub, page) {
     gal.appendChild(buildStrip(state.edits.map((ed, i) => ({
       id: "edit:" + i, cap: ed.report?.extra || "Changed",
       url: heroThumb(ed.result, 320), pickable: true, res: ed.result,
+      px: ed.report?.crop_side,
     }))));
 
     // Send and Open live HERE too. They used to sit only in the HERO card, which
@@ -14636,7 +14663,7 @@ function heroBody(node, body, sub, page) {
       hint.textContent = "Click one to send or delete it.";
       gal.appendChild(hint);
     }
-    body.appendChild(gal);
+    colL.appendChild(gal);
   }
 
   // ---- FRONT-ON RENDER ----------------------------------------------------
@@ -14830,7 +14857,7 @@ function heroBody(node, body, sub, page) {
     e.textContent = state.error;
     rep.appendChild(e);
   }
-  if (page === "headshot") body.appendChild(rep);
+  if (page === "headshot") colR.appendChild(rep);
 
   // ---- REDESIGN: a stage of its own, run on the front-on picture -------------
   const ed = document.createElement("div");
@@ -14870,16 +14897,21 @@ function heroBody(node, body, sub, page) {
   styleRow.append(styleLab, styleSeg);
   ed.appendChild(styleRow);
 
-  let exRow = document.createElement("div");
-  exRow.className = "rn-ws-row";
-  exRow.style.flexWrap = "wrap";
+  // A GRID, two across, with the label above its own box. Six of these on one
+  // wrapping row put labels and boxes in different places on every line, so
+  // nothing read as a pair.
+  const exRow = document.createElement("div");
+  exRow.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px 10px";
   ed.appendChild(exRow);
   const pick = (label, key, values) => {
+    const cell = document.createElement("div");
+    cell.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:0";
     const lab = document.createElement("span");
     lab.className = "rn-ws-note";
     lab.textContent = label;
     const selEl = document.createElement("select");
     selEl.dataset.choice = "hero_" + key;
+    selEl.style.cssText = "width:100%;min-width:0";
     for (const v of ["", ...values]) {
       const o = document.createElement("option");
       o.value = v;
@@ -14888,19 +14920,19 @@ function heroBody(node, body, sub, page) {
       selEl.appendChild(o);
     }
     selEl.onchange = () => { ex[key] = selEl.value; render(node); };
-    exRow.append(lab, selEl);
+    cell.append(lab, selEl);
+    exRow.appendChild(cell);
   };
   pick("Ethnicity", "ethnic", HERO_ETHNIC);
   pick("Skin", "skin", HERO_SKIN);
-  const exRow2 = document.createElement("div");
-  exRow2.className = "rn-ws-row";
-  exRow2.style.flexWrap = "wrap";
-  ed.appendChild(exRow2);
-  exRow = exRow2;                 // the rest of the choices go on the second line
   pick("Hair", "hair", HERO_HAIR);
   pick("Eyes", "eyes", HERO_EYES);
   pick("Age", "age", HERO_AGE);
 
+  const freeLab = document.createElement("span");
+  freeLab.className = "rn-ws-note";
+  freeLab.textContent = "Anything else";
+  ed.appendChild(freeLab);
   const free = document.createElement("input");
   free.type = "text";
   free.dataset.choice = "hero_free";
@@ -15024,7 +15056,7 @@ function heroBody(node, body, sub, page) {
     e.textContent = state.error;
     ed.appendChild(e);
   }
-  if (page === "redesign") body.appendChild(ed);
+  if (page === "redesign") colR.appendChild(ed);
 }
 
 // ---- the Detailer tab -------------------------------------------------------------
