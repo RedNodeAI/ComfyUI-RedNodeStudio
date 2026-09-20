@@ -399,8 +399,50 @@ export function buildFrameEditor(wrap, F) {
     o.value = v; o.textContent = t;
     rwStyle.appendChild(o);
   }
+  // The five above are shortcuts, not the whole of what can be asked for. An
+  // instruction of your own goes in the same slot they do, and the saved
+  // library is the one the Auto Prompt sections already write to, so an
+  // instruction written once is reachable from both.
+  const rwOwn = document.createElement("option");
+  rwOwn.value = "own";
+  rwOwn.textContent = "My own instruction...";
+  rwStyle.appendChild(rwOwn);
+  const rwSaved = document.createElement("optgroup");
+  rwSaved.label = "Saved instructions";
+  rwStyle.appendChild(rwSaved);
+  let rwNote = "";
+  fetch("/rednode/caption_instructions").then((r) => r.json()).then((d) => {
+    const saved = d?.prompts || {};
+    for (const [name, p] of Object.entries(saved)) {
+      const o = document.createElement("option");
+      o.value = "saved:" + name;
+      o.textContent = name;
+      // a saved instruction carries a system half and a question half; the
+      // rewrite has its own question, so only the system half travels
+      o.dataset.note = String(p?.system || p?.text || "");
+      rwSaved.appendChild(o);
+    }
+    if (!rwSaved.children.length) rwSaved.remove();
+  }).catch(() => rwSaved.remove());
+  rwStyle.onchange = () => {
+    const v = rwStyle.value;
+    if (v === "own") {
+      const typed = (window.prompt(
+        "What should the rewrite do? This replaces the style note and is sent "
+        + "with the same rules about keeping every fact.", rwNote) || "").trim();
+      if (!typed) { rwStyle.value = "keep"; rwNote = ""; return; }
+      rwNote = typed.slice(0, 2000);
+      rwOwn.textContent = "Mine: " + rwNote.slice(0, 40)
+        + (rwNote.length > 40 ? "..." : "");
+      return;
+    }
+    const opt = [...rwStyle.querySelectorAll?.("option") || []]
+      .find((o) => o.value === v);
+    rwNote = v.startsWith("saved:") ? String(opt?.dataset?.note || "") : "";
+  };
   rwStyle.value = "keep";
-  rwStyle.title = "What the rewrite writes for. Keep leaves the medium and style as you "
+  rwStyle.title = "What the rewrite writes for. Your own instruction, or a saved one, "
+                + "replaces the style note entirely. Keep leaves the medium and style as you "
                 + "wrote them and only tightens the wording; the others add the words "
                 + "of that kind of picture.";
   const rwBtn = el("button", "rn-pf-btn", "✍ Rewrite");
@@ -426,7 +468,12 @@ export function buildFrameEditor(wrap, F) {
       const r = await fetch("/rednode/prompt_rewrite", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model, url: F.sortUrl?.() || "", fields,
-                               style: rwStyle.value }),
+                               // a note REPLACES the style note server side, so
+                               // the style is still sent and still decides the
+                               // variation path
+                               style: rwStyle.value.startsWith("saved:")
+                                 || rwStyle.value === "own" ? "keep" : rwStyle.value,
+                               note: rwNote }),
       });
       const j = await r.json();
       if (j.error) throw new Error(j.error);

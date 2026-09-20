@@ -144,12 +144,19 @@ Every value must be a JSON string. No commentary, markdown, headings, explanatio
 
 
 def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=None,
-                   generate=None):
+                   generate=None, note=""):
     """fields: the frame's text boxes -> the same boxes rewritten, or None.
+
+    `note` is an instruction of your own and REPLACES the style note when given:
+    the five styles are shortcuts, not the whole of what can be asked for. It
+    lands in the same slot they do, inside the system prompt, so the rules about
+    keeping every fact and returning JSON still hold around it. The boxes are
+    still the question; nothing about the shape of the exchange changes.
 
     `generate` may be injected (tests); it takes (model, system, prompt) and
     returns the reply text. Returns None on any failure, having printed why."""
     style = style if style in REWRITE_STYLES else "keep"
+    note = str(note or "").strip()[:2000]
     lump = "\n".join("%s: %s" % (k, str(fields.get(k) or "").strip())
                      for k in IN_FIELDS if str(fields.get(k) or "").strip())
     if not lump.strip():
@@ -159,7 +166,10 @@ def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=No
     gen = generate or (lambda m, s, p: _ap.ollama_generate(
         m, s, p, url=url, options={"temperature": 0.8 if vary else 0.4, "num_predict": 900 if vary else 700},
         keep_alive=0, **({"transport": transport} if transport else {})))
-    system = (VARIATION_SYSTEM if vary else REWRITE_SYSTEM) % _STYLE_NOTES[style]
+    system = (VARIATION_SYSTEM if vary else REWRITE_SYSTEM) % (note or _STYLE_NOTES[style])
+    if note:
+        print("[RedNode Prompt Rewrite] using your own instruction rather than a "
+              "style: %s" % (note[:90] + ("..." if len(note) > 90 else "")), flush=True)
     reply = gen(model, system,
                 "Input boxes:\n\n" + lump + "\n\nReturn the JSON.")
     if not reply:
@@ -287,7 +297,8 @@ try:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             None, lambda: rewrite_fields(body.get("fields") or {}, model,
-                                         str(body.get("style") or "keep"), url=url))
+                                         str(body.get("style") or "keep"), url=url,
+                                         note=str(body.get("note") or "")))
         if result is None:
             return web.json_response(
                 {"error": "the rewrite could not produce a result; the console "
