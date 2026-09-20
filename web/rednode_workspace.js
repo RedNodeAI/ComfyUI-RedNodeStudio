@@ -14105,6 +14105,16 @@ function heroBody(node, body, sub, page) {
   const idLoraNow = () => (node._rnCfg.loras?.slots || [])
     .filter((sl) => sl && sl.type !== "title")
     .find((sl) => sl.enabled && isIdentityLora(sl.name));
+  // WHERE THE VISION MODEL LIVES. cfg.auto is global: one Ollama model and one
+  // address for every tab, chosen in any tab's Auto Prompt section. Reading it
+  // from tabs.subject.auto (the per-tab on/off and mode) found nothing, so the
+  // panel said no model was chosen while one plainly was, and the render went
+  // ahead inventing the face it had been told to read.
+  const lookArgs = () => ({
+    look_model: (node.properties || {}).rn_hero_look
+      ? String(node._rnCfg.auto?.model || "") : "",
+    look_url: String(node._rnCfg.auto?.url || ""),
+  });
   const rigArgs = () => ({
     unet: rigNow().unet || rigNow().checkpoint || "",
     clip: rigNow().clip, vae: rigNow().vae, lora: idLoraNow()?.name || "",
@@ -14269,8 +14279,7 @@ function heroBody(node, body, sub, page) {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ source: p, ...rigArgs(),
             max_side: (node.properties || {}).rn_hero_max_side || 1024,
-            look_model: (node.properties || {}).rn_hero_look
-              ? String(node._rnCfg.tabs?.subject?.auto?.model || "") : "" }),
+            ...lookArgs() }),
         });
         const d2 = await r2.json();
         if (d2.error) throw new Error(d2.error);
@@ -14896,13 +14905,14 @@ function heroBody(node, body, sub, page) {
   lookLab.textContent = "Read the face first";
   lookRow.append(lookSw, lookLab);
   rep.appendChild(lookRow);
-  const lookModel = String(node._rnCfg.tabs?.subject?.auto?.model || "");
-  if (props.rn_hero_look && !lookModel) {
+  const lookModel = String(node._rnCfg.auto?.model || "");
+  if (props.rn_hero_look) {
     const n = document.createElement("div");
-    n.className = "rn-ws-note warn";
-    n.textContent = "No Ollama model is chosen on the Subject tab's Auto Prompt "
-      + "section, so there is nothing to read the face with. The render still runs "
-      + "and invents what it is not told.";
+    n.className = "rn-ws-note" + (lookModel ? "" : " warn");
+    n.textContent = lookModel
+      ? "Reading with " + lookModel + "."
+      : "No Ollama model is chosen in the Auto Prompt section, so there is nothing "
+        + "to read the face with. The render still runs and invents what it is not told.";
     rep.appendChild(n);
   }
 
@@ -14929,7 +14939,7 @@ function heroBody(node, body, sub, page) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: from, ...rigArgs(),
                                max_side: props.rn_hero_max_side || 1024,
-                               look_model: props.rn_hero_look ? lookModel : "" }),
+                               ...lookArgs() }),
       });
       const d = await res.json();
       if (d.error) throw new Error(d.error);
