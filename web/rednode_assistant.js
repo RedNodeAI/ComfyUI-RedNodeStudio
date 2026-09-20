@@ -48,7 +48,11 @@ function chosen(node) {
   return available.find((t) => t.key === key) || (!key && available.length === 1 ? available[0] : null);
 }
 
-export function snapshotOf(target) {
+// words: the Include my words switch, which lives on the ASSISTANT node. It is
+// passed in rather than read here, because `target.node` is the Workspace, and
+// reading the switch off that found nothing and held the words back however the
+// box was ticked. Default off: a caller that forgets sends less, never more.
+export function snapshotOf(target, words = false) {
   const node = target.node;
   // Normalisation works on a detached widget when the panel has no cached config yet.
   const cfg = node._rnCfg ? clone(node._rnCfg)
@@ -68,7 +72,7 @@ export function snapshotOf(target) {
   // a caption lands. Switch Include my words on when you want it to read them,
   // and they go no further than Ollama on this machine. Stripped HERE rather
   // than in Python, so what is not wanted is never sent at all.
-  cfg.words_included = !!state(node).words;
+  cfg.words_included = !!words;
   if (!cfg.words_included) {
     for (const row of cfg.prompts?.rows || []) {
       if (!row || typeof row !== "object") continue;
@@ -183,9 +187,9 @@ function writeLive(workspace) {
   app.graph?.setDirtyCanvas?.(true, true);
 }
 
-function fingerprint(target) {
+function fingerprint(target, words) {
   // Compare full live state as well as connections, including paths omitted from the snapshot.
-  const snap = snapshotOf(target);
+  const snap = snapshotOf(target, words);
   return JSON.stringify([widget(target.node)?.value, target.node._rnCfg,
     snap.connections, snap.outside, snap.diagnostics]);
 }
@@ -245,7 +249,8 @@ export async function ask(node, question, contextOnly = false) {
     s.notice = "Ask a question of 1 to 4000 characters."; renderAssistant(node); return;
   }
   let snapshot, before;
-  try { snapshot = snapshotOf(target); before = fingerprint(target); }
+  const words = !!state(node).words;
+  try { snapshot = snapshotOf(target, words); before = fingerprint(target, words); }
   catch {
     s.notice = "Workspace settings could not be read. Reopen its panel and try again.";
     renderAssistant(node); return;
@@ -282,7 +287,7 @@ export async function ask(node, question, contextOnly = false) {
     if (result.target?.key !== snapshot.target.key || result.taken_at !== snapshot.taken_at) {
       throw new Error("Reply did not match the requested Workspace snapshot.");
     }
-    const stale = fingerprint(live) !== s.pending.fingerprint;
+    const stale = fingerprint(live, words) !== s.pending.fingerprint;
     s.context = result.context || result.text || "";
     s.contextStamp = `${snapshot.target.title} (${snapshot.target.key}), ${snapshot.taken_at}`;
     s.notice = [stale ? "Workspace changed. This answer describes an earlier state. Ask again for current settings."
@@ -425,8 +430,16 @@ export function renderAssistant(node) {
       box.append(row);
       block.append(box);
     } else if (turn.changes?.length) {
-      block.append(el("div", `${turn.changes.length} change(s) proposed, already handled.`,
-                      "rn-as-diff"));
+      // what it was, kept: "already handled" told you a proposal had existed and
+      // nothing about what it did to the workflow
+      const done = el("div", undefined, "rn-as-diff");
+      done.append(el("div", `${turn.changes.length} change(s) proposed, already handled.`));
+      for (const change of turn.changes) {
+        done.append(el("div", change.op === "prompt_add"
+          ? `${change.label}: ${change.detail}`
+          : `${change.label}: ${change.before} to ${change.after}`));
+      }
+      block.append(done);
     }
     if (turn.notices?.length) block.append(foldedNotices(turn.notices, "Detail not shown"));
     transcript.append(block);
