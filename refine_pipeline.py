@@ -543,6 +543,16 @@ def pass_words(ws_cfg, s, seed, subject_words=""):
     falls back to the row, which is the old behaviour.
     """
     text = str(s.get("prompt") or "")
+    if text.strip():
+        # TYPED TEXT WINS, and until now winning meant losing the expansion: the
+        # borrowed row resolved its wildcards and the box right next to it did
+        # not. Each pass is offset by its own place in the chain so two passes
+        # drawing on one file do not get the same line.
+        try:
+            from .prompt_frame import expand as _pf_expand
+            text = _pf_expand(text, seed, True)
+        except Exception:
+            pass
     if not text.strip() and str(s.get("words") or "") == "subject":
         text = str(subject_words or "")
     if not text.strip():

@@ -420,7 +420,7 @@ class RedNodePaintRender:
 
     @staticmethod
     def _conditioning(clip, positive, negative, pc, pos_over, neg_over,
-                      prompt=None, vae=None):
+                      prompt=None, vae=None, seed=0):
         """Which prompt the patch is rendered with, strongest claim first.
 
         1. conditioning wired into the override inputs
@@ -448,11 +448,14 @@ class RedNodePaintRender:
             return pos_over, neg_over if neg_over is not None else negative
         typed = str((pc or {}).get("prompt") or "").strip()
         if typed:
-            # @keyword macros work here exactly as in the Prompt Box, so a detail
-            # phrase you type constantly lives in one place
+            # @keywords AND __wildcards__, exactly as in the Prompt Box, so a
+            # detail phrase you type constantly lives in one place and a
+            # wildcard rolls here too. Keywords alone was the old behaviour, and
+            # it left a wildcard inside a keyword sitting in the prompt as its
+            # own name.
             try:
-                from . import prompt_library
-                typed = prompt_library.expand_keywords(typed)
+                from .prompt_frame import expand as _pf_expand
+                typed = _pf_expand(typed, seed, True)
             except Exception:
                 pass
         combined = ", ".join(x for x in (auto_words, typed) if x)
@@ -762,7 +765,7 @@ class RedNodePaintRender:
         model, clip = self._apply_loras(model, clip, pc, prompt)
         pos, neg = self._conditioning(clip, positive, negative, pc,
                                       positive_override, negative_override,
-                                      prompt=prompt, vae=vae)
+                                      prompt=prompt, vae=vae, seed=seed)
         rgb = work[:, :, :, :3]
         latent = {"samples": vae.encode(rgb)}
         _refs = [k[4:].capitalize() for k in ("use_subject", "use_scene", "use_moodboard")

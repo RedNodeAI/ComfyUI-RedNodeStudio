@@ -204,6 +204,21 @@ class RedNodePaintOut:
               flush=True)
         return digest
 
+    @staticmethod
+    def _bridge_seed(prompt):
+        """The Workspace's own seed, so the words handed out match its render.
+
+        A renderer outside the graph gets no run seed of its own, and rolling one
+        here would hand a different wildcard to the external engine than the
+        Workspace used for the same queue. Falls back to 0, which is a fixed
+        pick rather than a wrong one.
+        """
+        try:
+            models = (_workspace_cfg(prompt) or {}).get("models") or {}
+            return int(models.get("seed") or 0)
+        except Exception:
+            return 0
+
     def handoff(self, scope="whole frame", context=0.25, region_size=1024,
                 region_shape="auto", image=None, prompt=None,
                 main_prompt="", main_negative="", rig="(active rig)"):
@@ -350,9 +365,9 @@ class RedNodePaintOut:
         kws = [k for k in (pc.get("keywords") or []) if isinstance(k, str) and k]
         if kws:
             words = ", ".join(x for x in [words] + ["@" + k for k in kws] if x)
-        try:                                    # @keyword macros, as everywhere else
-            from . import prompt_library
-            words = prompt_library.expand_keywords(words)
+        try:                    # @keywords and __wildcards__, as everywhere else
+            from .prompt_frame import expand as _pf_expand
+            words = _pf_expand(words, self._bridge_seed(prompt), True)
         except Exception:
             pass
         # The empty box falls back to whatever is wired into main_prompt, keeping the
@@ -381,8 +396,8 @@ class RedNodePaintOut:
         # expansion as the positive, or the two boxes would not behave the same.
         against = str(pc.get("negative") or "")
         try:
-            from . import prompt_library
-            against = prompt_library.expand_keywords(against)
+            from .prompt_frame import expand as _pf_expand
+            against = _pf_expand(against, self._bridge_seed(prompt) + 1, True)
         except Exception:
             pass
         # Same fallback, independently: the main negative is what the render should

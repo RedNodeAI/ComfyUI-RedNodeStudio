@@ -3847,6 +3847,12 @@ class RedNodeStudioWorkspace:
             for _row in cfg["prompts"]["rows"]:
                 if _row["text"]:
                     _row["text"] = _pf_expand(_row["text"], run_seed, True)
+                # THE NEGATIVE TOO. It is a prompt box like any other and it was
+                # the one that never resolved, so a __wildcard__ typed there
+                # reached the model as its own name. Offset by one so the two
+                # boxes do not draw the same line from the same file.
+                if _row.get("negative"):
+                    _row["negative"] = _pf_expand(_row["negative"], run_seed + 1, True)
         except Exception as exc:
             print("[RedNode Workspace] wildcard resolve failed: %s" % exc, flush=True)
 
@@ -4227,6 +4233,7 @@ class RedNodeStudioWorkspace:
             try:
                 from .prompt_frame import expand as _pf_expand0
                 prompt_text_out = _pf_expand0(prompt_text_out, run_seed, True)
+                negative_text_out = _pf_expand0(negative_text_out, run_seed + 1, True)
             except Exception:
                 pass
             # THE WORDS AS QUEUED, for the Prompts tab: every socket, caption and
