@@ -37,7 +37,13 @@ SYSTEM = ("Describe the key features of the input image (color, shape, size, tex
           "alter or modify the image. Generate a new image that meets the user's "
           "requirements while maintaining consistency with the original input where "
           "appropriate.")
-SNAP = 16          # the latent grid patchifies at /16; 512 is what squared the source
+# WHAT THE SOURCE IS ROUNDED TO. 16 is the floor: the latent grid patchifies
+# there, so anything smaller decodes short. The larger steps snap the working
+# size towards the coarse buckets an edit model is trained on, at the cost of
+# cropping: 512 turns a portrait into 1024x1536 and a squarish picture into a
+# square. The workflow this came from uses 512, which is why it is offered.
+ROUNDINGS = (16, 64, 512)
+SNAP = 16
 MAX_SIDE = 1536
 _RESULT_CACHE = []
 _CACHE_KEEP = 4
@@ -78,6 +84,13 @@ def parse(raw):
         # straight into "real" skin
         "desaturate": num("desaturate", 20, 0, 100, int),
         "max_side": num("max_side", MAX_SIDE, 512, 2048, int),
+        "round_to": (int(r.get("round_to")) if r.get("round_to") in ROUNDINGS
+                     or str(r.get("round_to")) in [str(x) for x in ROUNDINGS]
+                     else SNAP),
+        # "" = the rig's own pair. A pass can want a different one: beta57 comes
+        # from RES4LYF and is what the workflow this came from renders with.
+        "sampler": str(r.get("sampler") or ""),
+        "scheduler": str(r.get("scheduler") or ""),
         "skip_pass": bool(r.get("skip_pass", False)),
     }
 
@@ -102,9 +115,10 @@ def _prepared(image, rc):
         lum = (img[..., 0] * 0.2126 + img[..., 1] * 0.7152 + img[..., 2] * 0.0722)
         img = img * (1.0 - amount) + lum.unsqueeze(-1) * amount
     h, w = int(img.shape[1]), int(img.shape[2])
+    snap = int(rc.get("round_to") or SNAP)
     scale = min(1.0, float(rc["max_side"]) / max(h, w))
-    nh = max(SNAP, int(round(h * scale / SNAP)) * SNAP)
-    nw = max(SNAP, int(round(w * scale / SNAP)) * SNAP)
+    nh = max(snap, int(round(h * scale / snap)) * snap)
+    nw = max(snap, int(round(w * scale / snap)) * snap)
     if (nh, nw) != (h, w):
         import comfy.utils
         moved = img.movedim(-1, 1)
@@ -130,22 +144,27 @@ def _call(name, **kw):
 
 
 def sampler_for(node_id, label):
-    """core's common_ksampler, streaming a frame a step to the Live Preview and
-    the Run tab under `node_id`, the way Re-angle does it. Plain when there is
-    no node to stream under.
+    """The pack's own sampler, streaming a frame a step under `node_id`.
+
+    sample_with_dials, NOT core's common_ksampler: beta57, bong_tangent and
+    hyperbolic are schedule shapes this pack builds itself (sampler_dials.py),
+    and core has never heard of them. Going through core would have printed "no
+    beta57 in this build" and quietly rendered on the rig's scheduler instead,
+    which is not what the workflow this came from renders with. With nothing on
+    and a stock scheduler it IS common_ksampler.
 
     The decode is this pack's own (live_preview.py), through the tiny decoder in
     models/vae_approx that matches the latent format: lighttaew2_1 for Krea 2.
     Without that file the frames fall back to latent2rgb rather than stopping.
     """
-    import nodes as _core
+    from . import sampler_dials as _dials
     if node_id is None:
-        return _core.common_ksampler
+        return _dials.sample_with_dials
     try:
         from . import live_preview as _live
-        return _live.sampled(node_id, _core.common_ksampler, label=label)
+        return _live.sampled(node_id, _dials.sample_with_dials, label=label)
     except Exception:
-        return _core.common_ksampler
+        return _dials.sample_with_dials
 
 
 def render(rc, source, cfg, seed, node_id=None):
@@ -164,7 +183,8 @@ def _render(rc, source, cfg, seed, node_id=None):
     key = json.dumps({"src": _source_key(source), "seed": int(seed), "rc":
                       {k: rc[k] for k in ("lora", "strength", "prompt", "system",
                                           "boost", "steps", "cfg", "desaturate",
-                                          "max_side", "loras", "lora_set")}},
+                                          "max_side", "loras", "lora_set",
+                                          "round_to", "sampler", "scheduler")}},
                      sort_keys=True)
     for k, img in _RESULT_CACHE:
         if k == key:
@@ -180,8 +200,24 @@ def _render(rc, source, cfg, seed, node_id=None):
                           len(rigs) - 1))] if rigs else {}
     steps = int(rc["steps"] or rec.get("steps") or 8)
     guide = float(rc["cfg"] or rec.get("cfg") or 1.0)
-    sampler = str(rec.get("sampler") or "euler")
-    scheduler = str(rec.get("scheduler") or "simple")
+    sampler = str(rc["sampler"] or rec.get("sampler") or "euler")
+    scheduler = str(rc["scheduler"] or rec.get("scheduler") or "simple")
+    # a pair this build does not have falls back and SAYS so, rather than
+    # failing the pass over the name of a scheduler
+    try:
+        import comfy.samplers as _cs
+        if sampler not in _cs.KSampler.SAMPLERS:
+            print("[RedNode Realism] no %r sampler in this build; euler instead"
+                  % sampler, flush=True)
+            sampler = "euler"
+        from . import sampler_dials as _sd
+        known = list(_cs.KSampler.SCHEDULERS) + list(getattr(_sd, "EXTRA_SCHEDULERS", ()))
+        if scheduler not in known:
+            print("[RedNode Realism] no %r scheduler here; the rig's is used instead"
+                  % scheduler, flush=True)
+            scheduler = str(rec.get("scheduler") or "simple")
+    except Exception:
+        pass
 
     src = _prepared(source, rc)
     # the rig's stack first, then the conversion LoRA on top of it: the order the

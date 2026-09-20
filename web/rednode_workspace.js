@@ -1297,6 +1297,10 @@ export function readCfg(node) {
       if (typeof RL.seed_random !== "boolean") RL.seed_random = true;
       if (typeof RL.desaturate !== "number") RL.desaturate = 20;
       if (typeof RL.max_side !== "number") RL.max_side = 1536;
+      if (![16, 64, 512].includes(RL.round_to)) RL.round_to = 16;
+      // "" = the rig's own pair, which is what most passes want
+      if (typeof RL.sampler !== "string") RL.sampler = "";
+      if (typeof RL.scheduler !== "string") RL.scheduler = "";
       if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
       // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
       if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
@@ -16164,8 +16168,46 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         + "is oversaturated and a full regeneration carries that into skin. 20 is a "
         + "nudge, not a grade.");
     num("Largest side", "max_side", 512, 2048, 64,
-        "The source is fitted inside this before converting, and snapped to 16 so the "
-        + "latent grid lines up. Not to 512, which is what turns a portrait square.");
+        "The source is fitted inside this before converting.");
+
+    const choose = (label, key, options, tip) => {
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.textContent = label;
+      const sel = document.createElement("select");
+      sel.className = "rn-ws-select";
+      sel.dataset.choice = "realism_" + key;
+      for (const [value, text] of options) {
+        const op = document.createElement("option");
+        op.value = String(value);
+        op.textContent = text;
+        op.selected = String(value) === String(R[key] ?? "");
+        sel.appendChild(op);
+      }
+      sel.title = tip;
+      sel.onchange = () => {
+        R[key] = key === "round_to" ? Number(sel.value) : sel.value;
+        writeCfg(node); render(node);
+      };
+      grid.append(l, sel);
+    };
+    // Rounding: the workflow this came from uses 512. It crops more, and it may
+    // well be snapping to buckets the model trained on, so it is offered rather
+    // than argued with.
+    choose("Round the size to", "round_to",
+           [[16, "16 (keeps the framing)"], [64, "64"], [512, "512 (coarse buckets)"]],
+           "The working size is snapped to this. 16 is the floor the latent grid "
+           + "needs. 512 crops harder and lands on the coarse sizes an edit model is "
+           + "often trained at, which is what the original workflow uses.");
+    choose("Sampler", "sampler",
+           [["", "The rig's"], ...(L.samplers || []).map((x) => [x, x])],
+           "Empty follows the Models tab's rig.");
+    choose("Scheduler", "scheduler",
+           [["", "The rig's"], ...(L.schedulers || []).map((x) => [x, x]),
+            ...RIG_EXTRA_SCHEDULERS.map((x) => [x, x])],
+           "Empty follows the Models tab's rig. beta57, bong_tangent and hyperbolic "
+           + "are this pack's own schedule shapes and run here because this pass "
+           + "samples through the pack's own sampler.");
     card.appendChild(grid);
 
     // THE RIG'S OWN STACK. On by default, because a conversion that dropped it
