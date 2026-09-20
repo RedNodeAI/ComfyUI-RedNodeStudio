@@ -139,6 +139,44 @@ def progress_safe():
                 pass
 
 
+def _plain(t):
+    """A tensor free of inference mode.
+
+    ComfyUI samples inside torch.inference_mode(), so the picture a sampler
+    hands back is an INFERENCE tensor: it has no version counter, and the next
+    thing that wants one fails with "Inference tensors do not track version
+    counter". SAM3 is one of those things, so the render died on the head rather
+    than on anything to do with the picture.
+
+    Rebuilt through numpy, which is the only way back that does not depend on
+    what mode the caller happens to be in. A 1024 square of float RGB is twelve
+    megabytes, so the copy costs nothing worth measuring.
+    """
+    try:
+        import torch as _t
+        if not getattr(t, "is_inference", lambda: False)():
+            return t
+        return _t.from_numpy(t.detach().cpu().numpy())
+    except Exception:
+        return t
+
+
+def say(step, detail=""):
+    """Tell the panel what is happening. Best effort, and never fatal.
+
+    A crop is four segmenter passes, a matting pass and often an upscale, which
+    is a long silence with a spinning button at the end of it. Naming the step
+    is the difference between waiting and wondering.
+    """
+    print("[RedNode Hero] %s%s" % (step, (": " + detail) if detail else ""), flush=True)
+    try:
+        from server import PromptServer
+        PromptServer.instance.send_sync("rednode.hero_step",
+                                        {"step": step, "detail": detail})
+    except Exception:
+        pass
+
+
 def _mask_np(image, target, sam_model=""):
     """A boolean array for `target`, or None with the reason SAM3 gave."""
     mask, why = _sam3_mask(image, target, THRESHOLD, sam_model)
@@ -240,8 +278,7 @@ def make_hero(source, sam_model="", enlarge=True, rebuild=False):
     if not rebuild:
         got = _cached_hero(key)
         if got is not None:
-            print("[RedNode Hero] reusing the hero already made for this picture",
-                  flush=True)
+            say("Reusing the hero already made for this picture")
             # said out loud in the report: a panel that showed a cached result as
             # if it had just been made would hide a stale one for ever
             return got["entry"], dict(got["report"], reused=True)
@@ -262,6 +299,7 @@ def crop_and_cut(image, sam_model=""):
     first crop removed.
     """
     h, w = int(image.shape[1]), int(image.shape[2])
+    say("Finding the head")
     head, why = _mask_np(image, HEAD, sam_model)
     if head is None:
         raise ValueError(why or "SAM3 found no head in this picture")
@@ -269,8 +307,11 @@ def crop_and_cut(image, sam_model=""):
     if head_box is None:
         raise ValueError("SAM3 found no head in this picture. Try a photo where "
                          "the face is not turned away or cut off at the edge.")
+    say("Finding the hair")
     hair, _ = _mask_np(image, HAIR, sam_model)
+    say("Looking for anything covering it")
     occ, _ = _mask_np(image, OCCLUDERS, sam_model)
+    say("Finding where the clothing starts")
     gar, _ = _mask_np(image, GARMENT, sam_model)
     gar_box = _box(gar)
 
@@ -279,6 +320,7 @@ def crop_and_cut(image, sam_model=""):
     if crop.shape[1] < 8 or crop.shape[2] < 8:
         raise ValueError("the head is too small in this picture to crop from")
 
+    say("Cutting out the background")
     prepared = _prepared_segmenters(crop)
     sub, used, _identity = _subject_mask_prepared(prepared)
     if sub is None:
@@ -395,6 +437,7 @@ def _enlarge(flat):
     if side >= WORKING:
         return flat, side, ""
     mult = min(8, max(2, -(-WORKING // max(1, side))))
+    say("Enlarging", "%d px, VOSR2 x%d" % (side, mult))
     up, why_up = _vosr2(flat.unsqueeze(0), dict(VOSR2_PASS, vosr2_scale=mult), 0)
     if up is None:
         return flat, side, "not enlarged: %s" % why_up
@@ -471,6 +514,7 @@ def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed,
         prompt = str(want).strip() if override             else "%s, %s" % (str(want).strip(), FRONT)
         render = _render_front(base, prompt, unet, clip, vae, lora, seed=seed,
                                system="" if override else None)
+        say("Cleaning up the change")
         try:
             flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         except ValueError:
@@ -485,6 +529,7 @@ def _edit(base_entry, want, unet, clip, vae, lora, sam_model, source, seed,
             used = "no crop: the override's picture was kept whole"
         render = None
         _settle()
+        say("Done")
 
     side = min(int(flat.shape[0]), int(flat.shape[1]))
     if head is None:
@@ -755,9 +800,11 @@ def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
     # unguarded import at the top took the whole pack down with it on one.
     from .identity import Krea2IdentityEdit
 
+    say("Loading the model")
     model = _run("UNETLoader", unet_name=unet, weight_dtype="default")[0]
     model = _run("LoraLoaderModelOnly", model=model, lora_name=lora,
                  strength_model=1.0)[0]
+    say("Loading the text encoder and VAE")
     cl = _run("CLIPLoader", clip_name=clip, type="krea2")[0]
     va = _run("VAELoader", vae_name=vae)[0]
 
@@ -768,12 +815,13 @@ def _render_front(base, want, unet, clip, vae, lora, seed=7000, system=None):
         ref_boost=FRONT_BOOST, ref_boost_a=FRONT_BOOST, target_latent=latent,
         fit_mode="fit", ref_t0_modulation=False,
         system_prompt=SYSTEM if system is None else system)[0]
+    say("Rendering")
     neg = _run("CLIPTextEncode", clip=cl, text="")[0]
     out = _run("KSampler", model=model, seed=int(seed) or 7000,
                steps=FRONT_STEPS, cfg=FRONT_CFG,
                sampler_name="euler", scheduler="simple", positive=pos, negative=neg,
                latent_image=latent, denoise=1.0)[0]
-    return _run("VAEDecode", samples=out, vae=va)[0]
+    return _plain(_run("VAEDecode", samples=out, vae=va)[0])
 
 
 def make_front(source, unet="", clip="", vae="", lora="", sam_model="", extra=""):
@@ -807,9 +855,11 @@ def _front(entry, report, source, unet, clip, vae, lora, sam_model, extra=""):
 
         render = _render_front(base, front_prompt(report.get("repair")),
                                unet, clip, vae, lora)
+        say("Cleaning up the render")
         flat, (head, hair, occ, head_box), used = crop_and_cut(render, sam_model)
         render = None
         _settle()
+        say("Done")
 
     fside = min(int(flat.shape[0]), int(flat.shape[1]))
     en, rep, hair_ratio, cover = assess(head, hair, occ, head_box, fside)

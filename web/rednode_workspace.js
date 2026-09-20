@@ -13858,6 +13858,22 @@ const HERO_STYLE = {
        + "studio lighting, shot on a DSLR, not an illustration, not a drawing",
 };
 
+// The server names each step as it starts one. Held on the node rather than
+// pushed through render(), because redrawing the panel for a line of text
+// destroys and reloads every picture on it.
+if (!globalThis.__rnHeroSteps) {
+  globalThis.__rnHeroSteps = true;
+  api.addEventListener?.("rednode.hero_step", (e) => {
+    const d = e?.detail || {};
+    const text = String(d.step || "") + (d.detail ? " (" + d.detail + ")" : "");
+    for (const n of (app.graph?._nodes || [])) {
+      if (!n._rnHero) continue;
+      n._rnHero.stepText = text;
+      n._rnHeroPaintStep?.();
+    }
+  });
+}
+
 const heroExtraLine = (node) => {
   const e = (node.properties?.rn_hero_extra) || {};
   // style, then WHO, then the details. What the picture is, then the person in
@@ -13965,7 +13981,7 @@ function heroBody(node, body, sub) {
       btns.front.disabled = busy || btns.frontBlocked;
     }
     if (btns.edit) {
-      btns.edit.textContent = st.busy === "edit" ? "Changing..." : "Apply the change";
+      btns.edit.textContent = st.busy === "edit" ? "Rendering..." : "Render change";
       btns.edit.disabled = busy || btns.editBlocked;
     }
     if (btns.batch) {
@@ -13979,6 +13995,7 @@ function heroBody(node, body, sub) {
       im.style.opacity = busy ? "0.45" : "1";
       im.style.cursor = busy ? "not-allowed" : "pointer";
     }
+    node._rnHeroPaintStep?.();
   };
 
   // ---- SOURCE ------------------------------------------------------------
@@ -14120,6 +14137,7 @@ function heroBody(node, body, sub) {
     const list = sel().slice();
     S().busy = "batch";
     S().error = "";
+    S().stepText = "Starting";
     S().batchAt = 0;
     S().batchOf = list.length;
     paintBusy();
@@ -14145,6 +14163,7 @@ function heroBody(node, body, sub) {
   go.onclick = async (opts) => {
     S().busy = "hero";
     S().error = "";
+    S().stepText = "Starting";
     paintBusy();
     const why = await makeOne(S().source, !!opts?.rebuild);
     if (why) { S().error = why; S().errorAt = "hero"; }
@@ -14197,6 +14216,42 @@ function heroBody(node, body, sub) {
     tools.appendChild(hint);
   }
   src.appendChild(tools);
+
+  // A crop is four segmenter passes, a matting pass and often an upscale. That
+  // is a long silence behind one spinning button, and the difference between
+  // waiting and wondering is being told which part is running.
+  const prog = document.createElement("div");
+  prog.style.cssText = "display:none;flex-direction:column;gap:5px;margin-top:2px";
+  const bar = document.createElement("div");
+  bar.style.cssText = "height:4px;border-radius:2px;background:#2a2e35;overflow:hidden";
+  const fill = document.createElement("div");
+  // indeterminate on purpose: the steps are known but their LENGTHS are not, and
+  // a bar that crawls to 90% and sits there is worse than one that does not claim
+  fill.style.cssText = "height:100%;width:35%;border-radius:2px;background:#b8283c;"
+    + "animation:rn-hero-slide 1.1s ease-in-out infinite";
+  bar.appendChild(fill);
+  const stepLine = document.createElement("div");
+  stepLine.className = "rn-ws-note";
+  prog.append(bar, stepLine);
+  src.appendChild(prog);
+  if (!document.getElementById("rn-hero-anim")) {
+    const st = document.createElement("style");
+    st.id = "rn-hero-anim";
+    st.textContent = "@keyframes rn-hero-slide{0%{margin-left:-35%}"
+      + "100%{margin-left:100%}}";
+    document.head.appendChild(st);
+  }
+  node._rnHeroPaintStep = () => {
+    const st = S();
+    const on = !!st.busy;
+    prog.style.display = on ? "flex" : "none";
+    if (!on) return;
+    const batch = st.busy === "batch"
+      ? " \u2014 picture " + (st.batchAt || 0) + " of " + (st.batchOf || 0) : "";
+    stepLine.textContent = (st.stepText || "Working") + batch;
+  };
+  node._rnHeroPaintStep();
+
   if (state.error && state.errorAt === "hero") {
     const e = document.createElement("div");
     e.className = "rn-ws-note warn";
@@ -14320,9 +14375,9 @@ function heroBody(node, body, sub) {
 
   const again = document.createElement("button");
   again.className = "rn-ws-btn";
-  again.textContent = "Make again";
-  again.title = "Ignore the crop already made and run it fresh. The front-on and the "
-    + "changes go with it: they were built from the old one.";
+  again.textContent = "Crop again";
+  again.title = "Find the head and cut it again from the source. The front-on and the "
+    + "changes go with it: they were built from the old crop.";
   again.onclick = () => go.onclick({ rebuild: true });
   acts.appendChild(again);
   card.appendChild(acts);
@@ -14490,6 +14545,7 @@ function heroBody(node, body, sub) {
     const from = S().source;
     S().busy = "front";
     S().error = "";
+    S().stepText = "Starting";
     paintBusy();
     try {
       const res = await api.fetchApi("/rednode/hero_front", {
@@ -14662,7 +14718,7 @@ function heroBody(node, body, sub) {
 
   const editBtn = document.createElement("button");
   editBtn.className = "rn-ws-btn go";
-  editBtn.textContent = "Apply the change";
+  editBtn.textContent = "Render change";
   btns.editBlocked = blocked || !state.front || !line;
   btns.edit = editBtn;
   editBtn.disabled = !!state.busy || btns.editBlocked;
@@ -14676,6 +14732,7 @@ function heroBody(node, body, sub) {
     const want = heroExtraLine(node);
     S().busy = "edit";
     S().error = "";
+    S().stepText = "Starting";
     paintBusy();
     try {
       const res = await api.fetchApi("/rednode/hero_edit", {
