@@ -1298,6 +1298,7 @@ export function readCfg(node) {
       if (typeof RL.desaturate !== "number") RL.desaturate = 20;
       if (typeof RL.max_side !== "number") RL.max_side = 1536;
       if (![16, 64, 512].includes(RL.round_to)) RL.round_to = 16;
+      if (typeof RL.vl_size !== "number") RL.vl_size = 384;
       // "" = the rig's own pair, which is what most passes want
       if (typeof RL.sampler !== "string") RL.sampler = "";
       if (typeof RL.scheduler !== "string") RL.scheduler = "";
@@ -16168,7 +16169,14 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         + "is oversaturated and a full regeneration carries that into skin. 20 is a "
         + "nudge, not a grade.");
     num("Largest side", "max_side", 512, 2048, 64,
-        "The source is fitted inside this before converting.");
+        "The source is fitted inside this before converting. This is the size it "
+        + "renders at; what the vision encoder reads is the next row.");
+    num("Vision read size", "vl_size", 64, 2048, 64,
+        "The longest side handed to the Qwen3-VL encoder, which is NOT the render "
+        + "size: it gets a coarse read while the reference latents carry the detail. "
+        + "384 is the value this was trained at and the value the original workflow "
+        + "asks for. Larger reads drift: the conversion starts treating the source as "
+        + "a loose reference rather than the picture to keep.");
 
     const choose = (label, key, options, tip) => {
       const l = document.createElement("span");

@@ -45,6 +45,13 @@ SYSTEM = ("Describe the key features of the input image (color, shape, size, tex
 ROUNDINGS = (16, 64, 512)
 SNAP = 16
 MAX_SIDE = 1536
+# WHAT THE VISION ENCODER SEES, which is not the size the picture renders at.
+# Qwen3-VL gets a coarse read and the VAE reference latents carry the detail:
+# ai-toolkit trains this at 384x384 total pixels and the workflow this came from
+# asks for 384. Feeding it the render size instead (1536) is roughly sixteen
+# times the pixel budget it was trained on, and the result was a conversion that
+# treated the source as a loose reference rather than the picture to keep.
+VL_SIZE = 384
 _RESULT_CACHE = []
 _CACHE_KEEP = 4
 
@@ -84,6 +91,7 @@ def parse(raw):
         # straight into "real" skin
         "desaturate": num("desaturate", 20, 0, 100, int),
         "max_side": num("max_side", MAX_SIDE, 512, 2048, int),
+        "vl_size": num("vl_size", VL_SIZE, 64, 2048, int),
         "round_to": (int(r.get("round_to")) if r.get("round_to") in ROUNDINGS
                      or str(r.get("round_to")) in [str(x) for x in ROUNDINGS]
                      else SNAP),
@@ -184,7 +192,8 @@ def _render(rc, source, cfg, seed, node_id=None):
                       {k: rc[k] for k in ("lora", "strength", "prompt", "system",
                                           "boost", "steps", "cfg", "desaturate",
                                           "max_side", "loras", "lora_set",
-                                          "round_to", "sampler", "scheduler")}},
+                                          "round_to", "sampler", "scheduler",
+                                          "vl_size")}},
                      sort_keys=True)
     for k, img in _RESULT_CACHE:
         if k == key:
@@ -250,13 +259,14 @@ def _render(rc, source, cfg, seed, node_id=None):
     from .identity import Krea2IdentityEdit
     positive = Krea2IdentityEdit().encode(
         clip=clip, prompt=rc["prompt"], vae=vae, image=src,
-        grounding_px=max(int(src.shape[1]), int(src.shape[2])),
+        grounding_px=int(rc["vl_size"]),
         ref_boost=rc["boost"], ref_boost_a=rc["boost"], target_latent=latent,
         fit_mode="fit", ref_t0_modulation=True, system_prompt=rc["system"])[0]
     negative = _call("CLIPTextEncode", clip=clip, text="")[0]
-    print("[RedNode Realism] %s on %s, boost %.2f, %d steps, rig stack %s" %
-          (rc["lora"], rig_name or "the active rig", rc["boost"], steps,
-           "on" if rc["loras"] else "off"), flush=True)
+    print("[RedNode Realism] %s on %s, boost %.2f, %d steps, VL read %d px, "
+          "rig stack %s" % (rc["lora"], rig_name or "the active rig", rc["boost"],
+                            steps, rc["vl_size"], "on" if rc["loras"] else "off"),
+          flush=True)
     # through common_ksampler rather than the KSampler node, because that is
     # what the live stream wraps: a pass you cannot watch is a pass you cannot
     # tell from a hang.
