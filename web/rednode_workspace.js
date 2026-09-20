@@ -14024,15 +14024,24 @@ function heroBody(node, body, sub, page) {
   // pictures were small and the controls were a scroll away from the results
   // they change.
   const cols = document.createElement("div");
-  cols.style.cssText = "display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap";
+  // max-width:none, inline, on purpose. Every direct child of the body is capped
+  // at 940px and centred unless the TAB opted out, and only Paint, Prompts and
+  // Latent do. This container escapes the cap; the two tab strips above it are
+  // also direct children and keep it, so the navigation stays in the middle and
+  // the content below it takes the width. Without this the two columns wrapped
+  // into a single 600px stack and the hero shots scrolled inside a 260px box.
+  cols.style.cssText = "display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;"
+    + "max-width:none;width:100%";
   const colL = document.createElement("div");
-  // the wider side holds the PICTURES on both pages, because comparing faces is
-  // the whole job and a 150px tile is not enough to judge a likeness on
-  colL.style.cssText = "flex:1 1 560px;min-width:360px;display:flex;"
-    + "flex-direction:column;gap:12px";
   const colR = document.createElement("div");
-  colR.style.cssText = "flex:0 1 400px;min-width:320px;display:flex;"
-    + "flex-direction:column;gap:12px";
+  // The PICTURES get the wide column on both pages, because comparing faces is
+  // the whole job. On Headshot the pictures are on the RIGHT (the three shots)
+  // and the source grid is the narrow side; on Redesign they are on the left
+  // (the preview and the strip) and the controls are the narrow side.
+  const wide = "flex:1 1 640px;min-width:420px;display:flex;flex-direction:column;gap:12px";
+  const rail = "flex:0 1 460px;min-width:320px;display:flex;flex-direction:column;gap:12px";
+  colL.style.cssText = page === "headshot" ? rail : wide;
+  colR.style.cssText = page === "headshot" ? wide : rail;
   cols.append(colL, colR);
   body.appendChild(cols);
 
@@ -14177,7 +14186,10 @@ function heroBody(node, body, sub, page) {
 
   const grid = document.createElement("div");
   // room for the selection ring, which is drawn outside the tile
-  grid.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;padding:5px";
+  // a grid that fills the column with as many thumbnails as fit, each growing
+  // to share the width, rather than fixed 82px tiles in a row of empty space
+  grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,"
+    + "minmax(96px,1fr));gap:8px;padding:5px";
   for (const p of pics) {
     const on = p === state.source;
     const set = heroSet(node, p);
@@ -14191,8 +14203,8 @@ function heroBody(node, body, sub, page) {
       + (set?.crop ? " (cropped)" : "") + (set?.front ? " (front-on)" : "")
       + (set?.edits?.length ? ` (${set.edits.length} changed)` : "")
       + "\nRight-click to select for a batch";
-    im.style.cssText = "width:82px;height:82px;object-fit:cover;border-radius:6px;"
-      + "cursor:pointer;background:#111;"
+    im.style.cssText = "width:100%;aspect-ratio:1;height:auto;object-fit:cover;"
+      + "border-radius:6px;display:block;cursor:pointer;background:#111;"
       + (chosen ? "outline:2px solid #3b82f6;outline-offset:1px"
                 : on ? "outline:2px solid #b8283c;outline-offset:1px"
                      : "outline:1px solid #2a2e35")
@@ -14422,13 +14434,13 @@ function heroBody(node, body, sub, page) {
   // The source is shown to judge the rest AGAINST, never sent: it is already in
   // the gallery, so choosing it would be a button that does nothing.
   const stages = [
-    { id: "", cap: "Source", url: thumbUrl(state.source, 320), pickable: false },
+    { id: "", cap: "Source", url: thumbUrl(state.source, 512), pickable: false },
     { id: "crop", cap: "Cropped",
-      url: state.crop ? heroThumb(state.crop.result, 320) : "",
+      url: state.crop ? heroThumb(state.crop.result, 512) : "",
       pickable: !!state.crop, res: state.crop?.result,
       px: state.crop?.report?.crop_side },
     { id: "front", cap: "Headshot",
-      url: state.front ? heroThumb(state.front.result, 320) : "",
+      url: state.front ? heroThumb(state.front.result, 512) : "",
       pickable: !!state.front, res: state.front?.result,
       px: state.front?.report?.render_side || state.front?.report?.crop_side },
   ];
@@ -14438,7 +14450,7 @@ function heroBody(node, body, sub, page) {
     .concat((state.edits || []).map((_, i) => "edit:" + i));
   if (!pickables.includes(state.pick)) state.pick = state.front ? "front" : "crop";
 
-  const buildStrip = (list) => {
+  const buildStrip = (list, fill) => {
     const strip = document.createElement("div");
     // An outline draws OUTSIDE the element, and this strip scrolls, so the scroll
     // container clips whatever hangs over. The ring needs its width plus its
@@ -14446,23 +14458,28 @@ function heroBody(node, body, sub, page) {
     // Exactly the bug fixed on the LoRA strip, carried in here with the code.
     strip.style.cssText = "display:flex;gap:10px;align-items:flex-start;overflow-x:auto;"
       + "padding:6px 6px 8px";
-    for (const st of list) strip.appendChild(buildTile(st));
+    for (const st of list) strip.appendChild(buildTile(st, fill));
     return strip;
   };
-  const buildTile = (st) => {
+  // fill: the three hero shots share their row equally and grow with the column,
+  // the way the mockup has them. The redesign strip is NOT filled: it holds any
+  // number of tiles and scrolls, so those stay a fixed 150px.
+  const buildTile = (st, fill) => {
     const col = document.createElement("div");
     col.style.cssText = "display:flex;flex-direction:column;gap:4px;align-items:center;"
-      + "flex:none;width:150px";
+      + (fill ? "flex:1 1 0;min-width:120px" : "flex:none;width:150px");
     const isPick = st.pickable && st.id === state.pick;
+    const w = fill ? "width:100%;" : "width:150px;";
     let im;
     if (st.url) {
       im = document.createElement("img");
       im.src = st.url;
-      im.style.cssText = "width:150px;border-radius:6px;background:#fff;";
+      im.style.cssText = w + "border-radius:6px;background:#fff;";
     } else {
       im = document.createElement("div");
       im.textContent = "Not made yet";
-      im.style.cssText = "width:150px;height:150px;border-radius:6px;background:#15171b;"
+      im.style.cssText = w + (fill ? "aspect-ratio:1;" : "height:150px;")
+        + "border-radius:6px;background:#15171b;"
         + "display:flex;align-items:center;justify-content:center;font-size:11px;"
         + "color:#6b7280;box-sizing:border-box;";
     }
@@ -14498,7 +14515,7 @@ function heroBody(node, body, sub, page) {
     }
     return col;
   };
-  card.appendChild(buildStrip(stages));
+  card.appendChild(buildStrip(stages, true));
 
   const r = picked()?.report || {};
   const chips = document.createElement("div");
