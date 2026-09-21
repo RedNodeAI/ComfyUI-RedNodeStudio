@@ -18,7 +18,8 @@ import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
-import { TAB_ORDER, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
+import { TAB_ICONS, RAIL_ICONS } from "./rednode_ws_icons.js";
+import { TAB_ORDER, RAIL_GROUPS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
@@ -137,6 +138,40 @@ css.textContent = `
    stray line between the tabs and the box, the one place it must never be. */
 .rn-ws-postbar .rn-ws-cog{margin-left:auto}
 .rn-ws-tabrow{display:flex;align-items:flex-start;gap:6px;flex:none}
+/* THE RAIL (2026-09-21, from the user's Direction 2 mockup): the tabs down the left
+   in their groups, each group a heading over a colour bar, each tab an icon, its
+   light and its name, the open one filled red. Folded, it is the icons and lights
+   alone. The body keeps the whole width beside it. */
+.rn-ws-shell{display:flex;gap:10px;flex:1 1 auto;min-height:0}
+.rn-ws-main{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
+.rn-ws-rail{display:flex;flex-direction:column;gap:10px;flex:none;width:184px;overflow-y:auto;
+  overflow-x:hidden;padding:4px 6px 4px 2px;box-sizing:border-box;border-right:1px solid #262a31}
+.rn-ws-rail.compact{width:52px;padding:4px 4px 4px 2px}
+.rn-ws-railhead{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex:none}
+.rn-ws-rail.compact .rn-ws-railhead{flex-direction:column;align-items:stretch}
+.rn-ws-railhead .rn-ws-tuck{margin-left:0}
+.rn-ws-railtog{background:#1b1e23;border:1px solid #2a2e35;border-radius:6px;color:#9aa0a8;
+  cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center}
+.rn-ws-railtog:hover{color:#fff;border-color:#3d434c}
+.rn-ws-rgroup{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--rn-g,#4a5058);
+  padding-left:7px;border-radius:1px}
+.rn-ws-rglab{font-size:11px;color:#8a919b;padding:1px 2px 3px;letter-spacing:.02em}
+.rn-ws-rail.compact .rn-ws-rglab{display:none}
+.rn-ws-rail.compact .rn-ws-rgroup{padding-left:3px}
+.rn-ws-tab.rail{background:transparent;border:0;justify-content:flex-start;gap:11px;
+  padding:7px 9px;font-size:13px;font-weight:500;color:#c8ccd2;border-radius:6px;width:100%;
+  text-align:left;overflow:visible}
+.rn-ws-tab.rail::after,.rn-ws-tab.rail::before{display:none}
+/* scoped under the rail so the strip's per-group .cur tints (later in this sheet)
+   do not win over the red fill */
+.rn-ws-rail .rn-ws-tab.rail:hover{background:#23262c;color:#fff}
+.rn-ws-rail .rn-ws-tab.rail.cur{background:#c42a3c;border:0;color:#fff;font-weight:600}
+.rn-ws-tab.rail .ic{display:flex;flex:none;color:#aeb4bc}
+.rn-ws-tab.rail.cur .ic{color:#fff}
+.rn-ws-tab.rail .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rn-ws-rail.compact .rn-ws-tab.rail{gap:5px;padding:7px 4px;justify-content:center}
+.rn-ws-rail.compact .rn-ws-tab.rail .lb{display:none}
+.rn-ws-rail.compact .rn-ws-tab.rail .dot{width:6px;height:6px}
 /* the LoRA tab's SET strip carries this class too, so the rule stays what it was
    and only the strip inside the tab row grows to push the plug to the right */
 .rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
@@ -17977,17 +18012,47 @@ export function render(node) {
   applyScale(host, cfg.ui_scale);
   root.appendChild(host);
 
-  const tabs = document.createElement("div");
-  tabs.className = "rn-ws-tabs";
-  let prevGroup = null;
-  // the FILTERED list drives the loop, so prevGroup only ever sees neighbours that
-  // are really on the strip: a `continue` over hidden tabs after the assignment
-  // would draw group separators for buttons that are not there
-  for (const t of tabsShown) {
+  // THE RAIL: a group heading and colour bar over its tabs, each tab its icon, its
+  // light and its name. Folded (a view choice kept on the node) it is the icons and
+  // lights alone, with the name on hover.
+  const compact = !!node.properties?.rn_rail_compact;
+  const rail = document.createElement("div");
+  rail.className = "rn-ws-rail" + (compact ? " compact" : "");
+  const railHead = document.createElement("div");
+  railHead.className = "rn-ws-railhead";
+  const railTog = document.createElement("button");
+  railTog.className = "rn-ws-railtog";
+  railTog.innerHTML = compact ? RAIL_ICONS.open : RAIL_ICONS.fold;
+  railTog.title = compact ? "Show the tab names beside their icons."
+                          : "Fold the tabs down to their icons and lights, for a narrow node.";
+  railTog.onclick = () => {
+    (node.properties ||= {}).rn_rail_compact = !compact;
+    render(node);
+  };
+  railHead.appendChild(railTog);
+  rail.appendChild(railHead);
+  const shownIds = new Set(tabsShown.map((t) => t.id));
+  for (const g of RAIL_GROUPS) {
+    const ids = g.tabs.filter((id) => shownIds.has(id));
+    if (!ids.length) continue;
+    const grp = document.createElement("div");
+    grp.className = "rn-ws-rgroup";
+    grp.dataset.group = g.id;
+    grp.style.setProperty("--rn-g", g.color);
+    const glab = document.createElement("div");
+    glab.className = "rn-ws-rglab";
+    glab.textContent = g.label;
+    grp.appendChild(glab);
+    rail.appendChild(grp);
+    for (const id of ids) {
+    const t = TAB_ORDER.find((x) => x.id === id);
     const b = document.createElement("button");
-    b.className = "rn-ws-tab g-" + t.group + (t.id === cur ? " cur" : "")
-                + (prevGroup && prevGroup !== t.group ? " gstart" : "");
-    prevGroup = t.group;
+    b.className = "rn-ws-tab rail g-" + t.group + (t.id === cur ? " cur" : "");
+    b.dataset.tab = t.id;
+    if (compact) b.title = t.label;
+    const ic = document.createElement("span");
+    ic.className = "ic";
+    ic.innerHTML = TAB_ICONS[t.id] || "";
     const dot = document.createElement("span");
     dot.className = "dot" + (tabLit(cfg, t.id) ? " on" : "");
     if (t.id === "models" || t.id === "prompts") {
@@ -17998,14 +18063,16 @@ export function render(node) {
       }
     }
     const lab = document.createElement("span");
+    lab.className = "lb";
     lab.textContent = t.label;
-    b.append(dot, lab);
+    b.append(ic, dot, lab);
     b.onclick = () => {
       node._rnTab = t.id;
       (node.properties ||= {}).rn_tab = t.id;   // so the reload lands back here
       render(node);
     };
-    tabs.appendChild(b);
+    grp.appendChild(b);
+    }
   }
   const tmode = tuckMode(node);
   const tuck = document.createElement("button");
@@ -18026,12 +18093,14 @@ export function render(node) {
     applyTuck(node);
     render(node);
   };
-  // beside the tabs, not above them. The strip wraps and the plug does not, so
-  // it sits at the right of the first row however many tabs there are.
-  const tabrow = document.createElement("div");
-  tabrow.className = "rn-ws-tabrow";
-  tabrow.append(tabs, tuck);
-  host.appendChild(tabrow);
+  // the socket tuck heads the rail, beside the fold button
+  railHead.appendChild(tuck);
+  const shell = document.createElement("div");
+  shell.className = "rn-ws-shell";
+  const main = document.createElement("div");
+  main.className = "rn-ws-main";
+  shell.append(rail, main);
+  host.appendChild(shell);
 
   const body = document.createElement("div");
   body.className = "rn-ws-body"
@@ -18096,7 +18165,7 @@ export function render(node) {
     }
     converterSection(node, body, cur);             // the built-in Prompt Converter
   }
-  host.appendChild(body);
+  main.appendChild(body);
   // a tab that needs its own scroll back (the Post list) sets this while building;
   // it runs now, with the body in the page and nothing painted yet
   try { node._rnAfterMount?.(); } catch (e) { /* a restore is never worth a broken panel */ }
@@ -18796,6 +18865,9 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function () {
       onCreated?.apply(this, arguments);
       injectStyle();
+      // a NEW node opens wide, for the rail beside the pages; a loaded one takes
+      // its saved size when configure runs after this
+      this.setSize([Math.max(this.size?.[0] || 0, 1400), Math.max(this.size?.[1] || 0, 900)]);
       build(this);
     };
 

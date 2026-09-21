@@ -104,6 +104,19 @@ export const TAB_ORDER = [
   { id: "advanced", label: "Advanced", group: "cfg" },
 ];
 
+// THE RAIL'S GROUPS, top to bottom: a heading and a colour bar each, over the tabs
+// in it. Separate from TAB_ORDER's `group`, which still colours the tab CSS classes.
+export const RAIL_GROUPS = [
+  { id: "view", label: "View", color: "#2dd4bf", tabs: ["overview"] },
+  { id: "model", label: "Model", color: "#a855f7", tabs: ["models", "prompts", "camera", "loras"] },
+  { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "editor", "paint"] },
+  { id: "mood", label: "Mood", color: "#e08a3c", tabs: ["moodboard"] },
+  { id: "identity", label: "Identity", color: "#eab308", tabs: ["identity"] },
+  { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["detailer", "post"] },
+  { id: "run", label: "Run", color: "#3b82f6", tabs: ["run"] },
+  { id: "settings", label: "Settings", color: "#8a919b", tabs: ["advanced"] },
+];
+
 // The Krea 2 Identity tab's sub-tabs: the tabs that feed the identity system. Their
 // ids are the old top-level tab ids, so a saved rn_tab still lands on them; the old
 // People tab is part of Subject now.
