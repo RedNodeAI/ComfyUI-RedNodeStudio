@@ -57,9 +57,11 @@ NODES = {
 SCHEDULER_PACK = {"beta57": "RES4LYF", "bong_tangent": "RES4LYF"}
 ROUNDINGS = ("8", "16", "32", "64", "128", "256", "512", "None")
 ENGINES = ("exact", "alternative")
-# the alternative engine's instruction: it names the CHANGE rather than
-# describing the picture, which is what lets its reference boost sit at 1.0
-ALT_SYSTEM = ("Describe the key features of the input image (color, shape, size, "
+# THE SYSTEM INSTRUCTION: Easy_QwenEdit2509's own default, copied from the
+# installed node and checked byte for byte (304 characters, the same 304 the
+# workflow carries). It names the CHANGE rather than describing the picture,
+# which is also what lets the alternative engine's reference boost sit at 1.0.
+SYSTEM = ("Describe the key features of the input image (color, shape, size, "
               "texture, objects, background), then explain how the user's text "
               "instruction should alter or modify the image. Generate a new image that "
               "meets the user's requirements while maintaining consistency with the "
@@ -189,6 +191,10 @@ def parse(raw):
         "clip": str(r.get("clip") or ""),
         "vae": str(r.get("vae") or ""),
         "prompt": str(r.get("prompt") if r.get("prompt") is not None else WANT)[:500],
+        # the node's second box: what the encoder is told to BE. Both engines read
+        # it. Empty comes back as the default rather than as no instruction.
+        "system": (str(r.get("system")) if str(r.get("system") or "").strip()
+                   else SYSTEM)[:2000],
         # ColorCorrect
         "saturation": num("saturation", -20.0, -100.0, 100.0),
         # ImageScaleByAspectRatio V2
@@ -322,7 +328,7 @@ def _render_alternative(rc, source, model, clip, vae, seed, node_id):
         clip=clip, prompt=rc["prompt"], vae=vae, image=src,
         grounding_px=int(rc["vl_size"]), ref_boost=rc["boost"],
         ref_boost_a=rc["boost"], target_latent=latent, fit_mode="fit",
-        ref_t0_modulation=True, system_prompt=ALT_SYSTEM)[0]
+        ref_t0_modulation=True, system_prompt=rc["system"])[0]
     negative = _call("CLIPTextEncode", clip=clip, text="")[0]
     return alt_sampler_for(node_id, "realism")(
         model, int(seed), int(rc["steps"]), float(rc["cfg"]), rc["sampler"],
@@ -417,12 +423,12 @@ def _render(rc, source, cfg, seed, node_id=None):
                 scale_to_side="longest", scale_to_length=int(rc["longest"]),
                 background_color="#000000", image=img)[0]
 
-    # the encode: image1 and latent_image are the same picture, and the system
-    # prompt is the node's own default, as in the workflow
+    # the encode: image1 and latent_image are the same picture, and both of the
+    # node's boxes are filled, the prompt and the system instruction
     positive, negative, latent = _call(
         "Easy_QwenEdit2509", clip=clip, vae=vae, image1=img, latent_image=img,
         auto_resize=rc["auto_resize"], vl_size=int(rc["vl_size"]),
-        prompt=rc["prompt"])[:3]
+        prompt=rc["prompt"], system_prompt=rc["system"])[:3]
     positive = _call("FluxKontextMultiReferenceLatentMethod", conditioning=positive,
                      reference_latents_method="index_timestep_zero")[0]
     negative = _call("FluxKontextMultiReferenceLatentMethod", conditioning=negative,

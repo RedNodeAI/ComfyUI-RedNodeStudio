@@ -1120,6 +1120,12 @@ export const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
 // rather than describing the picture, which is what lets the reference boost
 // stay at 1.0; see A2R_FINDINGS.md in the hub.
 export const REALISM_WANT = "transform the image to realistic photograph";
+// Easy_QwenEdit2509's own default system instruction, word for word (realism.py)
+export const REALISM_SYSTEM = "Describe the key features of the input image (color, "
+  + "shape, size, texture, objects, background), then explain how the user's text "
+  + "instruction should alter or modify the image. Generate a new image that meets "
+  + "the user's requirements while maintaining consistency with the original input "
+  + "where appropriate.";
 // ImageScaleByAspectRatio V2's round_to_multiple choices, as that node lists them
 export const REALISM_ROUNDINGS = ["8", "16", "32", "64", "128", "256", "512", "None"];
 const TEXT_TABS_META = {
@@ -1293,6 +1299,7 @@ export function readCfg(node) {
       rlStr("lora_set", "");
       rlStr("unet", ""); rlStr("clip", ""); rlStr("vae", "");
       rlStr("prompt", REALISM_WANT);
+      if (typeof RL.system !== "string" || !RL.system.trim()) RL.system = REALISM_SYSTEM;
       rlNum("saturation", -20);
       rlPick("round_to", REALISM_ROUNDINGS, "512");
       rlNum("longest", 1536);
@@ -1307,7 +1314,8 @@ export function readCfg(node) {
       if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
       // settings from the first version, which rebuilt the graph from this
       // pack's parts instead of running it; gone so they cannot mislead
-      for (const old of ["desaturate", "max_side", "system"]) delete RL[old];
+      delete RL.desaturate;
+      delete RL.max_side;
       // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
       if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
       const R = t.reangle;
@@ -16300,15 +16308,35 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       num(g, "Vision size", "vl_size", 64, 2048, 64, "Easy_QwenEdit2509's vl_size. 384 in the workflow.");
       select(g, "Vision fit", "auto_resize", [["crop", "Crop"], ["pad", "Pad"], ["stretch", "Stretch"]],
              "Easy_QwenEdit2509's auto_resize. crop in the workflow.");
-      num(g, "Steps", "steps", 1, 100, 1, "KSampler. 8 in the workflow.");
-      num(g, "CFG", "cfg", 0, 20, 0.1, "KSampler. 1.0 in the workflow.");
-      select(g, "Sampler", "sampler", [...new Set([...(L.samplers || []), R.sampler])].map((x) => [x, x]),
+      // THE SEED. Without one the stage rolls the run's seed, and two runs of the
+      // same graph at different seeds are different pictures: no comparison with
+      // the workflow means anything until this matches its seed.
+      num(g, "Seed", "seed", 0, 2 ** 53, 1, "The KSampler seed. Set it to the "
+          + "workflow's own and switch Random off to compare the two like for like.");
+      card.appendChild(g);
+      const rs = document.createElement("div");
+      rs.className = "rn-ws-row";
+      const rsw = document.createElement("div");
+      rsw.className = "rn-ws-sw" + (R.seed_random ? " on" : "");
+      rsw.dataset.choice = "realism_seed_random";
+      rsw.title = "On: the stage uses the run's seed, so every queue differs. Off: the "
+                + "seed above, every time.";
+      rsw.onclick = () => { R.seed_random = !R.seed_random; writeCfg(node); render(node); };
+      const rsl = document.createElement("span");
+      rsl.className = "rn-ws-swlabel";
+      rsl.textContent = "Random seed";
+      rs.append(rsw, rsl);
+      card.appendChild(rs);
+      const g2 = grid();
+      num(g2, "Steps", "steps", 1, 100, 1, "KSampler. 8 in the workflow.");
+      num(g2, "CFG", "cfg", 0, 20, 0.1, "KSampler. 1.0 in the workflow.");
+      select(g2, "Sampler", "sampler", [...new Set([...(L.samplers || []), R.sampler])].map((x) => [x, x]),
              "KSampler. euler in the workflow.");
-      select(g, "Scheduler", "scheduler",
+      select(g2, "Scheduler", "scheduler",
              [...new Set([...(L.schedulers || []), R.scheduler])].map((x) => [x, x]),
              "KSampler. beta57 in the workflow, which core only lists once RES4LYF is "
              + "installed.");
-      card.appendChild(g);
+      card.appendChild(g2);
       const pr = document.createElement("div");
       pr.className = "rn-ws-note";
       pr.textContent = "Ask for";
@@ -16321,6 +16349,24 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         + "padding:4px 6px;resize:vertical";
       ta.onchange = () => { R.prompt = ta.value; writeCfg(node); };
       card.append(pr, ta);
+      // THE SECOND BOX, the node's system instruction: what the encoder is told
+      // to be. The workflow shows it and so does this page.
+      const sl = document.createElement("div");
+      sl.className = "rn-ws-note";
+      sl.textContent = "System instruction";
+      const sy = document.createElement("textarea");
+      sy.value = R.system;
+      sy.rows = 5;
+      sy.dataset.choice = "realism_system";
+      sy.title = "Easy_QwenEdit2509's system prompt: what the encoder is told to BE. "
+        + "Its default names the change rather than describing the picture. Cleared, "
+        + "it goes back to that default.";
+      sy.style.cssText = ta.style.cssText;
+      sy.onchange = () => {
+        R.system = sy.value.trim() ? sy.value : REALISM_SYSTEM;
+        writeCfg(node); render(node);
+      };
+      card.append(sl, sy);
     }
 
     // THE ENGINE: the rig's, unless the workflow's own files differ from it
