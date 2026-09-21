@@ -167,6 +167,15 @@ css.textContent = `
 .rn-ls-only:hover{color:#fff;border-color:#b8283c}
 .rn-ls-only.on{background:#b8283c;border-color:#b8283c;color:#fff;font-weight:600}
 .rn-ls-none{font-size:11px;opacity:.55;padding:10px 4px;text-align:center}
+/* the search and Only on at the HEAD of the list, sticking there while it scrolls */
+.rn-ls-top{display:flex;gap:8px;align-items:center;flex:none;position:sticky;top:0;z-index:2;
+  padding-bottom:6px;background:#16181c}
+.rn-ls-find{flex:1;min-width:0;display:flex;align-items:center;gap:4px;background:#111316;
+  border:1px solid #33373d;border-radius:5px;height:30px;padding:0 4px 0 8px;box-sizing:border-box}
+.rn-ls-find:focus-within{border-color:#b8283c}
+.rn-ls-find input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#e2e5ea;font-size:12px}
+.rn-ls-find button{background:transparent;border:0;color:#9aa0a8;cursor:pointer;font-size:14px;padding:0 4px}
+.rn-ls-find button:hover{color:#fff}
 .rn-ls-panel{position:fixed;z-index:10002;width:270px;background:#1b1e23;border:1px solid #3a3d44;border-radius:7px;padding:10px;
   font:12px system-ui,sans-serif;color:#ddd;box-shadow:0 10px 30px #000c;display:flex;flex-direction:column;gap:8px}
 .rn-ls-panel h5{margin:0;font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.4px}
@@ -300,18 +309,34 @@ function groupMembers(node, titleIndex) {
 // rather than the stack JSON — it is not part of what a preset saves.
 const onlyOn = (node) => !!node.properties?.rn_ls_only_on;
 
+// THE STACK SEARCH: only the rows whose LoRA file, trigger words or group name hold
+// the typed text. A view of this session, on the node rather than in its
+// properties, so typing never marks the workflow as changed.
+const lsQuery = (node) => String(node._rnLsQuery || "").trim().toLowerCase();
+const slotHits = (slot, q) => !q || [slot.name, slot.trigger]
+  .some((x) => String(x || "").toLowerCase().includes(q));
+
 // The rows the list is DRAWING, in order. render() and anything that acts on a
 // range (Select all) both read this, because a button that reaches a row you
 // cannot see is how you delete a LoRA you meant to keep.
 function visibleRows(node) {
   const out = [];
   const only = onlyOn(node);
+  const q = lsQuery(node);
   let hide = false;
+  let all = false;                             // the group's own name matched
   (node._rnSlots || []).forEach((slot, i) => {
     if (isTitle(slot)) {
-      hide = !!slot.folded;                    // a folded title swallows its group
-      // nothing on under it: the section box would be an empty frame
-      if (only && !groupMembers(node, i).some((j) => node._rnSlots[j]?.enabled)) {
+      all = !!q && String(slot.text || "").toLowerCase().includes(q);
+      // a folded title swallows its group, except while searching: a match
+      // hidden inside a fold is a search that finds nothing
+      hide = !!slot.folded && !q;
+      const shown = groupMembers(node, i).filter((j) => {
+        const m = node._rnSlots[j];
+        return m && (!only || m.enabled) && (all || slotHits(m, q));
+      });
+      // nothing left under it: the section box would be an empty frame
+      if ((only || q) && !shown.length && !(all && !only)) {
         hide = true;
         return;
       }
@@ -320,6 +345,7 @@ function visibleRows(node) {
     }
     if (hide) return;
     if (only && !slot.enabled) return;
+    if (!all && !slotHits(slot, q)) return;
     out.push(i);
   });
   return out;
@@ -1570,13 +1596,16 @@ export function render(node) {
     bucket.appendChild(buildSlot(node, slot, i));
   });
   // an empty list with a lit button looks like the stack was lost, so say it
-  if (onlyOn(node) && !list.children.length && (node._rnSlots || []).length) {
+  if (!list.children.length && (node._rnSlots || []).length && (onlyOn(node) || lsQuery(node))) {
     const none = document.createElement("div");
     none.className = "rn-ls-none";
-    none.textContent = "Nothing is on. Turn Only on off to see the stack.";
+    none.textContent = lsQuery(node)
+      ? `No LoRA in this stack matches "${String(node._rnLsQuery).trim()}"`
+        + (onlyOn(node) ? " among the ones that are on." : ".")
+      : "Nothing is on. Turn Only on off to see the stack.";
     list.appendChild(none);
   }
-  if (node._rnOnlyEl) paintOnly(node, node._rnOnlyEl);
+  for (const b of node._rnOnlyEls || []) paintOnly(node, b);
   // the bar's home is the LIST'S OWN CONTAINER: on the LoRA Stack node that is
   // the widget element, on the Workspace it is the LoRAs tab's host. Mounted
   // on node._rnWidget it landed at the top of the WHOLE workspace panel, above
@@ -1626,6 +1655,45 @@ function paintOnly(node, b) {
     : `Show only the ${n} LoRA(s) that are on, instead of scrolling past the rest.`;
 }
 
+// THE TOP ROW: the search and a second Only on, so a long stack is filtered from
+// its head instead of scrolled to its foot
+function buildTop(node) {
+  const top = document.createElement("div");
+  top.className = "rn-ls-top";
+  const find = document.createElement("div");
+  find.className = "rn-ls-find";
+  const inp = document.createElement("input");
+  inp.type = "text";
+  inp.className = "rn-ls-search";
+  inp.placeholder = "Search this stack";
+  inp.title = "Show only the LoRAs in this stack whose file, trigger words or group "
+            + "name hold this text, on or off. Esc clears it.";
+  inp.value = node._rnLsQuery || "";
+  const clear = document.createElement("button");
+  clear.textContent = "\u00d7";
+  clear.title = "Clear the search";
+  const paintClear = () => { clear.style.visibility = inp.value ? "visible" : "hidden"; };
+  const apply = () => {
+    node._rnLsQuery = inp.value;
+    paintClear();
+    // a row that just went off screen must not stay selected
+    const sel = selSet(node);
+    const vis = new Set(visibleRows(node));
+    [...sel].forEach((i) => { if (!vis.has(i)) sel.delete(i); });
+    render(node);
+  };
+  inp.oninput = apply;
+  inp.onkeydown = (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") { inp.value = ""; apply(); }
+  };
+  clear.onclick = () => { inp.value = ""; apply(); inp.focus(); };
+  paintClear();
+  find.append(inp, clear);
+  top.append(find, buildOnly(node));
+  return top;
+}
+
 function buildOnly(node) {
   const b = document.createElement("button");
   b.className = "rn-ls-only";
@@ -1639,6 +1707,7 @@ function buildOnly(node) {
     render(node);
   };
   paintOnly(node, b);
+  (node._rnOnlyEls ||= []).push(b);
   return b;
 }
 
@@ -1670,7 +1739,6 @@ function buildHead(node) {
   cog.onclick = () => openCog(node, cog);
   head.append(add, from, only, cog);
   node._rnFromEl = from;
-  node._rnOnlyEl = only;
   return head;
 }
 
@@ -1678,11 +1746,13 @@ function buildHead(node) {
 // it. The node-specific plumbing (which widget holds the JSON, what "redraw" means)
 // stays with the caller.
 export function buildLoraPanel(node, container) {
+  node._rnOnlyEls = [];                        // the buttons on screen now, repainted together
+  const top = buildTop(node);
   const head = buildHead(node);
 
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:5px";
-  container.append(list, head);
+  container.append(top, list, head);
   node._rnListEl = list;
   loraNames().then((names) => { node._rnNames = names; render(node); });
   loraTypes();
@@ -1707,11 +1777,13 @@ function build(node) {
   stopEvents(wrap);
   bindSliderWheel(wrap);      // wheel over a strength slider adjusts it
 
+  node._rnOnlyEls = [];
+  const top = buildTop(node);
   const head = buildHead(node);
 
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:5px";
-  wrap.append(list, head);      // + / cog sit BELOW the slots
+  wrap.append(top, list, head);      // search above, + / cog BELOW the slots
   node._rnListEl = list;
 
   const w = node.addDOMWidget("rednode_lora_ui", "rednode_lora_ui", wrap, {
