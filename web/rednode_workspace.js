@@ -1306,7 +1306,11 @@ export function readCfg(node) {
       rlPick("fit", ["letterbox", "crop", "fill"], "crop");
       rlNum("vl_size", 384);
       rlPick("auto_resize", ["crop", "pad", "stretch"], "crop");
-      if (typeof RL.kv_cache !== "boolean") RL.kv_cache = false;
+      if (typeof RL.kv_cache !== "boolean") RL.kv_cache = true;
+      // RECIPE 2: kv_cache was saved as false while the page had no switch for it,
+      // so a false from before this is the old wrong default and never a choice
+      // anyone made. Corrected once; from here the switch on the page decides.
+      if (!(RL.recipe >= 2)) { RL.kv_cache = true; RL.recipe = 2; }
       rlNum("steps", 8); rlNum("cfg", 1);
       rlStr("sampler", "euler"); rlStr("scheduler", "beta57");
       rlNum("seed", 0);
@@ -16308,12 +16312,30 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       num(g, "Vision size", "vl_size", 64, 2048, 64, "Easy_QwenEdit2509's vl_size. 384 in the workflow.");
       select(g, "Vision fit", "auto_resize", [["crop", "Crop"], ["pad", "Pad"], ["stretch", "Stretch"]],
              "Easy_QwenEdit2509's auto_resize. crop in the workflow.");
+      // KV CACHE, the Ostris patch's one setting. On in the workflow, and the
+      // setting that decides whether the conversion looks like it at all.
+      card.appendChild(g);
+      const kv = document.createElement("div");
+      kv.className = "rn-ws-row";
+      const kvsw = document.createElement("div");
+      kvsw.className = "rn-ws-sw" + (R.kv_cache ? " on" : "");
+      kvsw.dataset.choice = "realism_kv_cache";
+      kvsw.title = "Krea2OstrisEditModelPatch's kv_cache. On in the workflow. For LoRAs "
+        + "trained with it, like Anything2Real: the reference is computed once and reused "
+        + "every step. Off is a different conditioning and a different picture.";
+      kvsw.onclick = () => { R.kv_cache = !R.kv_cache; writeCfg(node); render(node); };
+      const kvl = document.createElement("span");
+      kvl.className = "rn-ws-swlabel";
+      kvl.textContent = "KV cache (Ostris patch)";
+      kv.append(kvsw, kvl);
+      card.appendChild(kv);
+      const gs = grid();
       // THE SEED. Without one the stage rolls the run's seed, and two runs of the
       // same graph at different seeds are different pictures: no comparison with
       // the workflow means anything until this matches its seed.
-      num(g, "Seed", "seed", 0, 2 ** 53, 1, "The KSampler seed. Set it to the "
+      num(gs, "Seed", "seed", 0, 2 ** 53, 1, "The KSampler seed. Set it to the "
           + "workflow's own and switch Random off to compare the two like for like.");
-      card.appendChild(g);
+      card.appendChild(gs);
       const rs = document.createElement("div");
       rs.className = "rn-ws-row";
       const rsw = document.createElement("div");

@@ -19,7 +19,8 @@ rather than a copy. The workflow is the specification, so it runs as written.
                  positive      -> FluxKontextMultiReferenceLatentMethod (index_timestep_zero)
                  zero_negative -> FluxKontextMultiReferenceLatentMethod (index_timestep_zero)
                  latent        -> KSampler
-  rig model -> the rig's LoRA stack -> the conversion LoRA -> Krea2OstrisEditModelPatch
+  rig model -> the rig's LoRA stack -> the conversion LoRA
+            -> Krea2OstrisEditModelPatch (kv_cache on)
             -> KSampler (8 steps, cfg 1, euler, beta57, denoise 1.0) -> VAEDecode
 
 The packs it needs are named up front, all of them, before anything loads.
@@ -204,8 +205,12 @@ def parse(raw):
         # Easy_QwenEdit2509
         "vl_size": num("vl_size", 384, 64, 2048, int),
         "auto_resize": pick("auto_resize", ("crop", "pad", "stretch"), "crop"),
-        # Krea2OstrisEditModelPatch
-        "kv_cache": bool(r.get("kv_cache", False)),
+        # Krea2OstrisEditModelPatch. ON in the workflow: this LoRA is trained with
+        # ai-toolkit's kv_cache, where the reference tokens are computed once at
+        # t=0 and injected every step instead of riding along in the sequence.
+        # It was first transcribed here as off, which is a different conditioning
+        # altogether, and the results were not close.
+        "kv_cache": bool(r.get("kv_cache", True)),
         # KSampler
         "steps": num("steps", 8, 1, 100, int),
         "cfg": num("cfg", 1.0, 0.0, 20.0),
