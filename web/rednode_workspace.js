@@ -18110,7 +18110,18 @@ export function render(node) {
     (node.properties ||= {}).rn_rail_compact = !compact;
     render(node);
   };
-  railHead.appendChild(railTog);
+  // FULL SCREEN, the Paint bar's own: the whole panel over the window, same node
+  const railFull = document.createElement("button");
+  railFull.className = "rn-ws-railtog rn-ws-railfull";
+  railFull.innerHTML = node._rnFsPrev ? RAIL_ICONS.unfull : RAIL_ICONS.full;
+  railFull.title = node._rnFsPrev
+    ? "Back to the node. Everything you did here is already in it. Esc does the same."
+    : "The whole panel over the window: the same node, nothing copied. Esc closes.";
+  railFull.onclick = () => {
+    if (node._rnFsPrev) node._rnFsClose?.();
+    else openFullscreen(node);
+  };
+  railHead.append(railTog, railFull);
   rail.appendChild(railHead);
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
