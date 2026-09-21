@@ -64,8 +64,88 @@ ALT_SYSTEM = ("Describe the key features of the input image (color, shape, size,
               "instruction should alter or modify the image. Generate a new image that "
               "meets the user's requirements while maintaining consistency with the "
               "original input where appropriate.")
+# THE CONVERSION LORAS THIS STAGE KNOWS, found by hash when nothing is chosen.
+# `names` shortlists the installed files first, so finding one never means
+# hashing a whole LoRA library; `sha256` then confirms which file it is. An
+# empty sha256 falls back to the name match alone, and says so.
+KNOWN_LORAS = (
+    {"label": "Anything2Real Characters V3",
+     "names": ("anything2real", "anythingtoreal", "a2r"),
+     "sha256": ""},
+)
+# the bound on how many files one search may hash. The same bound the Civitai
+# card's search holds: a shortlist, never a scan of the library.
+FIND_MAX = 5
 _RESULT_CACHE = []
 _CACHE_KEEP = 4
+
+
+def _installed():
+    try:
+        import folder_paths
+        return list(folder_paths.get_filename_list("loras"))
+    except Exception:
+        return []
+
+
+def _norm(text):
+    return "".join(c for c in str(text or "").lower() if c.isalnum())
+
+
+def lora_hash(name):
+    """SHA256 of an installed LoRA, through the Civitai card's own disk cache, so
+    a file is read once and never again while its size and date stay put."""
+    try:
+        import folder_paths
+        from . import lora_info
+        path = folder_paths.get_full_path("loras", name)
+        return lora_info.file_sha256(path).lower() if path else ""
+    except Exception:
+        return ""
+
+
+def _shortlist(hints, installed):
+    hints = [_norm(h) for h in hints if len(_norm(h)) > 2]
+    out = []
+    for name in installed:
+        stem = _norm(name.rsplit("/", 1)[-1].rsplit(".", 1)[0])
+        if any(h in stem for h in hints):
+            out.append(name)
+    return out[:FIND_MAX]
+
+
+def find_lora(rc, installed=None, hasher=None):
+    """(name, sha256, how) for the conversion LoRA, or ("", "", why).
+
+    In order: the file chosen, if it is still there; the file whose hash was
+    recorded when it was chosen, under whatever name it has now; the known
+    Anything2Real LoRA. Only ever fills an empty or missing choice, never
+    replaces one that is there.
+    """
+    installed = _installed() if installed is None else installed
+    hasher = hasher or lora_hash
+    chosen = rc.get("lora") or ""
+    if chosen and chosen in installed:
+        return chosen, rc.get("lora_sha256") or "", "chosen"
+
+    want = (rc.get("lora_sha256") or "").lower()
+    if want:
+        # the recorded file under a new name: shortlist by the old name first
+        hints = [chosen.rsplit("/", 1)[-1].rsplit(".", 1)[0]] + [
+            h for k in KNOWN_LORAS for h in k["names"]]
+        for name in _shortlist(hints, installed):
+            if hasher(name) == want:
+                return name, want, "hash"
+
+    for known in KNOWN_LORAS:
+        for name in _shortlist(known["names"], installed):
+            if known["sha256"]:
+                if hasher(name) == known["sha256"].lower():
+                    return name, known["sha256"].lower(), "hash"
+            else:
+                # no reference hash yet: a name match, labelled as one
+                return name, "", "name"
+    return "", "", "not found"
 
 
 def parse(raw):
@@ -95,6 +175,10 @@ def parse(raw):
         "boost": num("boost", 1.0, 0.0, 3.0),
         # the conversion LoRA: the user's own download, so no file is named here
         "lora": str(r.get("lora") or ""),
+        # the SHA256 of the file that was chosen, recorded when it was picked, so
+        # the same LoRA is found again under another name or on another machine:
+        # a shared workflow carries the hash with it
+        "lora_sha256": str(r.get("lora_sha256") or "").lower()[:64],
         "strength": num("strength", 1.0, 0.0, 2.0),
         # the rig's LoRA stack under it, as the workflow stacks one under it
         "loras": bool(r.get("loras", True)),
@@ -264,10 +348,18 @@ def render(rc, source, cfg, seed, node_id=None):
 
 
 def _render(rc, source, cfg, seed, node_id=None):
+    # a choice that is empty, or names a file that has gone, is looked for by
+    # hash before it is refused: a shared workflow or a renamed file still runs
+    if not str(rc["lora"] or "").strip() or rc["lora"] not in _installed():
+        name, digest, how = find_lora(rc)
+        if name:
+            print("[RedNode Realism] conversion LoRA found by %s: %s" % (how, name),
+                  flush=True)
+            rc = dict(rc, lora=name, lora_sha256=digest or rc.get("lora_sha256", ""))
     # what can be refused without loading anything comes first
     if not str(rc["lora"] or "").strip():
-        raise ValueError("no realism LoRA is chosen on the Img2Img tab, and the "
-                         "conversion is the LoRA's doing: pick one first.")
+        raise ValueError("no realism LoRA is chosen on the Img2Img tab, and none "
+                         "was found by hash either: pick one first.")
     need = missing(rc)
     if need:
         raise ValueError("the Anything2Real graph needs %s, which this ComfyUI does "
@@ -357,3 +449,37 @@ def _finish(key, image):
     _RESULT_CACHE.append((key, image.clone()))
     del _RESULT_CACHE[:-_CACHE_KEEP]
     return image
+
+
+# ---------------------------------------------------------------------------
+# HTTP: the page asks which file is the conversion LoRA, and what a chosen one
+# hashes to so the hash can travel with the workflow
+# ---------------------------------------------------------------------------
+try:
+    from server import PromptServer
+    from aiohttp import web
+
+    @PromptServer.instance.routes.post("/rednode/realism/find_lora")
+    async def _rednode_realism_find(request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        rc = {"lora": str(data.get("lora") or ""),
+              "lora_sha256": str(data.get("lora_sha256") or "").lower()[:64]}
+        name, digest, how = find_lora(rc)
+        return web.json_response({"name": name, "sha256": digest, "how": how})
+
+    @PromptServer.instance.routes.post("/rednode/realism/lora_hash")
+    async def _rednode_realism_hash(request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        name = str(data.get("name") or "")
+        if name not in _installed():
+            return web.json_response({"error": "no such LoRA"}, status=404)
+        return web.json_response({"name": name, "sha256": lora_hash(name)})
+
+except Exception as e:  # no server (tests, a bare import)
+    print("[RedNode Krea2] realism routes not registered: %s" % e, flush=True)

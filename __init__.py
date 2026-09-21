@@ -685,6 +685,7 @@ from . import lora_info  # noqa: F401,E402  (registers the Civitai lookup route)
 # already loaded by this point, so hero cannot move anyone's turn.
 from . import hero as _rednode_hero  # noqa: F401,E402  (registers the hero routes)
 from .assistant import RedNodeStudioAssistant  # noqa: E402 (registers the assistant routes)
+from . import realism as _rednode_realism  # noqa: F401,E402  (registers the realism routes)
 
 WEB_DIRECTORY = "./web"
 

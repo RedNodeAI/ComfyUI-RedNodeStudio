@@ -1288,7 +1288,7 @@ export function readCfg(node) {
       if (typeof RL.on !== "boolean") RL.on = false;
       rlPick("engine", ["exact", "alternative"], "exact");
       rlNum("boost", 1);
-      rlStr("lora", ""); rlNum("strength", 1);
+      rlStr("lora", ""); rlStr("lora_sha256", ""); rlNum("strength", 1);
       if (typeof RL.loras !== "boolean") RL.loras = true;
       rlStr("lora_set", "");
       rlStr("unet", ""); rlStr("clip", ""); rlStr("vae", "");
@@ -16148,7 +16148,28 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         sel.appendChild(op);
       }
       sel.title = tip;
-      sel.onchange = () => { R[key] = cast ? cast(sel.value) : sel.value; writeCfg(node); render(node); };
+      sel.onchange = () => {
+        R[key] = cast ? cast(sel.value) : sel.value;
+        if (key === "lora") {
+          // chosen by hand: record what it hashes to, and forget any earlier hash
+          R.lora_sha256 = "";
+          node._rnRealismFound = "";
+          if (R.lora) {
+            api.fetchApi("/rednode/realism/lora_hash", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: R.lora }),
+            }).then((r) => r.json()).then((d) => {
+              // the live block, for the same reason as the finder above
+              const live = node._rnCfg?.tabs?.i2i?.realism;
+              if (live && d?.sha256 && live.lora === d.name) {
+                live.lora_sha256 = d.sha256;
+                writeCfg(node);
+              }
+            }).catch(() => {});
+          }
+        }
+        writeCfg(node); render(node);
+      };
       g.appendChild(sel);
     };
     const num = (g, text, key, min, max, step, tip) => {
@@ -16203,14 +16224,55 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
            + "source becomes a reference more than a copy, and it needs nothing extra.");
     card.appendChild(eng);
 
+    // THE CONVERSION LORA, found for you. Once per page opening, and only when
+    // the choice is empty or names a file that is not installed: it never
+    // replaces a LoRA that is there. The server shortlists by name and confirms
+    // by hash, so a renamed or freshly downloaded file is found without hashing
+    // a whole library.
+    const installed = L.loras || [];
+    // an EMPTY choice asks straight away; a chosen file is only judged missing
+    // once the installed list has arrived, or every opening would ask
+    if ((!R.lora || (MODEL_LISTS && !installed.includes(R.lora)))
+        && node._rnRealismLooked !== (R.lora + "|" + R.lora_sha256)) {
+      node._rnRealismLooked = R.lora + "|" + R.lora_sha256;
+      api.fetchApi("/rednode/realism/find_lora", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lora: R.lora, lora_sha256: R.lora_sha256 }),
+      }).then((r) => r.json()).then((d) => {
+        // THE LIVE BLOCK, read when the answer lands. The config is re-read
+        // between asking and hearing back, so writing to the block captured at
+        // ask time put the LoRA on a copy that was already gone, and writeCfg
+        // then saved the live one without it.
+        const live = node._rnCfg?.tabs?.i2i?.realism;
+        if (!live || !d?.name) return;
+        // and never over a choice made meanwhile
+        if (live.lora && installed.includes(live.lora)) return;
+        live.lora = d.name;
+        if (d.sha256) live.lora_sha256 = d.sha256;
+        node._rnRealismFound = d.how;
+        writeCfg(node); render(node);
+      }).catch(() => {});
+    }
+
     // WHAT CHANGES FROM PICTURE TO PICTURE, on the front
     const front = grid();
     select(front, "Conversion LoRA", "lora",
            [["", "Choose a LoRA"], ...[...new Set([...(L.loras || []), ...(R.lora ? [R.lora] : [])])]
              .map((n) => [n, n])],
-           "The LoRA that does the converting. Without one there is nothing to convert "
-           + "with, and the pass says so rather than handing the picture back.");
+           "The LoRA that does the converting. Left empty, it is found for you by "
+           + "hash when it is installed. Its hash is kept with the workflow, so the "
+           + "same file is found again under another name or on another machine.");
     num(front, "Strength", "strength", 0, 2, 0.05, "1.0 in the workflow.");
+    if (node._rnRealismFound && R.lora) {
+      label(front, "");
+      const note = document.createElement("span");
+      note.className = "rn-ws-note";
+      note.dataset.choice = "realism_found";
+      note.textContent = node._rnRealismFound === "hash"
+        ? "Found by its hash."
+        : "Found by its name. No reference hash to confirm it yet.";
+      front.appendChild(note);
+    }
     if (R.engine === "alternative") {
       // the alternative's own dial: how hard its encoder holds the source
       num(front, "Reference boost", "boost", 0, 3, 0.05,
