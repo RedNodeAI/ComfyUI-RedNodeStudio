@@ -13583,7 +13583,8 @@ export function identityIssues(cfg) {
   const out = [];
   const tabs = cfg?.tabs || {};
   const lit = (t) => !!(t?.on && t.images?.length);
-  const on = lit(tabs.subject) || lit(tabs.scene) || !!tabs.boost_mask?.on;
+  // the boost mask only boosts the Subject's references, so it never counts alone
+  const on = lit(tabs.subject) || lit(tabs.scene);
   if (!on) return out;
   // the LoRA stack the render runs through, and the Detailer passes that share it
   const L = cfg.loras || {};
