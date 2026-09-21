@@ -19,10 +19,12 @@ try:
     from . import autoprompt as _ap
     from .style_library import CHOICES as STYLE_CHOICES
     from .prompt_lists import LIGHTING_CHOICES
+    from .prompt_tools import SWAP_MODES, STYLE_MODES, ACT_MODES, convert_text
 except ImportError:  # loaded as a plain file (tests)
     import autoprompt as _ap
     from style_library import CHOICES as STYLE_CHOICES
     from prompt_lists import LIGHTING_CHOICES
+    from prompt_tools import SWAP_MODES, STYLE_MODES, ACT_MODES, convert_text
 
 FIELDS = ("subject", "surroundings", "style_extra", "light_and_colour", "placement")
 # the boxes read in: the five above, and the Anything else box, which is unsorted
@@ -190,6 +192,115 @@ def rewrite_fields(fields, model, style="keep", url=_ap.OLLAMA_URL, transport=No
               "the frame as it was", flush=True)
         return None
     return out
+
+
+# ---------------------------------------------------------------------------
+# THE FINAL PROMPT: the Editor tab's Converter page. The active rig's row as it
+# will be encoded, every caption, wildcard and people merge already in, reworked
+# once more at queue time: the local model's rewrite when switched on, then the
+# converter's tables and rules, so a swap or a rule of your own has the last word.
+# ---------------------------------------------------------------------------
+FINAL_STYLES = ("keep", "photoreal", "cinematic", "illustration")
+
+FINAL_SYSTEM = """You rewrite one finished image prompt so it reads well for a text to image model. You are a writer, not an inventor.
+
+Rules:
+1. Keep every fact: every person, name, object, colour, action, place, pose, camera and light detail stays.
+2. Do not add people, objects, actions or details that are not in the prompt.
+3. Keep names exactly as written.
+4. %s
+5. Write plain prose in one paragraph. No lists, headings, labels or quotation marks.
+6. Do not mention that you changed, interpreted or rewrote anything.
+
+Output ONLY the rewritten prompt."""
+
+_FINAL_CACHE = {}
+
+
+def parse_final(raw):
+    """The Editor Converter's final-prompt block, normalised. The panel mirrors it
+    in readCfg (Trap 13). The converter is on and empty by default, which changes
+    nothing; the rewrite is an explicit option and starts off."""
+    r = raw if isinstance(raw, dict) else {}
+    return {
+        "on": r.get("on", True) is not False,
+        "gender": r.get("gender") if r.get("gender") in SWAP_MODES else "off",
+        "style": r.get("style") if r.get("style") in STYLE_MODES else "off",
+        "act": r.get("act") if r.get("act") in ACT_MODES else "off",
+        "remove_cum": bool(r.get("remove_cum")),
+        "shave": bool(r.get("shave")),
+        "rules": str(r.get("rules") or ""),
+        "llm": bool(r.get("llm")),
+        "llm_style": r.get("llm_style") if r.get("llm_style") in FINAL_STYLES else "keep",
+        "llm_note": str(r.get("llm_note") or "")[:2000],
+        "llm_fresh": bool(r.get("llm_fresh")),
+    }
+
+
+def rewrite_text(text, model, style="keep", note="", url=_ap.OLLAMA_URL, keep_alive=0,
+                 reuse=True, generate=None):
+    """One finished prompt -> the same prompt rewritten by the local model, or "".
+
+    `note` is an instruction of your own and replaces the style's, as it does for
+    the frame rewrite. REUSE keeps the answer for the same prompt, style and note,
+    so a queue that changes nothing asks nothing; a new wildcard roll is a new
+    prompt and is asked again. `generate` may be injected (tests)."""
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    style = style if style in FINAL_STYLES else "keep"
+    note = str(note or "").strip()[:2000]
+    key = json.dumps([text, style, note, str(model)])
+    if reuse and key in _FINAL_CACHE:
+        print("[RedNode Final Prompt] rewrite: reused", flush=True)
+        return _FINAL_CACHE[key]
+    gen = generate or (lambda m, s, pr: _ap.ollama_generate(
+        m, s, pr, url=url, options={"temperature": 0.4, "num_predict": 900},
+        keep_alive=keep_alive))
+    reply = gen(model, FINAL_SYSTEM % (note or _STYLE_NOTES[style]),
+                "Prompt:\n\n" + text + "\n\nWrite the rewritten prompt.")
+    out = _ap._strip_think(str(reply or "")).strip().strip('"').strip()
+    if not out:
+        print("[RedNode Final Prompt] rewrite: the model returned nothing; the prompt "
+              "is used as it was", flush=True)
+        return ""
+    if len(_FINAL_CACHE) >= 64:
+        _FINAL_CACHE.pop(next(iter(_FINAL_CACHE)))
+    _FINAL_CACHE[key] = out
+    return out
+
+
+def finish_prompt(text, fin, model="", url=_ap.OLLAMA_URL, keep_alive=0, generate=None):
+    """The final prompt through the Editor's Converter -> (text, what was done, warning).
+
+    The rewrite first when switched on, then the converter. Any failure keeps the
+    text it had; the warning is for the run log."""
+    out = str(text or "")
+    did, warn = [], ""
+    if not fin.get("on", True) or not out.strip():
+        return out, did, warn
+    if fin.get("llm"):
+        if not str(model or "").strip():
+            warn = ("The final prompt rewrite is on, but no Ollama model is chosen on an "
+                    "Auto Prompt section, so it was skipped.")
+            print("[RedNode Final Prompt] %s" % warn, flush=True)
+        else:
+            r = rewrite_text(out, model, fin.get("llm_style", "keep"), fin.get("llm_note", ""),
+                             url=url, keep_alive=keep_alive,
+                             reuse=not fin.get("llm_fresh"), generate=generate)
+            if r:
+                out = r
+                did.append("rewritten by %s" % model)
+    before = out
+    out = convert_text(out, gender_swap=fin.get("gender", "off"),
+                       style_convert=fin.get("style", "off"),
+                       nsfw_act_swap=fin.get("act", "off"),
+                       nsfw_remove_cum=bool(fin.get("remove_cum")),
+                       nsfw_shave_pubic=bool(fin.get("shave")),
+                       custom_rules=fin.get("rules", ""), lock_to_authority=False)
+    if out != before:
+        did.append("converted")
+    return out, did, warn
 
 
 def _system():

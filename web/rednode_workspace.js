@@ -1596,6 +1596,16 @@ export function readCfg(node) {
   if (!["vosr2", "upscale", "usdu"].includes(d.upscale.stage.type)) {
     d.upscale.stage.type = "vosr2";
   }
+  // THE FINAL PROMPT, the Editor Converter page's block (prompt_sort.parse_final)
+  d.final = d.final && typeof d.final === "object" ? d.final : {};
+  d.final.on = d.final.on !== false;
+  for (const k of ["gender", "style", "act"]) {
+    if (typeof d.final[k] !== "string") d.final[k] = "off";
+  }
+  for (const k of ["remove_cum", "shave", "llm", "llm_fresh"]) d.final[k] = !!d.final[k];
+  if (typeof d.final.rules !== "string") d.final.rules = "";
+  if (!FINAL_STYLES.some(([v]) => v === d.final.llm_style)) d.final.llm_style = "keep";
+  if (typeof d.final.llm_note !== "string") d.final.llm_note = "";
   // the Prompts tab: named prompts, each linked to a rig by the rig's name
   d.prompts = d.prompts && typeof d.prompts === "object" ? d.prompts : {};
   if (!Array.isArray(d.prompts.rows)) d.prompts.rows = [];
@@ -13445,6 +13455,15 @@ function stageChips(node, bar, chips, issues) {
 
 const capFirst = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
 
+// The final prompt's rewrite styles, prompt_sort.FINAL_STYLES
+const FINAL_STYLES = [["keep", "Keep the style"], ["photoreal", "Photograph"],
+                      ["cinematic", "Film still"], ["illustration", "Illustration"]];
+
+// the Editor Converter's final-prompt block does something on a queue
+export const finalActive = (f) => !!(f && f.on !== false
+  && (f.llm || f.gender !== "off" || f.style !== "off" || f.act !== "off"
+      || f.remove_cum || f.shave || String(f.rules || "").trim()));
+
 export function convActive(c) {
   return !!(c && c.on !== false && (c.gender !== "off" || c.style !== "off" || c.act !== "off"
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
@@ -13497,7 +13516,7 @@ function i2iSubLit(cfg, id) {
   if (id === "reangle") return !!(t.reangle?.on && (t.reangle.target === "render" || edPic));
   if (id === "realism") return !!(t.realism?.on && edPic);
   if (id === "swap") return !!(t.swap?.on && (t.swap.target === "render" || edPic));
-  if (id === "converter") return !!t.on && convActive(t.conv);
+  if (id === "converter") return (!!t.on && convActive(t.conv)) || finalActive(cfg.final);
   if (id === "upscale") return !!cfg.upscale?.on;
   return false;
 }
@@ -13867,7 +13886,11 @@ function editorTabs(node, body) {
                  text: !live ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render"
                    : "Swap on the source" });
   }
-  if (convActive(t.conv)) chips.push({ sub: "converter", text: "Converter", warn: !t.on });
+  if (finalActive(cfg.final)) {
+    chips.push({ sub: "converter", text: cfg.final.llm ? "Final prompt rewrite" : "Final prompt converter",
+                 warn: !!(cfg.final.llm && !String(cfg.auto?.model || "").trim()) });
+  }
+  if (convActive(t.conv)) chips.push({ sub: "converter", text: "Img2Img converter", warn: !t.on });
   if (cfg.upscale?.on) chips.push({ sub: "upscale", text: "Upscale on" });
   stageChips(node, bar, chips, issues);
   body.appendChild(bar);
@@ -13879,16 +13902,19 @@ function editorTabs(node, body) {
     body.appendChild(linkNote(node, "The Editor has no source picture, so this does nothing "
       + "yet. Add one on the Source page. ", "Open Source", "esource"));
   }
-  if (sub === "converter" && !t.on) {
-    body.appendChild(linkNote(node, "Img2Img is off, so the Img2Img converter does nothing: "
-      + "it reworks the Img2Img auto prompt. ", "Open Img2Img", "source"));
-  }
   if (sub === "esource") editorSourcePage(node, body);
   else if (sub === "reangle") reangleSection(node, body, "i2i", { flat: true });
   else if (sub === "realism") realismSection(node, body, "i2i", { flat: true });
   else if (sub === "swap") swapSection(node, body, "i2i", { flat: true });
-  else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
-  else if (sub === "upscale") upscaleBody(node, body);
+  else if (sub === "converter") {
+    finalPromptSection(node, body);
+    if (!t.on) {
+      body.appendChild(linkNote(node, "Img2Img is off, so the Img2Img auto prompt converter "
+        + "below does nothing. The final prompt converter above works either way. ",
+        "Open Img2Img", "source"));
+    }
+    converterSection(node, body, "i2i", { flat: true, title: "IMG2IMG AUTO PROMPT CONVERTER" });
+  } else if (sub === "upscale") upscaleBody(node, body);
 }
 
 // A note that names what is missing and links to the page that fixes it
@@ -17018,16 +17044,19 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   body.appendChild(card);
 }
 
-function converterSection(node, body, tabName, { flat = false } = {}) {
-  if (!CONVERTER_TABS.includes(tabName)) return;
+function converterSection(node, body, tabName, { flat = false, conv = null,
+                                                 title = "PROMPT CONVERTER",
+                                                 what = "this tab's prompt", locks = true } = {}) {
+  if (!conv && !CONVERTER_TABS.includes(tabName)) return;
   const cfg = node._rnCfg;
-  const c = cfg.tabs[tabName].conv;
+  const c = conv || cfg.tabs[tabName].conv;
   const open = flat || !!(node._rnConvOpen ||= {})[tabName];
   const active = convActive(c);
   const isOn = c.on !== false;
 
   const sect = document.createElement("div");
-  sect.className = "rn-ws-sect rn-ws-conv" + (flat ? " flat" : "");
+  sect.className = "rn-ws-sect rn-ws-conv" + (flat ? " flat" : "")
+    + (tabName === "final" ? " rn-ws-convfinal" : "");
   const head = document.createElement("div");
   head.className = "head";
   const arr = document.createElement("span");
@@ -17035,14 +17064,14 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
   arr.textContent = open ? "▾" : "▸";
   const ttl = document.createElement("span");
   ttl.className = "ttl";
-  ttl.textContent = "PROMPT CONVERTER"
+  ttl.textContent = title
     + (!isOn ? ": off" : active ? "" : ": nothing set");
   const onSw = document.createElement("button");
   onSw.className = "rn-ws-sw" + (isOn ? " on" : "");
   onSw.title = isOn
-    ? "On: this tab's prompt runs through the converter below. Switch off to pass it "
+    ? `On: ${what} runs through the converter below. Switch off to pass it `
       + "through untouched; the settings are kept."
-    : "Off: this tab's prompt passes through untouched. The settings below are kept "
+    : `Off: ${what} passes through untouched. The settings below are kept `
       + "for when it is switched back on.";
   onSw.onclick = (e) => {
     e.stopPropagation();
@@ -17101,14 +17130,20 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
       sel("NSFW act", "act", lists.act, "Rewrite act terms to the chosen one."),
       boolB("Remove cum terms", "remove_cum", "Strip cum, ejaculation, semen, sperm."),
       boolB("Shave pubic", "shave", "Rewrite pubic hair mentions to shaved."),
-      boolB("Mood owns the style", "lock",
-            "Strip style words the moodboard prompt does not itself use, so this tab's "
-            + "image cannot smuggle its own style past the mood."),
-      boolB("Mood owns the lighting", "lock_lighting",
-            "Stronger: also strip lighting and atmosphere words (golden hour, bokeh, "
-            + "backlighting, long shadows) the mood does not use. Lighting the mood "
-            + "mentions survives."),
     );
+    // the mood locks read a caption against the moodboard; the final prompt already
+    // carries the mood's own words, so they have nothing to hold there
+    if (locks) {
+      sect.append(
+        boolB("Mood owns the style", "lock",
+              "Strip style words the moodboard prompt does not itself use, so this tab's "
+              + "image cannot smuggle its own style past the mood."),
+        boolB("Mood owns the lighting", "lock_lighting",
+              "Stronger: also strip lighting and atmosphere words (golden hour, bokeh, "
+              + "backlighting, long shadows) the mood does not use. Lighting the mood "
+              + "mentions survives."),
+      );
+    }
     const rl = document.createElement("div");
     rl.className = "rn-ws-note";
     rl.textContent = "Custom rules, one per line: word => replacement";
@@ -17121,6 +17156,125 @@ function converterSection(node, body, tabName, { flat = false } = {}) {
     sect.append(rl, ta);
   }
   body.appendChild(sect);
+}
+
+// THE FINAL PROMPT on the Editor's Converter page: the active rig's row as it will be
+// encoded, every caption, wildcard and people merge in, reworked at queue time. The
+// local model's rewrite first when switched on, then the converter, so a swap or a
+// rule of your own has the last word (prompt_sort.finish_prompt). Under it, the prompt
+// as last queued, and what it was before this page touched it.
+function finalPromptSection(node, body) {
+  const cfg = node._rnCfg;
+  const Fi = cfg.final;
+  converterSection(node, body, "final", { flat: true, conv: Fi, title: "FINAL PROMPT CONVERTER",
+                                          what: "the final prompt", locks: false });
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-finalllm";
+  const r = document.createElement("div");
+  r.className = "rn-ws-row";
+  r.style.flexWrap = "wrap";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (Fi.llm ? " on" : "");
+  sw.dataset.choice = "final_llm";
+  sw.title = Fi.llm
+    ? "On: the local model rewrites the final prompt on each queue, before the converter "
+      + "above. Off: the prompt is used as it was written."
+    : "Off: the final prompt is used as it was written. On: the local model rewrites it "
+      + "on each queue, keeping every fact, before the converter above.";
+  sw.onclick = () => { Fi.llm = !Fi.llm; writeCfg(node); render(node); };
+  const l = document.createElement("span");
+  l.className = "rn-ws-swlabel";
+  l.style.fontWeight = "600";
+  l.textContent = "Rewrite with the local model";
+  r.append(sw, l);
+  card.appendChild(r);
+  if (Fi.llm) {
+    const model = String(cfg.auto?.model || "").trim();
+    const mn = document.createElement("div");
+    mn.className = "rn-ws-note" + (model ? "" : " rn-ws-peoplewarn");
+    mn.textContent = model
+      ? `Uses ${model}, the Ollama model chosen on the Auto Prompt section. Only the final `
+        + "prompt is rewritten, never the rows on the Prompts tab."
+      : "No Ollama model is chosen. Pick one on any Auto Prompt section, or the rewrite "
+        + "is skipped.";
+    card.appendChild(mn);
+    const sr = document.createElement("div");
+    sr.className = "rn-ws-row";
+    const sl = document.createElement("span");
+    sl.className = "rn-ws-note";
+    sl.textContent = "Style";
+    const sel = document.createElement("select");
+    sel.className = "rn-ws-res";
+    sel.dataset.choice = "final_llm_style";
+    for (const [v, label] of FINAL_STYLES) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = label;
+      o.selected = Fi.llm_style === v;
+      sel.appendChild(o);
+    }
+    sel.title = "How the rewrite writes. Your own instruction below replaces this.";
+    sel.onchange = () => { Fi.llm_style = sel.value; writeCfg(node); };
+    sr.append(sl, sel);
+    const seg = segSwitch([
+      ["once", "Once", "Rewrite a prompt once and reuse the answer while the prompt, style "
+                     + "and instruction stay the same. A new wildcard roll is a new prompt."],
+      ["fresh", "Every queue", "Ask the model again on every queue, for a new wording each time."],
+    ], Fi.llm_fresh ? "fresh" : "once",
+    (v) => { Fi.llm_fresh = v === "fresh"; writeCfg(node); render(node); });
+    seg.dataset.choice = "final_llm_fresh";
+    sr.appendChild(seg);
+    card.appendChild(sr);
+    const nl = document.createElement("div");
+    nl.className = "rn-ws-note";
+    nl.textContent = "Your own instruction, in place of the style";
+    const ta = document.createElement("textarea");
+    ta.className = "rn-ws-vsp";
+    ta.rows = 2;
+    ta.dataset.choice = "final_llm_note";
+    ta.value = Fi.llm_note;
+    ta.placeholder = "Make it read like a fashion editorial";
+    ta.addEventListener("change", () => { Fi.llm_note = ta.value; writeCfg(node); });
+    card.append(nl, ta);
+  }
+  body.appendChild(card);
+
+  // THE REVIEW: the final prompt as last queued, and what it was before this page
+  const rv = document.createElement("div");
+  rv.className = "rn-ws-card rn-ws-finalreview";
+  const h = document.createElement("div");
+  h.className = "rn-ws-swlabel";
+  h.style.fontWeight = "600";
+  h.textContent = "Last queued final prompt";
+  rv.appendChild(h);
+  const last = node.properties?.rn_last_prompt;
+  const box = (label, text) => {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.textContent = label;
+    const ta = document.createElement("textarea");
+    ta.className = "rn-ws-vsp";
+    ta.rows = 4;
+    ta.readOnly = true;
+    ta.value = text;
+    rv.append(n, ta);
+  };
+  if (!last?.text) {
+    const n = document.createElement("div");
+    n.className = "rn-ws-note";
+    n.textContent = "Queue once and the final prompt shows here, before and after this page.";
+    rv.appendChild(n);
+  } else if (last.before && last.before !== last.text) {
+    box("Before the converter", last.before);
+    box("As queued", last.text);
+  } else {
+    box("As queued, unchanged by this page", last.text);
+  }
+  body.appendChild(rv);
+  // a queue lands a new prompt: redraw this page if it is still the one showing
+  node._rnFinalChanged = () => {
+    if (node._rnTab === "editor" && node._rnEdSub === "converter") render(node);
+  };
 }
 
 // A collapsible "Dials" box at the bottom of the tab those dials belong to.

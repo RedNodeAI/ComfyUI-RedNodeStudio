@@ -1062,6 +1062,11 @@ def _pass_names(raw, on, n):
     return use, out
 
 
+def _parse_final(raw):
+    from .prompt_sort import parse_final
+    return parse_final(raw)
+
+
 def parse_config(config_json):
     """Normalised config: {tabs: {name: {on, images, sel, mask}}, dials: {...}, resize, use_dials}."""
     try:
@@ -1801,6 +1806,8 @@ def parse_config(config_json):
             # does above, so refine_pipeline.parse_pipeline stays the only owner of
             # that schema instead of a second copy drifting here (KNOWN_TRAPS 13).
             "upscale": _upscale_cfg(data.get("upscale")),
+            # THE FINAL PROMPT: the Editor Converter page's block (prompt_sort.py)
+            "final": _parse_final(data.get("final")),
             # SAVED FOLDER BATCHES, per tab: {"upscale": {name: [files]}, ...}.
             # Managed input names, so a saved folder is a list of pictures already
             # copied in rather than a path on anybody's drive.
@@ -3944,6 +3951,26 @@ class RedNodeStudioWorkspace:
                 _add = " ".join("%s: %s." % (n, c.rstrip(".")) for n, c in _rp[0])
                 _row["text"] = (_t + ". " + _add) if _t else _add
 
+        # THE FINAL PROMPT, the Editor's Converter page: the active rig's row as it
+        # will be encoded, every caption, wildcard and people merge in. The local
+        # model's rewrite first when switched on, then the converter, so a swap or a
+        # rule of your own has the last word. Not on a paint or upscale run, and not
+        # when an Editor edit is the output, which no prompt makes.
+        _final_before = None
+        _frow = prompt_row_for(cfg["models"], cfg["prompts"], "")
+        if (_frow is not None and cfg["final"]["on"] and not _stage_only
+                and not cfg["paint"].get("run_token") and not _urt):
+            from .prompt_sort import finish_prompt as _finish
+            _ftext, _fdid, _fwarn = _finish(
+                _frow["text"], cfg["final"], model=cfg["auto"]["model"],
+                url=cfg["auto"]["url"], keep_alive=cfg["auto"]["keep_alive"])
+            if _fwarn:
+                _run.note(_fwarn, "warn")
+            if _ftext != _frow["text"]:
+                _final_before = _frow["text"]
+                _frow["text"] = _ftext
+                print("[RedNode Workspace] final prompt: %s" % ", ".join(_fdid), flush=True)
+
         # a paint prompt that came FROM a row must see the injected version
         if cfg["paint"].get("prompt_from") == "prompts_tab":
             _row3 = prompt_row_for(cfg["models"], cfg["prompts"])
@@ -4310,6 +4337,7 @@ class RedNodeStudioWorkspace:
             try:
                 _rows0 = cfg["prompts"].get("rows") or []
                 _run.info(prompt=prompt_text_out, negative=negative_text_out,
+                          final_before=str(_final_before or ""),
                           prompt_row=str(_prow0.get("name") or ""),
                           prompt_index=next((_i for _i, _r in enumerate(_rows0) if _r is _prow0), -1))
             except Exception:

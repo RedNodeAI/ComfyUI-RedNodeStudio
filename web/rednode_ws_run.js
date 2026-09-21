@@ -178,9 +178,12 @@ export function onRunEvent(d) {
         (wsn.properties ||= {}).rn_last_prompt = {
           text: RUN.prompt, negative: String(d.info.negative || ""),
           row: String(d.info.prompt_row || ""), index: Number(d.info.prompt_index ?? -1),
+          // what the Editor's Converter was handed, when it changed anything
+          before: String(d.info.final_before || ""),
           seed: RUN.seed, at: Date.now(), promptId: RUN.promptId || null,
         };
         wsn._rnLastPromptChanged?.();
+        wsn._rnFinalChanged?.();
       }
     }
   } else if (d.kind === "stage") {
