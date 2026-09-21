@@ -195,7 +195,8 @@ export function overviewBoxes(node, cfg) {
   const swNote = capFirst(S.mode || "face") + " from " + refName(S.reference || "subject");
   const swBlocked = ownEmpty ? "Own picture is picked and the Swap gallery is empty." : "";
   if (!R.on || raTarget !== "render") run.push(editBox("reangle", "Re-angle", R, false, "", raNote));
-  if (I.realism?.on) run.push(editBox("realism", "Realism", I.realism, false, "", "Anything2Real"));
+  if (I.realism?.on) run.push(editBox("realism", "Realism", I.realism, false, "",
+                                          I.realism.photo ? "Photo finish" : "Anime to photo"));
   if (!S.on || swapTarget !== "render") run.push(editBox("swap", "Swap", S, false, swBlocked, swNote));
   if (internal) {
     run.push({ key: "encode", label: "Encode", state: "on",

@@ -119,7 +119,7 @@ export const IDENTITY_SUBS = [
 export const EDITOR_SUBS = [
   { id: "esource", label: "SOURCE", tip: "The picture Re-angle, Realism and Swap edit, and where the edit goes." },
   { id: "upscale", label: "UPSCALE", tip: "One upscale on one picture, straight to the result pane." },
-  { id: "realism", label: "REALISM", tip: "Turn the source into a photograph with the Anything2Real LoRA." },
+  { id: "realism", label: "REALISM", tip: "Turn the source into a photograph with a conversion LoRA." },
   { id: "reangle", label: "RE-ANGLE", tip: "Re-shoot the source or the render from a new camera angle." },
   { id: "swap", label: "SWAP", tip: "Swap a character into the source or the render." },
   { id: "converter", label: "CONVERTER", tip: "Rework the final prompt and the Img2Img auto prompt." },

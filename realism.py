@@ -435,11 +435,11 @@ def _render(rc, source, cfg, seed, node_id=None):
             rc = dict(rc, lora=name, lora_sha256=digest or rc.get("lora_sha256", ""))
     # what can be refused without loading anything comes first
     if not str(rc["lora"] or "").strip():
-        raise ValueError("no realism LoRA is chosen on the Img2Img tab, and none "
+        raise ValueError("no conversion LoRA is chosen on the Realism page, and none "
                          "was found by hash either: pick one first.")
     need = missing(rc)
     if need:
-        raise ValueError("the Anything2Real graph needs %s, which this ComfyUI does "
+        raise ValueError("Realism needs %s, which this ComfyUI does "
                          "not have" % ", ".join(need))
 
     from . import workspace as _ws

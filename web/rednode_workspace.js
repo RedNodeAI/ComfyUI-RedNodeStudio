@@ -16225,8 +16225,8 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   const L = MODEL_LISTS || {};
   const open = (node._rnRealismOpen ||= { recipe: false, engine: false, photo: false });
   const card = sectionCard("REALISM", "#8ad2f0",
-    !R.on ? "off" : (R.engine === "alternative" ? "Alternative \u00b7 "
-                     : R.photo ? "Photo finish \u00b7 " : "Exact \u00b7 ")
+    !R.on ? "off" : (R.engine === "alternative" ? "Loose \u00b7 "
+                     : R.photo ? "Photo finish \u00b7 " : "Faithful \u00b7 ")
             + (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
             + (R.loras ? " \u00b7 with the stack" : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
@@ -16235,7 +16235,7 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
   sw.className = "rn-ws-sw" + (R.on ? " on" : "");
-  sw.title = "On: the Editor's source picture goes through the Anything2Real workflow. "
+  sw.title = "On: the Editor's source picture is converted into a photograph. "
            + "Off: nothing converted.";
   sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
@@ -16341,11 +16341,11 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
     // THE ENGINE, first: it decides what the rest of the page means
     const eng = grid();
     select(eng, "Engine", "engine",
-           [["exact", "Exact: the Anything2Real workflow"],
-            ["alternative", "Alternative: looser, a look of its own"]],
-           "Exact runs the workflow's own nodes in its order with its values, and "
-           + "needs its packs. Alternative is this pack's own rebuild of it: the "
-           + "source becomes a reference more than a copy, and it needs nothing extra.");
+           [["exact", "Faithful: stays closest to the picture"],
+            ["alternative", "Loose: a freer look of its own"]],
+           "Faithful keeps the picture as close as it can while changing the medium, and "
+           + "needs a few extra packs, named here if one is missing. Loose treats the source "
+           + "as a reference more than a copy, and needs no extra pack.");
     card.appendChild(eng);
 
     // THE CONVERSION LORA, found for you. Once per page opening, and only when
@@ -16384,9 +16384,9 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
            [["", "Choose a LoRA"], ...[...new Set([...(L.loras || []), ...(R.lora ? [R.lora] : [])])]
              .map((n) => [n, n])],
            "The LoRA that does the converting. Left empty, it is found for you by "
-           + "hash when it is installed. Its hash is kept with the workflow, so the "
+           + "hash when it is installed. Its hash is saved with the graph, so the "
            + "same file is found again under another name or on another machine.");
-    num(front, "Strength", "strength", 0, 2, 0.05, "1.0 in the workflow.");
+    num(front, "Strength", "strength", 0, 2, 0.05, "How hard the LoRA converts. 1.0 by default.");
     if (node._rnRealismFound && R.lora) {
       label(front, "");
       const note = document.createElement("span");
@@ -16405,8 +16405,8 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
     }
     card.appendChild(front);
     toggle("Run the rig's LoRA stack too", "loras",
-           "On: the LoRAs tab's stack goes under the conversion LoRA, the way the "
-           + "workflow stacks one under it. Off: the conversion LoRA alone.");
+           "On: the LoRAs tab's stack goes under the conversion LoRA. Off: the "
+           + "conversion LoRA alone.");
 
     const exact = R.engine !== "alternative";
     if (exact) {
@@ -16416,7 +16416,7 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
              "On: two passes over 12 steps, the conversion LoRA strong for the first 8 "
              + "and light for the last 4 with fresh noise. More photographic skin and "
              + "light, the layout kept, about twice the time. Always on the Ostris "
-             + "encoder. Off: the one pass of the workflow.");
+             + "encoder. Off: one pass.");
       if (R.photo) {
         const pn = document.createElement("div");
         pn.className = "rn-ws-note";
@@ -16425,51 +16425,52 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         card.appendChild(pn);
         if (fold("Photo finish: its settings", "photo")) {
           const pg = grid();
-          num(pg, "Total steps", "photo_steps", 2, 100, 1, "Both passes together. 12 in the v30 workflow.");
+          num(pg, "Total steps", "photo_steps", 2, 100, 1, "Both passes together. 12 by default.");
           num(pg, "Switch at step", "photo_split", 1, 99, 1,
-              "Where the second pass takes over. 8 of 12 in the v30 workflow.");
+              "Where the second pass takes over. 8 of 12 by default.");
           num(pg, "First pass strength", "photo_strength1", 0, 3, 0.05,
-              "The conversion LoRA while the picture takes shape. 1.5 in the v30 workflow.");
+              "The conversion LoRA while the picture takes shape. 1.5 by default.");
           num(pg, "Second pass strength", "photo_strength2", 0, 3, 0.05,
-              "The conversion LoRA while it is finished. 0.6 in the v30 workflow.");
+              "The conversion LoRA while it is finished. 0.6 by default.");
           const samplers = (k) => [...new Set([...(L.samplers || []), R[k]])].map((x) => [x, x]);
           select(pg, "First sampler", "photo_sampler1", samplers("photo_sampler1"),
-                 "er_sde in the v30 workflow.");
+                 "er_sde by default.");
           select(pg, "Second sampler", "photo_sampler2", samplers("photo_sampler2"),
-                 "dpmpp_sde in the v30 workflow. It asks the model twice a step.");
+                 "dpmpp_sde by default. It asks the model twice a step.");
           select(pg, "Scheduler", "photo_scheduler",
                  [...new Set([...(L.schedulers || []), R.photo_scheduler])].map((x) => [x, x]),
-                 "Both passes. simple in the v30 workflow.");
-          num(pg, "Shift", "shift", 0, 20, 0.5, "AuraFlow shift. 5 in the v30 workflow; 0 is none.");
+                 "Both passes. simple by default.");
+          num(pg, "Shift", "shift", 0, 20, 0.5, "AuraFlow shift. 5 by default; 0 is none.");
           card.appendChild(pg);
         }
       }
     }
 
     // THE WORKFLOW'S OWN SETTINGS, folded, with its own values
-    if (fold("Recipe: the workflow's settings", "recipe")) {
+    if (fold("Recipe: conversion settings", "recipe")) {
       const g = grid();
-      num(g, "Saturation", "saturation", -100, 100, 5, "ColorCorrect. -20 in the workflow.");
+      num(g, "Saturation", "saturation", -100, 100, 5, "Takes the saturation down before converting. -20 by default.");
       select(g, "Round to", "round_to", REALISM_ROUNDINGS.map((x) => [x, x]),
-             "ImageScaleByAspectRatio V2's round_to_multiple. 512 in the workflow.");
+             "The picture's sides are rounded to a multiple of this. 512 by default.");
       num(g, "Longest side", "longest", 256, 4096, 64,
-          "ImageScaleByAspectRatio V2's scale_to_length. 1536 in the workflow.");
+          "The picture is scaled so its longest side is this. 1536 by default.");
       select(g, "Fit", "fit", [["crop", "Crop"], ["letterbox", "Letterbox"], ["fill", "Fill"]],
-             "ImageScaleByAspectRatio V2. crop in the workflow.");
+             "How the picture fits the rounded size. Crop by default.");
       if (exact) {
         select(g, "Encoder", "encoder",
-               [["easy", "Easy_QwenEdit2509 (the workflow's)"],
-                ["ostris", "Ostris edit encoder (no Apt_Preset)"]],
-               "The workflow encodes with Apt_Preset's Easy_QwenEdit2509. The Ostris pack's "
-               + "own encoder gave the same picture in testing and needs no Apt_Preset. "
+               [["easy", "Qwen edit encoder (needs Apt_Preset)"],
+                ["ostris", "Ostris edit encoder"]],
+               "The Qwen edit encoder (Apt_Preset's Easy_QwenEdit2509) is the default. The "
+               + "Ostris pack's own encoder gave the same picture in testing and needs no "
+               + "Apt_Preset. "
                + "The photo finish always uses the Ostris one.");
         if (R.encoder === "ostris" && !R.photo) {
           num(g, "Shift", "shift", 0, 20, 0.5, "AuraFlow shift on the Ostris encoder. 0 is none.");
         }
       }
-      num(g, "Vision size", "vl_size", 64, 2048, 64, "Easy_QwenEdit2509's vl_size. 384 in the workflow.");
+      num(g, "Vision size", "vl_size", 64, 2048, 64, "How big the encoder sees the picture. 384 by default.");
       select(g, "Vision fit", "auto_resize", [["crop", "Crop"], ["pad", "Pad"], ["stretch", "Stretch"]],
-             "Easy_QwenEdit2509's auto_resize. crop in the workflow.");
+             "How the picture fits the vision size. Crop by default.");
       // KV CACHE, the Ostris patch's one setting. On in the workflow, and the
       // setting that decides whether the conversion looks like it at all.
       card.appendChild(g);
@@ -16478,8 +16479,8 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       const kvsw = document.createElement("div");
       kvsw.className = "rn-ws-sw" + (R.kv_cache ? " on" : "");
       kvsw.dataset.choice = "realism_kv_cache";
-      kvsw.title = "Krea2OstrisEditModelPatch's kv_cache. On in the workflow. For LoRAs "
-        + "trained with it, like Anything2Real: the reference is computed once and reused "
+      kvsw.title = "The Ostris edit patch's kv_cache. On by default. For LoRAs trained with it, "
+        + "like this conversion LoRA: the reference is computed once and reused "
         + "every step. Off is a different conditioning and a different picture.";
       kvsw.onclick = () => { R.kv_cache = !R.kv_cache; writeCfg(node); render(node); };
       const kvl = document.createElement("span");
@@ -16491,8 +16492,8 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       // THE SEED. Without one the stage rolls the run's seed, and two runs of the
       // same graph at different seeds are different pictures: no comparison with
       // the workflow means anything until this matches its seed.
-      num(gs, "Seed", "seed", 0, 2 ** 53, 1, "The KSampler seed. Set it to the "
-          + "workflow's own and switch Random off to compare the two like for like.");
+      num(gs, "Seed", "seed", 0, 2 ** 53, 1, "The seed. Switch Random off and set "
+          + "it to repeat a picture exactly.");
       card.appendChild(gs);
       const rs = document.createElement("div");
       rs.className = "rn-ws-row";
@@ -16508,13 +16509,13 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       rs.append(rsw, rsl);
       card.appendChild(rs);
       const g2 = grid();
-      num(g2, "Steps", "steps", 1, 100, 1, "KSampler. 8 in the workflow.");
-      num(g2, "CFG", "cfg", 0, 20, 0.1, "KSampler. 1.0 in the workflow.");
+      num(g2, "Steps", "steps", 1, 100, 1, "8 by default.");
+      num(g2, "CFG", "cfg", 0, 20, 0.1, "1.0 by default.");
       select(g2, "Sampler", "sampler", [...new Set([...(L.samplers || []), R.sampler])].map((x) => [x, x]),
-             "KSampler. euler in the workflow.");
+             "euler by default.");
       select(g2, "Scheduler", "scheduler",
              [...new Set([...(L.schedulers || []), R.scheduler])].map((x) => [x, x]),
-             "KSampler. beta57 in the workflow, which core only lists once RES4LYF is "
+             "beta57 by default, which ComfyUI only lists once RES4LYF is "
              + "installed.");
       card.appendChild(g2);
       const pr = document.createElement("div");
@@ -16565,9 +16566,9 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         [["", "The rig's"], ...[...new Set([...(list || []), ...(R[key] ? [R[key]] : [])])]
           .map((n) => [n, n])], tip);
       files("unet", L.unets, "Empty follows the rig.");
-      files("clip", L.clips, "The workflow uses qwen3vl_4b_fp8_scaled. A rig on another "
-            + "encoder reads the picture differently, so set this to match it.");
-      files("vae", L.vaes, "The workflow uses qwen_image_vae.");
+      files("clip", L.clips, "Empty follows the rig. The conversion LoRA was trained on "
+            + "qwen3vl_4b_fp8_scaled; another encoder reads the picture differently.");
+      files("vae", L.vaes, "Empty follows the rig. qwen_image_vae is the usual one.");
       card.appendChild(g);
     }
 
