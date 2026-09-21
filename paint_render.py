@@ -850,6 +850,7 @@ class RedNodePaintRender:
         painted = vae.decode(out["samples"])
         while painted.ndim > 4:                               # video VAEs hand back 5D
             painted = painted[0]
+        painted = painted[:, :, :, :3]                        # an RGBA VAE (Qwen Image 2.1)
 
         # A WHOLE-FRAME PASS THAT RESIZED KEEPS THE RENDER'S SIZE, up or down. Scaling
         # the render back to the source would spend the whole sample on pixels that are
