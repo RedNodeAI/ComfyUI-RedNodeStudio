@@ -3028,8 +3028,11 @@ class RedNodeStudioWorkspace:
             cfg["auto"]["seed"] = int(_linked["auto"]) & 0x7fffffff
         # a linked part's own stage block takes the linked number, fixed
         for _a in ("reangle", "realism", "swap"):
-            if _linked[_a] is not None and isinstance(tabs["i2i"].get(_a), dict):
-                tabs["i2i"][_a] = dict(tabs["i2i"][_a], seed=int(_linked[_a]), seed_random=False)
+            # cfg["tabs"], not `tabs`: that name is bound further down, and the i2i
+            # block is the same dict object either way
+            _i2i_blk = cfg["tabs"]["i2i"]
+            if _linked[_a] is not None and isinstance(_i2i_blk.get(_a), dict):
+                _i2i_blk[_a] = dict(_i2i_blk[_a], seed=int(_linked[_a]), seed_random=False)
         if _linked["upscale"] is not None:
             cfg["upscale"] = dict(cfg["upscale"], seed=int(_linked["upscale"]), seed_random=False)
         if _linked["detailer"] is not None or _same_pass:
