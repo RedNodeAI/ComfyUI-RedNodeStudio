@@ -167,6 +167,9 @@ css.textContent = `
 .rn-ws-rail .rn-ws-tab.rail:hover{background:#23262c;color:#fff}
 .rn-ws-rail .rn-ws-tab.rail.cur{background:#c42a3c;border:0;color:#fff;font-weight:600}
 .rn-ws-tab.rail .ic{display:flex;flex:none;color:#aeb4bc}
+.rn-ws-icimg{display:block;width:18px;height:18px;background:currentColor;
+  -webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:center;mask-position:center}
 .rn-ws-tab.rail.cur .ic{color:#fff}
 .rn-ws-tab.rail .lb{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rn-ws-rail.compact .rn-ws-tab.rail{gap:5px;padding:7px 4px;justify-content:center}
