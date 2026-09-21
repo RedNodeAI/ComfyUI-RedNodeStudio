@@ -25,6 +25,17 @@ rather than a copy. The workflow is the specification, so it runs as written.
 
 The packs it needs are named up front, all of them, before anything loads.
 
+TWO OPTIONS ON THE EXACT ENGINE, both off by default, both from the v30
+DoublePass workflow as tested in the sandbox (hub A2R_FINDINGS.md):
+
+  encoder "ostris"  the Ostris pack's own TextEncodeKrea2OstrisEdit in place of
+                    Easy_QwenEdit2509: Krea's own template, a blank canvas at 1MP,
+                    AuraFlow shift. The same picture in testing, and no Apt_Preset.
+  photo             the photo finish: the Ostris encoder, then two passes over 12
+                    steps, the LoRA strong for the first 8 (er_sde) and light for the
+                    last 4 with fresh noise (dpmpp_sde). More photographic, keeps the
+                    layout, about twice the time.
+
 TWO ENGINES, chosen on the page, never switched between on their own:
 
   exact        the workflow above. The default, and the one that matches it.
@@ -56,6 +67,18 @@ NODES = {
 # the workflow renders on beta57, which core's KSampler only knows once RES4LYF
 # has registered it; a different beta57 would not be the workflow's
 SCHEDULER_PACK = {"beta57": "RES4LYF", "bong_tangent": "RES4LYF"}
+# the Ostris encoder route and the photo finish, in place of the Qwen edit encode
+OSTRIS_NODES = {
+    "TextEncodeKrea2OstrisEdit": "comfyui-krea2-ostris-edit",
+    "ConditioningZeroOut": "ComfyUI core",
+    "EmptySD3LatentImage": "ComfyUI core",
+    "ModelSamplingAuraFlow": "ComfyUI core",
+    "KSamplerAdvanced": "ComfyUI core",
+}
+ENCODERS = ("easy", "ostris")
+# the Ostris encoder fits its reference latents to one megapixel; a canvas any
+# bigger than that is filled by zooming out and inventing the rest
+CANVAS_PX = 1024 * 1024
 ROUNDINGS = ("8", "16", "32", "64", "128", "256", "512", "None")
 ENGINES = ("exact", "alternative")
 # THE SYSTEM INSTRUCTION: Easy_QwenEdit2509's own default, copied from the
@@ -219,6 +242,20 @@ def parse(raw):
         "seed": num("seed", 0, 0, 2 ** 53, int),
         "seed_random": bool(r.get("seed_random", True)),
         "skip_pass": bool(r.get("skip_pass", False)),
+        # the exact engine's encoder: the workflow's Easy_QwenEdit2509, or the
+        # Ostris pack's own, which gave the same picture and needs no Apt_Preset
+        "encoder": pick("encoder", ENCODERS, "easy"),
+        # AuraFlow shift on the Ostris routes, as the v30 workflow runs them
+        "shift": num("shift", 5.0, 0.0, 20.0),
+        # THE PHOTO FINISH, the v30 double pass. Off by default.
+        "photo": bool(r.get("photo", False)),
+        "photo_steps": num("photo_steps", 12, 2, 100, int),
+        "photo_split": num("photo_split", 8, 1, 99, int),
+        "photo_strength1": num("photo_strength1", 1.5, 0.0, 3.0),
+        "photo_strength2": num("photo_strength2", 0.6, 0.0, 3.0),
+        "photo_sampler1": str(r.get("photo_sampler1") or "er_sde"),
+        "photo_sampler2": str(r.get("photo_sampler2") or "dpmpp_sde"),
+        "photo_scheduler": str(r.get("photo_scheduler") or "simple"),
     }
 
 
@@ -241,16 +278,45 @@ def missing(rc):
     if rc.get("engine") == "alternative":
         return []
     reg = _registry()
-    out = sorted({pack for node, pack in NODES.items() if node not in reg})
+    out = sorted({pack for node, pack in _needed(rc).items() if node not in reg})
+    photo = bool(rc.get("photo"))
     try:
         import comfy.samplers as _cs
-        if rc["scheduler"] not in _cs.KSampler.SCHEDULERS:
+        sched = rc["photo_scheduler"] if photo else rc["scheduler"]
+        if sched not in _cs.KSampler.SCHEDULERS:
             out.append("%s (for the %s scheduler)"
-                       % (SCHEDULER_PACK.get(rc["scheduler"], "a pack that adds it"),
-                          rc["scheduler"]))
+                       % (SCHEDULER_PACK.get(sched, "a pack that adds it"), sched))
+        known = getattr(_cs.KSampler, "SAMPLERS", None)
+        if photo and known:
+            for s in (rc["photo_sampler1"], rc["photo_sampler2"]):
+                if s not in known:
+                    out.append("a pack that adds the %s sampler" % s)
     except Exception:
         pass
     return out
+
+
+def _needed(rc):
+    """The nodes this route calls, with the pack each comes from."""
+    need = dict(NODES)
+    if rc.get("photo") or rc.get("encoder") == "ostris":
+        for n in ("Easy_QwenEdit2509", "FluxKontextMultiReferenceLatentMethod"):
+            need.pop(n)
+        need.update({k: v for k, v in OSTRIS_NODES.items() if k != "KSamplerAdvanced"})
+        if not float(rc.get("shift") or 0) > 0:
+            need.pop("ModelSamplingAuraFlow")
+    if rc.get("photo"):
+        need.pop("KSampler")
+        need["KSamplerAdvanced"] = OSTRIS_NODES["KSamplerAdvanced"]
+    return need
+
+
+def canvas_size(image):
+    """(width, height) for the Ostris routes' blank canvas: the picture's shape,
+    no bigger than the one megapixel the encoder fits its reference to, on 16."""
+    h, w = int(image.shape[1]), int(image.shape[2])
+    k = min(1.0, (CANVAS_PX / float(max(1, h * w))) ** 0.5)
+    return (max(16, int(round(w * k / 16)) * 16), max(16, int(round(h * k / 16)) * 16))
 
 
 def _call(name, **kw):
@@ -258,14 +324,14 @@ def _call(name, **kw):
     cls = _registry().get(name)
     if cls is None:
         raise ValueError("this ComfyUI has no %s node (install %s)"
-                         % (name, NODES.get(name, "the pack that provides it")))
+                         % (name, {**NODES, **OSTRIS_NODES}.get(name, "the pack that provides it")))
     fn = getattr(cls(), getattr(cls, "FUNCTION", "") or "", None)
     if fn is None:
         raise ValueError("the %s node has no callable entry point" % name)
     return fn(**kw)
 
 
-def sampler_for(node_id, label):
+def sampler_for(node_id, label, node="KSampler"):
     """Core's KSampler node, streaming a frame a step under `node_id`.
 
     The node itself, not a helper standing in for it: the workflow runs core's
@@ -274,7 +340,7 @@ def sampler_for(node_id, label):
     common_ksampler, so watching it costs nothing.
     """
     def run(**kw):
-        return _call("KSampler", **kw)
+        return _call(node, **kw)
     if node_id is None:
         return run
     try:
@@ -408,8 +474,12 @@ def _render(rc, source, cfg, seed, node_id=None):
         except Exception as exc:
             print("[RedNode Realism] the rig's LoRA stack could not be applied (%s); "
                   "the conversion LoRA runs alone" % exc, flush=True)
-    model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
-                        strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
+    # the photo finish puts the conversion LoRA on twice, at two strengths, so it
+    # keeps the model and clip from before it
+    base_model, base_clip = model, clip
+    if not (rc["photo"] and rc["engine"] != "alternative"):
+        model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
+                            strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
 
     if rc["engine"] == "alternative":
         print("[RedNode Realism] alternative engine: %s on %s, boost %.2f, %d steps"
@@ -427,6 +497,13 @@ def _render(rc, source, cfg, seed, node_id=None):
                 fit=rc["fit"], method="lanczos", round_to_multiple=rc["round_to"],
                 scale_to_side="longest", scale_to_length=int(rc["longest"]),
                 background_color="#000000", image=img)[0]
+
+    if rc["photo"]:
+        return _finish(key, _render_photo(rc, img, base_model, base_clip, vae, seed,
+                                          node_id, rig_name))
+    if rc["encoder"] == "ostris":
+        return _finish(key, _render_ostris(rc, img, model, clip, vae, seed, node_id,
+                                           rig_name))
 
     # the encode: image1 and latent_image are the same picture, and both of the
     # node's boxes are filled, the prompt and the system instruction
@@ -450,6 +527,67 @@ def _render(rc, source, cfg, seed, node_id=None):
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
         negative=negative, latent_image=latent, denoise=1.0)[0]
     return _finish(key, _call("VAEDecode", samples=out, vae=vae)[0])
+
+
+def _ostris_model(rc, model):
+    """AuraFlow shift, then the Ostris patch: the model side of both Ostris routes."""
+    if float(rc["shift"]) > 0:
+        model = _call("ModelSamplingAuraFlow", model=model, shift=float(rc["shift"]))[0]
+    return _call("Krea2OstrisEditModelPatch", model=model, kv_cache=bool(rc["kv_cache"]))[0]
+
+
+def _ostris_encode(rc, img, clip, vae):
+    """The Ostris pack's own encode, a zeroed negative and a blank canvas at 1MP."""
+    positive = _call("TextEncodeKrea2OstrisEdit", clip=clip, prompt=rc["prompt"],
+                     vae=vae, image1=img)[0]
+    negative = _call("ConditioningZeroOut", conditioning=positive)[0]
+    w, h = canvas_size(img)
+    latent = _call("EmptySD3LatentImage", width=w, height=h, batch_size=1)[0]
+    return positive, negative, latent
+
+
+def _render_ostris(rc, img, model, clip, vae, seed, node_id, rig_name):
+    """The exact engine on the Ostris encoder: one pass, the recipe's sampler."""
+    model = _ostris_model(rc, model)
+    positive, negative, latent = _ostris_encode(rc, img, clip, vae)
+    print("[RedNode Realism] %s on %s, Ostris encoder: %d steps, %s / %s, shift %s"
+          % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["sampler"],
+             rc["scheduler"], rc["shift"]), flush=True)
+    out = sampler_for(node_id, "realism")(
+        model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
+        sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
+        negative=negative, latent_image=latent, denoise=1.0)[0]
+    return _call("VAEDecode", samples=out, vae=vae)[0]
+
+
+def _render_photo(rc, img, model, clip, vae, seed, node_id, rig_name):
+    """THE PHOTO FINISH, the v30 double pass: the LoRA strong while the picture
+    takes shape, light while it is finished, each pass on its own sampler."""
+    model = _ostris_model(rc, model)
+    strong, strong_clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
+                                strength_model=rc["photo_strength1"],
+                                strength_clip=rc["photo_strength1"])[:2]
+    light = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
+                  strength_model=rc["photo_strength2"],
+                  strength_clip=rc["photo_strength2"])[0]
+    positive, negative, latent = _ostris_encode(rc, img, strong_clip, vae)
+    steps = int(rc["photo_steps"])
+    split = max(1, min(int(rc["photo_split"]), steps - 1))
+    print("[RedNode Realism] %s on %s, photo finish: steps 0-%d at %.2f (%s), %d-%d at "
+          "%.2f (%s), %s, shift %s"
+          % (rc["lora"], rig_name or "the active rig", split, rc["photo_strength1"],
+             rc["photo_sampler1"], split, steps, rc["photo_strength2"],
+             rc["photo_sampler2"], rc["photo_scheduler"], rc["shift"]), flush=True)
+    run = sampler_for(node_id, "realism", node="KSamplerAdvanced")
+    common = dict(add_noise="enable", noise_seed=int(seed), steps=steps,
+                  cfg=float(rc["cfg"]), scheduler=rc["photo_scheduler"],
+                  positive=positive, negative=negative,
+                  return_with_leftover_noise="disable")
+    first = run(model=strong, sampler_name=rc["photo_sampler1"], latent_image=latent,
+                start_at_step=0, end_at_step=split, **common)[0]
+    out = run(model=light, sampler_name=rc["photo_sampler2"], latent_image=first,
+              start_at_step=split, end_at_step=10000, **common)[0]
+    return _call("VAEDecode", samples=out, vae=vae)[0]
 
 
 def _finish(key, image):

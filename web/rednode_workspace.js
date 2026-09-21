@@ -1334,6 +1334,14 @@ export function readCfg(node) {
       rlNum("seed", 0);
       if (typeof RL.seed_random !== "boolean") RL.seed_random = true;
       if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
+      // the Ostris encoder and the photo finish (realism.py parse)
+      rlPick("encoder", ["easy", "ostris"], "easy");
+      rlNum("shift", 5);
+      if (typeof RL.photo !== "boolean") RL.photo = false;
+      rlNum("photo_steps", 12); rlNum("photo_split", 8);
+      rlNum("photo_strength1", 1.5); rlNum("photo_strength2", 0.6);
+      rlStr("photo_sampler1", "er_sde"); rlStr("photo_sampler2", "dpmpp_sde");
+      rlStr("photo_scheduler", "simple");
       // settings from the first version, which rebuilt the graph from this
       // pack's parts instead of running it; gone so they cannot mislead
       delete RL.desaturate;
@@ -16215,9 +16223,10 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   const R = t.realism;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
-  const open = (node._rnRealismOpen ||= { recipe: false, engine: false });
+  const open = (node._rnRealismOpen ||= { recipe: false, engine: false, photo: false });
   const card = sectionCard("REALISM", "#8ad2f0",
-    !R.on ? "off" : (R.engine === "alternative" ? "Alternative \u00b7 " : "Exact \u00b7 ")
+    !R.on ? "off" : (R.engine === "alternative" ? "Alternative \u00b7 "
+                     : R.photo ? "Photo finish \u00b7 " : "Exact \u00b7 ")
             + (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
             + (R.loras ? " \u00b7 with the stack" : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
@@ -16399,6 +16408,44 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
            "On: the LoRAs tab's stack goes under the conversion LoRA, the way the "
            + "workflow stacks one under it. Off: the conversion LoRA alone.");
 
+    const exact = R.engine !== "alternative";
+    if (exact) {
+      // THE PHOTO FINISH: the v30 DoublePass workflow's two passes. More
+      // photographic and keeps the layout, for about twice the time.
+      toggle("Photo finish (double pass)", "photo",
+             "On: two passes over 12 steps, the conversion LoRA strong for the first 8 "
+             + "and light for the last 4 with fresh noise. More photographic skin and "
+             + "light, the layout kept, about twice the time. Always on the Ostris "
+             + "encoder. Off: the one pass of the workflow.");
+      if (R.photo) {
+        const pn = document.createElement("div");
+        pn.className = "rn-ws-note";
+        pn.textContent = "Two passes on the Ostris encoder, about twice the time of one. "
+          + "The Strength above is not used: each pass has its own below.";
+        card.appendChild(pn);
+        if (fold("Photo finish: its settings", "photo")) {
+          const pg = grid();
+          num(pg, "Total steps", "photo_steps", 2, 100, 1, "Both passes together. 12 in the v30 workflow.");
+          num(pg, "Switch at step", "photo_split", 1, 99, 1,
+              "Where the second pass takes over. 8 of 12 in the v30 workflow.");
+          num(pg, "First pass strength", "photo_strength1", 0, 3, 0.05,
+              "The conversion LoRA while the picture takes shape. 1.5 in the v30 workflow.");
+          num(pg, "Second pass strength", "photo_strength2", 0, 3, 0.05,
+              "The conversion LoRA while it is finished. 0.6 in the v30 workflow.");
+          const samplers = (k) => [...new Set([...(L.samplers || []), R[k]])].map((x) => [x, x]);
+          select(pg, "First sampler", "photo_sampler1", samplers("photo_sampler1"),
+                 "er_sde in the v30 workflow.");
+          select(pg, "Second sampler", "photo_sampler2", samplers("photo_sampler2"),
+                 "dpmpp_sde in the v30 workflow. It asks the model twice a step.");
+          select(pg, "Scheduler", "photo_scheduler",
+                 [...new Set([...(L.schedulers || []), R.photo_scheduler])].map((x) => [x, x]),
+                 "Both passes. simple in the v30 workflow.");
+          num(pg, "Shift", "shift", 0, 20, 0.5, "AuraFlow shift. 5 in the v30 workflow; 0 is none.");
+          card.appendChild(pg);
+        }
+      }
+    }
+
     // THE WORKFLOW'S OWN SETTINGS, folded, with its own values
     if (fold("Recipe: the workflow's settings", "recipe")) {
       const g = grid();
@@ -16409,6 +16456,17 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
           "ImageScaleByAspectRatio V2's scale_to_length. 1536 in the workflow.");
       select(g, "Fit", "fit", [["crop", "Crop"], ["letterbox", "Letterbox"], ["fill", "Fill"]],
              "ImageScaleByAspectRatio V2. crop in the workflow.");
+      if (exact) {
+        select(g, "Encoder", "encoder",
+               [["easy", "Easy_QwenEdit2509 (the workflow's)"],
+                ["ostris", "Ostris edit encoder (no Apt_Preset)"]],
+               "The workflow encodes with Apt_Preset's Easy_QwenEdit2509. The Ostris pack's "
+               + "own encoder gave the same picture in testing and needs no Apt_Preset. "
+               + "The photo finish always uses the Ostris one.");
+        if (R.encoder === "ostris" && !R.photo) {
+          num(g, "Shift", "shift", 0, 20, 0.5, "AuraFlow shift on the Ostris encoder. 0 is none.");
+        }
+      }
       num(g, "Vision size", "vl_size", 64, 2048, 64, "Easy_QwenEdit2509's vl_size. 384 in the workflow.");
       select(g, "Vision fit", "auto_resize", [["crop", "Crop"], ["pad", "Pad"], ["stretch", "Stretch"]],
              "Easy_QwenEdit2509's auto_resize. crop in the workflow.");
@@ -16489,6 +16547,13 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         writeCfg(node); render(node);
       };
       card.append(sl, sy);
+      if (exact && (R.encoder === "ostris" || R.photo)) {
+        const on = document.createElement("div");
+        on.className = "rn-ws-note";
+        on.textContent = "The Ostris encoder uses Krea's own template, so the system "
+          + "instruction, vision size and vision fit above are not used.";
+        card.appendChild(on);
+      }
     }
 
     // THE ENGINE: the rig's, unless the workflow's own files differ from it
