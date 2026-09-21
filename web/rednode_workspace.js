@@ -1120,11 +1120,8 @@ export const TEXT_TAB_IDS = ["text_style", "text_subject", "text_scene"];
 // rather than describing the picture, which is what lets the reference boost
 // stay at 1.0; see A2R_FINDINGS.md in the hub.
 export const REALISM_WANT = "transform the image to realistic photograph";
-export const REALISM_SYSTEM = "Describe the key features of the input image (color, "
-  + "shape, size, texture, objects, background), then explain how the user's text "
-  + "instruction should alter or modify the image. Generate a new image that meets "
-  + "the user's requirements while maintaining consistency with the original input "
-  + "where appropriate.";
+// ImageScaleByAspectRatio V2's round_to_multiple choices, as that node lists them
+export const REALISM_ROUNDINGS = ["8", "16", "32", "64", "128", "256", "512", "None"];
 const TEXT_TABS_META = {
   text_style: { label: "Style", hint: "Pictures whose look is described in words." },
   text_subject: { label: "Subject", hint: "Pictures whose person is described in words." },
@@ -1279,30 +1276,36 @@ export function readCfg(node) {
       t.prompt_only = !!t.prompt_only;
       if (typeof t.denoise !== "number") t.denoise = 0.7;
       // REALISM, the medium stage between the viewpoint and the character
-      // (server: realism.py parse). Defaults mirror it exactly, because this
-      // schema is written twice with nothing to hold the two halves together.
+      // (server: realism.py parse). It IS the Anything2Real workflow node for
+      // node, so every default here is that workflow's own value. Mirrors the
+      // server exactly: this schema is written twice with nothing holding the
+      // two halves together.
       if (!t.realism || typeof t.realism !== "object") t.realism = {};
       const RL = t.realism;
+      const rlNum = (k, dv) => { if (typeof RL[k] !== "number") RL[k] = dv; };
+      const rlStr = (k, dv) => { if (typeof RL[k] !== "string") RL[k] = dv; };
+      const rlPick = (k, options, dv) => { if (!options.includes(RL[k])) RL[k] = dv; };
       if (typeof RL.on !== "boolean") RL.on = false;
-      if (typeof RL.lora !== "string") RL.lora = "";
-      if (typeof RL.strength !== "number") RL.strength = 1;
+      rlStr("lora", ""); rlNum("strength", 1);
       if (typeof RL.loras !== "boolean") RL.loras = true;
-      if (typeof RL.lora_set !== "string") RL.lora_set = "";
-      if (typeof RL.prompt !== "string") RL.prompt = REALISM_WANT;
-      if (typeof RL.system !== "string") RL.system = REALISM_SYSTEM;
-      if (typeof RL.boost !== "number") RL.boost = 1;
-      if (typeof RL.steps !== "number") RL.steps = 0;
-      if (typeof RL.cfg !== "number") RL.cfg = 0;
-      if (typeof RL.seed !== "number") RL.seed = 0;
+      rlStr("lora_set", "");
+      rlStr("unet", ""); rlStr("clip", ""); rlStr("vae", "");
+      rlStr("prompt", REALISM_WANT);
+      rlNum("saturation", -20);
+      rlPick("round_to", REALISM_ROUNDINGS, "512");
+      rlNum("longest", 1536);
+      rlPick("fit", ["letterbox", "crop", "fill"], "crop");
+      rlNum("vl_size", 384);
+      rlPick("auto_resize", ["crop", "pad", "stretch"], "crop");
+      if (typeof RL.kv_cache !== "boolean") RL.kv_cache = false;
+      rlNum("steps", 8); rlNum("cfg", 1);
+      rlStr("sampler", "euler"); rlStr("scheduler", "beta57");
+      rlNum("seed", 0);
       if (typeof RL.seed_random !== "boolean") RL.seed_random = true;
-      if (typeof RL.desaturate !== "number") RL.desaturate = 20;
-      if (typeof RL.max_side !== "number") RL.max_side = 1536;
-      if (![16, 64, 512].includes(RL.round_to)) RL.round_to = 16;
-      if (typeof RL.vl_size !== "number") RL.vl_size = 384;
-      // "" = the rig's own pair, which is what most passes want
-      if (typeof RL.sampler !== "string") RL.sampler = "";
-      if (typeof RL.scheduler !== "string") RL.scheduler = "";
       if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
+      // settings from the first version, which rebuilt the graph from this
+      // pack's parts instead of running it; gone so they cannot mislead
+      for (const old of ["boost", "desaturate", "max_side", "system"]) delete RL[old];
       // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
       if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
       const R = t.reangle;
@@ -11746,7 +11749,12 @@ function modelsBody(node, page) {
            "Comes out typed, so it wires straight into a KSampler's sampler_name.");
     // the pack's own three shapes ride the rig's dropdown after core's list: the
     // built-in sampler runs them, a stock KSampler on the socket gets "simple"
-    selRow("Scheduler", "scheduler", [...(L.schedulers || []), ...RIG_EXTRA_SCHEDULERS],
+    // Once, not twice. RES4LYF registers beta57 and bong_tangent into core's
+    // list, so appending the pack's own shapes after it showed each name twice
+    // with no way to tell them apart. On a rig they run the same either way:
+    // the built-in sampler always builds the pack's own for these names.
+    selRow("Scheduler", "scheduler", [...new Set([...(L.schedulers || []),
+                                                  ...RIG_EXTRA_SCHEDULERS])],
            "Wires straight into a KSampler's scheduler. beta57, bong_tangent and "
            + "hyperbolic are this pack's own shapes: the built-in sampler and the "
            + "Detailer run them, and the scheduler socket hands a stock KSampler "
@@ -16077,10 +16085,10 @@ function editSkipRow(node, card, X, tag, what) {
   card.appendChild(srow);
 }
 
-// REALISM: an illustration becomes a photograph before the i2i pass. The whole
-// feature is one LoRA plus Krea 2's own reference system, so the page is a LoRA
-// picker, the words, and one dial that actually changes the answer. What the
-// pass runs on is the Models tab's rig, already loaded for the render.
+// REALISM: an illustration becomes a photograph before the i2i pass, by running
+// the Anything2Real workflow node for node (realism.py). The front of the page is
+// what changes from picture to picture; the workflow's own settings sit folded
+// under it with its own values, because they are a recipe to keep, not dials.
 function realismSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
@@ -16088,19 +16096,18 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   const R = t.realism;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
-  const open = (node._rnRealismOpen ||= { words: false, engine: false });
+  const open = (node._rnRealismOpen ||= { recipe: false, engine: false });
   const card = sectionCard("REALISM", "#8ad2f0",
     !R.on ? "off" : (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
-            + " \u00b7 boost " + R.boost + (R.loras ? " \u00b7 with the stack" : ""),
+            + (R.loras ? " \u00b7 with the stack" : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
 
   const row0 = document.createElement("div");
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
   sw.className = "rn-ws-sw" + (R.on ? " on" : "");
-  sw.title = "On: the Img2Img source is converted to a photograph before the pass "
-           + "runs on it, through the Models tab's rig and the LoRA below. Off: the "
-           + "source goes to the pass as it is.";
+  sw.title = "On: the Img2Img source goes through the Anything2Real workflow before "
+           + "the pass runs on it. Off: the source goes to the pass as it is.";
   sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
@@ -16113,33 +16120,36 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   card.appendChild(row0);
 
   if (R.on) {
-    const grid = document.createElement("div");
-    grid.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;"
-      + "align-items:center;margin-top:6px";
-    const lrow = document.createElement("span");
-    lrow.className = "rn-ws-note";
-    lrow.textContent = "Conversion LoRA";
-    const sel = document.createElement("select");
-    sel.className = "rn-ws-select";
-    sel.dataset.choice = "realism_lora";
-    const names = [...new Set([...(L.loras || []), ...(R.lora ? [R.lora] : [])])];
-    for (const n of ["", ...names]) {
-      const op = document.createElement("option");
-      op.value = n;
-      op.textContent = n || "Choose a LoRA";
-      op.selected = n === (R.lora || "");
-      sel.appendChild(op);
-    }
-    sel.title = "The LoRA that does the converting. This is the whole feature: without "
-              + "one the pass has nothing to convert with, and it says so rather than "
-              + "rendering the picture back at you.";
-    sel.onchange = () => { R.lora = sel.value; writeCfg(node); render(node); };
-    grid.append(lrow, sel);
-
-    const num = (label, key, min, max, step, tip) => {
+    const grid = () => {
+      const g = document.createElement("div");
+      g.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;"
+        + "align-items:center;margin-top:6px";
+      return g;
+    };
+    const label = (g, text) => {
       const l = document.createElement("span");
       l.className = "rn-ws-note";
-      l.textContent = label;
+      l.textContent = text;
+      g.appendChild(l);
+    };
+    const select = (g, text, key, options, tip, cast) => {
+      label(g, text);
+      const sel = document.createElement("select");
+      sel.className = "rn-ws-select";
+      sel.dataset.choice = "realism_" + key;
+      for (const [value, shown] of options) {
+        const op = document.createElement("option");
+        op.value = String(value);
+        op.textContent = shown;
+        op.selected = String(value) === String(R[key] ?? "");
+        sel.appendChild(op);
+      }
+      sel.title = tip;
+      sel.onchange = () => { R[key] = cast ? cast(sel.value) : sel.value; writeCfg(node); render(node); };
+      g.appendChild(sel);
+    };
+    const num = (g, text, key, min, max, step, tip) => {
+      label(g, text);
       const inp = document.createElement("input");
       inp.type = "number";
       inp.min = min; inp.max = max; inp.step = step;
@@ -16154,131 +16164,97 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
         writeCfg(node); render(node);
       };
       inp.addEventListener("wheel", () => inp.blur(), { passive: true });
-      grid.append(l, inp);
+      g.appendChild(inp);
     };
-    num("Strength", "strength", 0, 2, 0.05, "The LoRA's own strength. 1.0 is where it "
-        + "was trained.");
-    // the one dial that decides whether this works at all
-    num("Reference boost", "boost", 0, 3, 0.05,
-        "How hard the model is told to keep what it was shown. Keeping the picture and "
-        + "changing its medium pull against each other, so this is the dial that decides "
-        + "whether the conversion happens: 1.0 converts, 1.5 holds the illustration. "
-        + "Measured 2026-09-21.");
-    num("Desaturate first", "desaturate", 0, 100, 5,
-        "Per cent of colour taken out of the source before converting. An illustration "
-        + "is oversaturated and a full regeneration carries that into skin. 20 is a "
-        + "nudge, not a grade.");
-    num("Largest side", "max_side", 512, 2048, 64,
-        "The source is fitted inside this before converting. This is the size it "
-        + "renders at; what the vision encoder reads is the next row.");
-    num("Vision read size", "vl_size", 64, 2048, 64,
-        "The longest side handed to the Qwen3-VL encoder, which is NOT the render "
-        + "size: it gets a coarse read while the reference latents carry the detail. "
-        + "384 is the value this was trained at and the value the original workflow "
-        + "asks for. Larger reads drift: the conversion starts treating the source as "
-        + "a loose reference rather than the picture to keep.");
-
-    const choose = (label, key, options, tip) => {
+    const toggle = (text, key, tip) => {
+      const r = document.createElement("div");
+      r.className = "rn-ws-row";
+      const s2 = document.createElement("div");
+      s2.className = "rn-ws-sw" + (R[key] ? " on" : "");
+      s2.dataset.choice = "realism_" + key;
+      s2.title = tip;
+      s2.onclick = () => { R[key] = !R[key]; writeCfg(node); render(node); };
       const l = document.createElement("span");
-      l.className = "rn-ws-note";
-      l.textContent = label;
-      const sel = document.createElement("select");
-      sel.className = "rn-ws-select";
-      sel.dataset.choice = "realism_" + key;
-      for (const [value, text] of options) {
-        const op = document.createElement("option");
-        op.value = String(value);
-        op.textContent = text;
-        op.selected = String(value) === String(R[key] ?? "");
-        sel.appendChild(op);
-      }
-      sel.title = tip;
-      sel.onchange = () => {
-        R[key] = key === "round_to" ? Number(sel.value) : sel.value;
-        writeCfg(node); render(node);
-      };
-      grid.append(l, sel);
+      l.className = "rn-ws-swlabel";
+      l.textContent = text;
+      r.append(s2, l);
+      card.appendChild(r);
     };
-    // Rounding: the workflow this came from uses 512. It crops more, and it may
-    // well be snapping to buckets the model trained on, so it is offered rather
-    // than argued with.
-    choose("Round the size to", "round_to",
-           [[16, "16 (keeps the framing)"], [64, "64"], [512, "512 (coarse buckets)"]],
-           "The working size is snapped to this. 16 is the floor the latent grid "
-           + "needs. 512 crops harder and lands on the coarse sizes an edit model is "
-           + "often trained at, which is what the original workflow uses.");
-    choose("Sampler", "sampler",
-           [["", "The rig's"], ...(L.samplers || []).map((x) => [x, x])],
-           "Empty follows the Models tab's rig.");
-    choose("Scheduler", "scheduler",
-           [["", "The rig's"], ...(L.schedulers || []).map((x) => [x, x]),
-            ...RIG_EXTRA_SCHEDULERS.map((x) => [x, x])],
-           "Empty follows the Models tab's rig. beta57, bong_tangent and hyperbolic "
-           + "are this pack's own schedule shapes and run here because this pass "
-           + "samples through the pack's own sampler.");
-    card.appendChild(grid);
+    const fold = (text, key) => {
+      const b = document.createElement("button");
+      b.className = "rn-ws-on";
+      b.style.cssText = "width:auto;padding:0 10px";
+      b.textContent = (open[key] ? "\u25be " : "\u25b8 ") + text;
+      b.onclick = () => { open[key] = !open[key]; render(node); };
+      card.appendChild(b);
+      return open[key];
+    };
 
-    // THE RIG'S OWN STACK. On by default, because a conversion that dropped it
-    // would come out a different look from the render beside it.
-    const lr = document.createElement("div");
-    lr.className = "rn-ws-row";
-    const lrsw = document.createElement("div");
-    lrsw.className = "rn-ws-sw" + (R.loras ? " on" : "");
-    lrsw.dataset.choice = "realism_loras";
-    lrsw.title = "On: this pass runs the LoRAs tab's stack as well, with the "
-               + "conversion LoRA on top, which is how the workflow this came from "
-               + "is wired. Off: the conversion LoRA alone.";
-    lrsw.onclick = () => { R.loras = !R.loras; writeCfg(node); render(node); };
-    const lrl = document.createElement("span");
-    lrl.className = "rn-ws-swlabel";
-    lrl.textContent = "Run the rig's LoRA stack too";
-    lr.append(lrsw, lrl);
-    card.appendChild(lr);
+    // WHAT CHANGES FROM PICTURE TO PICTURE, on the front
+    const front = grid();
+    select(front, "Conversion LoRA", "lora",
+           [["", "Choose a LoRA"], ...[...new Set([...(L.loras || []), ...(R.lora ? [R.lora] : [])])]
+             .map((n) => [n, n])],
+           "The LoRA that does the converting. Without one there is nothing to convert "
+           + "with, and the pass says so rather than handing the picture back.");
+    num(front, "Strength", "strength", 0, 2, 0.05, "1.0 in the workflow.");
+    card.appendChild(front);
+    toggle("Run the rig's LoRA stack too", "loras",
+           "On: the LoRAs tab's stack goes under the conversion LoRA, the way the "
+           + "workflow stacks one under it. Off: the conversion LoRA alone.");
+    toggle("Skip the i2i pass", "skip_pass",
+           "On: the converted picture IS the output and the rig never samples again. "
+           + "Off: the pass runs on it at the tab's denoise.");
 
-    const sk = document.createElement("div");
-    sk.className = "rn-ws-row";
-    const sksw = document.createElement("div");
-    sksw.className = "rn-ws-sw" + (R.skip_pass ? " on" : "");
-    sksw.dataset.choice = "realism_skip";
-    sksw.title = "On: the converted picture IS the output and the i2i pass is skipped, "
-               + "so the rig never samples. Off: the pass runs on it at the tab's denoise.";
-    sksw.onclick = () => { R.skip_pass = !R.skip_pass; writeCfg(node); render(node); };
-    const skl = document.createElement("span");
-    skl.className = "rn-ws-swlabel";
-    skl.textContent = "Skip the i2i pass";
-    sk.append(sksw, skl);
-    card.appendChild(sk);
+    // THE WORKFLOW'S OWN SETTINGS, folded, with its own values
+    if (fold("Recipe: the workflow's settings", "recipe")) {
+      const g = grid();
+      num(g, "Saturation", "saturation", -100, 100, 5, "ColorCorrect. -20 in the workflow.");
+      select(g, "Round to", "round_to", REALISM_ROUNDINGS.map((x) => [x, x]),
+             "ImageScaleByAspectRatio V2's round_to_multiple. 512 in the workflow.");
+      num(g, "Longest side", "longest", 256, 4096, 64,
+          "ImageScaleByAspectRatio V2's scale_to_length. 1536 in the workflow.");
+      select(g, "Fit", "fit", [["crop", "Crop"], ["letterbox", "Letterbox"], ["fill", "Fill"]],
+             "ImageScaleByAspectRatio V2. crop in the workflow.");
+      num(g, "Vision size", "vl_size", 64, 2048, 64, "Easy_QwenEdit2509's vl_size. 384 in the workflow.");
+      select(g, "Vision fit", "auto_resize", [["crop", "Crop"], ["pad", "Pad"], ["stretch", "Stretch"]],
+             "Easy_QwenEdit2509's auto_resize. crop in the workflow.");
+      num(g, "Steps", "steps", 1, 100, 1, "KSampler. 8 in the workflow.");
+      num(g, "CFG", "cfg", 0, 20, 0.1, "KSampler. 1.0 in the workflow.");
+      select(g, "Sampler", "sampler", [...new Set([...(L.samplers || []), R.sampler])].map((x) => [x, x]),
+             "KSampler. euler in the workflow.");
+      select(g, "Scheduler", "scheduler",
+             [...new Set([...(L.schedulers || []), R.scheduler])].map((x) => [x, x]),
+             "KSampler. beta57 in the workflow, which core only lists once RES4LYF is "
+             + "installed.");
+      card.appendChild(g);
+      const pr = document.createElement("div");
+      pr.className = "rn-ws-note";
+      pr.textContent = "Ask for";
+      const ta = document.createElement("textarea");
+      ta.value = R.prompt;
+      ta.rows = 2;
+      ta.dataset.choice = "realism_prompt";
+      ta.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
+        + "border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;"
+        + "padding:4px 6px;resize:vertical";
+      ta.onchange = () => { R.prompt = ta.value; writeCfg(node); };
+      card.append(pr, ta);
+    }
 
-    // THE WORDS, folded: they have a working default and are the last thing
-    // anyone needs to touch
-    const wh = document.createElement("button");
-    wh.className = "rn-ws-on";
-    wh.style.cssText = "width:auto;padding:0 10px";
-    wh.textContent = (open.words ? "\u25be" : "\u25b8") + " Words";
-    wh.onclick = () => { open.words = !open.words; render(node); };
-    card.appendChild(wh);
-    if (open.words) {
-      const box = (label, key, tip, rows) => {
-        const l = document.createElement("div");
-        l.className = "rn-ws-note";
-        l.textContent = label;
-        const ta = document.createElement("textarea");
-        ta.value = R[key];
-        ta.rows = rows;
-        ta.title = tip;
-        ta.dataset.choice = "realism_" + key;
-        ta.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
-          + "border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;"
-          + "padding:4px 6px;resize:vertical";
-        ta.onchange = () => { R[key] = ta.value; writeCfg(node); };
-        card.append(l, ta);
-      };
-      box("Ask for", "prompt", "What the conversion is asked to do.", 2);
-      box("How to read the picture", "system",
-          "What the encoder is told to BE. This one matters more than it looks: an "
-          + "instruction that only describes the picture forces the reference boost "
-          + "down to 0.4 before anything converts, while one that names the CHANGE "
-          + "works at 1.0.", 5);
+    // THE ENGINE: the rig's, unless the workflow's own files differ from it
+    if (fold("Engine: " + (R.unet || R.clip || R.vae ? "its own files" : "the Models tab's rig"),
+             "engine")) {
+      const g = grid();
+      const files = (key, list, tip) => select(g, key === "unet" ? "Model" : key === "clip"
+        ? "Text encoder" : "VAE", key,
+        [["", "The rig's"], ...[...new Set([...(list || []), ...(R[key] ? [R[key]] : [])])]
+          .map((n) => [n, n])], tip);
+      files("unet", L.unets, "Empty follows the rig.");
+      files("clip", L.clips, "The workflow uses qwen3vl_4b_fp8_scaled. A rig on another "
+            + "encoder reads the picture differently, so set this to match it.");
+      files("vae", L.vaes, "The workflow uses qwen_image_vae.");
+      card.appendChild(g);
     }
 
     if (!R.lora) {
