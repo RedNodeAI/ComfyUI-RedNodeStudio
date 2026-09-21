@@ -706,11 +706,19 @@ export function plannedStages(node, cfg) {
   const internal = cfg.models?.sampler_mode === "internal";
   const I = tabs.i2i || {};
   const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
-  // the edit stages on the source run before the encode
+  // THE EDITOR'S SOURCE STAGES, in the order workspace.py runs them, on the Editor's
+  // own picture. They need that picture, not Img2Img; their result IS the output, so
+  // with the built-in sampler no encode, pass or decode follows them.
   const RA = I.reangle || {};
-  if (i2iRun && RA.on && (RA.target || "source") === "source") out.push(["reangle", "Re-angle"]);
-  if (i2iRun && I.swap?.on && I.swap.target !== "render") out.push(["swap", "Swap"]);
-  if (internal) {
+  const edPic = (tabs.editor_src?.images?.length || 0) > 0;
+  const onSrc = (X) => !!(X?.on && (X.target || "source") === "source");
+  const edRuns = edPic && [RA, I.realism, I.swap].some(onSrc);
+  if (edPic && onSrc(RA)) out.push(["reangle", "Re-angle"]);
+  if (edPic && I.realism?.on) out.push(["realism", "Realism"]);
+  if (edPic && onSrc(I.swap)) out.push(["swap", "Swap"]);
+  if (internal && edRuns) {
+    // nothing: the edited picture is the render
+  } else if (internal) {
     out.push(["encode", "Encode"]);
     const n = Math.max(1, Math.round(Number(i2iRun ? I.passes : cfg.latent?.passes) || 1));
     for (let i = 1; i <= n; i++) out.push([`pass${i}`, PASS_LABEL(i, !i2iRun)]);
@@ -795,6 +803,7 @@ export function jumpForStage(key, cfg) {
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
   if (key === "decode" || key === "external" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
+  if (key === "realism") return { tab: "editor", sub: "realism" };
   if (key === "reangle" || key === "reangle_polish") return { tab: "i2i", sub: "reangle" };
   if (key === "paint") return { tab: "paint" };
   if (key === "detailer") return { tab: "detailer" };
