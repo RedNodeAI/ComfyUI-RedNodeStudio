@@ -862,6 +862,7 @@ class RedNodeStudioDetailer:
     _rn_subject_words = ""          # set per run; a bare node never has them
 
     @_run_events.tracked("detailer", "Detailer")
+    @_live.quiet_core_preview
     def run(self, image, config="{}", prompt=None, unique_id=None,
             chain_step="detailer", subject_words="", **_custom_rigs):
         # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only

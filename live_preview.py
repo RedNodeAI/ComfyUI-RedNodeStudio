@@ -22,6 +22,8 @@ nothing outside that call is touched.
 """
 
 import base64
+import contextlib
+import functools
 import io
 
 import nodes
@@ -203,6 +205,36 @@ def frame_data(previewer, x0, size=None):
     buf = io.BytesIO()
     img.convert("RGB").save(buf, "JPEG", quality=FRAME_QUALITY)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+@contextlib.contextmanager
+def no_core_preview():
+    """ComfyUI's own step preview off for one node's run. The Workspace and the
+    Detailer sample inside themselves, so core drew its preview ON the node: a
+    blurry picture under the panel that squeezed the panel to a strip and stayed
+    after the run, since the node returns no core images to replace it. The
+    progress bar still moves and this module's own frames still reach the panel;
+    they use their own decoder, never get_previewer. Nested calls restore in order."""
+    try:
+        import latent_preview as lp
+    except Exception:
+        yield
+        return
+    orig = lp.get_previewer
+    lp.get_previewer = lambda *a, **k: None
+    try:
+        yield
+    finally:
+        lp.get_previewer = orig
+
+
+def quiet_core_preview(fn):
+    """no_core_preview() around a node method."""
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        with no_core_preview():
+            return fn(*a, **kw)
+    return wrapper
 
 
 def sampled(node_id, fn, label="", size=None):

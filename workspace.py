@@ -2910,7 +2910,14 @@ class RedNodeStudioWorkspace:
             flush=True)
         return pos, model_i
 
-    def build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None, extra_pnginfo=None,
+    def build(self, *a, **kw):
+        """The run, with ComfyUI's own step preview kept off this node
+        (live_preview.no_core_preview says why)."""
+        from . import live_preview as _lpq
+        with _lpq.no_core_preview():
+            return self._build(*a, **kw)
+
+    def _build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None, extra_pnginfo=None,
               boost_mask_in=None, edit_mask_in=None,
                unique_id=None, subject_caption_in=None, scene_caption_in=None,
                mood_caption_in=None, clip=None, i2i_caption_in=None, vae=None,
