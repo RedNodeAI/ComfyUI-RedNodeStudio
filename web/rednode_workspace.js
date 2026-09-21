@@ -226,7 +226,53 @@ css.textContent = `
    raised off the page with their titles marked, and the text a size up */
 .rn-ws-modelslay{display:flex;gap:14px;align-items:flex-start}
 .rn-ws-modelsmain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px}
-.rn-ws-modelslay>.rn-ws-rigbar{flex:0 0 250px;position:sticky;top:0}
+.rn-ws-modelslay>.rn-ws-rigbar{flex:0 0 310px;position:sticky;top:0}
+/* the rig cards */
+.rn-ws-rigcard{display:flex;flex-direction:column;align-items:stretch;gap:5px;text-align:left;
+  background:#15171b;border:1px solid #2e333a;border-radius:9px;padding:10px 12px;cursor:pointer;
+  color:#e8ecf1;font:inherit;width:100%;box-sizing:border-box}
+.rn-ws-rigcard:hover{border-color:#4a505a}
+.rn-ws-rigcard.cur{border:2px solid #c42a3c;background:#221a1d}
+.rn-ws-rigcard .rt{display:flex;align-items:center;gap:8px}
+.rn-ws-rigcard .rd{width:9px;height:9px;border-radius:50%;flex:none;background:#4a5058}
+.rn-ws-rigcard .rd.ok{background:#22c55e}
+.rn-ws-rigcard .rd.bad{background:#ef4444}
+.rn-ws-rigcard .rn{font-size:15px;font-weight:700}
+.rn-ws-rigcard .ra{font-size:10px;font-weight:800;letter-spacing:.05em;padding:2px 8px;
+  border-radius:9px;background:#c42a3c;color:#fff}
+.rn-ws-rigcard .rf{font-size:12px;color:#8a919b;padding-left:17px}
+.rn-ws-rigcard .rl{display:grid;grid-template-columns:40px 14px 1fr;gap:6px;align-items:center;
+  font-size:12px;color:#c8ccd2;padding-left:17px}
+.rn-ws-rigcard .rk{color:#8a919b}
+.rn-ws-rigcard .rs{color:#22c55e;font-weight:800}
+.rn-ws-rigcard .rl.bad .rs,.rn-ws-rigcard .rl.bad .rv{color:#ef4444}
+.rn-ws-rigcard .rv{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rn-ws-rigcard.folded{padding:7px 12px}
+/* the status on a card's title, and the tick or cross on a file row */
+.rn-ws-mstate{margin-left:auto;font-size:12px;font-weight:700;padding:3px 12px;border-radius:12px}
+.rn-ws-mstate.set{background:#14532d;color:#86efac;border:1px solid #22c55e66}
+.rn-ws-mstate.missing{background:#4a1520;color:#fca5a5;border:1px solid #ef444466}
+.rn-ws-mstate.optional{background:#2a2e35;color:#aab0b8;border:1px solid #3d434c}
+.rn-ws-filestate{width:18px;flex:none;text-align:center;font-weight:800;font-size:14px}
+.rn-ws-filestate.ok{color:#22c55e}
+.rn-ws-filestate.bad{color:#ef4444}
+.rn-ws-filebox.missing{border-color:#ef4444;box-shadow:0 0 0 1px #ef444455}
+.rn-ws-modelslay .rn-ws-mbox{flex:1 1 100%}
+.rn-ws-resolvecard{flex:1 1 100%;padding:10px 14px!important}
+/* the banner with its one next step at the right */
+.rn-ws-setupwarn.has-next{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.rn-ws-setupwarn.has-next>.ttl{display:none}
+.rn-ws-setupwarn.has-next{padding:12px 14px;font-size:15px;font-weight:600;color:#fde2e2}
+.rn-ws-warnicon{font-size:26px;color:#ef4444;line-height:1;flex:none}
+.rn-ws-rigcard.folded .rt{gap:10px}
+.rn-ws-rigcard.folded .rf{display:block;flex:1 1 auto;padding-left:0;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.rn-ws-rigcard .rfs{width:10px;height:10px;border-radius:50%;flex:none;margin-left:auto}
+.rn-ws-rigcard .rfs.ok{background:#22c55e}
+.rn-ws-rigcard .rfs.bad{background:#ef4444}
+.rn-ws-nextstep{margin-left:auto;background:#c42a3c;border:0;border-radius:7px;color:#fff;
+  font-weight:700;font-size:14px;padding:10px 18px;cursor:pointer}
+.rn-ws-nextstep:hover{background:#d83a4c}
 .rn-ws-modelslay>.rn-ws-rigbar .rn-ws-row{flex-direction:column;align-items:stretch}
 .rn-ws-modelslay>.rn-ws-rigbar .rn-ws-row>button{justify-content:flex-start;width:100%}
 /* in the column the active prompt reads label, then the picker and Edit on a row */
@@ -11274,7 +11320,8 @@ export function applyFamily(node, fam, picks, asNew) {
   }
   const R = fam.rig || {};
   Object.assign(rig, {
-    kind: "files", checkpoint: picks.checkpoint || "", unet: picks.unet || "",
+    // "" is Local files on this page (the server reads a missing kind as files too)
+    kind: "", checkpoint: picks.checkpoint || "", unet: picks.unet || "",
     clip: picks.clip || "", vae: picks.vae || "", clip_type: R.clip_type || "",
     unet_loader: "", int8_type: "", steps: R.steps, cfg: R.cfg, sampler: R.sampler,
     scheduler: R.scheduler,
@@ -11464,8 +11511,47 @@ const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 // Setup; after that the page remembers where it was left.
 const MODELS_SUBS = [["files", "MODEL, CLIP, VAE"], ["sampling", "SAMPLING"], ["seed", "SEED"],
                      ["setup", "SETUP"]];
-const MODELS_BOX_TAB = { "Model, CLIP, VAE": "files", "Identity rescue": "files",
-                         Sampling: "sampling", Seed: "seed" };
+const MODELS_BOX_TAB = { Model: "files", "Text encoder": "files", Decoder: "files",
+                         "Identity rescue": "files", Sampling: "sampling", Seed: "seed" };
+
+// THE MODEL FAMILY a rig looks like, from its files' names, for the rig cards
+export function rigFamily(r) {
+  if (!r) return "";
+  if (r.kind === "node") return "Your own nodes";
+  if (r.kind === "external") return "External renderer";
+  if (r.kind && r.kind !== "files") return window.rnLocalRigLabel?.(r.kind) || r.kind;
+  const n = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const u = n(r.unet);
+  const c = n(r.checkpoint);
+  if (u.includes("krea2")) return u.includes("raw") ? "Krea 2 Raw" : u.includes("turbo") ? "Krea 2 Turbo" : "Krea 2";
+  if (r.clip_type === "krea2") return "Krea 2";
+  if (u.includes("zimage")) return u.includes("turbo") ? "Z-Image Turbo" : "Z-Image";
+  if (/(sdxl|xl|pony|illustrious|noobai)/.test(u + c)) return "SDXL / Pony";
+  return (r.unet || r.checkpoint || r.clip || r.vae) ? "Unknown model" : "Not set up";
+}
+
+// a file name to fit a card: the folder dropped, the middle cut, both ends kept
+export const midName = (name, max = 30) => {
+  const b = String(name || "").split(/[\\/]/).pop();
+  return b.length <= max ? b : b.slice(0, Math.ceil(max / 2) - 1) + "\u2026" + b.slice(-Math.floor(max / 2));
+};
+
+// the three roles of a files rig: set, from the checkpoint, or missing
+function rigRoles(r) {
+  const ck = !!r.checkpoint;
+  return [["Model", r.unet || r.checkpoint || "", !!(r.unet || r.checkpoint)],
+          ["CLIP", r.clip || (ck ? "(from the checkpoint)" : ""), !!(r.clip || ck)],
+          ["VAE", r.vae || (ck ? "(from the checkpoint)" : ""), !!(r.vae || ck)]];
+}
+
+// the first file a files rig still needs: [key, what the button says]
+function nextRigFile(r) {
+  if (!r || (r.kind && r.kind !== "files")) return null;
+  if (!r.unet && !r.checkpoint) return ["unet", "Choose a model"];
+  if (!r.clip && !r.checkpoint) return ["clip", "Choose a text encoder"];
+  if (!r.vae && !r.checkpoint) return ["vae", "Choose a VAE"];
+  return null;
+}
 
 function modelsSub(node, cfg) {
   const M = cfg.models;
@@ -11483,10 +11569,11 @@ function modelsBody(node, page) {
 
   // WHAT STOPS A RENDER, at the top where it is seen: the same reasons a run that
   // comes out empty gives, before anyone queues
+  let warn = null;
   {
     const probs = setupProblems(node, cfg);
     if (probs.length) {
-      const warn = document.createElement("div");
+      warn = document.createElement("div");
       warn.className = "rn-ws-setupwarn";
       const t = document.createElement("div");
       t.className = "ttl";
@@ -11498,6 +11585,28 @@ function modelsBody(node, page) {
         warn.appendChild(line);
       }
       page.appendChild(warn);
+      // THE NEXT STEP: one button, the first file the rig still needs, opened
+      const nx = nextRigFile(M.rigs?.[M.active]);
+      if (nx) {
+        const go = document.createElement("button");
+        go.className = "rn-ws-nextstep";
+        go.dataset.next = nx[0];
+        go.textContent = `Next: ${nx[1]} \u2192`;
+        go.title = "Open the box for it on the Model, CLIP, VAE tab.";
+        go.onclick = () => {
+          node._rnModelsSub = "files";
+          (node.properties ||= {}).rn_models_sub = "files";
+          node._rnFocusFile = nx[0];
+          render(node);
+        };
+        // one line, as the design has it: the icon, what is wrong, the next step
+        warn.classList.add("has-next");
+        const ic = document.createElement("span");
+        ic.className = "rn-ws-warnicon";
+        ic.textContent = "⚠";
+        warn.insertBefore(ic, warn.firstChild);
+        warn.appendChild(go);
+      }
     }
   }
 
@@ -11615,28 +11724,63 @@ function modelsBody(node, page) {
     crow.className = "rn-ws-row";
     crow.style.flexWrap = "wrap";
     bar.appendChild(crow);
+    // RIG CARDS: the name, the model family it looks like and its three files with a
+    // tick or a cross, so a missing VAE shows without opening the rig. More than five
+    // rigs fold every card but the active one to a line.
+    const foldCards = M.rigs.length > 5;
     M.rigs.forEach((r, i) => {
       const chip = document.createElement("button");
       const activeChip = M.active === i;
-      chip.style.cssText = "display:flex;align-items:center;gap:7px;"
-        + "padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;"
-        + "font-weight:600;background:" + (activeChip ? "#b8283c" : "#15171b")
-        + ";border:1px solid " + (activeChip ? "#b8283c" : "#2a2e34")
-        + ";color:#e8ecf1";
+      const files = !r.kind || r.kind === "files";
+      const roles = files ? rigRoles(r) : [];
+      const ready = files ? roles.every((x) => x[2]) : true;
+      chip.className = "rn-ws-rigcard" + (activeChip ? " cur" : "")
+        + (foldCards && !activeChip ? " folded" : "");
+      chip.dataset.rig = r.name || ("Rig " + (i + 1));
+      const top = document.createElement("span");
+      top.className = "rt";
       const dot = document.createElement("span");
-      dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:none;"
-        + "background:" + ([r.checkpoint || r.unet, r.clip, r.vae]
-          .filter(Boolean).length || r.kind !== "files" ? "#3f9e63" : "#666");
-      chip.appendChild(dot);
+      dot.className = "rd" + (foldCards && !activeChip ? " ok" : ready ? " ok" : " bad");
       const nm = document.createElement("span");
+      nm.className = "rn";
       nm.textContent = r.name || ("Rig " + (i + 1));
-      chip.appendChild(nm);
+      top.append(dot, nm);
       if (activeChip) {
         const badge = document.createElement("span");
+        badge.className = "ra";
         badge.textContent = "ACTIVE";
-        badge.style.cssText = "font-size:9px;font-weight:700;padding:2px 7px;"
-          + "border-radius:8px;background:#1e5233;color:#a7f3c0";
-        chip.appendChild(badge);
+        top.appendChild(badge);
+      }
+      chip.appendChild(top);
+      const famL = document.createElement("span");
+      famL.className = "rf";
+      famL.textContent = rigFamily(r);
+      if (foldCards && !activeChip) {
+        // FOLDED: one row, the name, its family and one dot for all its files
+        const fs = document.createElement("span");
+        fs.className = "rfs" + (ready ? " ok" : " bad");
+        fs.title = ready ? "Every file this rig needs is set." : "A file this rig needs is missing.";
+        top.append(famL, fs);
+      } else {
+        chip.appendChild(famL);
+      }
+      if (!(foldCards && !activeChip)) {
+        for (const [role, file, ok] of roles) {
+          const line = document.createElement("span");
+          line.className = "rl" + (ok ? "" : " bad");
+          const k = document.createElement("span");
+          k.className = "rk";
+          k.textContent = role;
+          const st = document.createElement("span");
+          st.className = "rs";
+          st.textContent = ok ? "\u2713" : "\u2715";
+          const v = document.createElement("span");
+          v.className = "rv";
+          v.textContent = ok ? midName(file, 26) : "Not set";
+          if (ok) v.title = file;
+          line.append(k, st, v);
+          chip.appendChild(line);
+        }
       }
       chip.title = activeChip
         ? "The active rig: it loads and renders. Its settings fill the boxes "
@@ -11780,6 +11924,8 @@ function modelsBody(node, page) {
     col.className = "rn-ws-modelsmain";
     lay.append(bar, col);
     col.append(strip, mwrap);
+    // the banner sits with the tabs it points into, above the cards
+    if (warn) { warn.remove(); col.insertBefore(warn, mwrap); }
   }
 
   let body = null;
@@ -11848,17 +11994,30 @@ function modelsBody(node, page) {
 
   const rig = M.rigs[M.active];
   if (!rig) return;
-  body = mkBox("Model, CLIP, VAE", "", "", "", "What this active rig loads.");
+  // THREE CARDS, each with a status on its title: Set, Missing or Optional
+  const statusBadge = (box, state, why) => {
+    const bd = document.createElement("span");
+    bd.className = "rn-ws-mstate " + state.toLowerCase();
+    bd.textContent = state;
+    if (why) bd.title = why;
+    box.querySelector(".rn-ws-mhead")?.appendChild(bd);
+  };
+  const filesRig = !rig.kind || rig.kind === "files";
+  body = mkBox("Model", "", "", "", filesRig ? "The diffusion model and how it loads."
+                                             : "Where this rig's model comes from.");
+  if (filesRig) {
+    statusBadge(body, rig.unet || rig.checkpoint ? "Set" : "Missing");
+  }
 
   // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
   // with recents shared per kind so the model you use daily is always on top
   const L = MODEL_LISTS
     || { checkpoints: [], unets: [], clips: [], clip_types: [], vaes: [] };
-  const pickRow = (label, key, items, recentKey, hint) => {
+  const pickRow = (label, key, items, recentKey, hint, need = "required") => {
     const input = document.createElement("input");
     input.type = "text";
     input.value = rig[key];
-    input.placeholder = "None";
+    input.placeholder = need === "optional" ? "None (optional)" : "None";
     input.title = hint + " Click and type to search; recently used come first.";
     makePicker(input, () => items(), (v) => {
       rig[key] = v;
@@ -11873,9 +12032,25 @@ function modelsBody(node, page) {
     lab.textContent = label;
     input.className = "rn-ws-filebox";
     // the box is the picker: click it to search the installed files, and the list
-    // starts with None, so the row needs nothing else
-    row.append(lab, input);
+    // starts with None, so the row needs nothing else. A tick when it is set, a
+    // cross and a red box when a file it needs is missing.
+    const has = !!rig[key];
+    const st = document.createElement("span");
+    st.className = "rn-ws-filestate" + (has ? " ok" : need === "required" ? " bad" : " opt");
+    st.textContent = has ? "\u2713" : need === "required" ? "\u2715" : "";
+    if (!has && need === "required") input.classList.add("missing");
+    row.append(lab, st, input);
     body.appendChild(row);
+    // opened by the banner's Next button
+    if (node._rnFocusFile === key) {
+      node._rnFocusFile = null;
+      const before = node._rnAfterMount;
+      node._rnAfterMount = () => {
+        before?.();
+        input.scrollIntoView?.({ block: "center" });
+        input.focus?.();
+      };
+    }
   };
   // EXTERNAL RENDERER: this rig is the cockpit for an engine outside the
   // workspace (the NovelAI chain). No files load; its numbers and prompt ride
@@ -11992,13 +12167,16 @@ function modelsBody(node, page) {
       redraw: () => render(node),
     });
   } else {
+  // with a diffusion model set the checkpoint is optional; with neither, one of the
+  // two is what is missing, and the Diffusion model row carries the cross
   pickRow("Checkpoint", "checkpoint", () => L.checkpoints, "models",
-          "A full checkpoint: model, CLIP and VAE in one file.");
+          "A full checkpoint: model, CLIP and VAE in one file.", "optional");
   pickRow("Diffusion model", "unet",
           () => [...new Set([...(L.unets || []), ...(L.ggufs || []), ...(L.int8s || [])])],
           "models",
           "A bare diffusion model; add CLIP and VAE below. Wins over the checkpoint's. "
-          + ".gguf and INT8 files are listed too when their loader packs are installed.");
+          + ".gguf and INT8 files are listed too when their loader packs are installed.",
+          rig.checkpoint ? "optional" : "required");
   {
     // WHICH LOADER the file goes through. By file name sends a .gguf through
     // ComfyUI-GGUF and anything else through core; an INT8 W8A8 file is a
@@ -12039,10 +12217,13 @@ function modelsBody(node, page) {
       pill(body, "INT8 type", ts);
     }
   }
+  body = mkBox("Text encoder", "", "", "", "The CLIP model that reads the prompt.");
+  statusBadge(body, rig.clip ? "Set" : rig.checkpoint ? "Set" : "Missing",
+              !rig.clip && rig.checkpoint ? "From the checkpoint." : "");
   pickRow("CLIP", "clip", () => L.clips, "clips",
           "The text encoder. Krea 2 wants qwen3vl with the type set to krea2. "
           + "LEAVE ON NONE with a checkpoint chosen and the checkpoint's own baked "
-          + "CLIP is used.");
+          + "CLIP is used.", rig.checkpoint ? "optional" : "required");
   {
     const sel = document.createElement("select");
     for (const t of ["", ...L.clip_types]) {
@@ -12059,9 +12240,13 @@ function modelsBody(node, page) {
     pill(body, "CLIP type", sel);
     if (rig.clip_type === "krea2") officialRow(node, body, rig);
   }
+  body = mkBox("Decoder", "", "", "", "The VAE that turns the result into a picture.");
+  statusBadge(body, rig.vae ? "Set" : rig.checkpoint ? "Set" : "Missing",
+              !rig.vae && rig.checkpoint ? "From the checkpoint." : "");
   pickRow("VAE", "vae", () => L.vaes, "vaes",
           "The VAE. Comes out on the workspace's vae output and through Paint Out. "
-          + "Leave on None with a checkpoint chosen and the checkpoint's own is used.");
+          + "Leave on None with a checkpoint chosen and the checkpoint's own is used.",
+          rig.checkpoint ? "optional" : "required");
 
   // Say WHERE each piece will come from, so a checkpoint's baked CLIP and VAE stop
   // being an invisible feature. This mirrors the loader's real precedence: the
@@ -12073,6 +12258,7 @@ function modelsBody(node, page) {
       : (rig.checkpoint ? "the checkpoint's baked " + kind
                         : "nowhere, pick one");
     const lk = rig.unet_loader || (/\.gguf$/i.test(rig.unet || "") ? "gguf" : "");
+    src.classList.add("rn-ws-resolves");
     src.textContent = "This rig resolves: model from "
       + (rig.unet ? "the diffusion model file"
                     + (lk === "gguf" ? " through the GGUF loader"
@@ -12080,7 +12266,11 @@ function modelsBody(node, page) {
          : rig.checkpoint ? "the checkpoint" : "nowhere, pick one")
       + "; CLIP from " + from(rig.clip, "CLIP")
       + "; VAE from " + from(rig.vae, "VAE") + ".";
-    body.appendChild(src);
+    // a line of its own under the three cards, the width of the page
+    const srcCard = document.createElement("div");
+    srcCard.className = "rn-ws-card rn-ws-resolvecard";
+    srcCard.appendChild(src);
+    if (curSub === "files") mwrap.appendChild(srcCard);
   }
   }
 
