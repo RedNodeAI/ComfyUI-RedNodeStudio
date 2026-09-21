@@ -258,6 +258,26 @@ css.textContent = `
 .rn-ws-filestate.bad{color:#ef4444}
 .rn-ws-filebox.missing{border-color:#ef4444;box-shadow:0 0 0 1px #ef444455}
 .rn-ws-modelslay .rn-ws-mbox{flex:1 1 100%}
+/* the Setup tab's family cards: side by side, labels over the boxes */
+.rn-ws-modelslay .rn-ws-mbox.rn-ws-famcard{flex:1 1 260px;min-width:250px;align-self:stretch;gap:6px}
+.rn-ws-famcard .rn-ws-famlab{font-size:13px;color:#c8ccd2;margin-top:6px}
+.rn-ws-famrow{display:flex;align-items:center;gap:8px;background:#101216;border:1px solid #2f333a;
+  border-radius:8px;padding:0 8px;min-height:40px}
+.rn-ws-famrow.missing{border-color:#ef4444;background:#1f1214}
+.rn-ws-famst{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:12px;font-weight:800;color:#fff}
+.rn-ws-famst.ok{background:#22c55e}
+.rn-ws-famst.bad{background:#ef4444}
+.rn-ws-famsel{flex:1 1 auto;min-width:0;background:transparent;border:0;outline:0;color:#e8ecf1;
+  font-size:13px;padding:8px 0;color-scheme:dark;cursor:pointer}
+.rn-ws-fammissing{font-size:12.5px;color:#fca5a5;line-height:1.35;padding:6px 0}
+.rn-ws-famnums{margin-top:auto;padding-top:8px}
+.rn-ws-fambtns{gap:8px}
+.rn-ws-fambtns>button{flex:1 1 0;min-height:40px;font-size:14px;font-weight:600;border-radius:8px}
+.rn-ws-famuse{background:#c42a3c!important;border-color:#c42a3c!important;color:#fff!important}
+.rn-ws-famuse:hover:not(:disabled){background:#d83a4c!important}
+.rn-ws-famnew{background:transparent!important;border:1px solid #6b7280!important;color:#e8ecf1!important}
+.rn-ws-fambtns>button:disabled{opacity:.4;cursor:not-allowed}
 .rn-ws-resolvecard{flex:1 1 100%;padding:10px 14px!important}
 /* the banner with its one next step at the right */
 .rn-ws-setupwarn.has-next{flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 14px}
@@ -11337,11 +11357,18 @@ function modelsSetupPage(node, host) {
   const intro = document.createElement("div");
   intro.className = "rn-ws-card rn-ws-setupintro";
   intro.style.flex = "1 1 100%";
+  const ih = document.createElement("div");
+  ih.className = "rn-ws-mhead";
+  const iht = document.createElement("span");
+  iht.className = "ch";
+  iht.textContent = "QUICK SETUP";
+  ih.appendChild(iht);
+  intro.appendChild(ih);
   const it = document.createElement("div");
   it.className = "rn-ws-note";
   it.textContent = "Pick the kind of model you have. The files are found in your model "
-    + "folders by name, newest first, and the rig gets that model's settings. Check "
-    + "the Model, CLIP, VAE and Sampling tabs afterwards; everything stays editable.";
+    + "folders by name, newest first, and the rig gets that model's settings. "
+    + "Everything stays editable.";
   const again = document.createElement("button");
   again.className = "rn-ws-btn";
   again.style.cssText = "width:auto;padding:3px 12px;align-self:flex-start";
@@ -11382,31 +11409,32 @@ function modelsSetupPage(node, host) {
     let missing = 0;
     for (const [role, info] of Object.entries(fam.roles || {})) {
       const found = fam.found?.[role] || [];
-      const r = document.createElement("div");
-      r.className = "rn-ws-row";
-      r.style.flexWrap = "wrap";
-      const l = document.createElement("span");
-      l.className = "rn-ws-note";
-      l.style.cssText = "flex:none;width:110px";
+      const l = document.createElement("div");
+      l.className = "rn-ws-famlab";
       l.textContent = ROLE_NAME[role] || role;
-      r.appendChild(l);
+      card.appendChild(l);
+      const r = document.createElement("div");
+      r.className = "rn-ws-famrow" + (found.length ? "" : " missing");
+      const st = document.createElement("span");
+      st.className = "rn-ws-famst " + (found.length ? "ok" : "bad");
+      st.textContent = found.length ? "\u2713" : "\u2715";
+      r.appendChild(st);
       if (!found.length) {
         missing++;
         const w = document.createElement("span");
-        w.className = "rn-ws-note rn-ws-peoplewarn rn-ws-fammissing";
-        w.style.flex = "1 1 200px";
+        w.className = "rn-ws-fammissing";
         w.textContent = "Not found. Needs " + info.example + ".";
         r.appendChild(w);
       } else {
         if (!found.includes(mine[role])) mine[role] = found[0];
         const sel = document.createElement("select");
-        sel.className = "rn-ws-res";
-        sel.style.cssText = "flex:1 1 200px;min-width:0";
+        sel.className = "rn-ws-famsel";
         sel.dataset.role = role;
         for (const n of found) {
           const o = document.createElement("option");
           o.value = n;
-          o.textContent = n + (n === found[0] ? "  (newest)" : "");
+          o.textContent = midName(n, 24) + (n === found[0] ? "  (newest)" : "");
+          o.title = n;
           o.selected = n === mine[role];
           sel.appendChild(o);
         }
@@ -11420,7 +11448,7 @@ function modelsSetupPage(node, host) {
     }
     const R = fam.rig || {};
     const nums = document.createElement("div");
-    nums.className = "rn-ws-note";
+    nums.className = "rn-ws-note rn-ws-famnums";
     nums.textContent = `Settings: ${R.steps} steps, CFG ${R.cfg}, ${R.sampler}, ${R.scheduler}`
       + (R.clip_type ? `, text encoder type ${R.clip_type}` : "") + ".";
     card.appendChild(nums);
@@ -11434,9 +11462,9 @@ function modelsSetupPage(node, host) {
     const br = document.createElement("div");
     br.className = "rn-ws-row";
     br.style.flexWrap = "wrap";
+    br.className = "rn-ws-row rn-ws-fambtns";
     const use = document.createElement("button");
     use.className = "rn-ws-btn rn-ws-famuse";
-    use.style.cssText = "width:auto;padding:5px 14px;font-weight:600";
     use.textContent = rig ? `Set up ${rig.name}` : "Set up a rig";
     use.disabled = missing > 0;
     use.title = missing ? "A file this model needs is missing: see above."
@@ -11451,7 +11479,6 @@ function modelsSetupPage(node, host) {
     };
     const add = document.createElement("button");
     add.className = "rn-ws-btn rn-ws-famnew";
-    add.style.cssText = "width:auto;padding:5px 14px";
     add.textContent = "As a new rig";
     add.disabled = missing > 0;
     add.title = "Add a new rig with these files and settings, and make it active.";
