@@ -3190,6 +3190,8 @@ class RedNodeStudioWorkspace:
         # whatever is wired.
         _stage_only = False
         _stage_only_by = ""
+        # the words a source stage made the picture from, for the saved record
+        _stage_words = None
         if (it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None
                 and _rg.get("target", "source") == "source"):
             try:
@@ -3239,6 +3241,8 @@ class RedNodeStudioWorkspace:
                     if cfg["models"]["sampler_mode"] == "internal":
                         _stage_only = True
                         _stage_only_by = "realism"
+                        _stage_words = {"positive": str(_rl.get("prompt") or "").strip(),
+                                        "negative": ""}
                     else:
                         print("[RedNode Workspace] realism: Skip the i2i pass only "
                               "applies to the built-in sampler; the external one runs "
@@ -5032,6 +5036,10 @@ class RedNodeStudioWorkspace:
                     if (_mode == "internal" and not _norun and not _stage_only
                             and prompt_text_out.strip()):
                         _words = {"positive": prompt_text_out, "negative": negative_text_out}
+                    elif _stage_only and _stage_words and _stage_words["positive"]:
+                        # the Realism stage made this picture from its own Ask for
+                        # text; left unsaid, Save traced the rig's prompt row instead
+                        _words = _stage_words
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
                                              seed=run_seed, prompt=prompt,
                                              extra_pnginfo=extra_pnginfo, words=_words,
