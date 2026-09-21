@@ -1827,6 +1827,21 @@ export function readCfg(node) {
   // left alone here on purpose. refine_pipeline.py owns that schema, and a
   // second set of defaults in this file is exactly the drift KNOWN_TRAPS 13 is
   // about; the panel writes only the fields it shows, the server clamps the rest.
+  // LINKED SEEDS (seeds.py parse): named seeds, what each part takes, same seed per pass
+  d.seeds = d.seeds && typeof d.seeds === "object" ? d.seeds : {};
+  d.seeds.extra = (Array.isArray(d.seeds.extra) ? d.seeds.extra : [])
+    .filter((x) => x && typeof x === "object" && String(x.name || "").trim());
+  for (const x of d.seeds.extra) {
+    x.name = String(x.name).trim().slice(0, 32);
+    if (typeof x.seed !== "number") x.seed = 0;
+    x.random = !!x.random;
+  }
+  d.seeds.links = d.seeds.links && typeof d.seeds.links === "object" ? d.seeds.links : {};
+  for (const [a] of SEED_AREAS) {
+    const v = d.seeds.links[a];
+    if (!(v === "main" || d.seeds.extra.some((x) => x.name === v))) d.seeds.links[a] = "own";
+  }
+  d.seeds.same_pass = !!d.seeds.same_pass;
   d.upscale = d.upscale && typeof d.upscale === "object" ? d.upscale : {};
   if (typeof d.upscale.on !== "boolean") d.upscale.on = false;
   if (typeof d.upscale.source !== "string") d.upscale.source = "";
@@ -11533,6 +11548,18 @@ const SAMPLER_NODES = [["", "Built-in (ComfyUI KSampler)", "", ""],
 // schedule shapes the pack builds itself (sampler_dials.py); a rig may name them
 const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 
+// THE PARTS A SEED CAN BE LINKED TO, mirroring seeds.AREAS, with what "Own" means
+const SEED_AREAS = [
+  ["reangle", "Re-angle", "its own seed on the Re-angle page"],
+  ["realism", "Realism", "its own seed on the Realism page"],
+  ["swap", "Swap", "its own seed on the Swap page"],
+  ["upscale", "Upscale", "the Upscale page's own seed"],
+  ["detailer", "Detailer", "a fresh roll every run"],
+  ["loras", "LoRA random strengths", "the LoRA stack's own seed"],
+  ["post", "Post random ranges and grain", "a fresh draw every run, grain at 0"],
+  ["auto", "Auto prompt (Ollama)", "the Auto prompt settings' seed"],
+];
+
 // THE MODELS PAGE'S TABS: Setup (one-click families and what a rig needs), then the
 // three cards that were stacked on one page, one each. A rig with no files opens on
 // Setup; after that the page remembers where it was left.
@@ -12857,6 +12884,170 @@ function modelsBody(node, page) {
       body.appendChild(cp);
     }
   }
+  if (curSub === "seed") seedLinksCard(node, mwrap);
+}
+
+// LINKED SEEDS: the Seed tab's number is Main, which prompts, wildcards and every
+// render pass always take. Each other part takes Main, a named seed of your own,
+// or its own seed as before. Named seeds are a number, or a roll every queue.
+function seedLinksCard(node, host) {
+  const cfg = node._rnCfg;
+  const S = cfg.seeds;
+  const w = () => { writeCfg(node); render(node); };
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-mbox rn-ws-seedlinks";
+  const h = document.createElement("div");
+  h.className = "rn-ws-mhead";
+  const ht = document.createElement("span");
+  ht.className = "ch";
+  ht.textContent = "LINKED SEEDS";
+  const hs = document.createElement("span");
+  hs.className = "rn-ws-note";
+  hs.textContent = "Which seed each part of a run takes. Prompts, wildcards and the render "
+    + "passes always take Main, the seed above.";
+  h.append(ht, hs);
+  card.appendChild(h);
+
+  // same seed every pass
+  const sp = document.createElement("div");
+  sp.className = "rn-ws-row";
+  const spw = document.createElement("button");
+  spw.className = "rn-ws-sw" + (S.same_pass ? " on" : "");
+  spw.dataset.choice = "seed_same_pass";
+  spw.title = "On: every render pass and every Detailer pass takes the one seed. Off: "
+    + "each pass takes the seed plus its number, as before.";
+  spw.onclick = () => { S.same_pass = !S.same_pass; w(); };
+  const spl = document.createElement("span");
+  spl.className = "rn-ws-swlabel";
+  spl.style.fontWeight = "600";
+  spl.textContent = "Same seed every pass";
+  const spn = document.createElement("span");
+  spn.className = "rn-ws-note";
+  spn.textContent = "Low-denoise passes on one seed can hold a result more steadily.";
+  sp.append(spw, spl, spn);
+  card.appendChild(sp);
+
+  // named seeds
+  const nh = document.createElement("div");
+  nh.className = "rn-ws-mgtitle";
+  nh.textContent = "Your seeds";
+  card.appendChild(nh);
+  S.extra.forEach((x, i) => {
+    const r = document.createElement("div");
+    r.className = "rn-ws-row rn-ws-seedrow";
+    const nm = document.createElement("input");
+    nm.type = "text";
+    nm.value = x.name;
+    nm.dataset.choice = "seed_name";
+    nm.className = "rn-ws-filebox";
+    nm.style.flex = "0 1 180px";
+    nm.onchange = () => {
+      const v = nm.value.trim().slice(0, 32);
+      if (!v || v.toLowerCase() === "main" || v.toLowerCase() === "own" || S.extra.some((y, j) => j !== i && y.name === v)) {
+        nm.value = x.name;
+        return;
+      }
+      for (const [a] of SEED_AREAS) if (S.links[a] === x.name) S.links[a] = v;
+      x.name = v;
+      w();
+    };
+    const val = document.createElement("input");
+    val.type = "number";
+    val.value = String(x.seed);
+    val.disabled = x.random;
+    val.dataset.choice = "seed_value";
+    val.className = "rn-ws-filebox";
+    val.style.flex = "1 1 160px";
+    val.onchange = () => {
+      const v = Math.max(0, Math.round(Number(val.value) || 0));
+      x.seed = v;
+      writeCfg(node);
+    };
+    const rnd = document.createElement("button");
+    rnd.className = "rn-ws-sw" + (x.random ? " on" : "");
+    rnd.dataset.choice = "seed_random";
+    rnd.title = x.random ? "Random: a fresh number every queue." : "Fixed: the number beside it.";
+    rnd.onclick = () => { x.random = !x.random; w(); };
+    const rl = document.createElement("span");
+    rl.className = "rn-ws-note";
+    rl.textContent = "Random";
+    const roll = document.createElement("button");
+    roll.className = "rn-ws-btn";
+    roll.style.cssText = "width:auto;padding:3px 10px";
+    roll.textContent = "\ud83c\udfb2";
+    roll.title = "A new fixed number.";
+    roll.onclick = () => { x.seed = Math.floor(Math.random() * 2 ** 48); x.random = false; w(); };
+    const del = document.createElement("button");
+    del.className = "rn-ws-btn";
+    del.style.cssText = "width:auto;padding:3px 10px";
+    del.textContent = "\u00d7";
+    del.title = "Delete this seed. Parts linked to it go back to their own seed.";
+    del.onclick = () => {
+      for (const [a] of SEED_AREAS) if (S.links[a] === x.name) S.links[a] = "own";
+      S.extra.splice(i, 1);
+      w();
+    };
+    r.append(nm, val, rnd, rl, roll, del);
+    card.appendChild(r);
+  });
+  const add = document.createElement("button");
+  add.className = "rn-ws-btn";
+  add.dataset.choice = "seed_add";
+  add.style.cssText = "width:auto;padding:4px 14px;align-self:flex-start";
+  add.textContent = "+ New seed";
+  add.onclick = () => {
+    let n = S.extra.length + 2;
+    while (S.extra.some((y) => y.name === "Seed " + n)) n++;
+    S.extra.push({ name: "Seed " + n, seed: Math.floor(Math.random() * 2 ** 48), random: false });
+    w();
+  };
+  card.appendChild(add);
+
+  // what each part takes
+  const lh = document.createElement("div");
+  lh.className = "rn-ws-mgtitle";
+  lh.textContent = "What each part takes";
+  card.appendChild(lh);
+  const grid = document.createElement("div");
+  grid.className = "rn-ws-pillgrid";
+  card.appendChild(grid);
+  for (const [a, label, own] of SEED_AREAS) {
+    const row = document.createElement("div");
+    row.className = "rn-ws-pill";
+    const k = document.createElement("span");
+    k.className = "k";
+    k.textContent = label;
+    const sel = document.createElement("select");
+    sel.dataset.area = a;
+    for (const [v, t] of [["own", "Own seed"], ["main", "Main"], ...S.extra.map((x) => [x.name, x.name])]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      o.selected = S.links[a] === v;
+      sel.appendChild(o);
+    }
+    sel.title = `Own seed: ${own}. Main: the seed above. Or one of your seeds.`;
+    sel.onchange = () => { S.links[a] = sel.value; writeCfg(node); };
+    row.append(k, sel);
+    grid.appendChild(row);
+  }
+  const all = document.createElement("div");
+  all.className = "rn-ws-row";
+  const linkAll = document.createElement("button");
+  linkAll.className = "rn-ws-btn";
+  linkAll.dataset.choice = "seed_link_all";
+  linkAll.style.cssText = "width:auto;padding:4px 14px";
+  linkAll.textContent = "Link all to Main";
+  linkAll.title = "Every part takes the seed above, so one number repeats the whole run.";
+  linkAll.onclick = () => { for (const [a] of SEED_AREAS) S.links[a] = "main"; w(); };
+  const unlink = document.createElement("button");
+  unlink.className = "rn-ws-btn";
+  unlink.style.cssText = "width:auto;padding:4px 14px";
+  unlink.textContent = "All back to their own";
+  unlink.onclick = () => { for (const [a] of SEED_AREAS) S.links[a] = "own"; w(); };
+  all.append(linkAll, unlink);
+  card.appendChild(all);
+  host.appendChild(card);
 }
 
 // ---------------------------------------------------------------- Prompts tab

@@ -229,7 +229,7 @@ def parse_pipeline(config_json):
         seed = int(data.get("seed", 0))
     except (TypeError, ValueError):
         seed = 0
-    return {"stages": stages, "seed": max(0, seed),
+    return {"stages": stages, "seed": max(0, seed), "same_seed": bool(data.get("same_seed")),
             "seed_random": (True if data.get("seed_random") is None
                             else bool(data.get("seed_random"))),
             # record the input, every pass and the output into the RedNode
@@ -1131,7 +1131,9 @@ class RedNodeStudioDetailer:
             reps = int(s.get("repeat", 1))
             why = None
             for r in range(max(1, reps)):
-                rseed = seed + i + r * 131
+                # "same seed every pass" on the Seed tab: every stage and round
+                # takes the one seed instead of the seed plus its place
+                rseed = seed if cfg.get("same_seed") else seed + i + r * 131
                 sr = round_stage(s, r)          # this round's denoise and scale
                 # what the streamed frames say they are (live_preview.py)
                 self._rn_live_label = "%s %d of %d" % (

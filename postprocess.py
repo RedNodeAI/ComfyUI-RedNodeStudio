@@ -1586,14 +1586,38 @@ def active_fx(cfg):
     return {c["fx"] for c in (cfg.get("chain") or []) if c.get("on")}
 
 
+# A LINKED SEED for one run (the Workspace's Seed tab): the random ranges draw from
+# it, so a seed repeats the grade, and grain takes it as its own seed
+_SEEDED = {"rng": None, "seed": None}
+
+
+class use_seed:
+    """With a seed, the random ranges and grain follow it; with None, as before."""
+
+    def __init__(self, seed):
+        self.seed = seed
+
+    def __enter__(self):
+        if self.seed is not None:
+            _SEEDED["rng"] = _random.Random(int(self.seed))
+            _SEEDED["seed"] = int(self.seed) & 0x7fffffff
+        return self
+
+    def __exit__(self, *exc):
+        _SEEDED["rng"] = None
+        _SEEDED["seed"] = None
+        return False
+
+
 def roll_block(name, block):
     """Draw a value for every control set to a random range. Ints stay ints."""
     rolled = {}
+    rng = _SEEDED["rng"] or _random
     for key, (lo, hi) in (block.get("rand") or {}).items():
         if isinstance(DEFAULTS[name].get(key), int):
-            rolled[key] = _random.randint(int(round(lo)), int(round(hi)))
+            rolled[key] = rng.randint(int(round(lo)), int(round(hi)))
         else:
-            rolled[key] = round(_random.uniform(lo, hi), 4)
+            rolled[key] = round(rng.uniform(lo, hi), 4)
     return rolled
 
 
@@ -1646,6 +1670,8 @@ def apply_post(image, config, depth=None, on_effect=None, rolls=None, extra_timi
                 rolls[item["id"]] = drawn
             shown = ", ".join(f"{k} {v}" for k, v in sorted(drawn.items()))
             print(f"[RedNode Post] {item['id']} rolled {shown}", flush=True)
+        if name == "grain" and _SEEDED["seed"] is not None:
+            args["seed"] = _SEEDED["seed"]
         if name in DEPTH_EFFECTS:
             args["depth"] = depth
         if name == "match":

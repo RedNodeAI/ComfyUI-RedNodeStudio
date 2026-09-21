@@ -1062,6 +1062,11 @@ def _pass_names(raw, on, n):
     return use, out
 
 
+def _parse_seeds(raw):
+    from .seeds import parse
+    return parse(raw)
+
+
 def _parse_final(raw):
     from .prompt_sort import parse_final
     return parse_final(raw)
@@ -1812,7 +1817,9 @@ def parse_config(config_json):
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
             "camera": camera_cfg,
-            "models": models_cfg, "prompts": prompts_cfg}
+            "models": models_cfg, "prompts": prompts_cfg,
+            # LINKED SEEDS: which seed each part of a run takes (seeds.py)
+            "seeds": _parse_seeds(data.get("seeds"))}
 
 
 # ---------------------------------------------------------------------------
@@ -2713,6 +2720,10 @@ class RedNodeStudioWorkspace:
                 cfg0["models"]["sampler_mode"] == "internal"
                 or any(r.get("text") for r in cfg0["prompts"]["rows"])):
             return float("nan")
+        # a part linked to a named seed that re-rolls every queue
+        from .seeds import any_random_link as _any_rl
+        if _any_rl(cfg0["seeds"]):
+            return float("nan")
         for name in IMAGE_TABS:
             t = cfg0["tabs"][name]
             if t["random"] and t["on"] and len(t["images"]) > 1:
@@ -3003,6 +3014,31 @@ class RedNodeStudioWorkspace:
         run_seed = (_random.getrandbits(48) if cfg["models"]["seed_random"]
                     else cfg["models"]["seed"])
         _run.info(seed=int(run_seed), rig=rig_name or "")
+        # LINKED SEEDS: this queue's number for each named seed, and what each part
+        # is linked to; None keeps the part's own seed, as before links existed
+        from . import seeds as _seeds
+        _seed_vals = _seeds.values(cfg["seeds"], run_seed)
+        _linked = {a: _seeds.seed_for(cfg["seeds"], _seed_vals, a) for a in _seeds.AREAS}
+        _same_pass = bool(cfg["seeds"]["same_pass"])
+        for _a, _v in _linked.items():
+            if _v is not None:
+                print("[RedNode Workspace] seed: %s takes %s (%d)"
+                      % (_a, cfg["seeds"]["links"][_a], _v), flush=True)
+        if _linked["auto"] is not None:
+            cfg["auto"]["seed"] = int(_linked["auto"]) & 0x7fffffff
+        # a linked part's own stage block takes the linked number, fixed
+        for _a in ("reangle", "realism", "swap"):
+            if _linked[_a] is not None and isinstance(tabs["i2i"].get(_a), dict):
+                tabs["i2i"][_a] = dict(tabs["i2i"][_a], seed=int(_linked[_a]), seed_random=False)
+        if _linked["upscale"] is not None:
+            cfg["upscale"] = dict(cfg["upscale"], seed=int(_linked["upscale"]), seed_random=False)
+        if _linked["detailer"] is not None or _same_pass:
+            cfg["detailer"] = dict(cfg["detailer"])
+            if _linked["detailer"] is not None:
+                cfg["detailer"].update(seed=int(_linked["detailer"]), seed_random=False)
+            if _same_pass:
+                cfg["detailer"]["same_seed"] = True
+        _lseed = (lambda v: int(_linked["loras"])) if _linked["loras"] is not None else (lambda v: v)
         # the panel's "Use last queued" and "Copy last seed" read this: the
         # run's seed goes out as an event the moment it is decided
         try:
@@ -4054,23 +4090,23 @@ class RedNodeStudioWorkspace:
                 _model_pre_camera, lora_clip, lora_words, _applied = _lora.apply_stack(
                     model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": _base_lc["ui"], "slots": _base_lc["slots"]}),
-                    _base_lc["seed"], unique_id, tag="Workspace LoRAs")
+                    _lseed(_base_lc["seed"]), unique_id, tag="Workspace LoRAs")
                 model, _, _cw, _ca = _lora.apply_stack(
                     _model_pre_camera, None, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": lc["ui"], "slots": _cam_slots}),
-                    lc["seed"], unique_id, tag="Workspace camera LoRAs")
+                    _lseed(lc["seed"]), unique_id, tag="Workspace camera LoRAs")
             elif len(_shot_states) > 1 and _cam_slots:
                 # a path with the tab's stack off: the wired model is the pre-camera one
                 model, _, lora_words, _applied = _lora.apply_stack(
                     model, None, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": lc["ui"], "slots": _cam_slots}),
-                    lc["seed"], unique_id, tag="Workspace camera LoRAs")
+                    _lseed(lc["seed"]), unique_id, tag="Workspace camera LoRAs")
                 lora_clip = clip
             else:
                 model, lora_clip, lora_words, _applied = _lora.apply_stack(
                     model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": lc["ui"], "slots": lc["slots"]}),
-                    lc["seed"], unique_id, tag="Workspace LoRAs")
+                    _lseed(lc["seed"]), unique_id, tag="Workspace LoRAs")
             if clip is None:
                 print("[RedNode Workspace] no clip is wired, so only the model half of "
                       "each LoRA is applied. Wire clip for the text encoder half.",
@@ -4109,7 +4145,7 @@ class RedNodeStudioWorkspace:
                 paint_model, _paint_clip, _pw, _pa = _lora.apply_stack(
                     raw_model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": _pl["ui"], "slots": _pl["slots"]}),
-                    _pl["seed"], unique_id, tag="Workspace paint LoRAs (set %s)" % _pl["name"])
+                    _lseed(_pl["seed"]), unique_id, tag="Workspace paint LoRAs (set %s)" % _pl["name"])
                 paint_clip = _paint_clip if _paint_clip is not None else clip
             else:
                 paint_model = raw_model
@@ -4120,7 +4156,7 @@ class RedNodeStudioWorkspace:
                 paint_model, _paint_clip, _pw, _pa = _lora.apply_stack(
                     raw_model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": pls["ui"], "slots": pls["slots"]}),
-                    pls["seed"], unique_id, tag="Workspace Paint LoRAs")
+                    _lseed(pls["seed"]), unique_id, tag="Workspace Paint LoRAs")
                 paint_clip = _paint_clip if _paint_clip is not None else clip
             elif raw_model is not None:
                 # asked for the paint stack with nothing in it: the honest reading is
@@ -4715,7 +4751,7 @@ class RedNodeStudioWorkspace:
                         with _rigc.using(_rigc.rig_for(_rig_rec), prompt,
                                          clip=_clip_p, vae=_vae_p):
                             _out = _live.sampled(unique_id, _dials.sample_with_dials, label=_lbl)(
-                                _model_p, _seed + _p, _steps_p, _cfg_p, _sampler_p,
+                                _model_p, _seed + (0 if _same_pass else _p), _steps_p, _cfg_p, _sampler_p,
                                 _sched_p, _pos_p, _neg_p, _out,
                                 denoise=_dnp, dials=_dials_p,
                                 sigmas=(_segs[_p] if _cont else None),
@@ -5069,7 +5105,8 @@ class RedNodeStudioWorkspace:
                     ui_extra = dict(ui_extra or {})
                     ui_extra["rn_before_post"] = _pre
                 try:
-                    rig_image = postprocess.RedNodePostProcess().run(rig_image, prompt=prompt)[0]
+                    with postprocess.use_seed(_linked["post"]):
+                        rig_image = postprocess.RedNodePostProcess().run(rig_image, prompt=prompt)[0]
                     _chain.mark("post")
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in Post FX failed: %s; the "
