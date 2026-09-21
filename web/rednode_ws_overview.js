@@ -184,7 +184,7 @@ export function overviewBoxes(node, cfg) {
       key: onRender ? key + "_render" : key,
       label: onRender ? label + " on the render" : label,
       state: !X.on ? "off" : blocked ? "skip" : "on",
-      note: !X.on ? "Off" : blocked ? "Skipped" : note + (!onRender && !E.to_pass ? ", is the output" : ""),
+      note: !X.on ? "Off" : blocked ? "Skipped" : note + (!onRender ? ", is the output" : ""),
       why: X.on ? blocked : "",
       to: { tab: "i2i", sub: key },
     };

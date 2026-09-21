@@ -1265,8 +1265,7 @@ export function readCfg(node) {
       && x.on && (x.target || "source") === "source");
     const imgs = Array.isArray(I0.images) ? I0.images.filter((x) => String(x).trim()) : [];
     if (src.length && I0.on && !I0.prompt_only && imgs.length) {
-      d.tabs.editor_src = { images: [...imgs], sel: typeof I0.sel === "number" ? I0.sel : 0,
-                            to_pass: !src.some((x) => x.skip_pass) };
+      d.tabs.editor_src = { images: [...imgs], sel: typeof I0.sel === "number" ? I0.sel : 0 };
     }
   }
   for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
@@ -1284,7 +1283,7 @@ export function readCfg(node) {
     if (name === "swap_ref") t.on = true;                  // Swap's switch decides
     if (name === "editor_src") {
       t.on = true;                                         // the stages' switches decide
-      t.to_pass = !!t.to_pass;                             // the hand-off to the pass
+      delete t.to_pass;                                    // the dropped hand-off switch
     }
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
                                || Array.isArray(t.people_meta))) {
@@ -13474,12 +13473,10 @@ export function i2iSkipped(t, E) {
   return !!skippedBy(t, E);
 }
 
-// The last Editor source stage that will run, "Re-angle", "Realism", "Swap" or "",
-// when its picture goes straight to the image output: Then run the Img2Img pass is
-// off, or Img2Img has no real pass to take it
+// The last Editor source stage that will run, "Re-angle", "Realism", "Swap" or "":
+// its picture is the image output, so the Img2Img pass stands aside
 export function skippedBy(t, E) {
   if (!t || !E?.images?.length) return "";
-  if (E.to_pass && t.on && !t.prompt_only) return "";
   let who = "";
   for (const [k, name] of [["reangle", "Re-angle"], ["realism", "Realism"], ["swap", "Swap"]]) {
     const X = t[k] || {};
@@ -13615,10 +13612,6 @@ export function i2iIssues(cfg, node) {
     out.push({ sub: "esource", text: `The Editor has no source picture, so `
       + `${onSrc.map(([, n]) => n).join(" and ")} ${onSrc.length > 1 ? "are" : "is"} skipped` });
   }
-  if (onSrc.length && E.images?.length && E.to_pass && !(t.on && !t.prompt_only)) {
-    out.push({ sub: "esource", text: "Then run the Img2Img pass is on, but Img2Img has no "
-      + "pass to run, so the edited picture is the output" });
-  }
   const who = skippedBy(t, E);
   if (t.on && !t.prompt_only && who) {
     out.push({ sub: "esource", about: "passes",
@@ -13748,8 +13741,7 @@ function i2iTabs(node, body) {
         ? `The Editor's ${who} picture is the image output, so this source is not `
           + "rendered."
         : `The Editor's ${who} picture is the image output, so none of these passes run. `
-          + "Switch on Then run the Img2Img pass on the Editor's Source page to run them "
-          + "on the edited picture.";
+          + `Switch ${who} off on the Editor tab to run them.`;
     }
     const tx = document.createElement("span");
     tx.textContent = label;
@@ -13866,8 +13858,7 @@ function editorTabs(node, body) {
   const chips = [];
   if (["reangle", "realism", "swap"].some((k) => t[k]?.on && (t[k].target || "source") === "source")) {
     chips.push({ sub: "esource", warn: !E.images?.length,
-                 text: !E.images?.length ? "No source picture"
-                   : E.to_pass ? "Edit into the pass" : "Edit is the output" });
+                 text: !E.images?.length ? "No source picture" : "Edit is the output" });
   }
   if (t.reangle?.on) {
     const live = i2iSubLit(cfg, "reangle");
@@ -13932,44 +13923,13 @@ function linkNote(node, text, label, page) {
 }
 
 // The words for where an Editor edit goes, for the stage pages
-const edFlow = (cfg) => (cfg.tabs.editor_src?.to_pass
-  ? ", then the Img2Img pass runs on it." : ", and that picture is the image output.");
+const edFlow = () => ", and that picture is the image output.";
 
-// THE EDITOR'S SOURCE PAGE: the picture the source stages edit, one after another,
-// and where the result goes. The same gallery and folder batch as Img2Img's Source.
+// THE EDITOR'S SOURCE PAGE: the picture the source stages edit, one after another.
+// The same gallery and folder batch as Img2Img's Source.
 function editorSourcePage(node, body) {
   const cfg = node._rnCfg;
   const E = cfg.tabs.editor_src;
-  const I = cfg.tabs.i2i;
-  const card = document.createElement("div");
-  card.className = "rn-ws-card rn-ws-edhand";
-  const r = document.createElement("div");
-  r.className = "rn-ws-row";
-  r.style.flexWrap = "wrap";
-  const sw = document.createElement("button");
-  sw.className = "rn-ws-sw" + (E.to_pass ? " on" : "");
-  sw.title = E.to_pass
-    ? "On: the edited picture becomes the Img2Img pass's source, and the pass runs on "
-      + "it at its denoise. Needs Img2Img on a real pass."
-    : "Off: the edited picture is the image output as it is. No encode and no pass, so "
-      + "the rig never shares the card with the edit model.";
-  sw.onclick = () => { E.to_pass = !E.to_pass; writeCfg(node); render(node); };
-  const l = document.createElement("span");
-  l.className = "rn-ws-swlabel";
-  l.style.fontWeight = "600";
-  l.textContent = "Then run the Img2Img pass";
-  const n = document.createElement("span");
-  n.className = "rn-ws-note";
-  n.style.flex = "1 1 220px";
-  n.textContent = !E.to_pass
-    ? "Off: the edited picture is the image output. The Detailer and Post FX still run."
-    : I.on && !I.prompt_only
-      ? "On: the edited picture is the Img2Img pass's source, in place of its own gallery."
-      : "On, but Img2Img is off or on Prompt only, so the edited picture is the output.";
-  if (E.to_pass && !(I.on && !I.prompt_only)) n.classList.add("rn-ws-peoplewarn");
-  r.append(sw, l, n);
-  card.appendChild(r);
-  body.appendChild(card);
   const view = sourceSwitch(node, body, "editor_src", "Gallery");
   if (view === "own") galleryBody(node, body, "editor_src", IMAGE_TABS.editor_src, { layout: "tabs" });
   else batchStrip(node, "editor_src", body, editorBatchOpts(node));
@@ -15875,8 +15835,7 @@ function passesTab(node, body, kind = "i2i") {
     n.className = "rn-ws-card rn-ws-note rn-ws-skipnote";
     n.textContent = `Skipped: the Editor's ${skippedBy(t, node._rnCfg.tabs.editor_src)} `
                   + "picture goes straight to the image output, so none of these passes "
-                  + "run. Switch on Then run the Img2Img pass on the Editor's Source page "
-                  + "to run them on it.";
+                  + "run. Switch it off on the Editor tab to run them.";
     right.appendChild(n);
   }
   if (!isLat && t.prompt_only) {
@@ -16591,8 +16550,8 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
   if (R.on) {
     // WHAT IT WORKS ON and the polish pass: the rows Swap has, shared
     editTargetRow(node, card, R, "reangle", {
-      source: "The picture on the Editor's Source page. Its Then run the Img2Img pass "
-            + "switch decides whether the pass finishes it.",
+      source: "The picture on the Editor's Source page. The edited picture is the "
+            + "image output.",
       render: "The finished render, a Latent tab render as much as an Img2Img one, re-shot "
             + "from the camera below. Img2Img does not need to be on.",
       polish: "On: after the re-shot the rig runs once more over the picture at the denoise "
@@ -16797,8 +16756,8 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
   if (S.on) {
     // WHAT IT WORKS ON and the polish pass, shared with Re-angle
     editTargetRow(node, card, S, "swap", {
-      source: "The picture on the Editor's Source page. Its Then run the Img2Img pass "
-            + "switch decides whether the pass finishes it.",
+      source: "The picture on the Editor's Source page. The edited picture is the "
+            + "image output.",
       render: "The finished render, a Latent tab render as much as an Img2Img one. Img2Img "
             + "does not need to be on.",
       polish: "On: after the swap the rig runs once more over the picture at the denoise "

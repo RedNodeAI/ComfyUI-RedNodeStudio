@@ -1127,8 +1127,6 @@ def parse_config(config_json):
             tabs[name]["on"] = True          # Swap's own switch decides; this has none
         if name == "editor_src":
             tabs[name]["on"] = True          # the stages' own switches decide
-            # the hand-off: the edit becomes the Img2Img pass's source instead of the output
-            tabs[name]["to_pass"] = bool(t.get("to_pass"))
         if name in TEXT_TABS:
             # an Image to text tab exists to be captioned: its switch is the auto prompt's
             tabs[name]["auto"]["on"] = tabs[name]["on"]
@@ -1227,8 +1225,7 @@ def parse_config(config_json):
             }
     # THE EDITOR'S SOURCE, for a workflow saved before the Editor had one. Re-angle,
     # Realism and Swap edited the Img2Img picture then, and only with Img2Img on a
-    # real pass. Such a workflow gets that picture copied across, and the pass keeps
-    # running on the edit unless a stage skipped it, so it renders what it did.
+    # real pass. Such a workflow gets that picture copied across.
     # The panel does the same on load (readCfg, Trap 13).
     if "editor_src" not in tabs_in:
         _it = tabs["i2i"]
@@ -1238,7 +1235,6 @@ def parse_config(config_json):
         if _src and _it["on"] and not _it.get("prompt_only") and _it["images"]:
             tabs["editor_src"]["images"] = list(_it["images"])
             tabs["editor_src"]["sel"] = _it["sel"]
-            tabs["editor_src"]["to_pass"] = not any(x.get("skip_pass") for x in _src)
     dials_in = data.get("dials") if isinstance(data.get("dials"), dict) else {}
     dials = {}
     for key, (lo, hi) in DIALS.items():
@@ -3316,29 +3312,20 @@ class RedNodeStudioWorkspace:
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
                           % exc, flush=True)
 
-        # WHERE THE EDIT GOES. By default the edited picture IS the image output: no
-        # encode and no i2i pass, so the rig never shares the card with the edit
-        # model. With the hand-off on it is the Img2Img pass's source instead, which
-        # needs Img2Img on a real pass; without one the edit is still the output.
+        # THE EDITED PICTURE IS THE IMAGE OUTPUT: the Editor is not Img2Img, so no
+        # encode and no i2i pass, and the rig never shares the card with the edit
+        # model. The Detailer and Post FX still run on it.
         if _ed_ran:
             i2i_img = ed_img
-            if _ed["to_pass"] and it["on"] and not it["prompt_only"]:
-                print("[RedNode Workspace] editor: %s -> the Img2Img pass's source"
-                      % " + ".join(_ed_ran), flush=True)
+            if cfg["models"]["sampler_mode"] == "internal":
+                _stage_only = True
+                _stage_only_by = _ed_ran[-1]
+                if _ed_ran[-1] == "realism":
+                    _stage_words = {"positive": str(_rl.get("prompt") or "").strip(),
+                                    "negative": ""}
             else:
-                if _ed["to_pass"]:
-                    print("[RedNode Workspace] editor: Then run the Img2Img pass is on, but "
-                          "Img2Img is off or on Prompt only, so the edited picture is the "
-                          "output", flush=True)
-                if cfg["models"]["sampler_mode"] == "internal":
-                    _stage_only = True
-                    _stage_only_by = _ed_ran[-1]
-                    if _ed_ran[-1] == "realism":
-                        _stage_words = {"positive": str(_rl.get("prompt") or "").strip(),
-                                        "negative": ""}
-                else:
-                    print("[RedNode Workspace] editor: the external sampler runs as wired, "
-                          "with the edited picture on i2i_image", flush=True)
+                print("[RedNode Workspace] editor: the external sampler runs as wired, "
+                      "with the edited picture on i2i_image", flush=True)
 
         def _edit_off():
             # the Qwen edit model is done for this run: off the card, kept in RAM
