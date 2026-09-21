@@ -17904,11 +17904,9 @@ export const tabLit = (cfg, id) =>
                       && (cfg.tabs.i2i.images.length
                           || cfg.tabs.i2i.canvas !== "gallery"
                           || cfg.tabs.i2i.prompt_only))
-  // The boost mask lives on the Subject page now, so Subject is what it lights.
-  // Taking masks out of IDENTITY_SUBS quietly stopped a painted mask lighting
-  // the Krea 2 Identity tab at all, which is the whole point of the dot.
-  : id === "subject" ? !!((cfg.tabs.subject.on && cfg.tabs.subject.images.length)
-                          || cfg.tabs.boost_mask?.on)
+  // The boost mask boosts the Subject's references, so with Subject off or empty it
+  // does nothing and lights nothing: it lit Krea 2 Identity on its own (2026-09-21)
+  : id === "subject" ? !!(cfg.tabs.subject.on && cfg.tabs.subject.images.length)
   : cfg.tabs[id].on && cfg.tabs[id].images.length;
 
 // WHICH SECTIONS ARE FOLDED OPEN, kept across a reload. Every one of these lives on the
