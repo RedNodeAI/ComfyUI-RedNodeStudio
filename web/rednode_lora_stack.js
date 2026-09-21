@@ -169,7 +169,7 @@ css.textContent = `
 .rn-ls-none{font-size:11px;opacity:.55;padding:10px 4px;text-align:center}
 /* the search and Only on at the HEAD of the list, sticking there while it scrolls */
 .rn-ls-top{display:flex;gap:8px;align-items:center;flex:none;position:sticky;top:0;z-index:2;
-  padding-bottom:6px;background:#16181c}
+  padding-bottom:6px;background:#16181c;box-shadow:0 -10px 0 0 #16181c}
 .rn-ls-find{flex:1;min-width:0;display:flex;align-items:center;gap:4px;background:#111316;
   border:1px solid #33373d;border-radius:5px;height:30px;padding:0 4px 0 8px;box-sizing:border-box}
 .rn-ls-find:focus-within{border-color:#b8283c}

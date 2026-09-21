@@ -6416,7 +6416,10 @@ function lorasBody(node, body) {
     + "overflow:auto";
   body.appendChild(box);
   const host = document.createElement("div");
-  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:0";
+  // AS TALL AS THE STACK, not the box: the search row sticks inside this holder, and
+  // a holder capped at the box's height scrolled away, search and all, a screen into
+  // a long stack (the user, 2026-09-21). The box does the scrolling.
+  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1 0 auto";
   box.appendChild(host);
   buildLoraPanel(node, host);
 }
@@ -6559,7 +6562,10 @@ function paintLorasBody(node, body) {
     + "overflow:auto";
   body.appendChild(box);
   const host = document.createElement("div");
-  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1;min-height:0";
+  // AS TALL AS THE STACK, not the box: the search row sticks inside this holder, and
+  // a holder capped at the box's height scrolled away, search and all, a screen into
+  // a long stack (the user, 2026-09-21). The box does the scrolling.
+  host.style.cssText = "display:flex;flex-direction:column;gap:6px;flex:1 0 auto";
   box.appendChild(host);
   buildLoraPanel(node, host);
 }
