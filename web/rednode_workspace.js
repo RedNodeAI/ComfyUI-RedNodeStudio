@@ -342,7 +342,13 @@ css.textContent = `
 .rn-ws-modelslay .rn-ws-note{font-size:12.5px;line-height:1.5}
 .rn-ws-modelslay .rn-ws-mgtitle{font-size:14px}
 .rn-ws-modelslay .rn-ws-pill{min-height:44px}
-.rn-ws-modelslay .rn-ws-pill>.k{font-size:13px}
+.rn-ws-modelslay .rn-ws-pill>.k{font-size:13px;min-width:70px}
+.rn-ws-modelslay .rn-ws-pill{background:#15171b}
+.rn-ws-modelslay .rn-ws-pill input,.rn-ws-modelslay .rn-ws-pill select{background:#0e1013;
+  border:1px solid #33373d;border-radius:7px;padding:7px 10px;text-align:left;min-height:36px;
+  box-sizing:border-box}
+.rn-ws-modelslay .rn-ws-pill input[type=number]{text-align:right}
+.rn-ws-modelslay .rn-ws-pill .rn-ws-sw{flex:none}
 .rn-ws-modelslay .rn-ws-pill input,.rn-ws-modelslay .rn-ws-pill select{font-size:14px}
 .rn-ws-modelslay .rn-ws-filerow>.k{font-size:13.5px}
 .rn-ws-modelslay .rn-ws-filebox{font-size:13.5px;padding:8px 11px}
@@ -11762,7 +11768,10 @@ const SEED_AREAS = [
 const MODELS_SUBS = [["files", "MODEL, CLIP, VAE"], ["sampling", "SAMPLING"], ["seed", "SEED"],
                      ["setup", "SETUP"]];
 const MODELS_BOX_TAB = { Model: "files", "Text encoder": "files", Decoder: "files",
-                         "Identity rescue": "files", Sampling: "sampling", Seed: "seed" };
+                         "Identity rescue": "files", Sampling: "sampling", Seed: "seed",
+                         "Main render": "sampling", "Sampler node": "sampling",
+                         "Image to image": "sampling", Detailer: "sampling",
+                         "Sampler dials": "sampling" };
 
 // THE MODEL FAMILY a rig looks like, from its files' names, for the rig cards
 export function rigFamily(r) {
@@ -12572,9 +12581,10 @@ function modelsBody(node, page) {
   // The rig's sampler settings, the numbers a KSampler needs, so loading the
   // workspace really is the whole model setup: wire steps, cfg, sampler_name and
   // scheduler from the workspace outputs and the channel run becomes optional.
-  body = mkBox("Sampling", "", "", "",
-               "How this rig renders, including main, image to image and Detailer.");
-  group(body, "Main render", "The render every queue starts with.");
+  // ONE CARD PER GROUP (the user's mockup, 2026-09-21), each with its badge
+  body = mkBox("Main render", "", "", "", "How the main render runs.");
+  statusBadge(body, "Set");
+  const mainCard = body;
   // the mock's Sampler presets: the saved sampler profiles, applied to this
   // rig's five numbers in one pick
   {
@@ -12783,7 +12793,9 @@ function modelsBody(node, page) {
     };
     // THE SAMPLER NODE: ComfyUI's KSampler, or a sampler node from another pack
     // that every call on this rig runs through instead (sampler_nodes.py)
-    group(body, "Sampler node", "Which node does the sampling for this rig.");
+    body = mkBox("Sampler node", "", "", "", "Choose which sampler node does the sampling.");
+    statusBadge(body, "Set");
+    body._isNodeCard = true;
     {
       const SN = rig.sampler_node && typeof rig.sampler_node === "object"
         ? rig.sampler_node : (rig.sampler_node = { id: "" });
@@ -12852,7 +12864,10 @@ function modelsBody(node, page) {
         pill(body, "Bongmath", bm, "RES4LYF's bongmath. On by default.");
       }
     }
-    group(body, "Image to image", "The pair an image to image run samples with.");
+    var nodeCard = body;
+    body = mkBox("Image to image", "", "", "",
+                 "Settings for image to image (uses the main settings by default).");
+    statusBadge(body, "Set");
     i2iRow("I2I sampler", "i2i_sampler", L.samplers || [],
            "The sampler an IMAGE TO IMAGE run uses in place of the one above. The "
          + "whole run follows it: the render, the paint pass, and the detailer, "
@@ -12865,7 +12880,8 @@ function modelsBody(node, page) {
          + "the same terms as the i2i sampler beside it. Same as above leaves i2i "
          + "on the main scheduler.");
   }
-  group(body, "Detailer", "What the Detailer passes on this rig take.");
+  body = mkBox("Detailer", "", "", "", "Settings for the detailer pass.");
+  statusBadge(body, "Set");
   numRow("Detailer steps", "detailer_steps", 1,
          "Steps for working over a picture that already exists: EVERY Detailer "
          + "pass left on the rig's own numbers takes this, the sampler and tiled "
@@ -12883,8 +12899,8 @@ function modelsBody(node, page) {
               + "the + on the LoRAs tab.");
     pill(body, "LoRA set", sel,
          "Which LoRAs-tab set this rig renders with. Main = the first tab there.");
-    dialsCard(node, rig, (body._dials = document.createElement("div")));
-    body._dials.className = "rn-ws-mgroup";
+    var dialsHost = document.createElement("div");
+    dialsCard(node, rig, dialsHost);
   }
 
   // The embedded sampler: comfy core's KSampler run inside the node. External is
@@ -12916,7 +12932,15 @@ function modelsBody(node, page) {
     smSeg.appendChild(b);
   }
   smRow.appendChild(smSeg);
-  body.appendChild(smRow);
+  // which does the render at all: the Workspace, or a KSampler you wire yourself
+  const runsCard = (typeof nodeCard !== "undefined" && nodeCard) || mainCard;
+  const smLab = document.createElement("span");
+  smLab.className = "rn-ws-note";
+  smLab.style.cssText = "flex:none;min-width:110px";
+  smLab.textContent = "Rendered by";
+  smRow.insertBefore(smLab, smSeg);
+  runsCard.appendChild(smRow);
+  body = runsCard;
   if (ownRig) {
     const n = document.createElement("div");
     n.className = "rn-ws-note rn-ws-ownrignote";
@@ -12930,7 +12954,12 @@ function modelsBody(node, page) {
         + "yours the settings above and takes the picture back.";
     body.appendChild(n);
   }
-  if (body._dials) body.appendChild(body._dials);       // the fold sits under the switch
+  // THE DIALS in a card of their own, optional
+  if (typeof dialsHost !== "undefined" && dialsHost) {
+    const dc = mkBox("Sampler dials", "", "", "", "Advanced sampling controls.");
+    statusBadge(dc, "Optional");
+    dc.appendChild(dialsHost);
+  }
   if (M.sampler_mode === "internal") {
     body = mkBox("Seed", "", "", "", "The run seed lives here.");
     body.classList.add("wide");
