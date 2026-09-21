@@ -4,7 +4,7 @@ import { api } from "../../scripts/api.js";
 import { writeCfg, render, adoptPaintSource, adoptResult, paintDropZone,
          pruneToNode, advanceSeeds, lastResultNow, promptKeyFor,
          runPaintFinal, copyResultToInput, resultUrl, openResultMenu,
-         openPaintViewer, registerUpscaleRun } from "./rednode_workspace.js";
+         openPaintViewer, registerUpscaleRun, openStagePage } from "./rednode_workspace.js";
 import { batchStrip, batchState, afterRow,
          sourceSwitch } from "./rednode_ws_batch.js";
 import { runStageRows } from "./rednode_ws_run.js";
@@ -107,7 +107,16 @@ export function upscaleNodeKey(prompt) {
     (k) => prompt[k]?.class_type === "RedNodeUpscaleRender") || null;
 }
 
-async function upscaleGenerate(node, statusEl) {
+// The picture picked in the Editor's Source gallery, or ""
+function editorPick(node) {
+  const E = node._rnCfg?.tabs?.editor_src;
+  if (!E?.images?.length) return "";
+  const i = Number(E.sel) || 0;
+  return String(E.images[i >= 0 && i < E.images.length ? i : 0] || "");
+}
+
+// `from`: a picture to run in place of the Single image one, the Editor's pick
+async function upscaleGenerate(node, statusEl, from = "") {
   const U = node._rnCfg?.upscale;
   const say = (t) => { if (statusEl) statusEl.textContent = t; };
   if (!U?.on) {
@@ -115,14 +124,16 @@ async function upscaleGenerate(node, statusEl) {
         + "on with the switch at the top of this tab.");
     return;
   }
-  if (!U.source) {
+  const src = from || U.source;
+  if (!src) {
     alert("Nothing to upscale. Press Use last result, drop a picture on the box, or "
         + "pick one from disk.");
     return;
   }
   say("Running…");
-  resetStages(node, U.source);
-  const pid = await queueUpscale(node, say, {});
+  resetStages(node, src);
+  // the Editor's pick rides the queued copy only; the Single image stays as it was
+  const pid = await queueUpscale(node, say, from ? { source: from } : {});
   if (!pid) return;
   say("Queued. The picture appears below when it is done.");
   await waitForPrompt(pid);
@@ -381,7 +392,49 @@ export function upscaleBody(node, body) {
   // ONE BOX AT A TIME. The two look alike and the page is long, so the switch
   // shows the one being worked on and folds the other. It changes the VIEW, not
   // what a run uses: each box still runs from its own buttons.
-  const view = sourceSwitch(node, body, "upscale", "Single image");
+  const view = sourceSwitch(node, body, "upscale", "Single image", null, [
+    ["editor", "Editor source", "Upscale the picture picked on the Editor's Source page."],
+  ]);
+
+  // THE EDITOR'S PICK: the picture chosen in the Editor's Source gallery, run as it
+  // is. Picking another there changes what this runs; nothing is copied here.
+  if (view === "editor") {
+    const { line: eLine } = card(body, "EDITOR SOURCE");
+    const pickName = editorPick(node);
+    const thumb = document.createElement(pickName ? "img" : "div");
+    thumb.style.cssText = "width:120px;height:120px;border:1px solid #2a2e35;border-radius:6px;"
+                        + "background:#15171b;flex:none;object-fit:contain";
+    if (pickName && U.on) thumb.src = viewInput(pickName);
+    else if (!pickName) {
+      thumb.textContent = "No picture";
+      thumb.style.cssText += ";display:flex;align-items:center;justify-content:center;"
+                           + "font-size:11px;color:#7f8792";
+    }
+    const col = el("div");
+    col.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:0;align-self:center";
+    const nm = el("span", "hint", pickName
+      ? pickName : "The Editor's Source gallery is empty. Add a picture there first.");
+    nm.style.cssText = "font-size:11px;overflow:hidden;text-overflow:ellipsis";
+    const open = el("button", "rn-ws-btn", "Open Editor Source");
+    open.style.cssText = "width:auto;padding:3px 12px;align-self:flex-start";
+    open.title = "Pick a different picture in the Editor's Source gallery.";
+    open.onclick = () => openStagePage(node, "esource");
+    col.append(nm, open);
+    const runBox = el("div");
+    runBox.style.cssText = "margin-left:auto;display:flex;flex-direction:column;gap:6px;"
+                         + "align-items:flex-end;flex:none";
+    const go = el("button", "rn-ws-btn", "Run this Image");
+    go.dataset.choice = "upscale_editor_run";
+    go.style.cssText = "width:auto;padding:6px 18px;font-weight:600;"
+                     + "background:#2b3a4d;color:#cfe6ff;border-color:#3d5570";
+    go.disabled = !pickName;
+    go.title = "Upscale the picture on the left. The result appears at the bottom of this tab.";
+    const status = el("span", "hint", "");
+    status.style.cssText = "font-size:11px;text-align:right";
+    go.onclick = () => upscaleGenerate(node, status, pickName);
+    runBox.append(go, status);
+    eLine.append(thumb, col, runBox);
+  }
 
   // THE PICTURE
   // BUILT ONLY WHEN SHOWING. Made and then hidden, its picture would still

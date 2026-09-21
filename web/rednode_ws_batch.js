@@ -654,13 +654,16 @@ export function afterRow(node, host, opts = {}) {
  *  box still says plainly what runs it. A switch that claimed to redirect the
  *  Queue would be a lie told in a nice colour.
  */
-export function sourceView(node, key) {
+// `extras` are further views a page offers between its own and the folder, as
+// [id, label, why]; a stored view the page does not offer reads as its own
+export function sourceView(node, key, extras = []) {
   const all = ((node.properties ||= {}).rn_src_view ||= {});
-  return all[key] === "batch" ? "batch" : "own";
+  if (all[key] === "batch") return "batch";
+  return extras.some(([id]) => id === all[key]) ? all[key] : "own";
 }
 
-export function sourceSwitch(node, host, key, ownLabel, onPick) {
-  const cur = sourceView(node, key);
+export function sourceSwitch(node, host, key, ownLabel, onPick, extras = []) {
+  const cur = sourceView(node, key, extras);
   const row = document.createElement("div");
   row.className = "rn-ws-row";
   row.style.cssText = "gap:6px;align-items:center";
@@ -670,6 +673,7 @@ export function sourceSwitch(node, host, key, ownLabel, onPick) {
   for (const [id, label, why] of [
     ["own", ownLabel, `Show ${ownLabel.toLowerCase()}. An ordinary Queue always `
       + "renders from this one."],
+    ...extras,
     ["batch", "Batch folder", "Show the folder batch. It runs from its own buttons, "
       + "one picture per queue."],
   ]) {
