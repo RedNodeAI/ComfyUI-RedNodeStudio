@@ -640,6 +640,7 @@ from .text_combine import RedNodeTextCombine  # noqa: E402
 from .prompt_box import RedNodePromptBox  # noqa: E402
 from .prompt_frame import RedNodePromptFrame  # noqa: E402
 from . import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers the sort route)
+from . import model_families as _rednode_model_families  # noqa: E402,F401  (the Setup page's route)
 from .camera_studio import RedNodeCameraStudio, RedNodeCameraLoRAs, RedNodeCameraMultiAngle  # noqa: E402
 from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
 from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402

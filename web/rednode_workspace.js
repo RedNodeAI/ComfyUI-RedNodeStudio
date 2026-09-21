@@ -11201,6 +11201,184 @@ function maskCanvas(layer, feather) {
 // ComfyUI's own /object_info for the stock loader nodes, so whatever core can load,
 // this can offer, with the shared picker's search and recents over the top.
 let MODEL_LISTS = null;
+// ---- the Setup page: one click from a model family to a working rig ------------
+// The families live in model_families.py; the server finds each role's files by
+// name, newest first. Picking a family fills the active rig, or a new one, with
+// those files and the family's numbers. Every value stays editable afterwards.
+async function fetchFamilies(node) {
+  try {
+    const r = await api.fetchApi("/rednode/model_families", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const d = await r.json();
+    node._rnFamilies = Array.isArray(d?.families) ? d.families : [];
+  } catch (e) {
+    node._rnFamilies = [];
+  }
+  render(node);
+}
+
+const ROLE_NAME = { checkpoint: "Checkpoint", unet: "Diffusion model", clip: "Text encoder",
+                    vae: "VAE" };
+
+export function applyFamily(node, fam, picks, asNew) {
+  const M = node._rnCfg.models;
+  let rig = M.rigs[M.active];
+  if (asNew || !rig) {
+    const taken = new Set(M.rigs.map((r) => r.name));
+    let name = fam.label;
+    for (let i = 2; taken.has(name); i++) name = `${fam.label} ${i}`;
+    rig = { name };
+    M.rigs.push(rig);
+    M.active = M.rigs.length - 1;
+  }
+  const R = fam.rig || {};
+  Object.assign(rig, {
+    kind: "files", checkpoint: picks.checkpoint || "", unet: picks.unet || "",
+    clip: picks.clip || "", vae: picks.vae || "", clip_type: R.clip_type || "",
+    unet_loader: "", int8_type: "", steps: R.steps, cfg: R.cfg, sampler: R.sampler,
+    scheduler: R.scheduler,
+  });
+  if (typeof R.official === "boolean") rig.official = R.official;
+  writeCfg(node);
+}
+
+function modelsSetupPage(node, host) {
+  const cfg = node._rnCfg;
+  const M = cfg.models;
+  const rig = M.rigs[M.active];
+  const intro = document.createElement("div");
+  intro.className = "rn-ws-card rn-ws-setupintro";
+  intro.style.flex = "1 1 100%";
+  const it = document.createElement("div");
+  it.className = "rn-ws-note";
+  it.textContent = "Pick the kind of model you have. The files are found in your model "
+    + "folders by name, newest first, and the rig gets that model's settings. Check "
+    + "the Files and Sampling tabs afterwards; everything stays editable.";
+  const again = document.createElement("button");
+  again.className = "rn-ws-btn";
+  again.style.cssText = "width:auto;padding:3px 12px;align-self:flex-start";
+  again.textContent = "Look again";
+  again.title = "Look through the model folders again, after adding a file.";
+  again.onclick = () => { node._rnFamilies = null; fetchFamilies(node); };
+  intro.append(it, again);
+  host.appendChild(intro);
+  if (!Array.isArray(node._rnFamilies)) {
+    if (!node._rnFamiliesAsked) {
+      node._rnFamiliesAsked = true;
+      fetchFamilies(node).finally(() => { node._rnFamiliesAsked = false; });
+    }
+    const wait = document.createElement("div");
+    wait.className = "rn-ws-note";
+    wait.textContent = "Looking through the model folders...";
+    host.appendChild(wait);
+    return;
+  }
+  const picks = (node._rnFamilyPicks ||= {});
+  const samplers = MODEL_LISTS?.samplers || [];
+  for (const fam of node._rnFamilies) {
+    const card = document.createElement("div");
+    card.className = "rn-ws-card rn-ws-mbox rn-ws-famcard";
+    card.dataset.family = fam.id;
+    const h = document.createElement("div");
+    h.className = "rn-ws-mhead";
+    const ht = document.createElement("span");
+    ht.className = "ch";
+    ht.textContent = fam.label.toUpperCase();
+    h.appendChild(ht);
+    card.appendChild(h);
+    const bl = document.createElement("div");
+    bl.className = "rn-ws-note";
+    bl.textContent = fam.blurb;
+    card.appendChild(bl);
+    const mine = (picks[fam.id] ||= {});
+    let missing = 0;
+    for (const [role, info] of Object.entries(fam.roles || {})) {
+      const found = fam.found?.[role] || [];
+      const r = document.createElement("div");
+      r.className = "rn-ws-row";
+      r.style.flexWrap = "wrap";
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.style.cssText = "flex:none;width:110px";
+      l.textContent = ROLE_NAME[role] || role;
+      r.appendChild(l);
+      if (!found.length) {
+        missing++;
+        const w = document.createElement("span");
+        w.className = "rn-ws-note rn-ws-peoplewarn rn-ws-fammissing";
+        w.style.flex = "1 1 200px";
+        w.textContent = "Not found. Needs " + info.example + ".";
+        r.appendChild(w);
+      } else {
+        if (!found.includes(mine[role])) mine[role] = found[0];
+        const sel = document.createElement("select");
+        sel.className = "rn-ws-res";
+        sel.style.cssText = "flex:1 1 200px;min-width:0";
+        sel.dataset.role = role;
+        for (const n of found) {
+          const o = document.createElement("option");
+          o.value = n;
+          o.textContent = n + (n === found[0] ? "  (newest)" : "");
+          o.selected = n === mine[role];
+          sel.appendChild(o);
+        }
+        sel.title = found.length > 1
+          ? `${found.length} files match. The newest is picked; choose another here.`
+          : "The one file that matches.";
+        sel.onchange = () => { mine[role] = sel.value; };
+        r.appendChild(sel);
+      }
+      card.appendChild(r);
+    }
+    const R = fam.rig || {};
+    const nums = document.createElement("div");
+    nums.className = "rn-ws-note";
+    nums.textContent = `Settings: ${R.steps} steps, CFG ${R.cfg}, ${R.sampler}, ${R.scheduler}`
+      + (R.clip_type ? `, text encoder type ${R.clip_type}` : "") + ".";
+    card.appendChild(nums);
+    if (samplers.length && R.sampler && !samplers.includes(R.sampler)) {
+      const sw = document.createElement("div");
+      sw.className = "rn-ws-note rn-ws-peoplewarn";
+      sw.textContent = `This ComfyUI has no ${R.sampler} sampler. Update ComfyUI, or pick `
+                     + "another on the Sampling tab after setting up.";
+      card.appendChild(sw);
+    }
+    const br = document.createElement("div");
+    br.className = "rn-ws-row";
+    br.style.flexWrap = "wrap";
+    const use = document.createElement("button");
+    use.className = "rn-ws-btn rn-ws-famuse";
+    use.style.cssText = "width:auto;padding:5px 14px;font-weight:600";
+    use.textContent = rig ? `Set up ${rig.name}` : "Set up a rig";
+    use.disabled = missing > 0;
+    use.title = missing ? "A file this model needs is missing: see above."
+      : rig ? `Give ${rig.name} these files and settings.` : "Make a rig with these files and settings.";
+    use.onclick = () => {
+      if (rig && (rig.checkpoint || rig.unet || rig.clip || rig.vae)
+          && !confirm(`Replace ${rig.name}'s files and settings with ${fam.label}'s?`)) return;
+      applyFamily(node, fam, mine, false);
+      node._rnModelsSub = "files";
+      (node.properties ||= {}).rn_models_sub = "files";
+      render(node);
+    };
+    const add = document.createElement("button");
+    add.className = "rn-ws-btn rn-ws-famnew";
+    add.style.cssText = "width:auto;padding:5px 14px";
+    add.textContent = "As a new rig";
+    add.disabled = missing > 0;
+    add.title = "Add a new rig with these files and settings, and make it active.";
+    add.onclick = () => {
+      applyFamily(node, fam, mine, true);
+      node._rnModelsSub = "files";
+      (node.properties ||= {}).rn_models_sub = "files";
+      render(node);
+    };
+    br.append(use, add);
+    card.appendChild(br);
+    host.appendChild(card);
+  }
+}
+
 async function fetchModelLists() {
   if (MODEL_LISTS) return MODEL_LISTS;
   const pull = async (nodeName, field) => {
@@ -11233,10 +11411,27 @@ async function fetchModelLists() {
 // schedule shapes the pack builds itself (sampler_dials.py); a rig may name them
 const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 
+// THE MODELS PAGE'S TABS: Setup (one-click families and what a rig needs), then the
+// three cards that were stacked on one page, one each. A rig with no files opens on
+// Setup; after that the page remembers where it was left.
+const MODELS_SUBS = [["setup", "SETUP"], ["files", "FILES"], ["sampling", "SAMPLING"],
+                     ["seed", "SEED"]];
+const MODELS_BOX_TAB = { Files: "files", "Identity rescue": "files", Sampling: "sampling",
+                         Seed: "seed" };
+
+function modelsSub(node, cfg) {
+  const M = cfg.models;
+  const rig = M.rigs?.[M.active];
+  const has = !!(rig && (rig.checkpoint || rig.unet || rig.clip || rig.vae || rig.kind !== "files"));
+  const saved = node._rnModelsSub || node.properties?.rn_models_sub;
+  return MODELS_SUBS.some(([id]) => id === saved) ? saved : has ? "files" : "setup";
+}
+
 function modelsBody(node, page) {
   const cfg = node._rnCfg;
   const M = cfg.models;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
+  const curSub = modelsSub(node, cfg);
 
   // WHAT STOPS A RENDER, at the top where it is seen: the same reasons a run that
   // comes out empty gives, before anyone queues
@@ -11290,7 +11485,14 @@ function modelsBody(node, page) {
       t.appendChild(bd);
     }
     b.appendChild(t);
-    mwrap.appendChild(b);
+    // a card on another tab is still built, so the code filling it runs the same,
+    // but it is never put on the page
+    const tab = MODELS_BOX_TAB[title];
+    // the rig manager shows on every tab but Setup, which makes rigs its own way,
+    // unless Manage rigs was pressed
+    const show = tab ? tab === curSub
+      : title !== "Rigs" || curSub !== "setup" || node._rnRigManage;
+    if (show) mwrap.appendChild(b);
     return b;
   };
   // pills flow in a grid; the grid appears where the first pill lands, so
@@ -11500,6 +11702,25 @@ function modelsBody(node, page) {
     };
     hrow.appendChild(manage);
     page.insertBefore(bar, mwrap);
+    // THE TABS, under the rigs they edit
+    const strip = document.createElement("div");
+    strip.className = "rn-ws-sub rn-ws-modelsub";
+    for (const [id, label] of MODELS_SUBS) {
+      const b = document.createElement("button");
+      b.className = "rn-ws-subt" + (id === curSub ? " cur" : "");
+      b.dataset.sub = id;
+      const tx = document.createElement("span");
+      tx.textContent = label;
+      b.appendChild(tx);
+      b.onclick = () => {
+        node._rnModelsSub = id;
+        (node.properties ||= {}).rn_models_sub = id;
+        render(node);
+      };
+      strip.appendChild(b);
+    }
+    page.insertBefore(strip, mwrap);
+    if (curSub === "setup") modelsSetupPage(node, mwrap);
   }
 
   let body = null;
