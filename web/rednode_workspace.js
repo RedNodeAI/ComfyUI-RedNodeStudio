@@ -11265,7 +11265,7 @@ function modelsSetupPage(node, host) {
   it.className = "rn-ws-note";
   it.textContent = "Pick the kind of model you have. The files are found in your model "
     + "folders by name, newest first, and the rig gets that model's settings. Check "
-    + "the Files and Sampling tabs afterwards; everything stays editable.";
+    + "the Model, CLIP, VAE and Sampling tabs afterwards; everything stays editable.";
   const again = document.createElement("button");
   again.className = "rn-ws-btn";
   again.style.cssText = "width:auto;padding:3px 12px;align-self:flex-start";
@@ -11433,10 +11433,10 @@ const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 // THE MODELS PAGE'S TABS: Setup (one-click families and what a rig needs), then the
 // three cards that were stacked on one page, one each. A rig with no files opens on
 // Setup; after that the page remembers where it was left.
-const MODELS_SUBS = [["setup", "SETUP"], ["files", "FILES"], ["sampling", "SAMPLING"],
-                     ["seed", "SEED"]];
-const MODELS_BOX_TAB = { Files: "files", "Identity rescue": "files", Sampling: "sampling",
-                         Seed: "seed" };
+const MODELS_SUBS = [["files", "MODEL, CLIP, VAE"], ["sampling", "SAMPLING"], ["seed", "SEED"],
+                     ["setup", "SETUP"]];
+const MODELS_BOX_TAB = { "Model, CLIP, VAE": "files", "Identity rescue": "files",
+                         Sampling: "sampling", Seed: "seed" };
 
 function modelsSub(node, cfg) {
   const M = cfg.models;
@@ -11808,7 +11808,7 @@ function modelsBody(node, page) {
 
   const rig = M.rigs[M.active];
   if (!rig) return;
-  body = mkBox("Files", "", "", "", "What this active rig loads.");
+  body = mkBox("Model, CLIP, VAE", "", "", "", "What this active rig loads.");
 
   // the active rig's files: one picker per kind, the LoRA picker behaviour exactly,
   // with recents shared per kind so the model you use daily is always on top
