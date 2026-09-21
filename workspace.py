@@ -763,6 +763,10 @@ def vae_images(t):
     [batch, frames, H, W, C]; taking [0] kept the first picture of a batch."""
     if t.ndim > 4:
         t = t.reshape((-1,) + tuple(t.shape[-3:]))
+    # an RGBA VAE (Qwen Image 2.1) decodes four channels; every stage after the
+    # decode blends and saves RGB, so the alpha stops here
+    if t.ndim == 4 and t.shape[-1] > 3:
+        t = t[..., :3]
     return t
 
 

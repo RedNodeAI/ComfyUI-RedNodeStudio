@@ -1403,6 +1403,7 @@ class RedNodeStudioDetailer:
         img = vae.decode(out["samples"])
         while img.ndim > 4:
             img = img[0]
+        img = img[:, :, :, :3]                    # an RGBA VAE (Qwen Image 2.1)
         if img.shape[1:3] != image.shape[1:3]:
             img = F.interpolate(img.permute(0, 3, 1, 2), size=image.shape[1:3],
                                 mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
@@ -1497,6 +1498,7 @@ class RedNodeStudioDetailer:
         rendered = vae.decode(out["samples"])
         while rendered.ndim > 4:
             rendered = rendered[0]
+        rendered = rendered[:, :, :, :3]          # an RGBA VAE (Qwen Image 2.1)
         if rendered.shape[1:3] != crop.shape[1:3]:
             rendered = F.interpolate(rendered.permute(0, 3, 1, 2),
                                      size=crop.shape[1:3], mode="bilinear",

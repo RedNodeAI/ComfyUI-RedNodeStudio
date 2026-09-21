@@ -225,6 +225,8 @@ class RedNodeStageTap:
         if shot is None and latent is not None and vae is not None:
             try:
                 shot = vae.decode(latent["samples"])
+                if shot.ndim == 4 and shot.shape[-1] > 3:
+                    shot = shot[..., :3]          # an RGBA VAE (Qwen Image 2.1)
                 source = "latent"
             except Exception as e:
                 print(f"[RedNode Stages] could not decode the latent for a preview ({e})",
