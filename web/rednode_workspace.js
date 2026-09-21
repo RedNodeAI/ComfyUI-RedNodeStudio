@@ -258,6 +258,37 @@ css.textContent = `
 .rn-ws-filestate.bad{color:#ef4444}
 .rn-ws-filebox.missing{border-color:#ef4444;box-shadow:0 0 0 1px #ef444455}
 .rn-ws-modelslay .rn-ws-mbox{flex:1 1 100%}
+/* Manage rigs */
+.rn-ws-rigbtns{display:flex;gap:8px}
+.rn-ws-rigbtns>button{flex:1 1 0;min-height:36px;font-size:13px;border-radius:8px}
+.rn-ws-rigbtns>.rn-ws-managerigs.on{background:#c42a3c!important;border-color:#c42a3c!important;color:#fff!important}
+.rn-ws-managecard .rn-ws-mhead{align-items:center}
+.rn-ws-managedone{margin-left:auto;width:auto!important;padding:8px 22px!important;font-size:14px;
+  border-radius:8px}
+.rn-ws-managerow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#181b20;
+  border:1px solid #30353d;border-radius:9px;padding:9px 12px;min-height:56px}
+.rn-ws-managerow .grip{cursor:grab;color:#6b7280;font-size:18px;letter-spacing:-3px;flex:none}
+.rn-ws-managerow .dot{width:11px;height:11px;border-radius:50%;flex:none}
+.rn-ws-managerow .dot.ok{background:#22c55e}
+.rn-ws-managerow .dot.bad{background:#ef4444}
+.rn-ws-managerow .main{flex:0 1 240px;min-width:160px;display:flex;flex-direction:column;gap:3px}
+.rn-ws-managerow .main input{font-size:14px;font-weight:600;flex:none;height:38px;box-sizing:border-box}
+.rn-ws-managerow .used{font-size:11.5px;color:#8a919b}
+.rn-ws-managerow .fam{flex:0 1 150px;font-size:13px;color:#8a919b}
+.rn-ws-managerow .sum{display:flex;gap:14px;font-size:13px;color:#c8ccd2;flex:1 1 auto}
+.rn-ws-managerow .sum .ok{color:#c8ccd2}
+.rn-ws-managerow .sum .bad{color:#ef4444}
+.rn-ws-managerow .acts{display:flex;align-items:center;gap:8px;margin-left:auto;flex:none}
+.rn-ws-managerow .acts .rn-ws-btn{width:auto;min-height:38px;padding:0 14px;border-radius:8px;font-size:13px}
+.rn-ws-managerow .acts .icon{padding:0 11px;font-size:15px}
+.rn-ws-managerow .acts .del:hover{border-color:#ef4444;color:#ef4444}
+.rn-ws-managerow .acts .yes{background:#c42a3c;border-color:#c42a3c;color:#fff}
+.rn-ws-managerow .acts .ask{font-weight:600;font-size:13.5px}
+.rn-ws-managerow .activebadge{background:#c42a3c;color:#fff;font-weight:800;font-size:12px;
+  letter-spacing:.05em;padding:9px 18px;border-radius:7px}
+.rn-ws-managefoot{display:flex;gap:12px;margin-top:6px}
+.rn-ws-managefoot>button{flex:1 1 0;min-height:50px!important;font-size:15px;border-radius:9px}
+.rn-ws-managefoot>.add{border:1px dashed #4a505a!important;background:transparent!important}
 /* the Setup tab's family cards: side by side, labels over the boxes */
 .rn-ws-modelslay .rn-ws-mbox.rn-ws-famcard{flex:1 1 260px;min-width:250px;align-self:stretch;gap:6px}
 .rn-ws-famcard .rn-ws-famlab{font-size:13px;color:#c8ccd2;margin-top:6px}
@@ -11323,6 +11354,186 @@ function maskCanvas(layer, feather) {
 // ComfyUI's own /object_info for the stock loader nodes, so whatever core can load,
 // this can offer, with the shared picker's search and recents over the top.
 let MODEL_LISTS = null;
+// ---- Manage rigs: one row per rig ------------------------------------------------
+// A rig's name is how everything else finds it: prompt rows, the passes' rigs and the
+// Detailer's stages. Renaming here renames it in all of them.
+function renameRig(cfg, from, to) {
+  if (!from || from === to) return;
+  for (const row of cfg.prompts?.rows || []) {
+    if (Array.isArray(row.rigs)) row.rigs = row.rigs.map((x) => (x === from ? to : x));
+    if (row.rig === from) row.rig = to;
+  }
+  for (const t of [cfg.latent, cfg.tabs?.i2i]) {
+    if (Array.isArray(t?.pass_rig)) t.pass_rig = t.pass_rig.map((x) => (x === from ? to : x));
+  }
+  for (const st of cfg.detailer?.stages || []) if (st?.rig === from) st.rig = to;
+}
+
+const promptsUsing = (cfg, name) => (cfg.prompts?.rows || []).filter((row) =>
+  (Array.isArray(row.rigs) ? row.rigs : [row.rig]).includes(name)).length;
+
+function manageRigsCard(node, card) {
+  const cfg = node._rnCfg;
+  const M = cfg.models;
+  card.classList.add("rn-ws-managecard");
+  const done = document.createElement("button");
+  done.className = "rn-ws-btn rn-ws-managedone";
+  done.textContent = "Done";
+  done.title = "Back to the rig's settings.";
+  done.onclick = () => { node._rnRigManage = false; node._rnRigDelAsk = null; render(node); };
+  card.querySelector(".rn-ws-mhead")?.appendChild(done);
+  const w = () => { writeCfg(node); render(node); };
+  const activeName = M.rigs[M.active]?.name;
+  M.rigs.forEach((r, i) => {
+    const row = document.createElement("div");
+    row.className = "rn-ws-managerow" + (M.active === i ? " cur" : "");
+    row.dataset.rig = r.name;
+    // DRAG to reorder, by the handle; the active rig stays the active rig
+    const grip = document.createElement("span");
+    grip.className = "grip";
+    grip.textContent = "\u2807\u2807";
+    grip.title = "Drag to reorder.";
+    grip.draggable = true;
+    grip.addEventListener("dragstart", (e) => {
+      node._rnRigDrag = i;
+      e.dataTransfer?.setData?.("text/plain", String(i));
+    });
+    row.addEventListener("dragover", (e) => e.preventDefault());
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const from = node._rnRigDrag;
+      node._rnRigDrag = null;
+      if (typeof from !== "number" || from === i) return;
+      const [moved] = M.rigs.splice(from, 1);
+      M.rigs.splice(i, 0, moved);
+      M.active = Math.max(0, M.rigs.findIndex((x) => x.name === activeName));
+      w();
+    });
+    const files = !r.kind || r.kind === "files";
+    const roles = files ? rigRoles(r) : [];
+    const dot = document.createElement("span");
+    dot.className = "dot " + (roles.every((x) => x[2]) ? "ok" : "bad");
+    const main = document.createElement("div");
+    main.className = "main";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "rn-ws-filebox";
+    name.dataset.choice = "rig_name";
+    name.value = r.name;
+    name.placeholder = "Rig " + (i + 1);
+    name.title = "The rig's name. Prompts, passes and Detailer stages that name it follow a rename.";
+    name.addEventListener("change", () => {
+      const v = name.value.trim();
+      if (!v || M.rigs.some((x, j) => j !== i && x.name === v)) { name.value = r.name; return; }
+      renameRig(cfg, r.name, v);
+      r.name = v;
+      w();
+    });
+    main.appendChild(name);
+    const used = promptsUsing(cfg, r.name);
+    if (used > 1) {
+      const u = document.createElement("div");
+      u.className = "used";
+      u.textContent = `Used by ${used} prompts. Renaming updates them.`;
+      main.appendChild(u);
+    }
+    const fam = document.createElement("span");
+    fam.className = "fam";
+    fam.textContent = rigFamily(r);
+    const sum = document.createElement("span");
+    sum.className = "sum";
+    for (const [role, , ok] of roles) {
+      const x = document.createElement("span");
+      x.className = ok ? "ok" : "bad";
+      x.textContent = role + " " + (ok ? "\u2713" : "\u2715");
+      sum.appendChild(x);
+    }
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    if (node._rnRigDelAsk === i) {
+      const q = document.createElement("span");
+      q.className = "ask";
+      q.textContent = `Delete ${r.name}?`;
+      const yes = document.createElement("button");
+      yes.className = "rn-ws-btn yes";
+      yes.dataset.choice = "rig_delete_yes";
+      yes.textContent = "Yes";
+      yes.onclick = () => {
+        M.rigs.splice(i, 1);
+        M.active = Math.max(0, M.rigs.findIndex((x) => x.name === activeName));
+        if (M.active >= M.rigs.length) M.active = Math.max(0, M.rigs.length - 1);
+        node._rnRigDelAsk = null;
+        w();
+      };
+      const no = document.createElement("button");
+      no.className = "rn-ws-btn";
+      no.textContent = "No";
+      no.onclick = () => { node._rnRigDelAsk = null; render(node); };
+      acts.append(q, yes, no);
+    } else {
+      if (M.active === i) {
+        const b = document.createElement("span");
+        b.className = "activebadge";
+        b.textContent = "ACTIVE";
+        acts.appendChild(b);
+      } else {
+        const mk = document.createElement("button");
+        mk.className = "rn-ws-btn make";
+        mk.dataset.choice = "rig_make_active";
+        mk.textContent = "Make Active";
+        mk.onclick = () => { M.active = i; w(); };
+        acts.appendChild(mk);
+      }
+      const dup = document.createElement("button");
+      dup.className = "rn-ws-btn icon";
+      dup.dataset.choice = "rig_duplicate";
+      dup.textContent = "\u2750";
+      dup.title = "Duplicate this rig.";
+      dup.onclick = () => {
+        const copy = JSON.parse(JSON.stringify(r));
+        let n = r.name + " copy";
+        for (let k = 2; M.rigs.some((x) => x.name === n); k++) n = `${r.name} copy ${k}`;
+        copy.name = n;
+        M.rigs.splice(i + 1, 0, copy);
+        M.active = Math.max(0, M.rigs.findIndex((x) => x.name === activeName));
+        w();
+      };
+      const del = document.createElement("button");
+      del.className = "rn-ws-btn icon del";
+      del.dataset.choice = "rig_delete";
+      del.textContent = "\ud83d\uddd1";
+      del.title = "Delete this rig. The files on disk are not touched.";
+      del.onclick = () => { node._rnRigDelAsk = i; render(node); };
+      acts.append(dup, del);
+    }
+    row.append(grip, dot, main, fam, sum, acts);
+    card.appendChild(row);
+  });
+  const foot = document.createElement("div");
+  foot.className = "rn-ws-managefoot";
+  const add = document.createElement("button");
+  add.className = "rn-ws-btn add";
+  add.dataset.choice = "rig_add";
+  add.textContent = "+ New Rig";
+  add.onclick = () => {
+    M.rigs.push({ name: nextRigName(M.rigs), checkpoint: "", unet: "", clip: "", clip_type: "", vae: "" });
+    w();
+  };
+  const fromSetup = document.createElement("button");
+  fromSetup.className = "rn-ws-btn";
+  fromSetup.dataset.choice = "rig_add_setup";
+  fromSetup.textContent = "+ New Rig From Setup";
+  fromSetup.title = "Open the Setup tab: a model family's files and settings, as a new rig.";
+  fromSetup.onclick = () => {
+    node._rnRigManage = false;
+    node._rnModelsSub = "setup";
+    (node.properties ||= {}).rn_models_sub = "setup";
+    render(node);
+  };
+  foot.append(add, fromSetup);
+  card.appendChild(foot);
+}
+
 // ---- the Setup page: one click from a model family to a working rig ------------
 // The families live in model_families.py; the server finds each role's files by
 // name, newest first. Picking a family fills the active rig, or a new one, with
@@ -11728,10 +11939,8 @@ function modelsBody(node, page) {
     // a card on another tab is still built, so the code filling it runs the same,
     // but it is never put on the page
     const tab = MODELS_BOX_TAB[title];
-    // the rig manager shows on every tab but Setup, which makes rigs its own way,
-    // unless Manage rigs was pressed
-    const show = tab ? tab === curSub
-      : title !== "Rigs" || curSub !== "setup" || node._rnRigManage;
+    // while managing rigs, that card is the page; otherwise each card on its tab
+    const show = node._rnRigManage ? title === "Manage rigs" : !tab || tab === curSub;
     if (show) mwrap.appendChild(b);
     return b;
   };
@@ -11875,12 +12084,14 @@ function modelsBody(node, page) {
     const addChip = document.createElement("button");
     addChip.className = "rn-ws-btn";
     addChip.style.cssText = "width:auto;padding:0 14px";
-    addChip.textContent = "＋ New Rig";
+    addChip.textContent = "+ New Rig";
     addChip.onclick = () => {
       M.rigs.push({ name: nextRigName(M.rigs), checkpoint: "", unet: "", clip: "",
                     clip_type: "", vae: "" });
       M.active = M.rigs.length - 1;
-      node._rnRigManage = true;
+      // a new rig has nothing yet, so it opens where a rig gets its files
+      node._rnModelsSub = "setup";
+      (node.properties ||= {}).rn_models_sub = "setup";
       writeCfg(node); render(node);
     };
     crow.appendChild(addChip);
@@ -11969,14 +12180,19 @@ function modelsBody(node, page) {
     }
     const manage = document.createElement("button");
     manage.className = "rn-ws-btn rn-ws-managerigs" + (node._rnRigManage ? " on" : "");
-    manage.style.cssText = "width:auto;padding:0 14px;margin-left:auto";
-    manage.textContent = "Manage rigs";
-    manage.title = "Rename, reorder or remove rigs.";
+    manage.textContent = "Manage Rigs";
+    manage.title = "Rename, reorder, duplicate or delete rigs.";
     manage.onclick = () => {
       node._rnRigManage = !node._rnRigManage;
+      node._rnRigDelAsk = null;
       render(node);
     };
-    hrow.appendChild(manage);
+    // beside New Rig, under the cards
+    const rowBtns = document.createElement("div");
+    rowBtns.className = "rn-ws-rigbtns";
+    addChip.remove();
+    rowBtns.append(addChip, manage);
+    bar.insertBefore(rowBtns, brow);
     page.insertBefore(bar, mwrap);
     // THE TABS, under the rigs they edit
     const strip = document.createElement("div");
@@ -11996,7 +12212,7 @@ function modelsBody(node, page) {
       strip.appendChild(b);
     }
     page.insertBefore(strip, mwrap);
-    if (curSub === "setup") modelsSetupPage(node, mwrap);
+    if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
     // are editing stays in view whichever tab is open (the user, 2026-09-21)
     const lay = document.createElement("div");
@@ -12012,68 +12228,8 @@ function modelsBody(node, page) {
   }
 
   let body = null;
-  if (node._rnRigManage || !M.rigs.length) {
-  body = mkBox("Rigs", "#b8283c", "⚙");
-
-  const note = document.createElement("div");
-  note.className = "rn-ws-note";
-  note.textContent = M.rigs.length
-    ? "Rename rigs here; the Prompts tab links prompts to a rig by its name. "
-      + "Close with Manage rigs when done."
-    : "No rigs yet. Add one, name it, and pick its files; the workspace then loads "
-      + "it so the graph needs no loader nodes.";
-  body.appendChild(note);
-
-  const list = document.createElement("div");
-  list.style.cssText = "display:flex;flex-direction:column;gap:5px";
-  M.rigs.forEach((rig, i) => {
-    const row = document.createElement("div");
-    row.className = "rn-ws-row";
-    const use = document.createElement("button");
-    use.className = "rn-ws-segb" + (M.active === i ? " on" : "");
-    use.textContent = M.active === i ? "Active" : "Use";
-    use.title = "The active rig is the one that loads and renders.";
-    use.onclick = () => { M.active = i; writeCfg(node); render(node); };
-    const name = document.createElement("input");
-    name.type = "text";
-    name.value = rig.name;
-    name.placeholder = "Rig " + (i + 1);
-    name.style.cssText = "flex:1;min-width:0;background:#15171b;border:1px solid "
-                       + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
-                       + "padding:4px 7px";
-    name.title = "Name this rig; the Prompts tab links prompts to it by this name.";
-    name.addEventListener("change", () => { rig.name = name.value; writeCfg(node); });
-    const files = document.createElement("span");
-    files.className = "hint";
-    files.textContent = [rig.checkpoint || rig.unet, rig.clip, rig.vae]
-      .filter(Boolean).length + " file(s)";
-    const del = document.createElement("button");
-    del.className = "rn-ws-btn";
-    del.style.width = "auto";
-    del.textContent = "\u2715";
-    del.title = "Remove this rig. Files on disk are untouched.";
-    del.onclick = () => {
-      M.rigs.splice(i, 1);
-      if (M.active >= M.rigs.length) M.active = Math.max(0, M.rigs.length - 1);
-      writeCfg(node); render(node);
-    };
-    row.append(use, name, files, del);
-    list.appendChild(row);
-  });
-  body.appendChild(list);
-
-  const add = document.createElement("button");
-  add.className = "rn-ws-btn";
-  add.style.width = "auto";
-  add.style.padding = "0 10px";
-  add.textContent = "\uFF0B Rig";
-  add.onclick = () => {
-    M.rigs.push({ name: nextRigName(M.rigs), checkpoint: "", unet: "", clip: "", clip_type: "", vae: "" });
-    M.active = M.rigs.length - 1;
-    writeCfg(node); render(node);
-  };
-  body.appendChild(add);
-  }
+  if (node._rnRigManage) manageRigsCard(node, mkBox("Manage rigs", "", "", "",
+    "Rename, reorder, duplicate or delete rigs. Prompts link to a rig by its name."));
 
   const rig = M.rigs[M.active];
   if (!rig) return;
@@ -12364,7 +12520,7 @@ function modelsBody(node, page) {
     const srcCard = document.createElement("div");
     srcCard.className = "rn-ws-card rn-ws-resolvecard";
     srcCard.appendChild(src);
-    if (curSub === "files") mwrap.appendChild(srcCard);
+    if (curSub === "files" && !node._rnRigManage) mwrap.appendChild(srcCard);
   }
   }
 
@@ -12884,7 +13040,7 @@ function modelsBody(node, page) {
       body.appendChild(cp);
     }
   }
-  if (curSub === "seed") seedLinksCard(node, mwrap);
+  if (curSub === "seed" && !node._rnRigManage) seedLinksCard(node, mwrap);
 }
 
 // LINKED SEEDS: the Seed tab's number is Main, which prompts, wildcards and every
