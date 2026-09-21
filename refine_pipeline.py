@@ -1095,7 +1095,8 @@ class RedNodeStudioDetailer:
                             # the subject over-drives a swap LoRA into noise.
                             if scene is not None:
                                 target = {"samples": torch.zeros(
-                                    (1, 4, scene.shape[1] // 8, scene.shape[2] // 8))}
+                                    (1, 4, scene.shape[1] // 8, scene.shape[2] // 8)),
+                                    "downscale_ratio_spacial": 8}
                             base = dict(_PRESETS.get(preset) or _PRESETS["Balanced"])
                             base.update(reference_fidelity=1.0, scene_fidelity=1.0,
                                         fit_mode="fit")

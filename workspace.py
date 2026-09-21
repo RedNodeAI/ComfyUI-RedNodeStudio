@@ -3189,7 +3189,10 @@ class RedNodeStudioWorkspace:
         if base_hw is not None:
             # 4 channels on purpose: comfy's fix_empty_latent_channels() re-shapes it to
             # whatever the sampled model wants, exactly as EmptyLatentImage relies on
-            latent = {"samples": torch.zeros((1, 4, base_hw[0] // 8, base_hw[1] // 8))}
+            # the 1/8 scale is named so core resizes it for a 1/16 model (Qwen Image 2.1);
+            # without it such a model renders at twice the width and height
+            latent = {"samples": torch.zeros((1, 4, base_hw[0] // 8, base_hw[1] // 8)),
+                      "downscale_ratio_spacial": 8}
 
         # The Paint tab deliberately does NOT touch these outputs. It used to feed
         # output_latent and edit_mask, which meant a normal queue quietly inherited
@@ -3543,7 +3546,8 @@ class RedNodeStudioWorkspace:
             if lc["random"]:
                 picks["latent"] = f"{lw} x {lh}"
                 print(f"[RedNode Workspace] rolled latent size: {lw} x {lh}", flush=True)
-            latent = {"samples": torch.zeros((lc["batch"], 4, lh // 8, lw // 8))}
+            latent = {"samples": torch.zeros((lc["batch"], 4, lh // 8, lw // 8)),
+                      "downscale_ratio_spacial": 8}
 
         # output_latent must never leave here as None. It used to be allowed to, and a
         # None travelling down a LATENT wire does not fail here where the cause is: it
@@ -3560,7 +3564,8 @@ class RedNodeStudioWorkspace:
             fw = fh = int(cfg["resize"] or 1024) or 1024
             if i2i_img is not None:
                 fh, fw = int(i2i_img.shape[1]) // 8 * 8, int(i2i_img.shape[2]) // 8 * 8
-            latent = {"samples": torch.zeros((1, 4, max(8, fh // 8), max(8, fw // 8)))}
+            latent = {"samples": torch.zeros((1, 4, max(8, fh // 8), max(8, fw // 8))),
+                      "downscale_ratio_spacial": 8}
             print(f"[RedNode Workspace] the i2i pass could not deliver a latent, so "
                   f"output_latent is an empty {fw} x {fh} canvas instead of nothing. A "
                   "None here would have crashed your sampler blaming its own node. See "
@@ -4478,7 +4483,8 @@ class RedNodeStudioWorkspace:
                 if _lat is None:
                     _lc = cfg["latent"]
                     _lat = {"samples": torch.zeros(
-                        [_lc["batch"], 16, _lc["h"] // 8, _lc["w"] // 8])}
+                        [_lc["batch"], 16, _lc["h"] // 8, _lc["w"] // 8]),
+                        "downscale_ratio_spacial": 8}
                 from . import rig_chain as _rigc
                 _chain0 = _rigc.rig_for(_ar)
                 print("[RedNode Workspace] %s: seed %d, %d steps, "
@@ -4760,12 +4766,23 @@ class RedNodeStudioWorkspace:
                                           if r.get("name") == _rig_p), None)
                                     if _rig_p else _ar) or {}
                         _pkey = "pass%d" % (_p + 1)
+                        # a fresh canvas is Generate whatever the pass count; only a
+                        # real Img2Img pass is called one
                         _plabel = "Pass %d · %s" % (
                             _p + 1, "Refine" if _p > 0
-                            else ("Generate" if _pass_what == "latent" else "Img2Img"))
+                            else ("Img2Img" if _i2i_run else "Generate"))
                         try:
-                            _psz = [int(_out["samples"].shape[-1]) * 8,
-                                    int(_out["samples"].shape[-2]) * 8]
+                            # the picture size by the latent's own scale: 1/8 for a
+                            # tagged blank canvas, else the model's (Qwen 2.1 is 1/16)
+                            _ratio = _out.get("downscale_ratio_spacial")
+                            if not _ratio:
+                                try:
+                                    _ratio = _model_p.get_model_object(
+                                        "latent_format").spacial_downscale_ratio
+                                except Exception:
+                                    _ratio = 8
+                            _psz = [int(_out["samples"].shape[-1]) * int(_ratio),
+                                    int(_out["samples"].shape[-2]) * int(_ratio)]
                             _pbatch = int(_out["samples"].shape[0])
                         except Exception:
                             _psz, _pbatch = None, 1

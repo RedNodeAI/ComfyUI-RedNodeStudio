@@ -389,7 +389,8 @@ class RedNodeCameraStudio:
         latent = None
         if st["auto_latent"]:
             import torch
-            latent = {"samples": torch.zeros([st["latent_batch"], 16, h // 8, w // 8])}
+            latent = {"samples": torch.zeros([st["latent_batch"], 16, h // 8, w // 8]),
+                      "downscale_ratio_spacial": 8}
         if count == 1:
             print("[RedNode Camera Studio] %d subject(s), lens %dmm, %s; auto latent %s: "
                   "%d x %d (%s)"
