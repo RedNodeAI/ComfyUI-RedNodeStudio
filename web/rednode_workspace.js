@@ -19,7 +19,7 @@ import { batchStrip, sourceSwitch, sourceView,
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ICONS, RAIL_ICONS } from "./rednode_ws_icons.js";
-import { TAB_ORDER, RAIL_GROUPS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
+import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
@@ -156,12 +156,25 @@ css.textContent = `
 .rn-ws-shell.right .rn-ws-railgrip{margin:0 -6px 0 -8px}
 .rn-ws-shell.right .rn-ws-rail{border-right:0;border-left:1px solid #262a31;padding:4px 2px 4px 6px}
 .rn-ws-shell.right .rn-ws-railhead{justify-content:flex-start}
+/* THE COLOUR BARS FACE THE PAGES: on the left the rail mirrors, bars on its right
+   edge and each tab reading icon, light, name back from it; on the right it is as
+   drawn above (the user, 2026-09-21) */
+.rn-ws-shell:not(.right) .rn-ws-rgroup{border-left:0;border-right:3px solid var(--rn-g,#4a5058);
+  padding-left:0;padding-right:7px}
+.rn-ws-shell:not(.right) .rn-ws-rglab{text-align:right}
+.rn-ws-shell:not(.right) .rn-ws-tab.rail{flex-direction:row-reverse;text-align:right}
+.rn-ws-shell:not(.right) .rn-ws-rail.compact .rn-ws-rgroup{padding-right:3px}
 .rn-ws-railhead{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex:none}
 .rn-ws-rail.compact .rn-ws-railhead{flex-direction:column;align-items:stretch}
 .rn-ws-railhead .rn-ws-tuck{margin-left:0}
 .rn-ws-railtog{background:#1b1e23;border:1px solid #2a2e35;border-radius:6px;color:#9aa0a8;
   cursor:pointer;padding:4px 6px;display:flex;align-items:center;justify-content:center}
 .rn-ws-railtog:hover{color:#fff;border-color:#3d434c}
+.rn-ws-railpreset{flex:1 1 auto;min-width:30px;gap:5px;justify-content:flex-start;overflow:hidden}
+.rn-ws-railpreset .pi{display:flex;flex:none}
+.rn-ws-railpreset .pn{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.rn-ws-rail.compact .rn-ws-railpreset .pn{display:none}
+.rn-ws-rail.compact .rn-ws-railpreset{justify-content:center}
 .rn-ws-rgroup{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--rn-g,#4a5058);
   padding-left:7px;border-radius:1px}
 .rn-ws-rglab{font-size:11px;color:#8a919b;padding:1px 2px 3px;letter-spacing:.02em}
@@ -1151,6 +1164,85 @@ onWsPrefChange((key) => {
 // ADVANCED CAN NEVER BE HIDDEN because it is the way back to the control that
 // unhides things. A stored list that somehow names it is corrected here rather
 // than honoured.
+// ---- UI presets: which tabs the rail shows ------------------------------------
+// A preset is a list of the tabs shown; applying one writes the hidden set the
+// Advanced checklist already keeps, so the two can never disagree. Advanced is
+// always shown. The shipped ones first, then the ones saved on the Advanced tab.
+function savedTabPresets() {
+  const raw = wsPref("TabPresets", {});
+  const known = new Set(TAB_ORDER.map((t) => t.id));
+  const out = [];
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [name, ids] of Object.entries(raw)) {
+      if (!String(name).trim() || !Array.isArray(ids)) continue;
+      out.push({ name: String(name), tabs: ids.map(String).filter((id) => known.has(id)), saved: true });
+    }
+  }
+  return out;
+}
+
+export function allTabPresets() {
+  return [...RAIL_PRESETS, ...savedTabPresets()];
+}
+
+// the preset whose tabs are exactly the ones shown now, or null
+function currentTabPreset() {
+  const hidden = hiddenTabSet();
+  const shown = TAB_ORDER.map((t) => t.id).filter((id) => id === "advanced" || !hidden.has(id));
+  const key = (ids) => [...new Set([...ids, "advanced"])].sort().join(",");
+  const now = key(shown);
+  return allTabPresets().find((p) => key(p.tabs) === now) || null;
+}
+
+function applyTabPreset(node, preset) {
+  const want = new Set([...preset.tabs, "advanced"]);
+  setWsPref("HiddenTabs", TAB_ORDER.map((t) => t.id).filter((id) => !want.has(id)));
+  render(node);
+}
+
+function openPresetMenu(node, anchor) {
+  document.querySelector(".rn-ws-menu")?.remove();
+  const m = document.createElement("div");
+  m.className = "rn-ws-menu rn-ws-presetmenu";
+  for (const k of ["pointerdown", "click", "contextmenu"]) {
+    m.addEventListener(k, (e) => e.stopPropagation());
+  }
+  const cur = currentTabPreset();
+  const note = (text) => {
+    const n = document.createElement("div");
+    n.className = "note";
+    n.textContent = text;
+    m.appendChild(n);
+  };
+  note("UI preset: the tabs shown");
+  let savedYet = false;
+  for (const p of allTabPresets()) {
+    if (p.saved && !savedYet) {
+      savedYet = true;
+      const sep = document.createElement("div");
+      sep.className = "sep";
+      m.appendChild(sep);
+    }
+    const bt = document.createElement("button");
+    bt.textContent = (cur?.name === p.name ? "\u2713 " : "") + p.name;
+    bt.dataset.preset = p.name;
+    bt.onclick = () => { m.remove(); applyTabPreset(node, p); };
+    m.appendChild(bt);
+  }
+  note("Save your own from the Advanced tab.");
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect?.() || { left: 0, bottom: 0 };
+  m.style.left = Math.max(6, Math.min(r.left, (window.innerWidth || 1920) - 236)) + "px";
+  m.style.top = (r.bottom + 4) + "px";
+  const close = (e) => {
+    if (!m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener("pointerdown", close, true);
+    }
+  };
+  document.addEventListener("pointerdown", close, true);
+}
+
 function hiddenTabSet() {
   const raw = wsPref("HiddenTabs", []);
   const known = new Set(TAB_ORDER.map((t) => t.id));
@@ -1733,6 +1825,9 @@ export function readCfg(node) {
   if (typeof d.paint.adv_open !== "boolean") d.paint.adv_open = false;
   const uiS = parseFloat(d.ui_scale);
   d.ui_scale = Number.isFinite(uiS) ? Math.max(0.7, Math.min(4, uiS)) : 1;
+  // the tab rail's size, apart from the pages' (a view setting; the server ignores it)
+  const rlS = parseFloat(d.rail_scale);
+  d.rail_scale = Number.isFinite(rlS) ? Math.max(0.7, Math.min(4, rlS)) : 1;
   if (typeof d.paint.renderer !== "string") d.paint.renderer = "";
   d.paint.invert = !!d.paint.invert;
   d.paint.use_loras = !!d.paint.use_loras;
@@ -6459,6 +6554,41 @@ function paintLorasBody(node, body) {
 // THE WORKSPACE CARD on Advanced: the settings for the whole node that used to crowd
 // the footer. Resize and the studio preset change renders. The workspace presets live
 // on the Overview (workspacePresetCard); this card only points there.
+// A SIZE: a slider and a typed percent for one of the panel's zooms. The number
+// tracks the drag and the zoom waits for release: the slider lives inside what the
+// zoom resizes, and applying live moved it under the pointer mid-drag.
+function sizeControl(node, key, tip) {
+  const cfg = node._rnCfg;
+  const rng = document.createElement("input");
+  rng.type = "range";
+  rng.min = 0.7; rng.max = 4; rng.step = 0.05;
+  rng.value = cfg[key] || 1;
+  rng.style.width = "180px";
+  rng.dataset.choice = key;
+  rng.title = tip;
+  const val = document.createElement("input");
+  val.type = "text";
+  val.inputMode = "numeric";
+  val.dataset.choice = key + "_typed";
+  val.style.cssText = "background:#15171b;border:1px solid #33373d;border-radius:5px;"
+                    + "color:#ddd;font-size:11px;padding:4px 6px;width:48px;text-align:right";
+  val.value = `${Math.round((cfg[key] || 1) * 100)}%`;
+  val.title = "Type a percent, 70 to 400, and press enter.";
+  const set = (v) => {
+    cfg[key] = Math.max(0.7, Math.min(4, v));
+    writeCfg(node);
+    render(node);          // render owns the effective-zoom math, one place only
+  };
+  rng.addEventListener("input", () => { val.value = `${Math.round(parseFloat(rng.value) * 100)}%`; });
+  rng.addEventListener("change", () => set(Math.round(parseFloat(rng.value) * 20) / 20));
+  val.addEventListener("change", () => {
+    const n = parseFloat(String(val.value).replace("%", "").trim());
+    if (Number.isFinite(n)) set(n / 100);
+    else val.value = `${Math.round((cfg[key] || 1) * 100)}%`;
+  });
+  return [rng, val];
+}
+
 function workspaceCard(node, body) {
   const cfg = node._rnCfg;
   const card = document.createElement("div");
@@ -6481,6 +6611,16 @@ function workspaceCard(node, body) {
     h.textContent = help;
     card.append(r, h);
   };
+  // THE SIZES, here since the footer went (2026-09-21): the pages and the tab rail
+  // apart, so a big page does not mean a big rail
+  line("Page size", sizeControl(node, "ui_scale",
+         "Size of everything in the pages: text, sliders, buttons, thumbnails. Applies "
+         + "when you let go. The node does not grow: the pages scroll for the rest."),
+       "The pages beside the tab rail. The node itself stays the same size.");
+  line("Tab rail size", sizeControl(node, "rail_scale",
+         "Size of the tab rail on its own: icons, names and its buttons. Applies when "
+         + "you let go."),
+       "The tab rail, apart from the pages. Its width is dragged from its edge.");
   const resLab = document.createElement("span");
   resLab.className = "rn-ws-note";
   resLab.textContent = "Resize long edge";
@@ -6855,6 +6995,64 @@ function workspacePrefs(node, body) {
                       + "never the workflow.";
   vis.append(visLab, visWrap, visHint);
   sect.appendChild(vis);
+
+  // UI PRESETS: the tabs shown above, saved under a name for the rail's head
+  const pr = document.createElement("div");
+  pr.className = "rn-ws-row rn-ws-presetrow";
+  const prLab = document.createElement("span");
+  prLab.className = "hint";
+  prLab.style.cssText = "flex:none;width:110px";
+  prLab.textContent = "UI presets";
+  const prWrap = document.createElement("span");
+  prWrap.style.cssText = "display:flex;gap:4px;flex-wrap:wrap;flex:1 1 auto;min-width:0;"
+                       + "align-items:center";
+  const saveP = document.createElement("button");
+  saveP.className = "rn-ws-btn";
+  saveP.dataset.choice = "preset_save";
+  saveP.style.cssText = "width:auto;padding:3px 12px";
+  saveP.textContent = "Save shown tabs as a preset";
+  saveP.title = "Keep the tabs shown now under a name, to pick from the rail's head.";
+  saveP.onclick = () => {
+    const name = (window.prompt("Name this UI preset") || "").trim().slice(0, 32);
+    if (!name) return;
+    if (RAIL_PRESETS.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      alert(`"${name}" is one of the presets that ship with the pack. Pick another name.`);
+      return;
+    }
+    const hid = hiddenTabSet();
+    const shown = TAB_ORDER.map((t) => t.id).filter((id) => id === "advanced" || !hid.has(id));
+    const all = { ...(wsPref("TabPresets", {}) || {}) };
+    all[name] = shown;
+    setWsPref("TabPresets", all);
+    render(node);
+  };
+  prWrap.appendChild(saveP);
+  for (const p of savedTabPresets()) {
+    const chip = document.createElement("span");
+    chip.className = "rn-ws-chip rn-ws-savedpreset";
+    chip.dataset.preset = p.name;
+    chip.textContent = p.name + " ";
+    const del = document.createElement("button");
+    del.className = "rn-ws-btn";
+    del.style.cssText = "width:auto;padding:0 6px;height:18px;margin-left:4px";
+    del.textContent = "\u00d7";
+    del.title = `Delete the "${p.name}" preset. The tabs shown now stay as they are.`;
+    del.onclick = () => {
+      const all = { ...(wsPref("TabPresets", {}) || {}) };
+      delete all[p.name];
+      setWsPref("TabPresets", all);
+      render(node);
+    };
+    chip.appendChild(del);
+    prWrap.appendChild(chip);
+  }
+  const prHint = document.createElement("span");
+  prHint.className = "hint";
+  prHint.style.cssText = "flex:0 1 320px;min-width:0";
+  prHint.textContent = "The pack ships All, Basic, New image, Image to image, Edit, Paint and "
+                     + "Finishing. This install only, never the workflow.";
+  pr.append(prLab, prWrap, prHint);
+  sect.appendChild(pr);
 
   // ---- VRAM: hand the card back when it has been full and idle ---------------
   // On the tab rather than only in the settings dialog, at : a
@@ -18151,6 +18349,10 @@ export function render(node) {
   rail.className = "rn-ws-rail" + (compact ? " compact" : "");
   const onRight = node.properties?.rn_rail_side === "right";
   const railW = Number(node.properties?.rn_rail_w) || 0;
+  // THE RAIL'S OWN SIZE: the host zooms by the panel size, so the rail zooms by the
+  // ratio and ends up at its own size whatever the pages are set to
+  const railZoom = (cfg.rail_scale || 1) / (cfg.ui_scale || 1);
+  if (Math.abs(railZoom - 1) > 0.001) rail.style.zoom = String(railZoom);
   if (railW) rail.style.width = Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, railW)) + "px";
   const railHead = document.createElement("div");
   railHead.className = "rn-ws-railhead";
@@ -18186,7 +18388,22 @@ export function render(node) {
     (node.properties ||= {}).rn_rail_side = onRight ? "left" : "right";
     render(node);
   };
-  railHead.append(railTog, railFull, railSide);
+  // THE UI PRESET, between the side switch and the spanner: which tabs are shown
+  const curPreset = currentTabPreset();
+  const railPreset = document.createElement("button");
+  railPreset.className = "rn-ws-railtog rn-ws-railpreset";
+  const presetIc = document.createElement("span");
+  presetIc.className = "pi";
+  presetIc.innerHTML = RAIL_ICONS.preset;
+  const presetName = document.createElement("span");
+  presetName.className = "pn";
+  presetName.textContent = curPreset ? curPreset.name : "Custom";
+  railPreset.append(presetIc, presetName);
+  railPreset.title = "UI preset: " + (curPreset ? curPreset.name : "Custom")
+    + ". Pick which tabs the rail shows for the work at hand. Hidden tabs keep "
+    + "working; save your own on the Advanced tab.";
+  railPreset.onclick = (e) => { e.stopPropagation(); openPresetMenu(node, railPreset); };
+  railHead.append(railTog, railFull, railSide, railPreset);
   rail.appendChild(railHead);
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
@@ -18330,78 +18547,8 @@ export function render(node) {
   try { node._rnAfterMount?.(); } catch (e) { /* a restore is never worth a broken panel */ }
   node._rnAfterMount = null;
   node._rnBodyEl = body;
-  const foot = document.createElement("div");
-  foot.className = "rn-ws-foot";
-  // Panel size, in the panel, next to the other things that apply to the whole panel.
-  // Same shape as the Thumbs slider on the gallery tabs, for the same reason: you set
-  // it while looking at the thing it changes, not in a dialog two clicks away.
-  const uiWrap = document.createElement("span");
-  uiWrap.className = "rn-ws-thumbs";
-  const uiLab = document.createElement("span");
-  uiLab.className = "t";
-  uiLab.textContent = "UI";
-  const uiRng = document.createElement("input");
-  uiRng.type = "range";
-  uiRng.min = 0.7; uiRng.max = 4; uiRng.step = 0.05;
-  uiRng.value = cfg.ui_scale;
-  uiRng.style.width = "160px";
-  uiRng.title = "Size of everything in this panel: text, sliders, buttons, thumbnails. "
-              + "Applies when you let go. The node itself does not move or grow: "
-              + "bigger content means fewer things per row inside the same frame, and "
-              + "the panel scrolls for the rest.";
-  // Typed, for when the slider is too coarse: 165 then enter.
-  const uiVal = document.createElement("input");
-  uiVal.type = "text";
-  uiVal.inputMode = "numeric";
-  uiVal.style.cssText = "background:#15171b;border:1px solid #33373d;"
-                     + "border-radius:5px;color:#ddd;font-size:11px;padding:4px 6px;"
-                     + "width:48px";
-  uiVal.style.textAlign = "right";
-  uiVal.value = `${Math.round(cfg.ui_scale * 100)}%`;
-  uiVal.title = "Type a percent, 70 to 400, and press enter.";
-  const setScale = (v) => {
-    cfg.ui_scale = Math.max(0.7, Math.min(4, v));
-    uiRng.value = cfg.ui_scale;
-    uiVal.value = `${Math.round(cfg.ui_scale * 100)}%`;
-    writeCfg(node);
-    render(node);          // render owns the effective-zoom math, one place only
-  };
 
-  // The number tracks the drag; the ZOOM waits for release. The slider lives inside
-  // the very container the zoom resizes, so applying live moved the slider under the
-  // pointer mid-drag and the drag chased its own tail. Applying on release is not a
-  // compromise here, it is the only version that is not fighting itself.
-  uiRng.addEventListener("input", () => {
-    uiVal.value = `${Math.round(parseFloat(uiRng.value) * 100)}%`;
-  });
-  uiRng.addEventListener("change", () => {
-    setScale(Math.round(parseFloat(uiRng.value) * 20) / 20);
-  });
-  uiVal.addEventListener("change", () => {
-    const n = parseFloat(String(uiVal.value).replace("%", "").trim());
-    if (Number.isFinite(n)) setScale(n / 100);
-    else uiVal.value = `${Math.round(cfg.ui_scale * 100)}%`;
-  });
-  uiWrap.append(uiLab, uiRng, uiVal);
-  foot.appendChild(uiWrap);
-  // Draft and the VRAM limit moved to the Run tab (rednode_ws_run.js), beside the
-  // Generate they change
-  const cog = document.createElement("button");
-  cog.className = "rn-ws-cog";
-  cog.textContent = "⚙";
-  cog.title = "Save or delete workspace presets.";
-  cog.onclick = () => openCog(node, cog);
-  foot.append(cog);
-  // INSIDE the host, not on the wrap. The host carries the UI zoom, and a sibling
-  // placed after a zoomed flex item is laid out against the UNZOOMED height, so at any
-  // scale above 1 the foot rendered part-way up the panel, floating over the effect
-  // cards. In the zoomed flow it sits where the eye expects, at the end, and it scales
-  // with the controls it belongs to.
-  foot.style.zoom = Math.abs((cfg.ui_scale || 1) - 1) < 0.001
-    ? "" : String(1 / cfg.ui_scale);
-  host.appendChild(foot);
-  // the kept scroll goes back now, with the footer in: restored before it, a place
-  // near the bottom was clamped short by the footer's height
+  // the kept scroll goes back now, with the body in the page
   node._rnBodyTab = viewKey;
   if (previousBody && previousBodyTab === viewKey) {
     body.scrollTop = previousScroll;
@@ -18718,54 +18865,6 @@ async function fetchPresetNames(node) {
     const d = await r.json();
     refreshPresetList(node, d?.presets || []);
   } catch (e) { /* the list simply stays as it is */ }
-}
-
-function openCog(node, anchor) {
-  document.querySelector(".rn-ws-panel")?.remove();
-  const m = document.createElement("div");
-  m.className = "rn-ws-panel";
-  for (const t of ["pointerdown", "pointerup", "click", "dblclick", "keydown", "contextmenu"]) {
-    m.addEventListener(t, (e) => e.stopPropagation());
-  }
-  const h = document.createElement("h5");
-  h.textContent = "Workspace presets";
-  const inp = document.createElement("input");
-  inp.placeholder = "Preset name, e.g. red dress shoot";
-  const note = document.createElement("div");
-  note.className = "rn-ws-note";
-  note.textContent = "A preset stores the whole workspace: galleries, selections, masks, dials. "
-                   + "Filenames only, so it is per-machine.";
-
-  const save = document.createElement("button");
-  save.textContent = "Save this workspace as a preset";
-  save.onclick = async () => {
-    const name = inp.value.trim();
-    if (!name) { note.textContent = "Give the preset a name first"; return; }
-    try {
-      const res = await api.fetchApi("/rednode/workspace_presets", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", name, config: node._rnCfg }),
-      });
-      const d = await res.json();
-      if (d.error) throw new Error(d.error);
-      refreshPresetList(node, d.presets || []);
-      note.textContent = `Saved "${name}"`;
-    } catch (e) { note.textContent = `Could not save: ${e.message}`; }
-  };
-
-  const where = document.createElement("div");
-  where.className = "rn-ws-note";
-  where.textContent = "Loading and deleting live at the top of the Overview tab, under Workspace preset.";
-  m.append(h, inp, save, note, where);
-  document.body.appendChild(m);
-  const r = anchor.getBoundingClientRect();
-  // the cog sits at the node's bottom edge, so the panel opens UPWARD — downward put it
-  // off-screen, the same trap the LoRA stack cog already solved
-  const mh = m.getBoundingClientRect().height || 220;
-  m.style.left = Math.max(6, Math.min(r.right - 300, (window.innerWidth || 1920) - 306)) + "px";
-  m.style.top = Math.max(6, r.top - mh - 6) + "px";
-  const close = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("pointerdown", close, true); } };
-  setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
 }
 
 // ---- build -----------------------------------------------------------------

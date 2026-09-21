@@ -182,6 +182,16 @@ const WS_PREFS = [
     type: "hidden",
     defaultValue: [],
   },
+  {
+    // the rail's saved UI presets, {name: [tab ids shown]}, saved from the Advanced tab
+    id: "RedNode.Workspace.TabPresets",
+    name: "Workspace UI presets",
+    category: ["RedNode", "Workspace", "UI presets"],
+    tooltip: "Managed from the Workspace's Advanced tab: which tabs the rail shows, "
+           + "saved under a name and picked from the rail's head.",
+    type: "hidden",
+    defaultValue: {},
+  },
 ];
 
 /** Read a RedNode setting, with the default if the store has nothing yet. */

@@ -107,14 +107,30 @@ export const TAB_ORDER = [
 // THE RAIL'S GROUPS, top to bottom: a heading and a colour bar each, over the tabs
 // in it. Separate from TAB_ORDER's `group`, which still colours the tab CSS classes.
 export const RAIL_GROUPS = [
+  // Run first: it is the tab opened most, so it heads the rail (the user, 2026-09-21)
+  { id: "run", label: "Run", color: "#3b82f6", tabs: ["run"] },
   { id: "view", label: "View", color: "#2dd4bf", tabs: ["overview"] },
   { id: "model", label: "Model", color: "#a855f7", tabs: ["models", "prompts", "camera", "loras"] },
   { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "editor", "paint"] },
   { id: "mood", label: "Mood", color: "#e08a3c", tabs: ["moodboard"] },
   { id: "identity", label: "Identity", color: "#eab308", tabs: ["identity"] },
   { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["detailer", "post"] },
-  { id: "run", label: "Run", color: "#3b82f6", tabs: ["run"] },
   { id: "settings", label: "Settings", color: "#8a919b", tabs: ["advanced"] },
+];
+
+// THE RAIL'S UI PRESETS, shipped: which tabs a kind of work needs, the rest hidden.
+// Advanced is always shown whatever a preset says, since it is the way back.
+// Taken from the user's own rails (2026-09-21), plus Finishing.
+export const RAIL_PRESETS = [
+  { name: "All", tabs: TAB_ORDER.map((t) => t.id) },
+  { name: "Basic", tabs: ["overview", "models", "prompts", "loras", "latent", "run"] },
+  { name: "New image", tabs: ["overview", "prompts", "camera", "loras", "latent", "moodboard",
+                              "identity", "detailer", "post", "run"] },
+  { name: "Image to image", tabs: ["overview", "prompts", "loras", "i2i", "moodboard", "identity",
+                                   "detailer", "post", "run"] },
+  { name: "Edit", tabs: ["overview", "loras", "editor", "post", "run"] },
+  { name: "Paint", tabs: ["loras", "paint", "identity", "post", "run"] },
+  { name: "Finishing", tabs: ["overview", "editor", "detailer", "post", "run"] },
 ];
 
 // The Krea 2 Identity tab's sub-tabs: the tabs that feed the identity system. Their
