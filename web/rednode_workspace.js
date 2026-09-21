@@ -1696,6 +1696,12 @@ export function readCfg(node) {
     if (typeof r.scheduler !== "string") r.scheduler = "simple";
     if (typeof r.detailer_steps !== "number") r.detailer_steps = 8;
     // the i2i pair: "" means the pair above, which is every rig saved before it
+    // a sampler node from another pack (sampler_nodes.py parse_node); "" is built-in
+    if (!r.sampler_node || typeof r.sampler_node !== "object") r.sampler_node = {};
+    if (!SAMPLER_NODES.some(([id]) => id === r.sampler_node.id)) r.sampler_node.id = "";
+    if (typeof r.sampler_node.eta !== "number") r.sampler_node.eta = 0.5;
+    if (typeof r.sampler_node.sampler_name !== "string") r.sampler_node.sampler_name = "res_2m";
+    if (typeof r.sampler_node.bongmath !== "boolean") r.sampler_node.bongmath = true;
     if (typeof r.i2i_sampler !== "string") r.i2i_sampler = "";
     if (typeof r.i2i_scheduler !== "string") r.i2i_scheduler = "";
     // THE KIND SURVIVES A LOAD. This used to clear anything but external/node, so a
@@ -11404,10 +11410,17 @@ async function fetchModelLists() {
     sam3: await pull("easy sam3ModelLoader", "model"),
     loras: await pull("LoraLoader", "lora_name"),
     samplers: await pull("KSampler", "sampler_name"),
+    // RES4LYF's own sampler list, for its ClownsharKSampler; empty without the pack
+    clownSamplers: await pull("ClownsharKSampler_Beta", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
   };
   return MODEL_LISTS;
 }
+// SAMPLER NODES from other packs a rig can sample through, mirroring
+// sampler_nodes.ADAPTERS: [id, label, the node, its pack]
+const SAMPLER_NODES = [["", "Built-in (ComfyUI KSampler)", "", ""],
+                       ["res4lyf_clownshark", "RES4LYF ClownsharKSampler", "ClownsharKSampler_Beta",
+                        "RES4LYF"]];
 // schedule shapes the pack builds itself (sampler_dials.py); a rig may name them
 const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 
@@ -12299,6 +12312,77 @@ function modelsBody(node, page) {
       sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
       pill(body, label, sel, hint);
     };
+    // THE SAMPLER NODE: ComfyUI's KSampler, or a sampler node from another pack
+    // that every call on this rig runs through instead (sampler_nodes.py)
+    group(body, "Sampler node", "Which node does the sampling for this rig.");
+    {
+      const SN = rig.sampler_node && typeof rig.sampler_node === "object"
+        ? rig.sampler_node : (rig.sampler_node = { id: "" });
+      // the same defaults readCfg gives, for a rig made since the last load
+      if (typeof SN.id !== "string") SN.id = "";
+      if (typeof SN.eta !== "number") SN.eta = 0.5;
+      if (typeof SN.sampler_name !== "string") SN.sampler_name = "res_2m";
+      if (typeof SN.bongmath !== "boolean") SN.bongmath = true;
+      const nsel = document.createElement("select");
+      nsel.className = "rn-ws-res";
+      nsel.dataset.choice = "sampler_node";
+      for (const [id, label] of SAMPLER_NODES) {
+        const o = document.createElement("option");
+        o.value = id;
+        o.textContent = label;
+        o.selected = (SN.id || "") === id;
+        nsel.appendChild(o);
+      }
+      nsel.onchange = () => { SN.id = nsel.value; writeCfg(node); render(node); };
+      const nodeHint = "Built-in samples with ComfyUI's KSampler. A pack's sampler node runs "
+        + "every render, pass and Detailer on this rig instead, with the numbers above and "
+        + "its own settings below. A pass that carries on the last one's noise, or stops "
+        + "part way, still uses the built-in sampler.";
+      pill(body, "Sampler node", nsel, nodeHint).classList.add("wide");
+      const ad = SAMPLER_NODES.find(([id]) => id === SN.id);
+      if (SN.id === "res4lyf_clownshark") {
+        const list = L.clownSamplers || [];
+        if (MODEL_LISTS && !list.length) {
+          const miss = document.createElement("div");
+          miss.className = "rn-ws-note rn-ws-peoplewarn rn-ws-samplernodemissing";
+          miss.textContent = `${ad[1]} comes with the ${ad[3]} pack, which is not installed, so `
+            + "this rig samples with the built-in sampler. Install it with ComfyUI Manager.";
+          body.appendChild(miss);
+        }
+        const ssel = document.createElement("select");
+        ssel.className = "rn-ws-res";
+        ssel.dataset.choice = "sampler_node_sampler";
+        for (const v of [...new Set([...list, SN.sampler_name])]) {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = v;
+          o.selected = v === SN.sampler_name;
+          ssel.appendChild(o);
+        }
+        ssel.onchange = () => { SN.sampler_name = ssel.value; writeCfg(node); };
+        pill(body, "RES4LYF sampler", ssel, "ClownsharKSampler's own sampler list, res_2m by "
+             + "default. The Sampler above is not used while this node samples.");
+        const eta = document.createElement("input");
+        eta.type = "number";
+        eta.step = "0.05";
+        eta.dataset.choice = "sampler_node_eta";
+        eta.value = String(SN.eta);
+        eta.style.cssText = "width:70px;background:#101216;border:1px solid #2a2e34;"
+          + "border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+        eta.onchange = () => {
+          const v = Number(eta.value);
+          if (Number.isFinite(v)) SN.eta = Math.max(-100, Math.min(100, v));
+          writeCfg(node);
+        };
+        pill(body, "Eta", eta, "The noise added and taken away each step. 0.5 by default; "
+             + "0 makes it deterministic.");
+        const bm = document.createElement("button");
+        bm.className = "rn-ws-sw" + (SN.bongmath ? " on" : "");
+        bm.dataset.choice = "sampler_node_bongmath";
+        bm.onclick = () => { SN.bongmath = !SN.bongmath; writeCfg(node); render(node); };
+        pill(body, "Bongmath", bm, "RES4LYF's bongmath. On by default.");
+      }
+    }
     group(body, "Image to image", "The pair an image to image run samples with.");
     i2iRow("I2I sampler", "i2i_sampler", L.samplers || [],
            "The sampler an IMAGE TO IMAGE run uses in place of the one above. The "

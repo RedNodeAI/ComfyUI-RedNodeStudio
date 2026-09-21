@@ -80,7 +80,19 @@ def parse_dials(r):
             "last": _num(de, "last", 0.0, 1.0, 0.3),
             "extra": int(round(_num(de, "extra", 0, 60, 4))),
         },
+        # a sampler node from another pack in place of ComfyUI's KSampler
+        # (sampler_nodes.py); rides the dials so every call that samples on the rig
+        # carries it
+        "node": _sampler_node(r.get("sampler_node")),
     }
+
+
+def _sampler_node(raw):
+    try:
+        from .sampler_nodes import parse_node
+    except ImportError:            # loaded as a plain file (tests)
+        from sampler_nodes import parse_node
+    return parse_node(raw)
 
 
 # ------------------------------------------------------------------ extra schedulers
@@ -350,6 +362,18 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
                              positive, negative, latent, denoise=denoise,
                              start_step=start_step, last_step=last_step, sigmas=sigmas)
     dials = dials or {}
+    # A SAMPLER NODE FROM ANOTHER PACK, named on the rig: it runs the call when it
+    # can express it, and hands it back to the built-in sampler when it cannot
+    if (dials.get("node") or {}).get("id"):
+        from . import sampler_nodes as _sn
+        if any_on(dials):
+            print("[RedNode sampler dials] the rig's sampler node runs this, so its "
+                  "Detail Daemon, Seed Variance and densify dials sit out", flush=True)
+        got = _sn.run(dials["node"], model, seed, steps, cfg, scheduler, positive, negative,
+                      latent, denoise=denoise, sigmas=sigmas, disable_noise=disable_noise,
+                      start_step=start_step, last_step=last_step)
+        if got is not None:
+            return got
     if sigmas is None and not any_on(dials) and scheduler not in EXTRA_SCHEDULERS:
         # only the keywords that differ from core's defaults travel, so a caller
         # (or a test's stand-in) that knows only denoise= keeps working
