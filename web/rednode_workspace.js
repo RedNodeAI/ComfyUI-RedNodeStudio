@@ -12,7 +12,7 @@ import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
-import { overviewBody, OVERVIEW_CSS } from "./rednode_ws_overview.js";
+import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
 import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
@@ -17860,6 +17860,85 @@ function applyTuck(node) {
   node.setDirtyCanvas?.(true, true);
 }
 
+// ---- the rail's right-click menu --------------------------------------------
+// The switches behind a tab, each the SAME config key its own page flips (the
+// Overview's boxSwitches where it has them), and Hide from the rail, which is the
+// Advanced tab's checklist: this install only, and it never turns anything off.
+function railSwitches(node, cfg, id) {
+  const tabs = cfg.tabs || {};
+  const I = tabs.i2i || {};
+  const flag = (name, obj, k, dflt = false) => !obj ? [] : [{
+    name, on: obj[k] === undefined ? dflt : !!obj[k], set: (v) => { obj[k] = !!v; } }];
+  if (id === "latent") return flag("Latent", cfg.latent, "on");
+  if (id === "i2i") return boxSwitches(node, cfg, "source");
+  if (id === "editor") {
+    return [...flag("Re-angle", I.reangle, "on"), ...flag("Realism", I.realism, "on"),
+            ...flag("Swap", I.swap, "on"), ...flag("Upscale", cfg.upscale, "on")];
+  }
+  if (["camera", "loras", "moodboard", "identity", "paint", "detailer", "post"].includes(id)) {
+    return boxSwitches(node, cfg, id);
+  }
+  return [];
+}
+
+function openRailMenu(node, t, ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  document.querySelector(".rn-ws-menu")?.remove();
+  const m = document.createElement("div");
+  m.className = "rn-ws-menu rn-ws-railmenu";
+  for (const k of ["pointerdown", "click", "contextmenu"]) {
+    m.addEventListener(k, (e) => e.stopPropagation());
+  }
+  const note = (text) => {
+    const n = document.createElement("div");
+    n.className = "note";
+    n.textContent = text;
+    m.appendChild(n);
+  };
+  const item = (label, fn) => {
+    const bt = document.createElement("button");
+    bt.textContent = label;
+    bt.onclick = () => { m.remove(); fn(); };
+    m.appendChild(bt);
+  };
+  note(t.label);
+  const sws = railSwitches(node, node._rnCfg, t.id);
+  for (const sw of sws) {
+    item((sw.on ? "Turn off " : "Turn on ") + sw.name, () => {
+      sw.set(!sw.on);
+      if (!sw.self) { writeCfg(node); render(node); }
+    });
+  }
+  if (!sws.length) note("No single switch. It is set on its page.");
+  if (t.id !== "advanced") {
+    const sep = document.createElement("div");
+    sep.className = "sep";
+    m.appendChild(sep);
+    const hidden = hiddenTabSet();
+    item(hidden.has(t.id) ? "Keep on the rail" : "Hide from the rail", () => {
+      const next = hiddenTabSet();
+      if (next.has(t.id)) next.delete(t.id);
+      else next.add(t.id);
+      setWsPref("HiddenTabs", [...next]);
+      render(node);
+    });
+    note("Hiding never turns it off. Bring it back from the Advanced tab.");
+  }
+  document.body.appendChild(m);
+  const mw = 230;
+  const mh = m.getBoundingClientRect?.().height || 140;
+  m.style.left = Math.max(6, Math.min(ev.clientX || 0, (window.innerWidth || 1920) - mw - 6)) + "px";
+  m.style.top = Math.max(6, Math.min(ev.clientY || 0, (window.innerHeight || 1080) - mh - 6)) + "px";
+  const close = (e) => {
+    if (!m.contains(e.target)) {
+      m.remove();
+      document.removeEventListener("pointerdown", close, true);
+    }
+  };
+  document.addEventListener("pointerdown", close, true);
+}
+
 // ---- render ----------------------------------------------------------------
 // Ordered the way a session actually flows: canvas first (latent, source image),
 // then the look, then the edit-node inputs (subject, people, scene, masks), then
@@ -18050,7 +18129,7 @@ export function render(node) {
     const b = document.createElement("button");
     b.className = "rn-ws-tab rail g-" + t.group + (t.id === cur ? " cur" : "");
     b.dataset.tab = t.id;
-    if (compact) b.title = t.label;
+    b.title = (compact ? t.label + ". " : "") + "Right-click to turn it on or off, or to hide it.";
     const ic = document.createElement("span");
     ic.className = "ic";
     ic.innerHTML = TAB_ICONS[t.id] || "";
@@ -18072,6 +18151,7 @@ export function render(node) {
       (node.properties ||= {}).rn_tab = t.id;   // so the reload lands back here
       render(node);
     };
+    b.addEventListener("contextmenu", (e) => openRailMenu(node, t, e));
     grp.appendChild(b);
     }
   }
