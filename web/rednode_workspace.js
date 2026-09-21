@@ -1286,6 +1286,8 @@ export function readCfg(node) {
       const rlStr = (k, dv) => { if (typeof RL[k] !== "string") RL[k] = dv; };
       const rlPick = (k, options, dv) => { if (!options.includes(RL[k])) RL[k] = dv; };
       if (typeof RL.on !== "boolean") RL.on = false;
+      rlPick("engine", ["exact", "alternative"], "exact");
+      rlNum("boost", 1);
       rlStr("lora", ""); rlNum("strength", 1);
       if (typeof RL.loras !== "boolean") RL.loras = true;
       rlStr("lora_set", "");
@@ -1305,7 +1307,7 @@ export function readCfg(node) {
       if (typeof RL.skip_pass !== "boolean") RL.skip_pass = false;
       // settings from the first version, which rebuilt the graph from this
       // pack's parts instead of running it; gone so they cannot mislead
-      for (const old of ["boost", "desaturate", "max_side", "system"]) delete RL[old];
+      for (const old of ["desaturate", "max_side", "system"]) delete RL[old];
       // RE-ANGLE, the viewpoint stage before the i2i pass (server: reangle.py)
       if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
       const R = t.reangle;
@@ -16098,7 +16100,8 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   const L = MODEL_LISTS || {};
   const open = (node._rnRealismOpen ||= { recipe: false, engine: false });
   const card = sectionCard("REALISM", "#8ad2f0",
-    !R.on ? "off" : (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
+    !R.on ? "off" : (R.engine === "alternative" ? "Alternative \u00b7 " : "Exact \u00b7 ")
+            + (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
             + (R.loras ? " \u00b7 with the stack" : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
 
@@ -16190,6 +16193,16 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       return open[key];
     };
 
+    // THE ENGINE, first: it decides what the rest of the page means
+    const eng = grid();
+    select(eng, "Engine", "engine",
+           [["exact", "Exact: the Anything2Real workflow"],
+            ["alternative", "Alternative: looser, a look of its own"]],
+           "Exact runs the workflow's own nodes in its order with its values, and "
+           + "needs its packs. Alternative is this pack's own rebuild of it: the "
+           + "source becomes a reference more than a copy, and it needs nothing extra.");
+    card.appendChild(eng);
+
     // WHAT CHANGES FROM PICTURE TO PICTURE, on the front
     const front = grid();
     select(front, "Conversion LoRA", "lora",
@@ -16198,6 +16211,12 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
            "The LoRA that does the converting. Without one there is nothing to convert "
            + "with, and the pass says so rather than handing the picture back.");
     num(front, "Strength", "strength", 0, 2, 0.05, "1.0 in the workflow.");
+    if (R.engine === "alternative") {
+      // the alternative's own dial: how hard its encoder holds the source
+      num(front, "Reference boost", "boost", 0, 3, 0.05,
+          "How hard the source is held. Keeping the picture and changing its medium "
+          + "pull against each other: 1.0 converts, 1.5 holds the illustration.");
+    }
     card.appendChild(front);
     toggle("Run the rig's LoRA stack too", "loras",
            "On: the LoRAs tab's stack goes under the conversion LoRA, the way the "

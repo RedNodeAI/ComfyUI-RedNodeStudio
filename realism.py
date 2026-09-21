@@ -23,6 +23,15 @@ rather than a copy. The workflow is the specification, so it runs as written.
             -> KSampler (8 steps, cfg 1, euler, beta57, denoise 1.0) -> VAEDecode
 
 The packs it needs are named up front, all of them, before anything loads.
+
+TWO ENGINES, chosen on the page, never switched between on their own:
+
+  exact        the workflow above. The default, and the one that matches it.
+  alternative  the first version, kept because its look is worth having: this
+               pack's own identity encoder with the reference method on, its own
+               resize and colour, and the pack's sampler. Looser than the
+               workflow, a reference more than a copy, which is the point of it.
+               Needs no third-party pack at all.
 """
 
 import json
@@ -47,6 +56,14 @@ NODES = {
 # has registered it; a different beta57 would not be the workflow's
 SCHEDULER_PACK = {"beta57": "RES4LYF", "bong_tangent": "RES4LYF"}
 ROUNDINGS = ("8", "16", "32", "64", "128", "256", "512", "None")
+ENGINES = ("exact", "alternative")
+# the alternative engine's instruction: it names the CHANGE rather than
+# describing the picture, which is what lets its reference boost sit at 1.0
+ALT_SYSTEM = ("Describe the key features of the input image (color, shape, size, "
+              "texture, objects, background), then explain how the user's text "
+              "instruction should alter or modify the image. Generate a new image that "
+              "meets the user's requirements while maintaining consistency with the "
+              "original input where appropriate.")
 _RESULT_CACHE = []
 _CACHE_KEEP = 4
 
@@ -72,6 +89,10 @@ def parse(raw):
 
     return {
         "on": bool(r.get("on", False)),
+        "engine": pick("engine", ENGINES, "exact"),
+        # alternative only: how hard the encoder holds the source. 1.0 converts
+        # with the instruction below; 1.5 holds the illustration.
+        "boost": num("boost", 1.0, 0.0, 3.0),
         # the conversion LoRA: the user's own download, so no file is named here
         "lora": str(r.get("lora") or ""),
         "strength": num("strength", 1.0, 0.0, 2.0),
@@ -118,7 +139,12 @@ def _registry():
 
 
 def missing(rc):
-    """Every pack this run needs and does not have, named, before any load."""
+    """Every pack this run needs and does not have, named, before any load.
+
+    The alternative engine is this pack and core, so it needs nothing at all.
+    """
+    if rc.get("engine") == "alternative":
+        return []
     reg = _registry()
     out = sorted({pack for node, pack in NODES.items() if node not in reg})
     try:
@@ -161,6 +187,62 @@ def sampler_for(node_id, label):
         return _live.sampled(node_id, run, label=label)
     except Exception:
         return run
+
+
+def _prepared(image, rc):
+    """The alternative engine's picture: desaturated, bounded, snapped.
+
+    It reads the same recipe the exact engine does where the values mean the same
+    thing: the saturation cut, the rounding and the longest side.
+    """
+    img = image[:1, :, :, :3].float()
+    amount = max(0.0, -float(rc["saturation"])) / 100.0
+    if amount > 0:
+        lum = (img[..., 0] * 0.2126 + img[..., 1] * 0.7152 + img[..., 2] * 0.0722)
+        img = img * (1.0 - amount) + lum.unsqueeze(-1) * amount
+    h, w = int(img.shape[1]), int(img.shape[2])
+    snap = 16 if rc["round_to"] == "None" else max(16, int(rc["round_to"]))
+    scale = min(1.0, float(rc["longest"]) / max(h, w))
+    nh = max(snap, int(round(h * scale / snap)) * snap)
+    nw = max(snap, int(round(w * scale / snap)) * snap)
+    if (nh, nw) != (h, w):
+        import comfy.utils
+        moved = img.movedim(-1, 1)
+        img = comfy.utils.common_upscale(moved, nw, nh, "lanczos", "disabled").movedim(1, -1)
+    return img.clamp(0.0, 1.0)
+
+
+def alt_sampler_for(node_id, label):
+    """The pack's own sampler for the alternative engine, streamed.
+
+    Its beta57 is the pack's continuous curve rather than RES4LYF's stepped one,
+    part of why this engine looks the way it does. It returns the latent itself,
+    not core's one-tuple.
+    """
+    from . import sampler_dials as _dials
+    if node_id is None:
+        return _dials.sample_with_dials
+    try:
+        from . import live_preview as _live
+        return _live.sampled(node_id, _dials.sample_with_dials, label=label)
+    except Exception:
+        return _dials.sample_with_dials
+
+
+def _render_alternative(rc, source, model, clip, vae, seed, node_id):
+    """The first version: this pack's identity encoder, reference method on."""
+    src = _prepared(source, rc)
+    latent = {"samples": vae.encode(src)}
+    from .identity import Krea2IdentityEdit
+    positive = Krea2IdentityEdit().encode(
+        clip=clip, prompt=rc["prompt"], vae=vae, image=src,
+        grounding_px=int(rc["vl_size"]), ref_boost=rc["boost"],
+        ref_boost_a=rc["boost"], target_latent=latent, fit_mode="fit",
+        ref_t0_modulation=True, system_prompt=ALT_SYSTEM)[0]
+    negative = _call("CLIPTextEncode", clip=clip, text="")[0]
+    return alt_sampler_for(node_id, "realism")(
+        model, int(seed), int(rc["steps"]), float(rc["cfg"]), rc["sampler"],
+        rc["scheduler"], positive, negative, latent, denoise=1.0)
 
 
 def _engine(rc, cfg, ws):
@@ -226,6 +308,13 @@ def _render(rc, source, cfg, seed, node_id=None):
     model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
                         strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
 
+    if rc["engine"] == "alternative":
+        print("[RedNode Realism] alternative engine: %s on %s, boost %.2f, %d steps"
+              % (rc["lora"], rig_name or "the active rig", rc["boost"], rc["steps"]),
+              flush=True)
+        out = _render_alternative(rc, source, model, clip, vae, seed, node_id)
+        return _finish(key, _call("VAEDecode", samples=out, vae=vae)[0])
+
     # the picture, exactly as the workflow prepares it
     img = source[:1, :, :, :3]
     img = _call("ColorCorrect", image=img, temperature=0.0, hue=0.0, brightness=0.0,
@@ -257,9 +346,13 @@ def _render(rc, source, cfg, seed, node_id=None):
         model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
         negative=negative, latent_image=latent, denoise=1.0)[0]
-    image = _call("VAEDecode", samples=out, vae=vae)[0]
-    # out of inference mode, so nothing downstream trips over a tensor whose
-    # version counter is not tracked
+    return _finish(key, _call("VAEDecode", samples=out, vae=vae)[0])
+
+
+def _finish(key, image):
+    """Out of inference mode, cached, and handed back."""
+    # a plain tensor, so nothing downstream trips over one whose version counter
+    # is not tracked
     image = torch.from_numpy(image.detach().cpu().numpy())
     _RESULT_CACHE.append((key, image.clone()))
     del _RESULT_CACHE[:-_CACHE_KEEP]
