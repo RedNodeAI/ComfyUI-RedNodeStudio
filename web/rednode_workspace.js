@@ -1912,6 +1912,7 @@ export function readCfg(node) {
       if (typeof x[k] !== "string") x[k] = "";
     }
     x.kind = x.kind === "plain" ? "plain" : "krea2";
+    if (typeof x.lora_set !== "string") x.lora_set = "";     // "" = the rig's set
   }
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
   d.paint.on = !!d.paint.on;
@@ -2178,7 +2179,6 @@ export function setupProblems(node, cfg) {
     if (!ckpt && !rig.vae && !wired("vae")) out.push("No VAE chosen, so the picture cannot be decoded.");
   }
   const rows = cfg.prompts?.rows || [];
-  const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
   // a row an auto prompt feeds has words by queue time, even with its box empty
   const fed = new Set();
   for (const name of AUTO_TAB_IDS) {
@@ -2188,12 +2188,7 @@ export function setupProblems(node, cfg) {
   }
   const hasText = (row) => String(row.text || "").trim()
     || fed.has(row.name || `Prompt ${rows.indexOf(row) + 1}`);
-  const serves = rows.some((row) => hasText(row) && (rigsOf(row).includes(rig.name) || !rigsOf(row).length));
-  if (!serves) {
-    out.push(rows.some(hasText)
-      ? `No prompt serves ${rig.name}: every prompt with words is linked to another rig.`
-      : "No prompt yet. Write one on the Prompts tab.");
-  }
+  if (!rows.some(hasText)) out.push("No prompt yet. Write one on the Prompts tab.");
   return out;
 }
 
@@ -11369,9 +11364,6 @@ function renameRig(cfg, from, to) {
   for (const st of cfg.detailer?.stages || []) if (st?.rig === from) st.rig = to;
 }
 
-const promptsUsing = (cfg, name) => (cfg.prompts?.rows || []).filter((row) =>
-  (Array.isArray(row.rigs) ? row.rigs : [row.rig]).includes(name)).length;
-
 function manageRigsCard(node, card) {
   const cfg = node._rnCfg;
   const M = cfg.models;
@@ -11430,13 +11422,6 @@ function manageRigsCard(node, card) {
       w();
     });
     main.appendChild(name);
-    const used = promptsUsing(cfg, r.name);
-    if (used > 1) {
-      const u = document.createElement("div");
-      u.className = "used";
-      u.textContent = `Used by ${used} prompts. Renaming updates them.`;
-      main.appendChild(u);
-    }
     const fam = document.createElement("span");
     fam.className = "fam";
     fam.textContent = rigFamily(r);
@@ -12105,10 +12090,11 @@ function modelsBody(node, page) {
     // row's rig list (and out of the others), so one rig has one prompt.
     if (M.rigs.length && Array.isArray(cfg.prompts?.rows)) {
       const rows = cfg.prompts.rows;
-      const rigName = M.rigs[M.active]?.name || ("Rig " + (M.active + 1));
-      const rigsOf = (row) => (Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []));
-      const curIdx = rows.findIndex((row) => rigsOf(row).includes(rigName) && String(row.text || "").trim());
-      const fallbackIdx = curIdx >= 0 ? -1 : rows.findIndex((row) => !rigsOf(row).length && String(row.text || "").trim());
+      // THE PROMPT THAT RENDERS, on whichever rig is active: the Prompts tab's
+      // chosen row, picked here too
+      const hasW = (row) => String(row.text || "").trim();
+      const act = Number(cfg.prompts.active);
+      const curIdx = act >= 0 && act < rows.length ? act : rows.findIndex(hasW);
       const pwrap = document.createElement("div");
       pwrap.className = "rn-ws-activeprompt";
       pwrap.style.cssText = "display:flex;align-items:center;gap:6px";
@@ -12118,27 +12104,24 @@ function modelsBody(node, page) {
       pl.textContent = "Active prompt";
       const psel = document.createElement("select");
       psel.className = "rn-ws-select";
-      psel.title = "The Prompts-tab row this rig renders. Pick another to move the rig onto it "
-                 + "(one rig, one prompt). Rows are edited on the Prompts tab.";
-      const o0 = document.createElement("option");
-      o0.value = "-1";
-      o0.textContent = fallbackIdx >= 0 ? "(unlinked: " + (rows[fallbackIdx].name || "Prompt " + (fallbackIdx + 1)) + ")" : "(none)";
-      psel.appendChild(o0);
+      psel.dataset.choice = "active_prompt";
+      psel.title = "The Prompts-tab row that renders, on whichever rig is active.";
+      if (!rows.length) {
+        const o0 = document.createElement("option");
+        o0.value = "-1";
+        o0.textContent = "(none)";
+        psel.appendChild(o0);
+      }
       rows.forEach((row, j) => {
         const o = document.createElement("option");
         o.value = String(j);
-        o.textContent = (row.name || "Prompt " + (j + 1)) + (rigsOf(row).length ? "  [" + rigsOf(row).join(", ") + "]" : "");
+        o.textContent = (row.name || "Prompt " + (j + 1)) + (hasW(row) ? "" : "  (empty)");
         o.selected = j === curIdx;
         psel.appendChild(o);
       });
       psel.onchange = () => {
         const j = parseInt(psel.value, 10);
-        rows.forEach((row) => {
-          if (!Array.isArray(row.rigs)) row.rigs = row.rig ? [row.rig] : [];
-          row.rigs = row.rigs.filter((x) => x !== rigName);
-          row.rig = row.rigs[0] || "";
-        });
-        if (j >= 0 && rows[j]) { rows[j].rigs.push(rigName); rows[j].rig = rows[j].rigs[0]; }
+        if (j >= 0) { cfg.prompts.active = j; node._rnPromptSel = j; }
         writeCfg(node); render(node);
       };
       const goP = document.createElement("button");
@@ -13331,14 +13314,11 @@ function promptsBody(node, body) {
       // THE ROW THAT RENDERS for the active rig, by the run's own rule: the
       // chosen row when it serves that rig and has words, else the first row
       // linked to it with words, else the first unlinked row with words
-      const activeRig = M.rigs[M.active]?.name || "";
-      const linksOf = (r) => (Array.isArray(r.rigs) ? r.rigs : (r.rig ? [r.rig] : [])).filter((x) => String(x || "").trim());
       const hasWords = (r) => String(r.text || "").trim().length > 0;
       const renders = (() => {
         const pick = R[node._rnPromptSel];
-        if (pick && hasWords(pick) && (linksOf(pick).includes(activeRig) || !linksOf(pick).length)) return pick;
-        return R.find((r) => linksOf(r).includes(activeRig) && hasWords(r))
-            || R.find((r) => !linksOf(r).length && hasWords(r)) || null;
+        if (pick && hasWords(pick)) return pick;
+        return R.find((r) => hasWords(r)) || null;
       })();
       R.forEach((row, i) => {
         const chip = document.createElement("button");
@@ -13350,14 +13330,11 @@ function promptsBody(node, body) {
         const nm = document.createElement("span");
         nm.textContent = row.name || ("Prompt " + (i + 1));
         chip.appendChild(nm);
-        {
-          const rigsOf = Array.isArray(row.rigs) ? row.rigs : (row.rig ? [row.rig] : []);
-          if (rigsOf.length) {
-            const rg = document.createElement("span");
-            rg.className = "rn-ws-note";
-            rg.textContent = rigsOf.join(" · ");
-            chip.appendChild(rg);
-          }
+        if (row.lora_set) {
+          const rg = document.createElement("span");
+          rg.className = "rn-ws-note";
+          rg.textContent = row.lora_set;
+          chip.appendChild(rg);
         }
         if (row === renders) {
           // the badge means "this one renders for the active rig", which is
@@ -13407,10 +13384,8 @@ function promptsBody(node, body) {
         const why = document.createElement("div");
         why.className = "rn-ws-note";
         why.style.cssText = "flex-basis:100%";
-        const lk = linksOf(editing);
         why.textContent = `Editing ${editing.name || "Prompt " + (node._rnPromptSel + 1)}, which `
-          + (hasWords(editing) ? `serves ${lk.join(", ")}` : "has no words yet")
-          + `. The active rig, ${activeRig || "none"}, renders ${renders.name || "Prompt " + (R.indexOf(renders) + 1)}.`;
+          + `has no words yet, so ${renders.name || "Prompt " + (R.indexOf(renders) + 1)} renders.`;
         bar.appendChild(why);
       }
       body.appendChild(bar);
@@ -13419,7 +13394,7 @@ function promptsBody(node, body) {
   const note = document.createElement("div");
   note.className = "rn-ws-note";
   note.textContent = R.length
-    ? "" : "No prompts yet. Add one, name it, and link it to a rig from the Models tab.";
+    ? "" : "No prompts yet. Add one and write it; the chosen prompt renders on the active rig.";
   if (note.textContent) body.appendChild(note);
 
   R.forEach((row, i) => {
@@ -13441,30 +13416,13 @@ function promptsBody(node, body) {
                        + "#33373d;border-radius:4px;color:#e8ecf1;font-size:13px;"
                        + "padding:4px 7px";
     name.addEventListener("change", () => { row.name = name.value; writeCfg(node); render(node); });
-    // RIGS: a chip per rig on
-    // the Models tab, click to include or drop; row.rig mirrors the first for
-    // older readers. No chip lit = an unlinked row that serves any rig.
-    const rigPick = document.createElement("div");
-    rigPick.className = "rn-ws-seg";
-    rigPick.title = "Which Models-tab rigs this prompt serves. Click to add or remove; "
-                  + "none lit = it serves any rig that has no prompt of its own.";
-    if (!Array.isArray(row.rigs)) row.rigs = row.rig ? [row.rig] : [];
-    cfg.models.rigs.forEach((r, j) => {
-      const nm = r.name || "Rig " + (j + 1);
-      const b = document.createElement("button");
-      b.className = "rn-ws-segb" + (row.rigs.includes(nm) ? " on" : "");
-      b.textContent = nm;
-      b.onclick = () => {
-        row.rigs = row.rigs.includes(nm) ? row.rigs.filter((x) => x !== nm) : [...row.rigs, nm];
-        row.rig = row.rigs[0] || "";
-        writeCfg(node); render(node);
-      };
-      rigPick.appendChild(b);
-    });
-    if (!cfg.models.rigs.length) {
-      const e = document.createElement("span"); e.className = "rn-ws-note"; e.textContent = "No rigs yet (Models tab)";
-      rigPick.appendChild(e);
-    }
+    // THE LORA SET this prompt renders with. Prompts no longer link to rigs: the
+    // chosen prompt renders on whichever rig is active.
+    if (typeof row.lora_set !== "string") row.lora_set = "";
+    const loraPick = loraSetSelect(node, cfg, () => row.lora_set, (v) => { row.lora_set = v; },
+      "Rig's set", "The LoRAs-tab set this prompt renders with. Rig's set leaves it to the "
+                 + "active rig's own LoRA set on the Models tab.");
+    loraPick.dataset.choice = "prompt_lora_set";
     const kind = segSwitch([
       ["krea2", "Frame box", "The prompt frame: Style, Subject, Surroundings, Light and "
                               + "colour and the camera, assembled into one paragraph, with "
@@ -13526,7 +13484,7 @@ function promptsBody(node, body) {
     size.oninput = () => { cfg.prompt_text_pct = Number(size.value); applyPct(); };
     size.onchange = () => { writeCfg(node); };
     applyPct();
-    head.append(field("Prompt name", name), field("Linked rigs", rigPick),
+    head.append(field("Prompt name", name), field("Linked LoRAs", loraPick),
                 field("Output box", kind), field("Text size", size), del);
     box.appendChild(head);
 

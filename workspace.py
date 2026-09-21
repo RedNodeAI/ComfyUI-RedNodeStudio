@@ -1517,6 +1517,10 @@ def parse_config(config_json):
             "kind": "plain" if p.get("kind") == "plain" else "krea2",
             "text": str(p.get("text") or ""),
             "negative": str(p.get("negative") or ""),
+            # THE LORA SET this prompt renders with: "" = the rig's set, "Main" or a
+            # named LoRAs-tab set. Prompts no longer link to rigs; the chosen row
+            # renders on whichever rig is active.
+            "lora_set": str(p.get("lora_set") or "")[:48],
             # the Frame editor's fields, kept as the panel wrote them. row["text"]
             # holds the ASSEMBLED prompt (the tab streams it in from the preview
             # route), so nothing downstream needs to re-run the assembly.
@@ -1893,45 +1897,26 @@ def _rig_cache_clear():
 
 
 def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
-    """The Prompts-tab row serving a rig; empty name means the active rig.
+    """The Prompts-tab row that renders: the one you chose, when it has words,
+    else the first row with words. None when no row has any, which callers must
+    treat as "no opinion", never as an empty prompt.
 
-    The first row linked to that rig WITH TEXT wins, so an empty draft row does not
-    blank a working prompt. None when nothing matches, which callers must treat as
-    "no opinion", never as an empty prompt.
+    Rows used to link to rigs and each rig found its own row. Since 2026-09-21 the
+    chosen row renders on whichever rig is active, and a Detailer pass names a row
+    when it wants another; `rig_name` is kept for the callers and ignored. Old
+    links in a saved workflow are simply not read.
     """
-    rigs = models_cfg.get("rigs") or []
-    want = str(rig_name or "").strip()
-    if (not want or want == "(active rig)") and rigs:
-        want = rigs[max(0, min(int(models_cfg.get("active", 0)),
-                               len(rigs) - 1))]["name"]
     rows = prompts_cfg.get("rows") or []
-    links = lambda row: (row.get("rigs") or ([row["rig"]] if row.get("rig") else []))
-    # THE CHOSEN ROW FIRST. The Prompts tab writes the row you picked as
-    # prompts.active; when it serves this rig (linked to it, or linked to
-    # nothing) and has words, it renders, whatever its place in the list.
-    # Two rows linked to one rig used to fall to whichever came first, while
-    # the tab badged the one you were editing as active.
     try:
-        _pick = int(prompts_cfg.get("active", -1))
+        pick = int(prompts_cfg.get("active", -1))
     except (TypeError, ValueError):
-        _pick = -1
-    if 0 <= _pick < len(rows):
-        row = rows[_pick]
+        pick = -1
+    if 0 <= pick < len(rows) and str(rows[pick].get("text") or "").strip():
+        return rows[pick]
+    for row in rows:
         if str(row.get("text") or "").strip():
-            lk = links(row)
-            if (want in lk) or not any(str(x or "").strip() for x in lk):
-                return row
-    for row in rows:
-        if want in links(row) and row["text"].strip():
-            return row
-    # An UNLINKED row serves any rig: with one rig on the tab, demanding the link
-    # be typed before anything renders is a tax, and an unlinked row with text is
-    # the obvious intent. An exact link still wins, so multi-rig stays exact.
-    for row in rows:
-        if not (row.get("rigs") or (row.get("rig") or "").strip()) and row["text"].strip():
             return row
     return None
-
 
 def rig_is_official(rec):
     """The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community
@@ -2260,10 +2245,18 @@ def camera_on(cfg):
 
 
 def rig_lora_set(cfg, name=""):
-    """The named rig's LoRA set (the active rig's when unnamed); "" = Main."""
+    """The named rig's LoRA set (the active rig's when unnamed); "" = Main.
+
+    For the active rig, the rendering prompt's own LoRA set wins when it names one;
+    left on "the rig's set" the rig decides, as before prompts carried one."""
     try:
         rigs = cfg.get("models", {}).get("rigs") or []
         want = str(name or "").strip()
+        _act = rigs[max(0, min(int(cfg["models"].get("active", 0)), len(rigs) - 1))] if rigs else None
+        if not want or want == "(active rig)" or (_act and want == _act.get("name")):
+            _row = prompt_row_for(cfg.get("models") or {}, cfg.get("prompts") or {})
+            if _row and str(_row.get("lora_set") or "").strip():
+                return str(_row["lora_set"])
         if want and want != "(active rig)":
             for r in rigs:
                 if r.get("name") == want:

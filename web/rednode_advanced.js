@@ -407,11 +407,8 @@ function promptRows() {
           const cfgW = n.widgets?.find((w) => w.name === "config");
           const rows = JSON.parse(cfgW?.value || "{}").prompts?.rows || [];
           rows.forEach((r, j) => {
-            const rigs = Array.isArray(r?.rigs) ? r.rigs : (r?.rig ? [r.rig] : []);
             const name = String(r?.name || "").trim();
-            out.push({ key: name || `#${j + 1}`,
-                       label: (name || `Prompt ${j + 1}`)
-                            + (rigs.length ? `  [${rigs.join(", ")}]` : "") });
+            out.push({ key: name || `#${j + 1}`, label: name || `Prompt ${j + 1}` });
           });
         } catch (e) { /* half-typed config */ }
       }
@@ -1726,7 +1723,7 @@ function buildPanel(node, hostEl = null) {
         // a chain no longer has to say the same thing on every pass.
         const rowsAvail = promptRows();
         const curRow = String(s.prompt_row || "");
-        const ropts = [["", "(rig's prompt)"], ...rowsAvail.map((r) => [r.key, r.label])];
+        const ropts = [["", "(active prompt)"], ...rowsAvail.map((r) => [r.key, r.label])];
         if (curRow && !rowsAvail.some((r) => r.key === curRow)) {
           ropts.push([curRow, curRow + " (missing)"]);
         }
@@ -1737,8 +1734,8 @@ function buildPanel(node, hostEl = null) {
           rsel.appendChild(o);
         }
         rsel.title = "Which Prompts-tab row this pass reads when the box beside it is "
-                   + "empty. (rig's prompt) is the row linked to the pass's rig, the "
-                   + "text the main render used. Typed text still wins.";
+                   + "empty. (active prompt) is the row the main render used. Typed "
+                   + "text still wins.";
         rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
         bottom.append(...A(lab("Prompt"), rsel));
         // WHERE THE WORDS COME FROM. The Subject tab's caption describes the
