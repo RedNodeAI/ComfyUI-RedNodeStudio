@@ -13864,7 +13864,7 @@ function editorTabs(node, body) {
   const issueOn = (id) => issues.some((x) => (x.about || x.sub) === id);
   const E = cfg.tabs.editor_src;
   const chips = [];
-  if (EDITOR_SUB_IDS.slice(1, 4).some((k) => t[k]?.on && (t[k].target || "source") === "source")) {
+  if (["reangle", "realism", "swap"].some((k) => t[k]?.on && (t[k].target || "source") === "source")) {
     chips.push({ sub: "esource", warn: !E.images?.length,
                  text: !E.images?.length ? "No source picture"
                    : E.to_pass ? "Edit into the pass" : "Edit is the output" });
