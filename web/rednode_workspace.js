@@ -18,7 +18,7 @@ import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
-import { TAB_ORDER, IDENTITY_SUBS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
+import { TAB_ORDER, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
@@ -840,6 +840,8 @@ css.textContent = `
 .s-realism{--rn-s:#8ad2f0}
 .s-swap{--rn-s:#e08fb0}
 .s-converter{--rn-s:#22a39f}
+.s-upscale{--rn-s:#b58ae0}
+.s-esource{--rn-s:#22c55e}
 .rn-ws-subt.tint{position:relative;overflow:hidden}
 .rn-ws-subt.tint::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
   border-radius:2px 2px 0 0;background:var(--rn-s,#4a5058);opacity:.75}
@@ -1144,12 +1146,13 @@ export const AUTO_ROW = "(auto)";
 // their auto switch is the tab's own switch and is on for everyone, so a default
 // there would wire up every install's captions without anyone asking.
 const INJECT_DEFAULT_TABS = ["subject", "scene", "moodboard", "i2i"];
-const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", ...TEXT_TAB_IDS]);
+const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", "editor_src",
+                                ...TEXT_TAB_IDS]);
 // Galleries are grouped into named COLLECTIONS ("red dress", "castle set"…). The legacy
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py
 // and old workflows read exactly what they always did.
 const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      "swap_ref", ...TEXT_TAB_IDS];
+                      "swap_ref", "editor_src", ...TEXT_TAB_IDS];
 // tabs that carry a built-in Prompt Converter, matching workspace.py
 const CONVERTER_TABS = ["i2i", "subject", "scene"];
 const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_style",
@@ -1254,8 +1257,20 @@ export function readCfg(node) {
   try { d = JSON.parse(w?.value || "{}"); } catch (e) { d = {}; }
   if (!d || typeof d !== "object") d = {};
   d.tabs = d.tabs && typeof d.tabs === "object" ? d.tabs : {};
+  // THE EDITOR'S SOURCE, for a workflow saved before it had one: the same copy
+  // workspace.py parse_config makes (Trap 13), so the panel shows what will run
+  if (!d.tabs.editor_src || typeof d.tabs.editor_src !== "object") {
+    const I0 = d.tabs.i2i && typeof d.tabs.i2i === "object" ? d.tabs.i2i : {};
+    const src = [I0.reangle, I0.realism, I0.swap].filter((x) => x && typeof x === "object"
+      && x.on && (x.target || "source") === "source");
+    const imgs = Array.isArray(I0.images) ? I0.images.filter((x) => String(x).trim()) : [];
+    if (src.length && I0.on && !I0.prompt_only && imgs.length) {
+      d.tabs.editor_src = { images: [...imgs], sel: typeof I0.sel === "number" ? I0.sel : 0,
+                            to_pass: !src.some((x) => x.skip_pass) };
+    }
+  }
   for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      "swap_ref", ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
+                      "swap_ref", "editor_src", ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
     const t = (d.tabs[name] = d.tabs[name] && typeof d.tabs[name] === "object" ? d.tabs[name] : {});
     t.images = Array.isArray(t.images) ? t.images : [];
     if (MULTI_TAB_IDS.includes(name)) t.sel = Array.isArray(t.sel) ? t.sel : (typeof t.sel === "number" ? [t.sel] : []);
@@ -1267,6 +1282,10 @@ export function readCfg(node) {
     t.auto = normaliseAutoUi(t.auto, autoMode, name);
     if (TEXT_TAB_IDS.includes(name)) t.auto.on = !!t.on;   // the tab's switch runs it
     if (name === "swap_ref") t.on = true;                  // Swap's switch decides
+    if (name === "editor_src") {
+      t.on = true;                                         // the stages' switches decide
+      t.to_pass = !!t.to_pass;                             // the hand-off to the pass
+    }
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
                                || Array.isArray(t.people_meta))) {
       t.people_meta = {};
@@ -10672,10 +10691,10 @@ function paintBody(node, body) {
     // as usable as a result. Declining on every other tab and on a clipboard with no
     // image leaves ComfyUI's own paste alone, including pasting copied NODES.
     panelPaste(host, (e) => {
-      // the Upscale tab takes a pasted picture the same way, into its own source:
+      // the Upscale page takes a pasted picture the same way, into its own source:
       // a screenshot is as good a thing to upscale as a render
       const key = node._rnTab === "paint" ? "paint"
-                : node._rnTab === "upscale" ? "upscale" : null;
+                : node._rnTab === "editor" && node._rnEdSub === "upscale" ? "upscale" : null;
       if (!key) return false;
       const file = clipboardImage(e);
       if (!file) return false;
@@ -13357,6 +13376,7 @@ function viewKeyOf(node, cur) {
       ? "i2i/auto/text/" + (node._rnTextSide || p.rn_text_side || "text_style")
       : "i2i/auto/i2i";
   }
+  if (cur === "editor") return "editor/" + (node._rnEdSub || p.rn_editor_sub || "reangle");
   if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
   if (cur === "moodboard") return "moodboard/" + (node._rnMbSub || p.rn_moodboard_sub || "gallery");
   if (cur === "run") return "run/" + (node._rnRunSub || p.rn_run_sub || "run");
@@ -13372,10 +13392,56 @@ function viewKeyOf(node, cur) {
 // ---- Img2Img as sub-tabs ---------------------------------------------------------
 // One section at a time under a strip of tabs, each with a light saying whether that
 // section is doing anything, and a status bar that stays put. The sections are the
-// same builders the stacked layout used; `flat` drops their own fold.
-const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PROMPT"],
-                  ["reangle", "RE-ANGLE"], ["realism", "REALISM"], ["swap", "SWAP"],
-                  ["converter", "CONVERTER"]];
+// same builders the stacked layout used; `flat` drops their own fold. Img2Img is the
+// pass system alone: Re-angle, Realism, Swap and the Converter are Editor pages now,
+// with their settings still under cfg.tabs.i2i.
+const I2I_SUBS = [["source", "SOURCE"], ["passes", "PASSES"], ["auto", "AUTO PROMPT"]];
+const I2I_PAGE_IDS = I2I_SUBS.map(([id]) => id);
+
+// Open the page a stage lives on, Img2Img's or the Editor's, from any chip or link
+export function openStagePage(node, id) {
+  const props = (node.properties ||= {});
+  if (EDITOR_SUB_IDS.includes(id)) {
+    node._rnTab = "editor"; props.rn_tab = "editor";
+    node._rnEdSub = id; props.rn_editor_sub = id;
+  } else {
+    node._rnTab = "i2i"; props.rn_tab = "i2i";
+    node._rnI2iSub = id; props.rn_i2i_sub = id;
+  }
+  render(node);
+}
+
+const stagePageName = (id) => String(I2I_SUBS.find(([x]) => x === id)?.[1]
+  || EDITOR_SUBS.find((x) => x.id === id)?.label || id).toLowerCase();
+
+// The chips and the issues box on a stage bar. A chip is one page with something to
+// say, in that page's colour; a click opens the page, and one that will not run goes
+// amber with the reason on hover. The issues box lists every reason, each a link.
+function stageChips(node, bar, chips, issues) {
+  for (const ch of chips) {
+    const c = document.createElement("button");
+    c.className = "rn-ws-chip rn-ws-i2ichip s-" + ch.sub + (ch.warn ? " warn" : "");
+    c.dataset.sub = ch.sub;
+    c.textContent = ch.text;
+    const why = issues.filter((x) => (x.about || x.sub) === ch.sub).map((x) => x.text);
+    c.title = (why.length ? why.join("\n") + "\n" : "") + "Opens the " + stagePageName(ch.sub) + " page.";
+    c.onclick = () => openStagePage(node, ch.sub);
+    bar.appendChild(c);
+  }
+  if (issues.length) {
+    const ibox = document.createElement("div");
+    ibox.className = "rn-ws-i2iissues";
+    for (const it of issues) {
+      const line = document.createElement("button");
+      line.className = "rn-ws-issue";
+      line.textContent = it.text;
+      line.title = "Opens the " + stagePageName(it.sub) + " page.";
+      line.onclick = () => openStagePage(node, it.sub);
+      ibox.appendChild(line);
+    }
+    bar.appendChild(ibox);
+  }
+}
 
 const capFirst = (x) => String(x).charAt(0).toUpperCase() + String(x).slice(1);
 
@@ -13384,21 +13450,23 @@ export function convActive(c) {
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
 }
 
-// Re-angle's "skip the pass": the re-shot picture is the image output, so the
-// source's own encode and every pass stand aside
-export function i2iSkipped(t) {
-  return !!skippedBy(t);
+// An Editor edit that is the image output: the Img2Img pass stands aside for it
+export function i2iSkipped(t, E) {
+  return !!skippedBy(t, E);
 }
 
-// the source stage whose Skip the pass is on, "Re-angle", "Swap" or "": both edit
-// the source, so either can hand its picture straight to the image output
-export function skippedBy(t) {
-  if (!t || t.prompt_only) return "";
-  const R = t.reangle || {};
-  const S = t.swap || {};
-  if (R.on && (R.target || "source") === "source" && R.skip_pass) return "Re-angle";
-  if (S.on && (S.target || "source") === "source" && S.skip_pass) return "Swap";
-  return "";
+// The last Editor source stage that will run, "Re-angle", "Realism", "Swap" or "",
+// when its picture goes straight to the image output: Then run the Img2Img pass is
+// off, or Img2Img has no real pass to take it
+export function skippedBy(t, E) {
+  if (!t || !E?.images?.length) return "";
+  if (E.to_pass && t.on && !t.prompt_only) return "";
+  let who = "";
+  for (const [k, name] of [["reangle", "Re-angle"], ["realism", "Realism"], ["swap", "Swap"]]) {
+    const X = t[k] || {};
+    if (X.on && (X.target || "source") === "source") who = name;
+  }
+  return who;
 }
 
 // true (lit), false (dark), or "skip" (amber: stood aside for Re-angle's skip)
@@ -13415,23 +13483,22 @@ function tabOffNote(name) {
 
 function i2iSubLit(cfg, id) {
   const t = cfg.tabs.i2i;
-  if ((id === "source" || id === "passes") && t.on && i2iSkipped(t)) return "skip";
+  const E = cfg.tabs.editor_src;
+  const edPic = !!E?.images?.length;
+  if ((id === "source" || id === "passes") && t.on && !t.prompt_only && i2iSkipped(t, E)) return "skip";
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
   if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
-  if (id === "reangle") {
-    // a re-shot of the render runs whatever the pass mode; on the source it needs the pass
-    return !!(t.reangle?.on && (t.reangle.target === "render" || (t.on && !t.prompt_only)));
+  // the Editor's stages: on the render they need nothing more, on the source a picture
+  if (id === "esource") {
+    return edPic && ["reangle", "realism", "swap"].some((k) => t[k]?.on
+      && (t[k].target || "source") === "source");
   }
-  if (id === "realism") {
-    // it converts the SOURCE, so it needs the tab on and a pass to run at all
-    return !!(t.realism?.on && t.on && !t.prompt_only);
-  }
-  if (id === "swap") {
-    // a swap on the render runs whatever the pass mode; a source swap needs the pass
-    return !!(t.swap?.on && (t.swap.target === "render" || (t.on && !t.prompt_only)));
-  }
+  if (id === "reangle") return !!(t.reangle?.on && (t.reangle.target === "render" || edPic));
+  if (id === "realism") return !!(t.realism?.on && edPic);
+  if (id === "swap") return !!(t.swap?.on && (t.swap.target === "render" || edPic));
   if (id === "converter") return !!t.on && convActive(t.conv);
+  if (id === "upscale") return !!cfg.upscale?.on;
   return false;
 }
 
@@ -13502,14 +13569,9 @@ export function i2iIssues(cfg, node) {
   const target = t.swap?.target || "source";
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).length;
   if (!t.on) {
-    // a stage that works on the finished render runs with the tab off, so only the
-    // ones that read the source are idle here
+    // the Editor's stages have their own picture, so only these are idle here
     const idle = [];
     if (t.auto?.on) idle.push({ page: "auto", name: "its auto prompt" });
-    if (t.reangle?.on && (t.reangle.target || "source") === "source") {
-      idle.push({ page: "reangle", name: "Re-angle" });
-    }
-    if (swapOn && target === "source") idle.push({ page: "swap", name: "a source Swap" });
     if (convActive(t.conv)) idle.push({ page: "converter", name: "the converter" });
     for (const it of idle) {
       out.push({ sub: it.page, text: `Img2Img is off, so ${it.name} does nothing` });
@@ -13526,18 +13588,22 @@ export function i2iIssues(cfg, node) {
     out.push({ sub: "source", text: "The canvas is set to Wired latent, but nothing is wired "
                                   + "into the latent socket" });
   }
-  if (t.on && t.prompt_only) {
-    if (t.reangle?.on && (t.reangle.target || "source") === "source") {
-      out.push({ sub: "passes", about: "reangle", text: "Prompt only is on, so the source Re-angle is skipped" });
-    }
-    if (swapOn && target === "source") {
-      out.push({ sub: "passes", about: "swap", text: "Prompt only is on, so the source Swap is skipped" });
-    }
+  // THE EDITOR'S SOURCE STAGES: they need its picture, and where the edit goes
+  const E = cfg.tabs.editor_src || {};
+  const onSrc = [["reangle", "Re-angle"], ["realism", "Realism"], ["swap", "Swap"]]
+    .filter(([k]) => t[k]?.on && (t[k].target || "source") === "source");
+  if (onSrc.length && !E.images?.length) {
+    out.push({ sub: "esource", text: `The Editor has no source picture, so `
+      + `${onSrc.map(([, n]) => n).join(" and ")} ${onSrc.length > 1 ? "are" : "is"} skipped` });
   }
-  const who = skippedBy(t);
-  if (t.on && who) {
-    out.push({ sub: who === "Swap" ? "swap" : "reangle", about: "passes",
-               text: `${who} skips the pass, so none of the passes run` });
+  if (onSrc.length && E.images?.length && E.to_pass && !(t.on && !t.prompt_only)) {
+    out.push({ sub: "esource", text: "Then run the Img2Img pass is on, but Img2Img has no "
+      + "pass to run, so the edited picture is the output" });
+  }
+  const who = skippedBy(t, E);
+  if (t.on && !t.prompt_only && who) {
+    out.push({ sub: "esource", about: "passes",
+               text: `The Editor's ${who} picture is the output, so none of the passes run` });
   }
   if (t.on && t.auto?.on && !engines) {
     out.push({ sub: "auto", text: "Auto prompt is on with no engine picked" });
@@ -13658,12 +13724,13 @@ function i2iTabs(node, body) {
     const lit = i2iSubLit(cfg, id);
     lt.className = "lt" + (lit === "skip" ? " skip" : lit ? " on" : "");
     if (lit === "skip") {
-      const who = skippedBy(t);
+      const who = skippedBy(t, cfg.tabs.editor_src);
       b.title = id === "source"
-        ? `${who} skips the pass: the source is edited and that picture goes `
-          + "straight to the image output, with no encode of its own."
-        : `${who} skips the pass: none of these passes run. Switch Skip the pass `
-          + `off on the ${who} tab to run them on the edited picture.`;
+        ? `The Editor's ${who} picture is the image output, so this source is not `
+          + "rendered."
+        : `The Editor's ${who} picture is the image output, so none of these passes run. `
+          + "Switch on Then run the Img2Img pass on the Editor's Source page to run them "
+          + "on the edited picture.";
     }
     const tx = document.createElement("span");
     tx.textContent = label;
@@ -13686,14 +13753,10 @@ function i2iTabs(node, body) {
   bar.append(on, nm);
   const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
   const engines = AUTO_ENGINES.filter(([k]) => t.auto?.[k]).map(([, l]) => l);
-  const issues = i2iIssues(cfg, node);
-  // an issue is about a stage (its chip goes amber) and names the page that fixes it
-  const issueOn = (id) => issues.some((x) => (x.about || x.sub) === id);
-  const pageName = (id) => I2I_SUBS.find(([x]) => x === id)[1].toLowerCase();
-  const openPage = (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; render(node); };
-  // ONE CHIP PER PAGE with something to say, in that page's colour; a click opens
-  // the page, and a stage that will not run goes amber with the reason on hover
-  const swapLive = i2iSubLit(cfg, "swap") && !issueOn("swap");
+  // an issue is about a stage (its chip goes amber) and names the page that fixes it;
+  // this bar keeps the ones that touch its own pages, the Editor's bar the rest
+  const issues = i2iIssues(cfg, node).filter((x) => I2I_PAGE_IDS.includes(x.sub)
+                                                    || I2I_PAGE_IDS.includes(x.about || x.sub));
   const chips = [
     { sub: "source",
       // WHAT WILL RUN, not what is remembered. A render uses ONE gallery picture,
@@ -13714,69 +13777,17 @@ function i2iTabs(node, body) {
                         || (t.canvas === "latent" && !socketWired(node, "latent")))) },
     { sub: "passes",
       text: t.prompt_only ? "Prompt only"
-        : i2iSkipped(t) ? "Passes skipped"
+        : i2iSkipped(t, cfg.tabs.editor_src) ? "Passes skipped"
         : npass > 1 ? `${npass} Passes` : `Denoise ${Number(t.denoise).toFixed(2)}`,
-      warn: !!(t.on && !t.prompt_only && i2iSkipped(t)) },
+      warn: !!(t.on && !t.prompt_only && i2iSkipped(t, cfg.tabs.editor_src)) },
     { sub: "auto",
       text: !t.auto?.on ? "Auto prompt off" : engines.length ? engines.join(", ") : "No engine on",
       warn: !!(t.on && t.auto?.on && !engines.length) },
   ];
-  if (t.reangle?.on) {
-    const live = i2iSubLit(cfg, "reangle");
-    chips.push({ sub: "reangle", warn: !live,
-                 text: !live ? "Re-angle skipped" : t.reangle.target === "render" ? "Re-angle on the render"
-                   : t.reangle.skip_pass ? "Re-angle skips the pass" : "Re-angle on the source" });
-  }
-  if (t.swap?.on) {
-    chips.push({ sub: "swap", warn: !swapLive,
-                 text: !swapLive ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render"
-                   : t.swap.skip_pass ? "Swap skips the pass" : "Swap on the source" });
-  }
-  if (convActive(t.conv)) chips.push({ sub: "converter", text: "Converter", warn: !t.on });
-  for (const ch of chips) {
-    const c = document.createElement("button");
-    c.className = "rn-ws-chip rn-ws-i2ichip s-" + ch.sub + (ch.warn ? " warn" : "");
-    c.dataset.sub = ch.sub;
-    c.textContent = ch.text;
-    const why = issues.filter((x) => (x.about || x.sub) === ch.sub).map((x) => x.text);
-    c.title = (why.length ? why.join("\n") + "\n" : "") + "Opens the " + pageName(ch.sub) + " page.";
-    c.onclick = () => openPage(ch.sub);
-    bar.appendChild(c);
-  }
-  // THE ISSUES BOX: every reason a stage will not run, at the bar's right end,
-  // one line each, each a link to the page that fixes it
-  if (issues.length) {
-    const ibox = document.createElement("div");
-    ibox.className = "rn-ws-i2iissues";
-    for (const it of issues) {
-      const line = document.createElement("button");
-      line.className = "rn-ws-issue";
-      line.textContent = it.text;
-      line.title = "Opens the " + pageName(it.sub) + " page.";
-      line.onclick = () => openPage(it.sub);
-      ibox.appendChild(line);
-    }
-    bar.appendChild(ibox);
-  }
+  stageChips(node, bar, chips, issues);
   body.appendChild(bar);
 
-  const onlyNote = (what) => {
-    const n = document.createElement("div");
-    n.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-onlynote";
-    const h = document.createElement("b");
-    h.textContent = "Prompt only is on. ";
-    const m = document.createElement("span");
-    m.textContent = `${what} works on an image to image pass, and the Passes tab is set to `
-                  + "Prompt only, so the source only donates its prompt. Pick a denoise on "
-                  + "the Passes tab to bring this page back.";
-    n.append(h, m);
-    body.appendChild(n);
-  };
-  // Image to text works with Img2Img off, so the auto page says so on its own tab
-  // a swap on the render works with Img2Img off too
-  if (!t.on && sub !== "source" && sub !== "auto"
-      && !(sub === "swap" && t.swap?.target === "render")
-      && !(sub === "reangle" && t.reangle?.target === "render")) body.appendChild(tabOffNote("Img2Img"));
+  if (!t.on && sub === "passes") body.appendChild(tabOffNote("Img2Img"));
   if (sub === "source") {
     // ONE SOURCE BOX AT A TIME. The gallery and the folder look alike stacked, and
     // the page is long. A VIEW switch: Queue still renders from the gallery and
@@ -13784,26 +13795,158 @@ function i2iTabs(node, body) {
     const view = sourceSwitch(node, body, "i2i", "Gallery");
     if (view === "own") galleryBody(node, body, "i2i", IMAGE_TABS.i2i, { layout: "tabs" });
     else {
-    // THE SAME FOLDER BATCH the Upscale tab uses, under the gallery it feeds. An
+    // THE SAME FOLDER BATCH the Upscale page uses, under the gallery it feeds. An
     // Img2Img run is an ordinary Queue, so a batch is that queue once per picture
     // with the gallery pointed at each in turn, in the QUEUED copy only.
       batchStrip(node, "i2i", body, i2iBatchOpts(node));
     }
   }
   else if (sub === "passes") passesTab(node, body);
-  else if (sub === "auto") i2iAutoPage(node, body);
-  else if (sub === "reangle") {
-    // a re-shot of the render runs under Prompt only too, so its page stays
-    if (t.prompt_only && (t.reangle?.target || "source") !== "render") onlyNote("Re-angle");
-    else reangleSection(node, body, "i2i", { flat: true });
-  } else if (sub === "realism") {
-    if (t.prompt_only) onlyNote("Realism");
-    else realismSection(node, body, "i2i", { flat: true });
-  } else if (sub === "swap") {
-    // a swap on the render runs under Prompt only too, so its page stays
-    if (t.prompt_only && (t.swap?.target || "source") !== "render") onlyNote("Swap");
-    else swapSection(node, body, "i2i", { flat: true });
-  } else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
+  else i2iAutoPage(node, body);
+}
+
+// ---- the Editor tab ------------------------------------------------------------------
+// The stages that edit a picture rather than make one: Re-angle, Realism and Swap on
+// the Img2Img source or the render, the Converter, and the one-picture Upscale. The
+// source stages still need Img2Img on, and their pages say so with a way back.
+function editorTabs(node, body) {
+  const cfg = node._rnCfg;
+  const t = cfg.tabs.i2i;
+  const props = (node.properties ||= {});
+  let sub = node._rnEdSub || props.rn_editor_sub || "esource";
+  if (!EDITOR_SUB_IDS.includes(sub)) sub = "esource";
+  node._rnEdSub = sub;
+
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub";
+  for (const s of EDITOR_SUBS) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt tint s-" + s.id + (s.id === sub ? " cur" : "");
+    b.dataset.sub = s.id;
+    b.title = s.tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (i2iSubLit(cfg, s.id) ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = s.label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnEdSub = s.id; props.rn_editor_sub = s.id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Editor";
+  bar.appendChild(nm);
+  const issues = i2iIssues(cfg, node).filter((x) => EDITOR_SUB_IDS.includes(x.sub)
+                                                    || EDITOR_SUB_IDS.includes(x.about || x.sub));
+  const issueOn = (id) => issues.some((x) => (x.about || x.sub) === id);
+  const E = cfg.tabs.editor_src;
+  const chips = [];
+  if (EDITOR_SUB_IDS.slice(1, 4).some((k) => t[k]?.on && (t[k].target || "source") === "source")) {
+    chips.push({ sub: "esource", warn: !E.images?.length,
+                 text: !E.images?.length ? "No source picture"
+                   : E.to_pass ? "Edit into the pass" : "Edit is the output" });
+  }
+  if (t.reangle?.on) {
+    const live = i2iSubLit(cfg, "reangle");
+    chips.push({ sub: "reangle", warn: !live,
+                 text: !live ? "Re-angle skipped" : t.reangle.target === "render" ? "Re-angle on the render"
+                   : "Re-angle on the source" });
+  }
+  if (t.realism?.on) {
+    const live = i2iSubLit(cfg, "realism") && !issueOn("realism");
+    chips.push({ sub: "realism", warn: !live,
+                 text: !live ? "Realism skipped" : "Realism on the source" });
+  }
+  if (t.swap?.on) {
+    const live = i2iSubLit(cfg, "swap") && !issueOn("swap");
+    chips.push({ sub: "swap", warn: !live,
+                 text: !live ? "Swap skipped" : t.swap.target === "render" ? "Swap on the render"
+                   : "Swap on the source" });
+  }
+  if (convActive(t.conv)) chips.push({ sub: "converter", text: "Converter", warn: !t.on });
+  if (cfg.upscale?.on) chips.push({ sub: "upscale", text: "Upscale on" });
+  stageChips(node, bar, chips, issues);
+  body.appendChild(bar);
+
+  // a stage on the source with no Editor picture does nothing; say so with the way there
+  const onSource = ["reangle", "realism", "swap"].includes(sub)
+    && (t[sub]?.target || "source") === "source";
+  if (onSource && t[sub]?.on && !E.images?.length) {
+    body.appendChild(linkNote(node, "The Editor has no source picture, so this does nothing "
+      + "yet. Add one on the Source page. ", "Open Source", "esource"));
+  }
+  if (sub === "converter" && !t.on) {
+    body.appendChild(linkNote(node, "Img2Img is off, so the Img2Img converter does nothing: "
+      + "it reworks the Img2Img auto prompt. ", "Open Img2Img", "source"));
+  }
+  if (sub === "esource") editorSourcePage(node, body);
+  else if (sub === "reangle") reangleSection(node, body, "i2i", { flat: true });
+  else if (sub === "realism") realismSection(node, body, "i2i", { flat: true });
+  else if (sub === "swap") swapSection(node, body, "i2i", { flat: true });
+  else if (sub === "converter") converterSection(node, body, "i2i", { flat: true });
+  else if (sub === "upscale") upscaleBody(node, body);
+}
+
+// A note that names what is missing and links to the page that fixes it
+function linkNote(node, text, label, page) {
+  const n = document.createElement("div");
+  n.className = "rn-ws-card rn-ws-note rn-ws-skipnote rn-ws-offnote";
+  const m = document.createElement("span");
+  m.textContent = text;
+  const go = document.createElement("button");
+  go.className = "rn-ws-btn";
+  go.textContent = label;
+  go.onclick = () => openStagePage(node, page);
+  n.append(m, go);
+  return n;
+}
+
+// The words for where an Editor edit goes, for the stage pages
+const edFlow = (cfg) => (cfg.tabs.editor_src?.to_pass
+  ? ", then the Img2Img pass runs on it." : ", and that picture is the image output.");
+
+// THE EDITOR'S SOURCE PAGE: the picture the source stages edit, one after another,
+// and where the result goes. The same gallery and folder batch as Img2Img's Source.
+function editorSourcePage(node, body) {
+  const cfg = node._rnCfg;
+  const E = cfg.tabs.editor_src;
+  const I = cfg.tabs.i2i;
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-edhand";
+  const r = document.createElement("div");
+  r.className = "rn-ws-row";
+  r.style.flexWrap = "wrap";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (E.to_pass ? " on" : "");
+  sw.title = E.to_pass
+    ? "On: the edited picture becomes the Img2Img pass's source, and the pass runs on "
+      + "it at its denoise. Needs Img2Img on a real pass."
+    : "Off: the edited picture is the image output as it is. No encode and no pass, so "
+      + "the rig never shares the card with the edit model.";
+  sw.onclick = () => { E.to_pass = !E.to_pass; writeCfg(node); render(node); };
+  const l = document.createElement("span");
+  l.className = "rn-ws-swlabel";
+  l.style.fontWeight = "600";
+  l.textContent = "Then run the Img2Img pass";
+  const n = document.createElement("span");
+  n.className = "rn-ws-note";
+  n.style.flex = "1 1 220px";
+  n.textContent = !E.to_pass
+    ? "Off: the edited picture is the image output. The Detailer and Post FX still run."
+    : I.on && !I.prompt_only
+      ? "On: the edited picture is the Img2Img pass's source, in place of its own gallery."
+      : "On, but Img2Img is off or on Prompt only, so the edited picture is the output.";
+  if (E.to_pass && !(I.on && !I.prompt_only)) n.classList.add("rn-ws-peoplewarn");
+  r.append(sw, l, n);
+  card.appendChild(r);
+  body.appendChild(card);
+  const view = sourceSwitch(node, body, "editor_src", "Gallery");
+  if (view === "own") galleryBody(node, body, "editor_src", IMAGE_TABS.editor_src, { layout: "tabs" });
+  else batchStrip(node, "editor_src", body, editorBatchOpts(node));
 }
 
 // The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community mixes
@@ -15701,12 +15844,13 @@ function passesTab(node, body, kind = "i2i") {
   const right = document.createElement("div");
   right.className = "r";
   right.style.cssText = "display:flex;flex-direction:column;gap:6px;min-width:0";
-  if (!isLat && i2iSkipped(t)) {
+  if (!isLat && i2iSkipped(t, node._rnCfg.tabs.editor_src)) {
     const n = document.createElement("div");
     n.className = "rn-ws-card rn-ws-note rn-ws-skipnote";
-    n.textContent = `Skipped: ${skippedBy(t)}'s Skip the pass is on, so the edited picture `
-                  + "goes straight to the image output and none of these passes run. "
-                  + "The settings are kept for when it is switched off.";
+    n.textContent = `Skipped: the Editor's ${skippedBy(t, node._rnCfg.tabs.editor_src)} `
+                  + "picture goes straight to the image output, so none of these passes "
+                  + "run. Switch on Then run the Img2Img pass on the Editor's Source page "
+                  + "to run them on it.";
     right.appendChild(n);
   }
   if (!isLat && t.prompt_only) {
@@ -16032,7 +16176,7 @@ function editTargetRow(node, card, X, tag, tips) {
   tl.textContent = "Works on";
   const tseg = document.createElement("div");
   tseg.className = "rn-ws-seg rn-ws-" + tag + "target";
-  for (const [v, label, tip] of [["source", "Img2Img source", tips.source],
+  for (const [v, label, tip] of [["source", "Editor source", tips.source],
                                  ["render", "New render", tips.render]]) {
     const b = document.createElement("button");
     b.className = "rn-ws-segb" + (X.target === v ? " on" : "");
@@ -16076,29 +16220,6 @@ function editTargetRow(node, card, X, tag, tips) {
   card.appendChild(trow);
 }
 
-// SKIP THE PASS, shared too: the edited picture is the image output as it is. The
-// point is memory: with the pass on, the rig and the edit model both want the
-// card in one run.
-function editSkipRow(node, card, X, tag, what) {
-  const srow = document.createElement("div");
-  srow.className = "rn-ws-row";
-  const ssw = document.createElement("div");
-  ssw.className = "rn-ws-sw rn-ws-" + tag + "skip" + (X.skip_pass ? " on" : "");
-  ssw.title = X.skip_pass
-    ? `On: the ${what} picture is the image output as it is. No encode and no i2i `
-      + "pass, so the rig never enters VRAM beside the edit model. Polish it in a "
-      + "Detailer pass afterwards if you want the Krea look. Built-in sampler only."
-    : `Off: the i2i pass runs on the ${what} picture at the denoise above, the `
-      + "normal run. Switch on to stop after the edit and keep the rig out of "
-      + "VRAM while the edit model works.";
-  ssw.onclick = () => { X.skip_pass = !X.skip_pass; writeCfg(node); render(node); };
-  const sl = document.createElement("span");
-  sl.className = "rn-ws-note";
-  sl.textContent = "Skip the i2i pass";
-  srow.append(ssw, sl);
-  card.appendChild(srow);
-}
-
 // REALISM: an illustration becomes a photograph before the i2i pass, by running
 // the Anything2Real workflow node for node (realism.py). The front of the page is
 // what changes from picture to picture; the workflow's own settings sit folded
@@ -16106,7 +16227,6 @@ function editSkipRow(node, card, X, tag, what) {
 function realismSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
-  if (t.prompt_only) return;
   const R = t.realism;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
@@ -16121,16 +16241,14 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
   sw.className = "rn-ws-sw" + (R.on ? " on" : "");
-  sw.title = "On: the Img2Img source goes through the Anything2Real workflow before "
-           + "the pass runs on it. Off: the source goes to the pass as it is.";
+  sw.title = "On: the Editor's source picture goes through the Anything2Real workflow. "
+           + "Off: nothing converted.";
   sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   lab.textContent = !R.on
-    ? "Anything to real: convert the source, then paint over it."
-    : R.skip_pass
-      ? "The source is converted and goes straight to the image output."
-      : "The source is converted, then the i2i pass runs on it at the denoise above.";
+    ? "Anything to real: convert the Editor's source picture into a photograph."
+    : "The source is converted" + edFlow(node._rnCfg);
   row0.append(sw, lab);
   card.appendChild(row0);
 
@@ -16295,9 +16413,6 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
     toggle("Run the rig's LoRA stack too", "loras",
            "On: the LoRAs tab's stack goes under the conversion LoRA, the way the "
            + "workflow stacks one under it. Off: the conversion LoRA alone.");
-    toggle("Skip the i2i pass", "skip_pass",
-           "On: the converted picture IS the output and the rig never samples again. "
-           + "Off: the pass runs on it at the tab's denoise.");
 
     // THE WORKFLOW'S OWN SETTINGS, folded, with its own values
     if (fold("Recipe: the workflow's settings", "recipe")) {
@@ -16420,7 +16535,6 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
 function reangleSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
-  if (t.prompt_only && (t.reangle?.target || "source") !== "render") return;
   const R = t.reangle;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
@@ -16445,16 +16559,14 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
     : R.target === "render"
       ? "The finished render is re-shot from the camera below"
         + (R.polish ? ", then the rig polishes it." : ".")
-      : R.skip_pass
-        ? "The source is re-shot from the camera below and goes straight to the image output."
-        : "The source is re-shot from the camera below, then the i2i pass runs on it at the denoise above.";
+      : "The source is re-shot from the camera below" + edFlow(node._rnCfg);
   row0.append(sw, lab);
   card.appendChild(row0);
   if (R.on) {
     // WHAT IT WORKS ON and the polish pass: the rows Swap has, shared
     editTargetRow(node, card, R, "reangle", {
-      source: "The Img2Img source picture, before its pass. The pass then finishes the "
-            + "re-shot picture at its denoise.",
+      source: "The picture on the Editor's Source page. Its Then run the Img2Img pass "
+            + "switch decides whether the pass finishes it.",
       render: "The finished render, a Latent tab render as much as an Img2Img one, re-shot "
             + "from the camera below. Img2Img does not need to be on.",
       polish: "On: after the re-shot the rig runs once more over the picture at the denoise "
@@ -16462,7 +16574,6 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
             + "the re-shot picture as the edit model left it.",
       denoise: "The polish pass's denoise. 0.2 to 0.35 keeps the viewpoint and blends it in.",
     });
-    if (R.target !== "render") editSkipRow(node, card, R, "reangle", "re-shot");
     // camera source
     const crow = document.createElement("div");
     crow.className = "rn-ws-row";
@@ -16629,7 +16740,6 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
 function swapSection(node, body, tabName, { flat = false } = {}) {
   if (tabName !== "i2i") return;
   const t = node._rnCfg.tabs.i2i;
-  if (t.prompt_only && (t.swap?.target || "source") !== "render") return;
   const S = t.swap;
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
@@ -16655,16 +16765,14 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
     : S.target === "render"
       ? refName(S.reference) + " goes onto the finished render"
         + (S.polish ? ", then the rig polishes it." : ".")
-      : refName(S.reference) + " goes onto the Img2Img source first, "
-        + (S.skip_pass ? "and that picture goes straight to the image output."
-                       : "then the i2i pass runs on it.");
+      : refName(S.reference) + " goes onto the Editor's source picture" + edFlow(node._rnCfg);
   row0.append(sw, lab);
   card.appendChild(row0);
   if (S.on) {
     // WHAT IT WORKS ON and the polish pass, shared with Re-angle
     editTargetRow(node, card, S, "swap", {
-      source: "The Img2Img source picture, before its pass. The pass then finishes the "
-            + "swapped picture at its denoise.",
+      source: "The picture on the Editor's Source page. Its Then run the Img2Img pass "
+            + "switch decides whether the pass finishes it.",
       render: "The finished render, a Latent tab render as much as an Img2Img one. Img2Img "
             + "does not need to be on.",
       polish: "On: after the swap the rig runs once more over the picture at the denoise "
@@ -16672,7 +16780,6 @@ function swapSection(node, body, tabName, { flat = false } = {}) {
             + "swapped picture as the edit model left it.",
       denoise: "The polish pass's denoise. 0.2 to 0.35 blends the face in and keeps it.",
     });
-    if (S.target !== "render") editSkipRow(node, card, S, "swap", "swapped");
     // FAST: the speed LoRA and its numbers in one switch
     const frow = document.createElement("div");
     frow.className = "rn-ws-row";
@@ -17558,6 +17665,7 @@ export const tabLit = (cfg, id) =>
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)
   : id === "paint" ? cfg.paint?.on
   : id === "upscale" ? cfg.upscale?.on
+  : id === "editor" ? EDITOR_SUB_IDS.some((s) => i2iSubLit(cfg, s) === true)
   : id === "post" ? cfg.post_on !== false && POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
   : id === "latent" ? cfg.latent.on
   : id === "models" ? !!cfg.models?.rigs?.some?.((r) =>
@@ -17577,13 +17685,11 @@ export const tabLit = (cfg, id) =>
   // its own and the plain rule below - on AND a gallery image - can never light
   // it, however hard it is working. Prompt-only counts too: the tab is then
   // contributing its words rather than a canvas, which is still doing something.
-  // A swap on the render runs with the tab off, so it lights the tab too.
-  : id === "i2i" ? !!((cfg.tabs.i2i.on
-                       && (cfg.tabs.i2i.images.length
-                           || cfg.tabs.i2i.canvas !== "gallery"
-                           || cfg.tabs.i2i.prompt_only))
-                      || (cfg.tabs.i2i.swap?.on && cfg.tabs.i2i.swap.target === "render")
-                      || (cfg.tabs.i2i.reangle?.on && cfg.tabs.i2i.reangle.target === "render"))
+  // A swap or re-angle on the render lights the Editor tab, where it lives now.
+  : id === "i2i" ? !!(cfg.tabs.i2i.on
+                      && (cfg.tabs.i2i.images.length
+                          || cfg.tabs.i2i.canvas !== "gallery"
+                          || cfg.tabs.i2i.prompt_only))
   // The boost mask lives on the Subject page now, so Subject is what it lights.
   // Taking masks out of IDENTITY_SUBS quietly stopped a painted mask lighting
   // the Krea 2 Identity tab at all, which is the whole point of the dot.
@@ -17650,6 +17756,18 @@ export function render(node) {
   // pre-fold size already lives, so per-node panel state has a home there.
   if (node._rnTab === undefined && node.properties?.rn_tab) {
     node._rnTab = String(node.properties.rn_tab);
+    // a workflow left on an Img2Img page that is an Editor page now opens there
+    const p0 = node.properties;
+    if (node._rnTab === "i2i" && EDITOR_SUB_IDS.includes(p0.rn_i2i_sub)) {
+      node._rnTab = "editor"; p0.rn_tab = "editor";
+      node._rnEdSub = p0.rn_i2i_sub; p0.rn_editor_sub = p0.rn_i2i_sub;
+      p0.rn_i2i_sub = "source";
+    }
+  }
+  if (node._rnTab === "upscale") {                // Upscale is an Editor page now
+    node._rnTab = "editor";
+    node._rnEdSub = "upscale";
+    Object.assign((node.properties ||= {}), { rn_tab: "editor", rn_editor_sub: "upscale" });
   }
   if (node._rnTab === "people") node._rnTab = "subject";     // People is part of Subject now
   if (IDENTITY_SUBS.some((s) => s.id === node._rnTab)) {
@@ -17779,7 +17897,7 @@ export function render(node) {
     postBody(node, body, { cogHost: bar });
   }
   else if (cur === "paint") paintBody(node, body);
-  else if (cur === "upscale") upscaleBody(node, body);
+  else if (cur === "editor") editorTabs(node, body);    // the editing stages and Upscale
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
   else if (cur === "overview") overviewBody(node, body);
@@ -17792,7 +17910,7 @@ export function render(node) {
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
   if (!["overview", "i2i", "identity", "moodboard", "run", "detailer",
-        "upscale"].includes(cur)) {
+        "editor"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image
@@ -18721,6 +18839,46 @@ app.registerExtension({
 // THE IMG2IMG FOLDER BATCH, as options rather than inline: the Run tab offers
 // the same run, and two copies of a queue builder is two places for it to
 // drift.
+// The Editor's folder batch: one queue per picture, the Editor's gallery pointed at it
+// in the queued copy only, exactly as Img2Img's batch does its own
+export function editorBatchOpts(node) {
+  const cfg = node._rnCfg;
+  const T = cfg.tabs.i2i;
+  const live = () => ["reangle", "realism", "swap"].some((k) => T[k]?.on
+    && (T[k].target || "source") === "source");
+  return {
+    runLabel: "Run All Batch",
+    loadImages: live(),
+    precheck: () => (live() ? "" : "No Editor stage is on for the source picture, so "
+      + "nothing would be edited. Switch Re-angle, Realism or Swap on, then run the "
+      + "batch again."),
+    onRun: async (file) => {
+      const { output } = await app.graphToPrompt();
+      const wsKey = promptKeyFor(output, node);
+      if (!wsKey) throw new Error("the Workspace is not in the queued graph");
+      const pruned = pruneToNode(output, wsKey);
+      const c = JSON.parse(pruned[wsKey].inputs.config || "{}");
+      const e2 = (c.tabs ||= {}).editor_src ||= {};
+      e2.images = [file];        // this picture, this queue
+      e2.sel = 0;
+      e2.random = false;         // the dice would undo the point of a batch
+      pruned[wsKey].inputs.config = JSON.stringify(c);
+      advanceSeeds(pruned, Object.keys(pruned));
+      const res = await api.fetchApi("/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: pruned,
+                               client_id: api.clientId ?? api.socket?.clientId }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.error) {
+        throw new Error(d.error?.message || d.error || `queue refused it (${res.status})`);
+      }
+      return String(d.prompt_id || "");
+    },
+  };
+}
+
 export function i2iBatchOpts(node) {
   const cfg = node._rnCfg;
   return {

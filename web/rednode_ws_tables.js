@@ -90,9 +90,9 @@ export const TAB_ORDER = [
   { id: "loras", label: "LoRAs", group: "model" },
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },
+  // the stages that edit a picture, and the one-picture Upscale (EDITOR_SUBS)
+  { id: "editor", label: "Editor", group: "canvas" },
   { id: "paint", label: "Paint", group: "canvas" },
-  // one upscale on one picture, straight to the result pane (rednode_ws_upscale.js)
-  { id: "upscale", label: "Upscale", group: "canvas" },
   { id: "moodboard", label: "Moodboard", group: "mood" },
   // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
@@ -113,6 +113,19 @@ export const IDENTITY_SUBS = [
   { id: "scene", label: "SCENE", tip: "The place: the setting the people are put into." },
 ];
 
+// The Editor tab's sub-tabs. Re-angle, Realism, Swap and the Converter were Img2Img
+// pages and still keep their settings under cfg.tabs.i2i: only the pages moved, so
+// Img2Img is the pass system alone. Upscale was a tab of its own.
+export const EDITOR_SUBS = [
+  { id: "esource", label: "SOURCE", tip: "The picture Re-angle, Realism and Swap edit, and where the edit goes." },
+  { id: "reangle", label: "RE-ANGLE", tip: "Re-shoot the source or the render from a new camera angle." },
+  { id: "realism", label: "REALISM", tip: "Turn the source into a photograph with the Anything2Real LoRA." },
+  { id: "swap", label: "SWAP", tip: "Swap a character into the source or the render." },
+  { id: "converter", label: "CONVERTER", tip: "Rework the final prompt and the Img2Img auto prompt." },
+  { id: "upscale", label: "UPSCALE", tip: "One upscale on one picture, straight to the result pane." },
+];
+export const EDITOR_SUB_IDS = EDITOR_SUBS.map((s) => s.id);
+
 // The gallery tabs and their headings.
 
 // thumbSlider used to gate which of these got a thumbnail size control: Img2Img,
@@ -120,6 +133,8 @@ export const IDENTITY_SUBS = [
 // behind it was one shared number so the slider on one tab resized the others. Every
 // gallery draws its own now, so there is no flag to set and none to forget.
 export const IMAGE_TABS = {
+  editor_src: { label: "Editor source", hint: "The picture the Editor's Re-angle, Realism "
+       + "and Swap edit, one after another." },
   i2i: { label: "Img2Img", hint: "The source image for an image-to-image pass. Its auto "
        + "prompt describes everything and runs through the built-in converter." },
   subject: { label: "Subject", hint: "The person to preserve. The face you want kept." },

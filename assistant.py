@@ -26,6 +26,7 @@ LABELS = {"i2i": "Img2Img", "subject": "Subject", "subject2": "Subject 2",
           "subject3": "Subject 3", "scene": "Scene", "moodboard": "Moodboard",
           "text_style": "Image to text style", "text_subject": "Image to text subject",
           "text_scene": "Image to text scene", "swap_ref": "Swap reference",
+          "editor_src": "Editor source",
           "boost_mask": "Boost mask", "edit_mask": "Edit mask"}
 COMMAND_SCHEMA = {"type": "object", "properties": {
     "op": {"type": "string", "enum": ["set", "prompt_add"]},

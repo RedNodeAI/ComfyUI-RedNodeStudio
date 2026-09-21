@@ -470,8 +470,9 @@ RUN_TAB_NAMES = {"subject": "Subject", "scene": "Scene", "moodboard": "Moodboard
 # Their pictures never reach the model, so they work on any rig.
 TEXT_TABS = ("text_style", "text_subject", "text_scene")
 # swap_ref: the Swap page's own gallery, read only when Swap's reference is "own"
+# editor_src: the Editor tab's source, what Re-angle, Realism and Swap edit
 IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-              "swap_ref") + TEXT_TABS
+              "swap_ref", "editor_src") + TEXT_TABS
 # the tabs with an auto prompt, and the ones whose selection is a list
 AUTO_TABS = ("subject", "scene", "moodboard", "i2i") + TEXT_TABS
 # Inject into, stored as "follow the rig": the caption joins whichever row this
@@ -1119,6 +1120,10 @@ def parse_config(config_json):
                 for k, v in pm_in.items() if isinstance(v, dict)}
         if name == "swap_ref":
             tabs[name]["on"] = True          # Swap's own switch decides; this has none
+        if name == "editor_src":
+            tabs[name]["on"] = True          # the stages' own switches decide
+            # the hand-off: the edit becomes the Img2Img pass's source instead of the output
+            tabs[name]["to_pass"] = bool(t.get("to_pass"))
         if name in TEXT_TABS:
             # an Image to text tab exists to be captioned: its switch is the auto prompt's
             tabs[name]["auto"]["on"] = tabs[name]["on"]
@@ -1215,6 +1220,20 @@ def parse_config(config_json):
                 "lock": bool(conv_in.get("lock", name == "i2i")),
                 "lock_lighting": bool(conv_in.get("lock_lighting")),
             }
+    # THE EDITOR'S SOURCE, for a workflow saved before the Editor had one. Re-angle,
+    # Realism and Swap edited the Img2Img picture then, and only with Img2Img on a
+    # real pass. Such a workflow gets that picture copied across, and the pass keeps
+    # running on the edit unless a stage skipped it, so it renders what it did.
+    # The panel does the same on load (readCfg, Trap 13).
+    if "editor_src" not in tabs_in:
+        _it = tabs["i2i"]
+        _src = [x for x in (_it.get("reangle") or {}, _it.get("realism") or {},
+                            _it.get("swap") or {})
+                if x.get("on") and x.get("target", "source") == "source"]
+        if _src and _it["on"] and not _it.get("prompt_only") and _it["images"]:
+            tabs["editor_src"]["images"] = list(_it["images"])
+            tabs["editor_src"]["sel"] = _it["sel"]
+            tabs["editor_src"]["to_pass"] = not any(x.get("skip_pass") for x in _src)
     dials_in = data.get("dials") if isinstance(data.get("dials"), dict) else {}
     dials = {}
     for key, (lo, hi) in DIALS.items():
@@ -3192,62 +3211,58 @@ class RedNodeStudioWorkspace:
         _stage_only_by = ""
         # the words a source stage made the picture from, for the saved record
         _stage_words = None
-        if (it["on"] and not it["prompt_only"] and _rg.get("on") and i2i_img is not None
+        # THE EDITOR'S SOURCE: Re-angle, Realism and Swap on the source edit the
+        # Editor tab's own picture, one after another. The result is the image
+        # output, or, with the hand-off on, the Img2Img pass's source.
+        _ed = tabs["editor_src"]
+        ed_img = None
+        _ed_ran = []
+        if any((it.get(_k) or {}).get("on")
+               and (it.get(_k) or {}).get("target", "source") == "source"
+               for _k in ("reangle", "realism", "swap")):
+            ed_img = tab_image("editor_src")
+            if ed_img is None:
+                print("[RedNode Workspace] editor: no source picture on the Editor tab, "
+                      "so its source stages are skipped", flush=True)
+            else:
+                _tap("editor", "Editor source", ed_img)
+        if (_rg.get("on") and ed_img is not None
                 and _rg.get("target", "source") == "source"):
             try:
                 from . import reangle as _re
                 _cams = _reangle_cams()
                 _prompts = _re.prompts_for(_rg, _cams)
                 _rseed = int(run_seed if _rg["seed_random"] else _rg["seed"])
-                _before = tuple(i2i_img.shape)
+                _before = tuple(ed_img.shape)
                 _run.begin("reangle", "Re-angle", steps=int(_rg["steps"]),
                            batch=len(_prompts))
-                i2i_img = _re.render(_rg, i2i_img, _prompts, _rseed, node_id=unique_id)
+                ed_img = _re.render(_rg, ed_img, _prompts, _rseed, node_id=unique_id)
                 _run.end("reangle", "Re-angle")
-                _tap("reangle", "Re-angle result", i2i_img)
-                print("[RedNode Workspace] re-angle: %d view(s) from %s -> the i2i source "
-                      "(%d x %d)" % (i2i_img.shape[0], "the studio" if _cams else "the bands",
-                                     i2i_img.shape[2], i2i_img.shape[1]), flush=True)
-                if _rg.get("skip_pass"):
-                    if cfg["models"]["sampler_mode"] == "internal":
-                        _stage_only = True
-                        _stage_only_by = "re-angle"
-                    else:
-                        print("[RedNode Workspace] re-angle: Skip the i2i pass only "
-                              "applies to the built-in sampler; the external one runs "
-                              "as wired, with the re-shot picture on i2i_image",
-                              flush=True)
+                _tap("reangle", "Re-angle result", ed_img)
+                _ed_ran.append("re-angle")
+                print("[RedNode Workspace] re-angle: %d view(s) from %s -> the edited picture "
+                      "(%d x %d)" % (ed_img.shape[0], "the studio" if _cams else "the bands",
+                                     ed_img.shape[2], ed_img.shape[1]), flush=True)
             except Exception as exc:
                 _run.end("reangle", "Re-angle", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
                       % exc, flush=True)
-        # REALISM: an illustration becomes a photograph before the pass, through
-        # the Models tab's own rig and a conversion LoRA. AFTER Re-angle, so the
-        # final viewpoint is what gets converted, and BEFORE Swap, so a face
-        # lands on a photograph rather than on cel shading. The result IS the
-        # i2i source from here on, exactly like Re-angle's.
+        # REALISM: an illustration becomes a photograph, through the workflow's
+        # own nodes and a conversion LoRA. AFTER Re-angle, so the final viewpoint
+        # is what gets converted, and BEFORE Swap, so a face lands on a
+        # photograph rather than on cel shading.
         _rl = it.get("realism") or {}
-        if (it["on"] and not it["prompt_only"] and _rl.get("on") and i2i_img is not None):
+        if _rl.get("on") and ed_img is not None:
             try:
                 from . import realism as _rl_mod
                 _rseed2 = int(run_seed if _rl["seed_random"] else _rl["seed"])
                 _run.begin("realism", "Realism", steps=int(_rl["steps"] or rig_steps))
-                i2i_img = _rl_mod.render(_rl, i2i_img, cfg, _rseed2, node_id=unique_id)
+                ed_img = _rl_mod.render(_rl, ed_img, cfg, _rseed2, node_id=unique_id)
                 _run.end("realism", "Realism")
-                _tap("realism", "Realism result", i2i_img)
-                print("[RedNode Workspace] realism: the i2i source is now a photograph "
-                      "(%d x %d)" % (i2i_img.shape[2], i2i_img.shape[1]), flush=True)
-                if _rl.get("skip_pass"):
-                    if cfg["models"]["sampler_mode"] == "internal":
-                        _stage_only = True
-                        _stage_only_by = "realism"
-                        _stage_words = {"positive": str(_rl.get("prompt") or "").strip(),
-                                        "negative": ""}
-                    else:
-                        print("[RedNode Workspace] realism: Skip the i2i pass only "
-                              "applies to the built-in sampler; the external one runs "
-                              "as wired, with the converted picture on i2i_image",
-                              flush=True)
+                _tap("realism", "Realism result", ed_img)
+                _ed_ran.append("realism")
+                print("[RedNode Workspace] realism: the picture is now a photograph "
+                      "(%d x %d)" % (ed_img.shape[2], ed_img.shape[1]), flush=True)
             except Exception as exc:
                 _run.end("realism", "Realism", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] realism failed: %s; the source is used as it is"
@@ -3269,7 +3284,7 @@ class RedNodeStudioWorkspace:
             return ((_people[_pk] if _pk < len(_people) and _people[_pk] is not None
                      else tab_image(_sw["reference"])),
                     _sw["reference"].replace("subject", "Subject ").strip())
-        if (it["on"] and not it["prompt_only"] and _sw.get("on") and i2i_img is not None
+        if (_sw.get("on") and ed_img is not None
                 and _sw.get("target", "source") == "source"):
             _ref, _ref_name = _swap_ref()
             if _ref is None:
@@ -3280,26 +3295,43 @@ class RedNodeStudioWorkspace:
                     from . import swap as _swap
                     _sseed = int(run_seed if _sw["seed_random"] else _sw["seed"])
                     _run.begin("swap", "Swap", steps=int(_sw["steps"]),
-                               batch=int(i2i_img.shape[0]))
-                    i2i_img = _swap.render(_sw, i2i_img, _ref, _sseed, node_id=unique_id)
+                               batch=int(ed_img.shape[0]))
+                    ed_img = _swap.render(_sw, ed_img, _ref, _sseed, node_id=unique_id)
                     _run.end("swap", "Swap")
-                    _tap("swap", "Swap result", i2i_img)
+                    _tap("swap", "Swap result", ed_img)
+                    _ed_ran.append("swap")
                     print("[RedNode Workspace] swap: %d frame(s), %s from the %s tab -> "
-                          "the i2i source (%d x %d)" % (i2i_img.shape[0], _sw["mode"],
-                                                        _sw["reference"], i2i_img.shape[2],
-                                                        i2i_img.shape[1]), flush=True)
-                    if _sw.get("skip_pass"):
-                        if cfg["models"]["sampler_mode"] == "internal":
-                            _stage_only = True
-                            _stage_only_by = "swap"
-                        else:
-                            print("[RedNode Workspace] swap: Skip the i2i pass only applies "
-                                  "to the built-in sampler; the external one runs as wired, "
-                                  "with the swapped picture on i2i_image", flush=True)
+                          "the edited picture (%d x %d)" % (ed_img.shape[0], _sw["mode"],
+                                                        _sw["reference"], ed_img.shape[2],
+                                                        ed_img.shape[1]), flush=True)
                 except Exception as exc:
                     _run.end("swap", "Swap", "error", error=str(exc)[:200])
                     print("[RedNode Workspace] swap failed: %s; the source is used as it is"
                           % exc, flush=True)
+
+        # WHERE THE EDIT GOES. By default the edited picture IS the image output: no
+        # encode and no i2i pass, so the rig never shares the card with the edit
+        # model. With the hand-off on it is the Img2Img pass's source instead, which
+        # needs Img2Img on a real pass; without one the edit is still the output.
+        if _ed_ran:
+            i2i_img = ed_img
+            if _ed["to_pass"] and it["on"] and not it["prompt_only"]:
+                print("[RedNode Workspace] editor: %s -> the Img2Img pass's source"
+                      % " + ".join(_ed_ran), flush=True)
+            else:
+                if _ed["to_pass"]:
+                    print("[RedNode Workspace] editor: Then run the Img2Img pass is on, but "
+                          "Img2Img is off or on Prompt only, so the edited picture is the "
+                          "output", flush=True)
+                if cfg["models"]["sampler_mode"] == "internal":
+                    _stage_only = True
+                    _stage_only_by = _ed_ran[-1]
+                    if _ed_ran[-1] == "realism":
+                        _stage_words = {"positive": str(_rl.get("prompt") or "").strip(),
+                                        "negative": ""}
+                else:
+                    print("[RedNode Workspace] editor: the external sampler runs as wired, "
+                          "with the edited picture on i2i_image", flush=True)
 
         def _edit_off():
             # the Qwen edit model is done for this run: off the card, kept in RAM

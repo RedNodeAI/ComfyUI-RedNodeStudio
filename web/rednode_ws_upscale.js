@@ -111,7 +111,7 @@ async function upscaleGenerate(node, statusEl) {
   const U = node._rnCfg?.upscale;
   const say = (t) => { if (statusEl) statusEl.textContent = t; };
   if (!U?.on) {
-    alert("The Upscale tab is switched off, so Generate would do nothing. Switch it "
+    alert("The Upscale page is switched off, so Generate would do nothing. Switch it "
         + "on with the switch at the top of this tab.");
     return;
   }
@@ -344,7 +344,7 @@ export function upscaleBody(node, body) {
     // checked ONCE, before the first picture: a switched-off tab fails every
     // picture in the folder, and two hundred ticks of nothing is not an answer
     precheck: () => (node._rnCfg?.upscale?.on
-      ? "" : "The Upscale tab is switched off, so nothing would be upscaled. "
+      ? "" : "The Upscale page is switched off, so nothing would be upscaled. "
            + "Switch it on with the switch at the top of this tab, then run the "
            + "batch again."),
     onRun: async (file) => queueUpscale(node, () => {}, { source: file }, true),

@@ -4,7 +4,7 @@ import { api } from "../../scripts/api.js";
 import { writeCfg, render, setupProblems, packInstalled,
          i2iBatchOpts } from "./rednode_workspace.js";
 import { batchState, runBatch, sourceView } from "./rednode_ws_batch.js";
-import { EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
+import { EXTRA_PACKS, packLink, EDITOR_SUB_IDS } from "./rednode_ws_tables.js";
 import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
          openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
@@ -743,6 +743,10 @@ export function plannedStages(node, cfg) {
 // tab's Auto prompt, a rig is the Models tab.
 export function goTo(node, t) {
   if (!t) return;
+  // the editing stages and Upscale moved to the Editor tab; a link written for
+  // their old home still lands on the right page
+  if (t.tab === "i2i" && EDITOR_SUB_IDS.includes(t.sub)) t = { ...t, tab: "editor" };
+  if (t.tab === "upscale") t = { tab: "editor", sub: "upscale" };
   const p = (node.properties ||= {});
   node._rnTab = t.tab;
   p.rn_tab = t.tab;
@@ -750,6 +754,8 @@ export function goTo(node, t) {
     node._rnI2iSub = t.sub || "source"; p.rn_i2i_sub = node._rnI2iSub;
     if (t.auto) { node._rnI2iAuto = t.auto; p.rn_i2i_auto = t.auto; }
     if (t.side) { node._rnTextSide = t.side; p.rn_text_side = t.side; }
+  } else if (t.tab === "editor") {
+    node._rnEdSub = t.sub || "reangle"; p.rn_editor_sub = node._rnEdSub;
   } else if (t.tab === "latent") {
     node._rnLatSub = t.sub || "canvas"; p.rn_latent_sub = node._rnLatSub;
   } else if (t.tab === "identity") {

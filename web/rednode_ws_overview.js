@@ -171,19 +171,20 @@ export function overviewBoxes(node, cfg) {
   }
   const R = I.reangle || {};
   const S = I.swap || {};
-  const offWhy = !I.on ? "Img2Img is off." : I.prompt_only ? "Prompt only is on, so the source only donates its prompt."
-    : "Img2Img has no picture.";
+  // the Editor's source stages edit the Editor's own picture
+  const E = tabs.editor_src || {};
+  const offWhy = "The Editor has no source picture.";
   const refName = (r) => r === "subject" ? "Main subject" : r === "own" ? "Own picture"
     : "Person " + String(r || "").replace("subject", "");
   const ownEmpty = S.reference === "own" && !(tabs.swap_ref?.images?.length);
   // ONE SHAPE FOR BOTH EDIT STAGES: on the source before its pass, or on the render
   const editBox = (key, label, X, onRender, blockedExtra, note) => {
-    const blocked = blockedExtra || ((!onRender && !i2iRun) ? offWhy : "");
+    const blocked = blockedExtra || ((!onRender && !E.images?.length) ? offWhy : "");
     return {
       key: onRender ? key + "_render" : key,
       label: onRender ? label + " on the render" : label,
       state: !X.on ? "off" : blocked ? "skip" : "on",
-      note: !X.on ? "Off" : blocked ? "Skipped" : note + (!onRender && X.skip_pass ? ", skips the pass" : ""),
+      note: !X.on ? "Off" : blocked ? "Skipped" : note + (!onRender && !E.to_pass ? ", is the output" : ""),
       why: X.on ? blocked : "",
       to: { tab: "i2i", sub: key },
     };
@@ -194,19 +195,20 @@ export function overviewBoxes(node, cfg) {
   const swNote = capFirst(S.mode || "face") + " from " + refName(S.reference || "subject");
   const swBlocked = ownEmpty ? "Own picture is picked and the Swap gallery is empty." : "";
   if (!R.on || raTarget !== "render") run.push(editBox("reangle", "Re-angle", R, false, "", raNote));
+  if (I.realism?.on) run.push(editBox("realism", "Realism", I.realism, false, "", "Anything2Real"));
   if (!S.on || swapTarget !== "render") run.push(editBox("swap", "Swap", S, false, swBlocked, swNote));
   if (internal) {
     run.push({ key: "encode", label: "Encode", state: "on",
                note: rows.length ? plural(rows.length, "prompt") : "No prompt", to: { tab: "prompts" } });
     const n = Math.max(1, Math.round(Number(i2iRun ? I.passes : L.passes) || 1));
-    const skipped = i2iRun && i2iSkipped(I);
-    const who = skippedBy(I);
+    const skipped = i2iRun && i2iSkipped(I, E);
+    const who = skippedBy(I, E);
     for (let i = 1; i <= n; i++) {
       run.push({
         key: `pass${i}`, label: `Pass ${i}`,
         state: skipped ? "skip" : "on",
         note: skipped ? "Skipped" : i > 1 ? "Refine" : i2iRun ? "Img2Img" : "Generate",
-        why: skipped ? `${who} skips the pass: the edited picture is the image output.` : "",
+        why: skipped ? `The Editor's ${who} picture is the image output, so the pass is skipped.` : "",
         to: jumpForStage(`pass${i}`, cfg),
       });
     }
