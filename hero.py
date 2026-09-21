@@ -368,6 +368,25 @@ def _abs_set(sub):
     return os.path.join(folder_paths.get_input_directory(), *sub.split("/"))
 
 
+def drop_path(sub, name):
+    """The file a delete request names, or None when it is not inside the hero
+    folder. The delete route takes both parts from an HTTP request, so the path
+    is rebuilt from the hero root and proved afterwards: no backslash (a Windows
+    separator a "/.." check cannot see), and the resolved path must sit inside."""
+    sub, name = str(sub or ""), os.path.basename(str(name or ""))
+    if (not name or name in (".", "..") or not sub.startswith(HERO_DIR + "/")
+            or "\\" in sub or "/../" in sub or sub.endswith("/..")):
+        return None
+    path = os.path.join(_abs_set(sub), name)
+    root = os.path.realpath(_abs_set(HERO_DIR))
+    try:
+        if os.path.commonpath([root, os.path.realpath(path)]) != root:
+            return None
+    except ValueError:                     # another drive altogether
+        return None
+    return path
+
+
 def read_manifest(sub):
     try:
         with io.open(os.path.join(_abs_set(sub), MANIFEST), encoding="utf-8") as f:
@@ -686,11 +705,9 @@ try:
         sub = str(data.get("subfolder") or "")
         if not name:
             return web.json_response({"error": "no picture named"}, status=400)
-        # rebuilt from the hero root, so nothing outside it can be named however
-        # the request is phrased
-        if not sub.startswith(HERO_DIR + "/") or "/../" in sub or sub.endswith("/.."):
+        path = drop_path(sub, name)
+        if path is None:
             return web.json_response({"error": "that is not a hero folder"}, status=400)
-        path = os.path.join(_abs_set(sub), name)
         try:
             if os.path.isfile(path):
                 os.remove(path)
