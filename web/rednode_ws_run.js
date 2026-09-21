@@ -714,7 +714,7 @@ export function plannedStages(node, cfg) {
   const onSrc = (X) => !!(X?.on && (X.target || "source") === "source");
   const edRuns = edPic && [RA, I.realism, I.swap].some(onSrc);
   if (edPic && onSrc(RA)) out.push(["reangle", "Re-angle"]);
-  if (edPic && I.realism?.on) out.push(["realism", "Realism"]);
+  if (edPic && onSrc(I.realism)) out.push(["realism", "Realism"]);
   if (edPic && onSrc(I.swap)) out.push(["swap", "Swap"]);
   if (internal && edRuns) {
     // nothing: the edited picture is the render
@@ -734,6 +734,7 @@ export function plannedStages(node, cfg) {
     out.push(["reangle", "Re-angle"]);
     if (RA.polish !== false && internal) out.push(["reangle_polish", "Re-angle polish"]);
   }
+  if (I.realism?.on && I.realism.target === "render") out.push(["realism", "Realism"]);
   const SW = tabs.i2i?.swap || {};
   if (SW.on && SW.target === "render") {
     out.push(["swap", "Swap"]);
@@ -844,7 +845,7 @@ const el = (tag, cls, text) => {
   return n;
 };
 
-async function queueWorkflow(btn) {
+export async function queueWorkflow(btn) {
   btn.disabled = true;
   try {
     const cmd = app.extensionManager?.command;

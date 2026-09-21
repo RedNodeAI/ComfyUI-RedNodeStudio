@@ -81,6 +81,10 @@ def _active_auto_prompt(pc):
 
 def _encode_text(clip, text):
     """Encode Paint text with Krea's template when that encoder is installed."""
+    if type(getattr(clip, "tokenizer", None)).__name__ == "QwenImage21Tokenizer":
+        # Qwen-Image-2.1 takes its own tokenize call, never Krea's template
+        return clip.encode_from_tokens_scheduled(clip.tokenize(
+            str(text or ""), images=[], keep_vision=True, prevent_empty_text=True))
     try:
         from comfy.text_encoders.krea2 import KREA2_TEMPLATE
         template = {"llama_template": KREA2_TEMPLATE}

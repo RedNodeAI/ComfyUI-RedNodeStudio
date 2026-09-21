@@ -1132,6 +1132,9 @@ def parse_config(config_json):
             tabs[name]["on"] = True          # Swap's own switch decides; this has none
         if name == "editor_src":
             tabs[name]["on"] = True          # the stages' own switches decide
+            # WHAT THE EDITOR EDITS: its gallery picture, or the new render
+            _fr = str(t.get("from") or "")
+            tabs[name]["from"] = _fr if _fr in ("gallery", "render") else ""
         if name in TEXT_TABS:
             # an Image to text tab exists to be captioned: its switch is the auto prompt's
             tabs[name]["auto"]["on"] = tabs[name]["on"]
@@ -1232,6 +1235,19 @@ def parse_config(config_json):
     # Realism and Swap edited the Img2Img picture then, and only with Img2Img on a
     # real pass. Such a workflow gets that picture copied across.
     # The panel does the same on load (readCfg, Trap 13).
+    # ONE CHOICE FOR EVERY EDITOR STAGE: the Source page says whether Re-angle,
+    # Realism and Swap edit its gallery picture or the new render. A workflow saved
+    # before it had the choice takes it from its stages: the render when every stage
+    # that is on worked on the render, the gallery otherwise.
+    _it0 = tabs["i2i"]
+    _ed0 = tabs["editor_src"]
+    if not _ed0["from"]:
+        _on = [x for x in (_it0.get("reangle") or {}, _it0.get("swap") or {}) if x.get("on")]
+        _ed0["from"] = ("render" if _on and all(x.get("target") == "render" for x in _on)
+                        else "gallery")
+    for _k in ("reangle", "realism", "swap"):
+        if isinstance(_it0.get(_k), dict):
+            _it0[_k]["target"] = "render" if _ed0["from"] == "render" else "source"
     if "editor_src" not in tabs_in:
         _it = tabs["i2i"]
         _src = [x for x in (_it.get("reangle") or {}, _it.get("realism") or {},
@@ -1894,6 +1910,25 @@ def node_rig(name, prompt=None):
 
 def _rig_cache_clear():
     _RIG_CACHE["slots"] = []
+
+
+def is_qwen21_clip(clip):
+    """True when this CLIP is Qwen-Image-2.1's text encoder (Qwen3-VL 8B)."""
+    tok = getattr(clip, "tokenizer", None)
+    return type(tok).__name__ == "QwenImage21Tokenizer"
+
+
+def plain_encode(clip, text):
+    """Conditioning for a rig outside the Krea 2 system. Qwen-Image-2.1 is encoded
+    the way core's Text Encode Qwen Image 2.1 does it with no reference images: an
+    empty prompt still yields a token, so the negative never comes back empty.
+    Every other model gets core's CLIPTextEncode."""
+    if is_qwen21_clip(clip):
+        tokens = clip.tokenize(str(text or ""), images=[], keep_vision=True,
+                               prevent_empty_text=True)
+        return clip.encode_from_tokens_scheduled(tokens)
+    import nodes as _core_enc
+    return _core_enc.CLIPTextEncode().encode(clip, text)[0]
 
 
 def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
@@ -2830,9 +2865,7 @@ class RedNodeStudioWorkspace:
                 clip, text, studio_preset or CUSTOM_SENTINEL,
                 style_strength if style_strength is not None else 0.5,
                 negative_prompt=negative, vae=vae, workspace=workspace)
-        import nodes as _core_enc
-        return (_core_enc.CLIPTextEncode().encode(clip, text)[0],
-                _core_enc.CLIPTextEncode().encode(clip, negative)[0])
+        return plain_encode(clip, text), plain_encode(clip, negative)
 
     def _shot_setup(self, si, shot_state, row, cfg, run_seed, enc_clip, model_pre_camera,
                     rig_is_krea2, studio_preset, style_strength, vae, workspace, lc, unique_id,
@@ -2853,8 +2886,7 @@ class RedNodeStudioWorkspace:
                     negative_prompt=str(row.get("negative") or ""),
                     vae=vae, workspace=workspace)
             else:
-                import nodes as _core_enc
-                pos = _core_enc.CLIPTextEncode().encode(enc_clip, text)[0]
+                pos = plain_encode(enc_clip, text)
         # the shot's camera LoRAs on the pre-camera model
         model_i = model_fallback
         slots = [{"name": e["name"], "strength": float(e["strength"]), "enabled": True,
@@ -3287,7 +3319,7 @@ class RedNodeStudioWorkspace:
         # is what gets converted, and BEFORE Swap, so a face lands on a
         # photograph rather than on cel shading.
         _rl = it.get("realism") or {}
-        if _rl.get("on") and ed_img is not None:
+        if _rl.get("on") and ed_img is not None and _rl.get("target", "source") == "source":
             try:
                 from . import realism as _rl_mod
                 _rseed2 = int(run_seed if _rl["seed_random"] else _rl["seed"])
@@ -4312,14 +4344,12 @@ class RedNodeStudioWorkspace:
                         vae=vae if vae is not None else rig_vae,
                         workspace=workspace)
                 else:
-                    import nodes as _core_enc
-                    positive = _core_enc.CLIPTextEncode().encode(
-                        _enc_clip, (_prow or {}).get("text", ""))[0]
-                    negative = _core_enc.CLIPTextEncode().encode(
-                        _enc_clip, (_prow or {}).get("negative", ""))[0]
-                    print("[RedNode Workspace] plain text encode for %r: not a "
-                          "Krea 2 rig, so the Studio identity system sits out"
-                          % (rig_name or "this rig"), flush=True)
+                    positive = plain_encode(_enc_clip, (_prow or {}).get("text", ""))
+                    negative = plain_encode(_enc_clip, (_prow or {}).get("negative", ""))
+                    print("[RedNode Workspace] %s for %r: not a Krea 2 rig, so the "
+                          "Studio identity system sits out"
+                          % ("Qwen Image 2.1 encode" if is_qwen21_clip(_enc_clip)
+                             else "plain text encode", rig_name or "this rig"), flush=True)
             except Exception as exc:
                 _enc_err = exc
                 print("[RedNode Workspace] built-in encode failed: %s" % exc,
@@ -4872,6 +4902,32 @@ class RedNodeStudioWorkspace:
                 _edit_off()
             if _reshot is not None and _rg["polish"]:
                 _polish("reangle_polish", "Re-angle polish", _reshot, float(_rg["polish_denoise"]))
+
+        # REALISM ON THE RENDER: render first, then turn it into a photograph, after
+        # Re-angle and before Swap, the order the stages run on the source
+        # (_rl is reused for a pass rig's LoRA list further up, so read it fresh)
+        _rl_cfg = (cfg["tabs"]["i2i"].get("realism") or {})
+        if (_rl_cfg.get("on") and _rl_cfg.get("target") == "render" and rig_image is not None
+                and not _norun and not _stage_only):
+            try:
+                from . import realism as _rl_mod
+                _rseed3 = int(run_seed if _rl_cfg["seed_random"] else _rl_cfg["seed"])
+                _run.begin("realism", "Realism", steps=int(_rl_cfg["steps"] or rig_steps),
+                           batch=int(rig_image.shape[0]))
+                _conv = [_rl_mod.render(_rl_cfg, rig_image[i:i + 1], cfg, _rseed3,
+                                        node_id=unique_id)[:, :, :, :3]
+                         for i in range(int(rig_image.shape[0]))]
+                _ch = min(int(v.shape[1]) for v in _conv)
+                _cw = min(int(v.shape[2]) for v in _conv)
+                rig_image = torch.cat([v[:, :_ch, :_cw, :] for v in _conv], dim=0)
+                _run.end("realism", "Realism")
+                _tap("realism", "Realism result", rig_image)
+                print("[RedNode Workspace] realism: the render is now a photograph "
+                      "(%d x %d)" % (rig_image.shape[2], rig_image.shape[1]), flush=True)
+            except Exception as exc:
+                _run.end("realism", "Realism", "error", error=str(exc)[:200])
+                print("[RedNode Workspace] realism failed: %s; the render is kept as it is"
+                      % exc, flush=True)
 
         # SWAP ON THE RENDER: the finished picture (a Latent tab render as much as
         # an Img2Img one) gets the person, then the rig polishes it at a low

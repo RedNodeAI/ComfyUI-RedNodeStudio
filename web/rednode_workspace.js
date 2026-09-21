@@ -11,7 +11,7 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { runTabBody, RUN_CSS, runLit, listenRun, configHost } from "./rednode_ws_run.js";
+import { runTabBody, RUN_CSS, runLit, listenRun, configHost, queueWorkflow } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
 import { batchStrip, sourceSwitch, sourceView,
@@ -178,6 +178,12 @@ css.textContent = `
 .rn-ws-rgroup{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--rn-g,#4a5058);
   padding-left:7px;border-radius:1px}
 .rn-ws-rglab{font-size:11px;color:#8a919b;padding:1px 2px 3px;letter-spacing:.02em}
+.rn-ws-railgen{display:flex;align-items:center;justify-content:center;gap:7px;flex:none;
+  min-height:38px;border:1px solid #d13a4f;border-radius:8px;background:#b8283c;color:#fff;
+  font-weight:600;font-size:13px;cursor:pointer;padding:0 10px}
+.rn-ws-railgen:hover{background:#cc3148}
+.rn-ws-railgen:disabled{opacity:.6;cursor:default}
+.rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
 .rn-ws-rail.compact .rn-ws-rgroup{padding-left:3px}
 .rn-ws-tab.rail{background:transparent;border:0;justify-content:flex-start;gap:11px;
@@ -1557,6 +1563,17 @@ export function readCfg(node) {
     if (name === "swap_ref") t.on = true;                  // Swap's switch decides
     if (name === "editor_src") {
       t.on = true;                                         // the stages' switches decide
+      // what the Editor edits: its gallery picture or the new render (workspace.py)
+      if (t.from !== "gallery" && t.from !== "render") {
+        const I1 = d.tabs.i2i || {};
+        const on1 = [I1.reangle, I1.swap].filter((x) => x && x.on);
+        t.from = on1.length && on1.every((x) => x.target === "render") ? "render" : "gallery";
+      }
+      for (const k of ["reangle", "realism", "swap"]) {
+        if (d.tabs.i2i?.[k] && typeof d.tabs.i2i[k] === "object") {
+          d.tabs.i2i[k].target = t.from === "render" ? "render" : "source";
+        }
+      }
       delete t.to_pass;                                    // the dropped hand-off switch
     }
     if (name === "subject" && (!t.people_meta || typeof t.people_meta !== "object"
@@ -7215,6 +7232,31 @@ function workspacePrefs(node, body) {
                      + "Finishing. This install only, never the workflow.";
   pr.append(prLab, prWrap, prHint);
   sect.appendChild(pr);
+
+  // ---- GENERATE: the rail's red button can open the Run page as it queues ------
+  {
+    const gr = document.createElement("div");
+    gr.className = "rn-ws-row";
+    gr.style.flexWrap = "wrap";
+    const gl = document.createElement("span");
+    gl.className = "hint";
+    gl.style.cssText = "flex:none;width:110px";
+    gl.textContent = "Generate opens Run";
+    const gb = document.createElement("button");
+    const on = !!wsPref("GenerateOpensRun", false);
+    gb.className = "rn-ws-btn rn-ws-compact" + (on ? " on" : "");
+    gb.style.cssText = "width:auto;padding:0 12px";
+    gb.textContent = on ? "On" : "Off";
+    gb.dataset.choice = "generate_opens_run";
+    gb.title = "On, the red Generate button on the rail also switches to the Run page.";
+    gb.onclick = () => { setWsPref("GenerateOpensRun", !on); render(node); };
+    const gh = document.createElement("span");
+    gh.className = "hint";
+    gh.style.cssText = "flex:0 1 320px;min-width:0";
+    gh.textContent = "Off by default. This install only, never the workflow.";
+    gr.append(gl, gb, gh);
+    sect.appendChild(gr);
+  }
 
   // ---- VRAM: hand the card back when it has been full and idle ---------------
   // On the tab rather than only in the settings dialog, at : a
@@ -14714,7 +14756,7 @@ function i2iSubLit(cfg, id) {
       && (t[k].target || "source") === "source");
   }
   if (id === "reangle") return !!(t.reangle?.on && (t.reangle.target === "render" || edPic));
-  if (id === "realism") return !!(t.realism?.on && edPic);
+  if (id === "realism") return !!(t.realism?.on && (t.realism.target === "render" || edPic));
   if (id === "swap") return !!(t.swap?.on && (t.swap.target === "render" || edPic));
   if (id === "converter") return (!!t.on && convActive(t.conv)) || finalActive(cfg.final);
   if (id === "upscale") return !!cfg.upscale?.on;
@@ -15134,6 +15176,38 @@ const edFlow = () => ", and that picture is the image output.";
 function editorSourcePage(node, body) {
   const cfg = node._rnCfg;
   const E = cfg.tabs.editor_src;
+  // WHAT THE EDITOR EDITS, for Re-angle, Realism and Swap at once
+  const fc = document.createElement("div");
+  fc.className = "rn-ws-card rn-ws-edfrom";
+  const fr = document.createElement("div");
+  fr.className = "rn-ws-row";
+  fr.style.flexWrap = "wrap";
+  const fl = document.createElement("span");
+  fl.className = "rn-ws-swlabel rn-ws-choicelab";
+  fl.textContent = "Edit";
+  const setFrom = (v) => {
+    E.from = v;
+    for (const k of ["reangle", "realism", "swap"]) {
+      if (cfg.tabs.i2i[k]) cfg.tabs.i2i[k].target = v === "render" ? "render" : "source";
+    }
+    writeCfg(node); render(node);
+  };
+  const fseg = segSwitch([
+    ["gallery", "Gallery picture", "Re-angle, Realism and Swap edit the picture picked below."],
+    ["render", "New render", "The Workspace renders first, then Re-angle, Realism and Swap "
+                           + "edit that render. Img2Img does not need to be on."],
+  ], E.from === "render" ? "render" : "gallery", setFrom);
+  fseg.dataset.choice = "editor_from";
+  const fn = document.createElement("span");
+  fn.className = "rn-ws-note";
+  fn.style.flex = "1 1 240px";
+  fn.textContent = E.from === "render"
+    ? "The render is made first, then edited: Re-angle, then Realism, then Swap."
+    : "The picture picked below is edited and is the image output.";
+  fr.append(fl, fseg, fn);
+  fc.appendChild(fr);
+  body.appendChild(fc);
+  if (E.from === "render") return;
   const view = sourceSwitch(node, body, "editor_src", "Gallery");
   if (view === "own") galleryBody(node, body, "editor_src", IMAGE_TABS.editor_src, { layout: "tabs" });
   else batchStrip(node, "editor_src", body, editorBatchOpts(node));
@@ -17374,7 +17448,10 @@ function editTargetRow(node, card, X, tag, tips) {
     b.onclick = () => { X.target = v; writeCfg(node); render(node); };
     tseg.appendChild(b);
   }
-  trow.append(tl, tseg);
+  // the choice lives on the Editor's Source page now; the row keeps the polish
+  tl.textContent = X.target === "render" ? "On the new render" : "On the gallery picture";
+  tl.title = "Chosen on the Editor's Source page, for every stage at once.";
+  trow.append(tl);
   if (X.target === "render") {
     const psw = document.createElement("div");
     psw.className = "rn-ws-sw rn-ws-" + tag + "polish" + (X.polish ? " on" : "");
@@ -19355,6 +19432,27 @@ export function render(node) {
   railPreset.onclick = (e) => { e.stopPropagation(); openPresetMenu(node, railPreset); };
   railHead.append(railTog, railFull, railSide, railPreset);
   rail.appendChild(railHead);
+  // GENERATE: queue the workflow from the rail, above the Run group
+  const railGen = document.createElement("button");
+  railGen.className = "rn-ws-railgen";
+  railGen.dataset.choice = "rail_generate";
+  railGen.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>';
+  const genLab = document.createElement("span");
+  genLab.className = "lb";
+  genLab.textContent = "Generate";
+  railGen.appendChild(genLab);
+  railGen.title = "Queue the workflow, the same as ComfyUI's Run button.";
+  railGen.onclick = () => {
+    // optional, off by default: land on the Run page to watch the stages
+    if (wsPref("GenerateOpensRun", false)) {
+      node._rnTab = "run";
+      node._rnRunSub = "run";
+      Object.assign((node.properties ||= {}), { rn_tab: "run", rn_run_sub: "run" });
+      render(node);
+    }
+    queueWorkflow(railGen);
+  };
+  rail.appendChild(railGen);
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
     const ids = g.tabs.filter((id) => shownIds.has(id));
