@@ -222,6 +222,35 @@ css.textContent = `
    dark rounded box per setting, dim label left, bold value right, uniform
    height, laid in a responsive grid. Unity comes from repetition. */
 .rn-ws-mbox{flex:1 1 380px;min-width:300px;gap:8px}
+/* THE MODELS PAGE: the rigs down the left, the tabs and cards beside, the cards
+   raised off the page with their titles marked, and the text a size up */
+.rn-ws-modelslay{display:flex;gap:14px;align-items:flex-start}
+.rn-ws-modelsmain{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:10px}
+.rn-ws-modelslay>.rn-ws-rigbar{flex:0 0 250px;position:sticky;top:0}
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-row{flex-direction:column;align-items:stretch}
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-row>button{justify-content:flex-start;width:100%}
+/* in the column the active prompt reads label, then the picker and Edit on a row */
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-activeprompt{flex-wrap:wrap}
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-activeprompt>span:first-child{flex:1 1 100%}
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-activeprompt>select{flex:1 1 auto;min-width:0;
+  font-size:13px;padding:5px 6px}
+.rn-ws-modelslay>.rn-ws-rigbar .rn-ws-holdtwo{padding-left:0;border-left:0;
+  padding-top:10px;border-top:1px solid #2e333a}
+.rn-ws-modelslay .rn-ws-card{background:#1e2127;border:1px solid #3a3f48;border-radius:10px;
+  padding:14px;box-shadow:0 3px 12px #0007}
+.rn-ws-modelslay .rn-ws-mhead .ch,.rn-ws-modelslay .rn-ws-card>.ch{font-size:14px;
+  font-weight:800;letter-spacing:.06em;color:#fff;padding-left:9px;border-left:3px solid #b8283c;
+  line-height:1.2}
+.rn-ws-modelslay .rn-ws-mhead .rn-ws-note{font-size:12.5px}
+.rn-ws-modelslay .rn-ws-note{font-size:12.5px;line-height:1.5}
+.rn-ws-modelslay .rn-ws-mgtitle{font-size:14px}
+.rn-ws-modelslay .rn-ws-pill{min-height:44px}
+.rn-ws-modelslay .rn-ws-pill>.k{font-size:13px}
+.rn-ws-modelslay .rn-ws-pill input,.rn-ws-modelslay .rn-ws-pill select{font-size:14px}
+.rn-ws-modelslay .rn-ws-filerow>.k{font-size:13.5px}
+.rn-ws-modelslay .rn-ws-filebox{font-size:13.5px;padding:8px 11px}
+.rn-ws-modelslay .rn-ws-famcard select{font-size:13px;padding:5px 8px}
+.rn-ws-modelslay .rn-ws-subt{font-size:13px;padding:10px 12px}
 .rn-ws-mbox.wide{flex:1 1 100%}
 .rn-ws-mhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .rn-ws-mhead .ch{margin:0}
@@ -11643,6 +11672,7 @@ function modelsBody(node, page) {
       const curIdx = rows.findIndex((row) => rigsOf(row).includes(rigName) && String(row.text || "").trim());
       const fallbackIdx = curIdx >= 0 ? -1 : rows.findIndex((row) => !rigsOf(row).length && String(row.text || "").trim());
       const pwrap = document.createElement("div");
+      pwrap.className = "rn-ws-activeprompt";
       pwrap.style.cssText = "display:flex;align-items:center;gap:6px";
       const pl = document.createElement("span");
       pl.className = "rn-ws-swlabel";
@@ -11740,6 +11770,16 @@ function modelsBody(node, page) {
     }
     page.insertBefore(strip, mwrap);
     if (curSub === "setup") modelsSetupPage(node, mwrap);
+    // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
+    // are editing stays in view whichever tab is open (the user, 2026-09-21)
+    const lay = document.createElement("div");
+    lay.className = "rn-ws-modelslay";
+    page.insertBefore(lay, bar);
+    for (const el of [bar, strip, mwrap]) el.remove();
+    const col = document.createElement("div");
+    col.className = "rn-ws-modelsmain";
+    lay.append(bar, col);
+    col.append(strip, mwrap);
   }
 
   let body = null;
@@ -18800,7 +18840,7 @@ export function render(node) {
   const body = document.createElement("div");
   body.className = "rn-ws-body"
     + (["paint", "prompts", "latent"].includes(cur) ? " full" : "")
-    + (cur === "camera" ? " wide" : "");
+    + (cur === "camera" || cur === "models" ? " wide" : "");
   // BEFORE the tab builds, never after: a tab sets this while building (the Post
   // list's scroll, the Order view's cards) and clearing it further down wiped the
   // hook before it could run, which put both lists back to the top on every click
