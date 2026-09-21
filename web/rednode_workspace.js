@@ -11549,8 +11549,31 @@ function nextRigFile(r) {
   if (!r || (r.kind && r.kind !== "files")) return null;
   if (!r.unet && !r.checkpoint) return ["unet", "Choose a model"];
   if (!r.clip && !r.checkpoint) return ["clip", "Choose a text encoder"];
+  if (r.clip && !r.clip_type) {
+    const g = guessClipType(r);
+    if (g) return ["clip_type", `Set CLIP type to ${g}`, g];
+  }
   if (!r.vae && !r.checkpoint) return ["vae", "Choose a VAE"];
   return null;
+}
+
+// THE CLIP TYPE a text encoder file wants, read off its name (and the model's, where
+// the encoder alone is ambiguous). "" when the name says nothing certain.
+export function guessClipType(r) {
+  const n = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const c = n(r?.clip);
+  const u = n(r?.unet) + n(r?.checkpoint);
+  if (!c) return "";
+  // Qwen3-VL 4B is Krea 2's encoder; Qwen 2.5 VL 7B is Qwen-Image's
+  if (/qwen3vl|qwen3vl4b/.test(c) || (c.includes("qwen3") && c.includes("vl"))) return "krea2";
+  if (c.includes("qwen25vl") || c.includes("qwen2vl")) return "qwen_image";
+  // plain Qwen 3 4B is Z-Image's (Lumina 2's loader); Gemma 2 2B is Lumina 2's own
+  if (c.includes("qwen34b") || c.includes("qwen3") || c.includes("gemma")) return "lumina2";
+  if (c.includes("umt5")) return "wan";
+  if (c.includes("t5xxl") && u.includes("sd3")) return "sd3";
+  if (c.includes("t5xxl") && (u.includes("flux") || u.includes("chroma"))) return "chroma";
+  if (u.includes("krea2")) return "krea2";
+  return "";
 }
 
 function modelsSub(node, cfg) {
@@ -11596,7 +11619,13 @@ function modelsBody(node, page) {
         go.onclick = () => {
           node._rnModelsSub = "files";
           (node.properties ||= {}).rn_models_sub = "files";
-          node._rnFocusFile = nx[0];
+          if (nx[0] === "clip_type") {
+            // the fix is known, so the button makes it rather than pointing at it
+            M.rigs[M.active].clip_type = nx[2];
+            writeCfg(node);
+          } else {
+            node._rnFocusFile = nx[0];
+          }
           render(node);
         };
         // one line, as the design has it: the icon, what is wrong, the next step
@@ -12237,7 +12266,18 @@ function modelsBody(node, page) {
               + "This also decides how the built-in render encodes prompts: krea2 "
               + "runs the Studio identity system, anything else encodes plain text.";
     sel.onchange = () => { rig.clip_type = sel.value; writeCfg(node); render(node); };
-    pill(body, "CLIP type", sel);
+    const typeRow = pill(body, "CLIP type", sel);
+    // MATCH: the type this CLIP file's name calls for, set on a click, never on its own
+    const guess = guessClipType(rig);
+    if (guess && guess !== rig.clip_type) {
+      const m = document.createElement("button");
+      m.className = "rn-ws-btn rn-ws-cliptypematch";
+      m.style.cssText = "width:auto;padding:3px 10px;flex:none";
+      m.textContent = `Match: ${guess}`;
+      m.title = `The CLIP file's name says it is a ${guess} text encoder. Click to set the type.`;
+      m.onclick = (e) => { e.stopPropagation(); rig.clip_type = guess; writeCfg(node); render(node); };
+      typeRow.appendChild(m);
+    }
     if (rig.clip_type === "krea2") officialRow(node, body, rig);
   }
   body = mkBox("Decoder", "", "", "", "The VAE that turns the result into a picture.");
