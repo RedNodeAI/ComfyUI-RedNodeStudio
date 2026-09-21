@@ -146,7 +146,16 @@ css.textContent = `
 .rn-ws-main{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 .rn-ws-rail{display:flex;flex-direction:column;gap:10px;flex:none;width:184px;overflow-y:auto;
   overflow-x:hidden;padding:4px 6px 4px 2px;box-sizing:border-box;border-right:1px solid #262a31}
-.rn-ws-rail.compact{width:52px;padding:4px 4px 4px 2px}
+.rn-ws-rail.compact{width:52px!important;padding:4px 4px 4px 2px}
+/* THE RAIL'S EDGE drags its width (kept per node); a double-click puts it back.
+   On the right the shell runs backwards, so the edge still sits between. */
+.rn-ws-railgrip{flex:none;width:6px;margin:0 -8px 0 -6px;cursor:col-resize;border-radius:3px;
+  align-self:stretch;touch-action:none}
+.rn-ws-railgrip:hover,.rn-ws-railgrip.drag{background:#3d434c}
+.rn-ws-shell.right{flex-direction:row-reverse}
+.rn-ws-shell.right .rn-ws-railgrip{margin:0 -6px 0 -8px}
+.rn-ws-shell.right .rn-ws-rail{border-right:0;border-left:1px solid #262a31;padding:4px 2px 4px 6px}
+.rn-ws-shell.right .rn-ws-railhead{justify-content:flex-start}
 .rn-ws-railhead{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex:none}
 .rn-ws-rail.compact .rn-ws-railhead{flex-direction:column;align-items:stretch}
 .rn-ws-railhead .rn-ws-tuck{margin-left:0}
@@ -17882,6 +17891,47 @@ function railSwitches(node, cfg, id) {
   return [];
 }
 
+const RAIL_MIN_W = 130;
+const RAIL_MAX_W = 380;
+
+// The rail's draggable edge. The width follows the pointer while dragging, in the
+// rail's own pixels (the panel's UI scale and the canvas zoom both sit between), and
+// is kept on the node when let go. A double-click forgets it.
+function railGrip(node, rail, onRight) {
+  const g = document.createElement("div");
+  g.className = "rn-ws-railgrip";
+  g.title = "Drag to make the tabs wider or narrower. Double-click for the default width.";
+  g.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = rail.getBoundingClientRect?.();
+    const cssW = rail.offsetWidth || Number(node.properties?.rn_rail_w) || 184;
+    const k = box?.width && cssW ? box.width / cssW : 1;          // screen px per rail px
+    const x0 = e.clientX || 0;
+    let w = cssW;
+    g.classList.add("drag");
+    const move = (ev) => {
+      const dx = ((ev.clientX || 0) - x0) / (k || 1);
+      w = Math.round(Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, cssW + (onRight ? -dx : dx))));
+      rail.style.width = w + "px";
+    };
+    const up = () => {
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", up, true);
+      g.classList.remove("drag");
+      (node.properties ||= {}).rn_rail_w = w;
+    };
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", up, true);
+  });
+  g.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    delete (node.properties ||= {}).rn_rail_w;
+    render(node);
+  });
+  return g;
+}
+
 function openRailMenu(node, t, ev) {
   ev.preventDefault();
   ev.stopPropagation();
@@ -18099,11 +18149,16 @@ export function render(node) {
   const compact = !!node.properties?.rn_rail_compact;
   const rail = document.createElement("div");
   rail.className = "rn-ws-rail" + (compact ? " compact" : "");
+  const onRight = node.properties?.rn_rail_side === "right";
+  const railW = Number(node.properties?.rn_rail_w) || 0;
+  if (railW) rail.style.width = Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, railW)) + "px";
   const railHead = document.createElement("div");
   railHead.className = "rn-ws-railhead";
   const railTog = document.createElement("button");
   railTog.className = "rn-ws-railtog";
-  railTog.innerHTML = compact ? RAIL_ICONS.open : RAIL_ICONS.fold;
+  // the arrow points the way the rail folds, which on the right is rightwards
+  railTog.innerHTML = (compact !== (node.properties?.rn_rail_side === "right"))
+    ? RAIL_ICONS.open : RAIL_ICONS.fold;
   railTog.title = compact ? "Show the tab names beside their icons."
                           : "Fold the tabs down to their icons and lights, for a narrow node.";
   railTog.onclick = () => {
@@ -18121,7 +18176,17 @@ export function render(node) {
     if (node._rnFsPrev) node._rnFsClose?.();
     else openFullscreen(node);
   };
-  railHead.append(railTog, railFull);
+  // THE SIDE: the rail on the left of the pages or on the right, per node
+  const railSide = document.createElement("button");
+  railSide.className = "rn-ws-railtog rn-ws-railside";
+  railSide.innerHTML = RAIL_ICONS.side;
+  railSide.title = onRight ? "Move the tabs to the left of the pages."
+                           : "Move the tabs to the right of the pages.";
+  railSide.onclick = () => {
+    (node.properties ||= {}).rn_rail_side = onRight ? "left" : "right";
+    render(node);
+  };
+  railHead.append(railTog, railFull, railSide);
   rail.appendChild(railHead);
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
@@ -18189,10 +18254,11 @@ export function render(node) {
   // the socket tuck heads the rail, beside the fold button
   railHead.appendChild(tuck);
   const shell = document.createElement("div");
-  shell.className = "rn-ws-shell";
+  shell.className = "rn-ws-shell" + (onRight ? " right" : "");
   const main = document.createElement("div");
   main.className = "rn-ws-main";
-  shell.append(rail, main);
+  if (compact) shell.append(rail, main);
+  else shell.append(rail, railGrip(node, rail, onRight), main);
   host.appendChild(shell);
 
   const body = document.createElement("div");
