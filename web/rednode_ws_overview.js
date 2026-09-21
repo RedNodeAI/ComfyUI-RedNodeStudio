@@ -104,7 +104,8 @@ export function overviewBoxes(node, cfg) {
   const idParts = [];
   if (tabs.subject?.on && tabs.subject.images?.length) idParts.push("Subject " + tabs.subject.images.length);
   if (tabs.scene?.on && tabs.scene.images?.length) idParts.push("Scene " + tabs.scene.images.length);
-  if (tabs.boost_mask?.on) idParts.push("Masks");
+  // the mask boosts the Subject's references, so it counts only while they are in
+  if (tabs.boost_mask?.on && tabs.subject?.on && tabs.subject.images?.length) idParts.push("Masks");
   const idProbs = identityIssues(cfg);
   feeds.push({
     key: "identity", label: "Krea 2 Identity",
