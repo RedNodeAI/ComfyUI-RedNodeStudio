@@ -589,6 +589,9 @@ css.textContent = `
    of a wide node. The Paint tab opts out - its canvas earns the width. */
 .rn-ws-body:not(.full)>*{max-width:940px;width:100%;box-sizing:border-box;
   margin-left:auto;margin-right:auto}
+/* the Camera tab's studio earns more room than a column of settings: its top view,
+   camera card and path sit side by side */
+.rn-ws-body.wide:not(.full)>*{max-width:1400px}
 .rn-ws-row{display:flex;gap:7px;align-items:center;flex:none}
 .rn-ws-row .hint{font-size:11.5px;opacity:.5;line-height:1.4;flex:1}
 .rn-ws-on{background:#15171b;border:1px solid #33373d;border-radius:4px;color:#9aa0a8;cursor:pointer;
@@ -3405,11 +3408,14 @@ function cameraBody(node, body) {
     body.appendChild(row);
   }
   const bar = document.createElement("div");
-  bar.className = "rn-ws-row";
+  bar.className = "rn-ws-row rn-ws-cambar";
+  // the chips wrap when there are many prompts, and the note takes a line of its own
+  // under them: squeezed beside a long chip strip it stood a word wide
+  bar.style.flexWrap = "wrap";
   const seg = document.createElement("div");
   seg.className = "rn-ws-seg";
   for (const [v, l, tip] of [["prompt", "Prompt", "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs."],
-                             ["i2i", "Img2Img", "A separate studio whose camera drives the Img2Img tab's RE-ANGLE (re-shooting the source from another viewpoint)."]]) {
+                             ["i2i", "Re-angle", "A separate studio whose camera drives the Editor's Re-angle (re-shooting the picture from another viewpoint)."]]) {
     const b = document.createElement("button");
     b.className = "rn-ws-segb" + (sub === v ? " on" : "");
     b.textContent = l; b.title = tip;
@@ -3418,7 +3424,8 @@ function cameraBody(node, body) {
   }
   bar.appendChild(seg);
   const note = document.createElement("span");
-  note.className = "rn-ws-note";
+  note.className = "rn-ws-note rn-ws-camnote";
+  note.style.flexBasis = "100%";
   bar.appendChild(note);
   body.appendChild(bar);
 
@@ -3433,6 +3440,7 @@ function cameraBody(node, body) {
     // which prompt's studio: chips, the same as the Prompts tab
     const chips = document.createElement("div");
     chips.className = "rn-ws-seg";
+    chips.style.flexWrap = "wrap";
     rows.forEach((row, i) => {
       const b = document.createElement("button");
       b.className = "rn-ws-segb" + (node._rnPromptSel === i ? " on" : "");
@@ -3458,14 +3466,14 @@ function cameraBody(node, body) {
     if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
     const R = t.reangle;
     note.textContent = R.on && R.camera === "studio"
-      ? "This camera drives the Img2Img tab's RE-ANGLE. A camera path gives one re-shot view per shot."
-      : "The Img2Img tab's RE-ANGLE uses this camera when it is on and set to Studio.";
+      ? "This camera drives the Editor's Re-angle. A camera path gives one re-shot view per shot."
+      : "The Editor's Re-angle uses this camera when it is on and set to Studio.";
     const goI2i = document.createElement("button");
     goI2i.className = "rn-ws-btn";
     goI2i.style.cssText = "width:auto;padding:0 10px;margin-left:auto";
-    goI2i.textContent = "Img2Img tab ▸";
-    goI2i.onclick = () => { node._rnTab = "i2i"; (node.properties ||= {}).rn_tab = "i2i"; render(node); };
-    bar.appendChild(goI2i);
+    goI2i.textContent = "Re-angle page ▸";
+    goI2i.onclick = () => openStagePage(node, "reangle");
+    bar.insertBefore(goI2i, note);
     getState = () => {
       const raw = R.studio;
       if (typeof raw === "string" && raw.trim()) { try { return JSON.parse(raw); } catch (e) { return {}; } }
@@ -18480,7 +18488,8 @@ export function render(node) {
 
   const body = document.createElement("div");
   body.className = "rn-ws-body"
-    + (["paint", "prompts", "latent"].includes(cur) ? " full" : "");
+    + (["paint", "prompts", "latent"].includes(cur) ? " full" : "")
+    + (cur === "camera" ? " wide" : "");
   // BEFORE the tab builds, never after: a tab sets this while building (the Post
   // list's scroll, the Order view's cards) and clearing it further down wiped the
   // hook before it could run, which put both lists back to the top on every click
