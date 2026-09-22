@@ -60,6 +60,24 @@ FAMILIES = (
                 "scheduler": "simple"},
     },
     {
+        "id": "qwen_image_21",
+        "label": "Qwen Image 2.1",
+        "blurb": "Alibaba's 7B generate-and-edit model with its own RGBA VAE. Needs "
+                 "ComfyUI 0.37.0 or newer.",
+        "roles": {
+            # the int8_convrot build loads through the standard loader on 0.37
+            "unet": {"all": ("qwen_image_2.1",), "none": ("vae", "lora", "edit"),
+                     "example": "qwen_image_2.1_bf16.safetensors in models/diffusion_models"},
+            # the 8B Qwen3-VL; the qwen3.5 "pe" files are the prompt rewriter, not it
+            "clip": {"all": ("qwen3vl", "8b"), "none": ("32b", "pe_t2i", "pe_i2i"),
+                     "example": "qwen3vl_8b_int8_convrot.safetensors in models/text_encoders"},
+            "vae": {"all": ("qwen_image_2.1", "vae"), "none": (),
+                    "example": "qwen_image_2.1_vae_bf16.safetensors in models/vae"},
+        },
+        "rig": {"clip_type": "qwen_image", "steps": 25, "cfg": 1.0, "sampler": "euler",
+                "scheduler": "simple"},
+    },
+    {
         "id": "sdxl",
         "label": "SDXL / Illustrious / Pony",
         "blurb": "One checkpoint file carries the model, its text encoders and its VAE.",
