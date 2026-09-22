@@ -145,6 +145,8 @@ tabs keep working. Beside it, the full screen button puts the same panel over th
 the red **Generate** under them queues the workflow. The socket tuck parks unwired sockets as dots
 along the node's bottom edge, so a node with forty sockets is no taller than its panel.
 
+![The rail on the right-hand side, on the Run page after an Anima render](images/run-rail-right.webp)
+
 ![The Overview: the Workspace preset card, what feeds the render, the run in order, and what the run needs](images/overview.webp)
 
 **Overview.** Workspace presets sit at the top: save the whole panel under a name and load it
@@ -225,6 +227,8 @@ files every finished picture itself.
 before Post FX when switched on, so a single Workspace renders, details, grades and files. A
 Detailer, Post Process or Save node already in an older workflow steps aside for any step the
 Workspace did.
+
+![The Prompts tab: a Frame box row with Style, Subject and Surroundings filled in, and the camera beside it](images/prompts.webp)
 
 **Prompts.** Rows, and the one chosen on the Models tab renders on whichever rig is active. Each
 row can name a LoRA set, which wins over the rig's own for that prompt. A row is either
@@ -317,6 +321,10 @@ and Clear canvas takes the picture off as well as the paint, where Clear paint k
 ![The Hero Creator's Headshot page: the source photo, the head cut out above the clothing, and the front-on headshot](images/hero-headshot.webp)
 
 ![The Hero Creator's Redesign page: the headshot it works from, a redesign and the instruction that made it](images/hero-redesign.webp)
+
+![The headshot in the Subject gallery as the main subject](images/identity-subject.webp)
+
+![The same woman in a new scene: a beach at sunset, rendered from the headshot on Krea 2 Turbo with the identity edit LoRA](images/identity-run.webp)
 
 **Krea 2 Identity: Subject, Hero Creator, Scene, Masks.** One tab with a sub-tab for each, and a
 light on each showing what is in use. The Hero Creator makes a clean front-on headshot out of a

@@ -13379,7 +13379,7 @@ function promptsBody(node, body) {
     h1.textContent = "Prompts";
     const sub = document.createElement("div");
     sub.className = "rn-ws-note";
-    sub.textContent = "Manage your prompts and their linked rigs.";
+    sub.textContent = "Your prompts: the active one renders on whichever rig is active.";
     head.append(h1, sub);
     body.appendChild(head);
     // the PROMPT bar: switch and add prompts up here, one
