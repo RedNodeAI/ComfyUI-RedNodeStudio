@@ -4,6 +4,69 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.5.0** - 2026-09-22
+
+The Workspace gets a new layout and four new jobs: an Editor tab, an Upscale page, Realism
+and the Hero Creator. Qwen Image 2.1 runs as a rig, released 20 September and working here
+two days later. The RedNode Studio template is now V1.5.
+
+### New
+
+- A tab rail replaces the tab strip: grouped, with an icon and a light per tab. It folds to
+  icons only, drags wider or narrower, and sits on either side of the pages. Right-click a
+  tab to switch it on or off, or to hide it. UI presets pick the tabs for the job (All,
+  Basic, New image, Image to image, Edit, Paint, Finishing), and your own save on Advanced.
+  A full screen button and a red Generate sit at its head; an Advanced switch, off by
+  default, makes Generate open the Run page
+- Editor tab: Source, Upscale, Realism, Re-angle, Swap and Converter, with its own source
+  gallery. One choice on Source sends Re-angle, Realism and Swap to the gallery picture or
+  to the new render, so a render can be turned into a photograph in the same queue. The
+  edited picture is the image output
+- Realism turns an illustration into a photograph. The Exact engine is the Anything2Real
+  workflow node for node, with an optional photo finish and the Ostris encoder; the
+  Alternative engine is the pack's own and needs no other pack. The conversion LoRA is found
+  among your files by name and hash
+- Upscale: SeedVR2, VOSR 2.0 or the tiled upscale on one picture or a folder, with a fit
+  step first and a before and after in the result
+- Hero Creator, on the Krea 2 Identity tab: a clean front-on headshot out of any gallery
+  picture, cropped above the clothing, which can be redesigned with a render and sent back
+  to the gallery as a subject
+- Models tab: rig cards in a column, and Model, CLIP, VAE, Sampling, Seed and Setup pages.
+  Setup makes a rig in one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL /
+  Illustrious / Pony from the files in your folders. Set and Missing badges on each file
+  card, one Next step in the warning bar, and Match CLIP type from the text encoder file
+- Seed page: link each part of a run (Re-angle, Realism, Swap, Upscale, Detailer, LoRA
+  ranges, Post's random ranges, the auto prompt) to the main seed, a named seed or its own,
+  and a Same seed every pass switch
+- A rig can sample through another pack's sampler node, starting with RES4LYF's
+  ClownsharKSampler
+- Prompts no longer belong to rigs: the chosen row renders on whichever rig is active, and a
+  row can name its own LoRA set
+- The LoRA stack has a search box, pinned in long stacks, and Only on at the top
+- Qwen Image 2.1: its own text encode, its RGBA VAE handled everywhere a picture is decoded,
+  and a Setup family. Needs ComfyUI 0.37.0 or newer
+- RedNode Studio Assistant: a read-only helper on a local Ollama model that explains a
+  Workspace's settings and proposes changes that only apply when you press Apply
+- RedNode Wildcards writes a __wildcard__ file from the canvas, and wildcards resolve in
+  every prompt box
+- Start Here offers seven more packs: the two the template's ZTurbo chain and prompt need,
+  and the five behind Realism and the ClownsharKSampler
+
+### Fixes
+
+- A queue with a Re-angle, Realism or Swap seed linked to another part failed
+- A blank canvas rendered at twice the width and height on a model with a 1/16 latent
+  (Qwen Image 2.1, Flux 2), and four times as slowly. Krea 2, Z-Image and SDXL were not
+  affected
+- ComfyUI's own step preview was drawn on the Workspace and Detailer nodes when a live
+  preview method was set, squeezing the panel to a strip, and stayed there after the run
+- The Hero Creator's delete route accepted a Windows backslash path out of its folder
+- A single-pass render from a blank canvas was labelled Img2Img on the Run page
+- ComfyUI's Refresh did not reach the Models page's file pickers
+- A boost mask alone lit Krea 2 Identity and raised the edit LoRA warning with the Subject
+  off
+- The Run page listed Save before Realism
+
 **1.4.3** - 2026-09-19
 
 Fixes, most of them the same shape: a control the panel shows, and a run that

@@ -1,5 +1,5 @@
 {
-  "last_node_id": 17,
+  "last_node_id": 24,
   "last_link_id": 0,
   "nodes": [
     {
@@ -21,7 +21,7 @@
       "title": "Note",
       "properties": {},
       "widgets_values": [
-        "START HERE: install the packs RedNode Studio can use\n\nThis workflow renders nothing. It holds one node from each pack the Workspace can lean on, so\nComfyUI Manager finds them all at once instead of one at a time.\n\n1. Manager says some nodes are missing when this opens. Let it install them.\n2. Restart ComfyUI.\n3. Open RedNode Studio from the template browser and work from there. This file has done its job.\n\nNone of these are required. The Workspace renders without every one of them and says on the Run\ntab when a pass wanted one that is not here. Install what you want and skip the rest: the\nOverview tab's Check installs button says which ones your own settings actually call for."
+        "START HERE: install the packs RedNode Studio can use\n\nThis workflow renders nothing. It holds one node from each pack the Workspace can lean on, so\nComfyUI Manager finds them all at once instead of one at a time.\n\n1. Manager says some nodes are missing when this opens. Let it install them.\n2. Restart ComfyUI.\n3. Open RedNode Studio from the template browser and work from there. This file has done its job.\n\nThe Workspace needs none of these. The RedNode Studio template needs Light and Scene, the Style browser, the Text node, GGUF and the FlowMatch scheduler; everything else is optional. The Workspace renders without every one of them and says on the Run\ntab when a pass wanted one that is not here. Install what you want and skip the rest: the\nOverview tab's Check installs button says which ones your own settings actually call for."
       ],
       "color": "#432",
       "bgcolor": "#653"
@@ -377,11 +377,11 @@
       "type": "Note",
       "pos": [
         0,
-        780
+        1160
       ],
       "size": [
         1180,
-        620
+        900
       ],
       "flags": {},
       "order": 16,
@@ -391,10 +391,171 @@
       "title": "Note",
       "properties": {},
       "widgets_values": [
-        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nVOSR 2.0 upscale\n    A Detailer pass set to VOSR 2.0. It enlarges what is there rather than inventing detail, which suits anime and lineart, and it costs about a quarter of the VRAM of a SeedVR2 pass at x4. The model downloads itself on the first run, about 6.5 GB.\n    https://github.com/ylchen333/ComfyUI-VOSR2\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. It installs without a checkpoint, so put one in models/sam3 too: https://huggingface.co/yolain/sam3-safetensors\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nDepth\n    The depth that Depth of field, Atmospheric haze and Relight read on the Post tab. Its estimators fetch their own weights the first time they run.\n    https://github.com/Fannovel16/comfyui_controlnet_aux\n\nSubject mask\n    The subject mask a Post card's Limit row uses to work on the subject or the background alone.\n    https://github.com/1038lab/ComfyUI-RMBG\n\nLight and Scene\n    The Light & Color and Scene nodes in the RedNode Studio template. That template will not run without this one.\n    https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter\n\nStyle browser\n    The Style browser in the RedNode Studio template, for picking a look from the Krea moodboards.\n    https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy"
+        "WHAT EACH ONE IS FOR\n\nEach node above is a marker for Manager and nothing else. Nothing is wired, and nothing renders.\n\n\nSeedVR2 upscale\n    A Detailer pass set to SeedVR2 upscale.\n    https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler\n\nTiled upscale\n    A Detailer pass set to the tiled upscale.\n    https://github.com/ssitu/ComfyUI_UltimateSDUpscale\n\nVOSR 2.0 upscale\n    A Detailer pass set to VOSR 2.0. It enlarges what is there rather than inventing detail, which suits anime and lineart, and it costs about a quarter of the VRAM of a SeedVR2 pass at x4. The model downloads itself on the first run, about 6.5 GB.\n    https://github.com/ylchen333/ComfyUI-VOSR2\n\nSegmenting\n    Finding what a Detailer pass works on, and the Paint tab's auto mask. It installs without a checkpoint, so put one in models/sam3 too: https://huggingface.co/yolain/sam3-safetensors\n    https://github.com/yolain/ComfyUI-Easy-Sam3\n\nGGUF models\n    Loading a .gguf diffusion model on a rig.\n    https://github.com/city96/ComfyUI-GGUF\n\nINT8 models\n    Loading an INT8 W8A8 diffusion model on a rig.\n    https://github.com/BobJohnson24/ComfyUI-INT8-Fast\n\nWD14 tags\n    The WD14 tags caption engine on the Auto prompt page.\n    https://github.com/pythongosssss/ComfyUI-WD14-Tagger\n\nFlorence\n    The Florence caption engine on the Auto prompt page.\n    https://github.com/kijai/ComfyUI-Florence2\n\nJoyCaption\n    The JoyCaption caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-JoyCaption\n\nQwenVL\n    The QwenVL caption engine on the Auto prompt page.\n    https://github.com/1038lab/ComfyUI-QwenVL\n\nDepth\n    The depth that Depth of field, Atmospheric haze and Relight read on the Post tab. Its estimators fetch their own weights the first time they run.\n    https://github.com/Fannovel16/comfyui_controlnet_aux\n\nSubject mask\n    The subject mask a Post card's Limit row uses to work on the subject or the background alone.\n    https://github.com/1038lab/ComfyUI-RMBG\n\nLight and Scene\n    The Light & Color and Scene nodes in the RedNode Studio template. That template will not run without this one.\n    https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter\n\nStyle browser\n    The Style browser in the RedNode Studio template, for picking a look from the Krea moodboards.\n    https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards\n\nSeed node\n    Used by the RedNode Multi-Angle example workflow.\n    https://github.com/rgthree/rgthree-comfy\n\nText node\n    The text node feeding the prompt in the RedNode Studio template. That template will not run without this one.\n    https://github.com/Derfuu/Derfuu_ComfyUI_ModdedNodes\n\nFlowMatch scheduler\n    The scheduler on the RedNode Studio template's ZTurbo chain. That rig will not run without this one.\n    https://github.com/erosDiffusion/ComfyUI-EulerDiscreteScheduler\n\nRealism\n    The Editor's Realism tab, Exact engine: it runs the Anything2Real workflow node for node, and these four packs are the nodes it calls. The Ostris edit pack also gives the Ostris encoder choice. The Alternative engine needs none of them.\n    https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit\n    https://github.com/cardenluo/ComfyUI-Apt_Preset\n    https://github.com/chflame163/ComfyUI_LayerStyle\n    https://github.com/EllangoK/ComfyUI-post-processing-nodes\n\nbeta57 and ClownsharKSampler\n    Realism renders on the beta57 schedule, which this pack registers, and a rig's Sampling page can run its passes through RES4LYF's ClownsharKSampler.\n    https://github.com/ClownsharkBatwing/RES4LYF\n"
       ],
       "color": "#432",
       "bgcolor": "#653"
+    },
+    {
+      "id": 18,
+      "type": "DF_Text",
+      "pos": [
+        0,
+        760
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "DF_Text",
+        "cnr_id": "derfuu_comfyui_moddednodes"
+      },
+      "title": "Text node (Derfuu Modded Nodes)",
+      "widgets_values": []
+    },
+    {
+      "id": 19,
+      "type": "FlowMatchEulerDiscreteScheduler (Custom)",
+      "pos": [
+        300,
+        760
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "FlowMatchEulerDiscreteScheduler (Custom)",
+        "cnr_id": "erosdiffusion-eulerflowmatchingdiscretescheduler"
+      },
+      "title": "FlowMatch scheduler (EulerDiscreteScheduler)",
+      "widgets_values": []
+    },
+    {
+      "id": 20,
+      "type": "Krea2OstrisEditModelPatch",
+      "pos": [
+        600,
+        760
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Krea2OstrisEditModelPatch",
+        "cnr_id": "comfyui-krea2-ostris-edit"
+      },
+      "title": "Realism: Ostris edit (Krea2-Ostris-Edit)",
+      "widgets_values": []
+    },
+    {
+      "id": 21,
+      "type": "Easy_QwenEdit2509",
+      "pos": [
+        900,
+        760
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "Easy_QwenEdit2509",
+        "cnr_id": "ComfyUI-Apt_Preset"
+      },
+      "title": "Realism: edit encode (Apt_Preset)",
+      "widgets_values": []
+    },
+    {
+      "id": 22,
+      "type": "LayerUtility: ImageScaleByAspectRatio V2",
+      "pos": [
+        0,
+        950
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "LayerUtility: ImageScaleByAspectRatio V2",
+        "cnr_id": "comfyui_layerstyle"
+      },
+      "title": "Realism: aspect scale (LayerStyle)",
+      "widgets_values": []
+    },
+    {
+      "id": 23,
+      "type": "ColorCorrect",
+      "pos": [
+        300,
+        950
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "ColorCorrect",
+        "cnr_id": "comfyui-post-processing-nodes"
+      },
+      "title": "Realism: colour correct (post-processing-nodes)",
+      "widgets_values": []
+    },
+    {
+      "id": 24,
+      "type": "ClownsharKSampler_Beta",
+      "pos": [
+        600,
+        950
+      ],
+      "size": [
+        270,
+        130
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "ClownsharKSampler_Beta",
+        "cnr_id": "RES4LYF"
+      },
+      "title": "beta57 and ClownsharKSampler (RES4LYF)",
+      "widgets_values": []
     }
   ],
   "links": [],

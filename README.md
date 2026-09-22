@@ -27,7 +27,8 @@ Search for **RedNode Studio** in ComfyUI Manager, or clone it with the line abov
 
 Restart ComfyUI. Everything registers under the `krea2` and `RedNode` categories in the node menu.
 
-Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs.
+Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs. ComfyUI
+0.26.0 or newer, which is where Krea 2 arrived; Qwen Image 2.1 rigs need 0.37.0 or newer.
 
 ### Optional packs
 
@@ -56,6 +57,14 @@ open the main template.
 | [Krea2-BBOX-Prompter](https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter) | The Light & Color and Scene nodes the RedNode Studio template runs on |
 | [ComfyUI-Krea-Moodboards](https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards) | The Style browser in the RedNode Studio template |
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
+| [ComfyUI-VOSR2](https://github.com/ylchen333/ComfyUI-VOSR2) | A Detailer pass, the Editor's Upscale and the Hero Creator set to VOSR 2.0 |
+| [ComfyUI-EulerDiscreteScheduler](https://github.com/erosDiffusion/ComfyUI-EulerDiscreteScheduler) | The FlowMatch scheduler on the RedNode Studio template's ZTurbo chain |
+| [Derfuu_ComfyUI_ModdedNodes](https://github.com/Derfuu/Derfuu_ComfyUI_ModdedNodes) | The text node feeding the RedNode Studio template's prompt |
+| [ComfyUI-Krea2-Ostris-Edit](https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit) | The Editor's Realism, its Exact engine and the Ostris encoder |
+| [ComfyUI-Apt_Preset](https://github.com/cardenluo/ComfyUI-Apt_Preset) | The Editor's Realism, Exact engine |
+| [ComfyUI_LayerStyle](https://github.com/chflame163/ComfyUI_LayerStyle) | The Editor's Realism, Exact engine |
+| [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | The Editor's Realism, Exact engine |
+| [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) | Realism's beta57 schedule, and the ClownsharKSampler a rig can sample through |
 
 ComfyUI-Easy-Sam3 installs without a checkpoint. Put one in `models/sam3` as well, from
 [yolain/sam3-safetensors](https://huggingface.co/yolain/sam3-safetensors) or Meta's own
@@ -68,15 +77,18 @@ Ollama is a program of its own rather than a node pack. Install it from
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
-`example_workflows/RedNodeStudio_V1.4.json` directly. It is the whole rig wired up, and it reads
+`example_workflows/RedNodeStudio_V1.5.json` directly. It is the whole rig wired up, and it reads
 left to right. It uses two of the packs above, Krea2-BBOX-Prompter for its Light & Color and
 Scene nodes and ComfyUI-Krea-Moodboards for its Style browser, so open the Start here workflow
 before it and let Manager install them.
 
 If you would rather build it yourself, the graph is short:
 
-1. Add **RedNode Studio Workspace**. On its Models tab, make a rig: the model, its CLIP, its VAE,
-   and the sampler numbers. Choose **Built-in sampler** and the node renders on its own.
+1. Add **RedNode Studio Workspace**. On its Models tab, open **Setup** and press the family you
+   have: Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL / Illustrious / Pony. It finds the
+   files in your model folders and makes the rig with that model's numbers. Choose **Built-in
+   sampler** and the node renders on its own; the red **Generate** at the top of the tab rail
+   queues it.
 2. Write the prompt on the Prompts tab, and put a reference on the Subject tab if there is a face
    to keep.
 3. Wire the workspace's `image` output into **RedNode Studio Detailer**, then into **RedNode Post
@@ -123,10 +135,15 @@ a workflow. **Cancel** stops waiting; an Ollama call already running may finish.
 
 ## The Workspace
 
-Fourteen tabs, in four groups, with an Overview in front of them. The strip sits on the panel and the panel sits on the node; press
-the full screen button and the same panel takes the whole window. The socket tuck, the plug on the
-row above the tabs, parks unwired sockets as dots along the node's bottom edge, so a node with
-forty sockets is no taller than its panel.
+Fifteen tabs on a rail down the side of the panel, in groups: Run, View, Model, Canvas, Mood,
+Identity, Refine and Settings, each with its icon, a light that says whether it is in use, and a
+colour bar. The rail folds to icons only, drags wider or narrower by its edge, and moves to either
+side of the pages. Right-click a tab to switch what it runs on or off, or to hide it. The preset
+button at the top of the rail picks the tabs for the job at hand: All, Basic, New image, Image to
+image, Edit, Paint and Finishing ship with the pack, and your own save on the Advanced tab. Hidden
+tabs keep working. Beside it, the full screen button puts the same panel over the whole window, and
+the red **Generate** under them queues the workflow. The socket tuck parks unwired sockets as dots
+along the node's bottom edge, so a node with forty sockets is no taller than its panel.
 
 ![The Overview: the Workspace preset card, what feeds the render, the run in order, and what the run needs](images/overview.webp)
 
@@ -162,11 +179,25 @@ through the standard loader, or INT8 W8A8 outright through ComfyUI-INT8-Fast whe
 installed; the file picker lists those packs' files beside the standard ones. A rig can also be
 your own nodes: name it on RedNode Rig Model, Rig Inputs and Rig Result, and every pass on that rig
 samples through your graph, with no wire to the Workspace. A Krea 2 rig carries an Official Krea 2
-model switch, and the identity edit warns until it is set. The tab is laid out by purpose: a Rigs
-bar, then Files and Sampling side by side, the Seed across the bottom. The footer carries the UI
-scale and the presets cog; the resize long edge and the studio preset are on the Advanced tab.
+model switch, and the identity edit warns until it is set.
 
-**Run.** Queue the workflow and watch it. Generate sits beside Full or Draft (Draft makes the
+The rigs sit in a column of cards on the left, each with its model family and a tick per file, and
+the pages beside them are Model, CLIP, VAE, then Sampling, Seed and Setup. **Setup** makes a rig in
+one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL / Illustrious / Pony: it finds the
+files in your model folders by name, newest first, and sets that model's steps, cfg, sampler and
+CLIP type, all of it editable afterwards. It reads file names and dates and nothing else, and
+downloads nothing. The warning bar names the one next step a rig is missing, and **Match CLIP
+type** sets the type from the text encoder file. **Sampling** is in cards: the main render, the
+sampler node, image to image, the Detailer's steps and the dials. A rig can sample through another
+pack's sampler node instead of the built-in one, starting with RES4LYF's ClownsharKSampler, and
+falls back to the built-in one where that node cannot take the run. **Seed** holds the main seed,
+named seeds of your own, and a link for each part of a run: Re-angle, Realism, Swap, Upscale, the
+Detailer, the LoRA ranges, Post's random ranges and the auto prompt each follow the main seed, a
+named one or their own, and Same seed every pass stops the passes stepping it.
+
+**Run.** Queue the workflow and watch it. The rail's Generate queues from any tab, and an
+Advanced switch, off by default, makes it open this page as well. Generate here sits beside Full
+or Draft (Draft makes the
 Detailer and the Post chain pass the picture through for fast rerolls) and the VRAM limit, your
 card's size from 8 GB to 32 GB+, or Free range. Under them the run's estimated peak, worked out
 from the model files it will load, the size it works at and, for Swap and Re-angle, the edit
@@ -193,7 +224,8 @@ before Post FX when switched on, so a single Workspace renders, details, grades 
 Detailer, Post Process or Save node already in an older workflow steps aside for any step the
 Workspace did.
 
-**Prompts.** Rows, each linked to one or more rigs, so a rig renders its own words. A row is either
+**Prompts.** Rows, and the one chosen on the Models tab renders on whichever rig is active. Each
+row can name a LoRA set, which wins over the rig's own for that prompt. A row is either
 a Frame box, the prompt frame editor with Style, Subject, Surroundings and Light and colour and the
 framing dial between them, or a Plain box for any other model. Each writing box keeps its saved
 versions behind a Presets button, and an Anything else box under the frame takes raw text: Auto
@@ -206,14 +238,15 @@ Wildcards and `@keyword` macros resolve on the run's seed.
 
 **Camera.** The stage from the camera section below, on its own tab, with a master switch. It has
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
-LoRAs, and a separate one for the Img2Img tab's re-angle.
+LoRAs, and a separate one for the Editor's Re-angle.
 
 ![The LoRAs tab: a tab per set, stack presets, and grouped slots that fold and switch off together](images/lora-stack.webp)
 
 **LoRAs.** The main stack, plus named sets on their own sub-tabs. Rows drag by their grip, switch
 off by their eye, and group under titles; a strength can be a random range with the roll shown
 after the run. A rig picks its set by name, and so can a Detailer pass or a paint pass. The Paint
-tab has a stack of its own.
+tab has a stack of its own. A search box at the top of the stack filters its rows by name and
+stays pinned however long the stack gets, with an Only on switch beside it.
 
 ![The Latent tab's canvas: aspect presets, the exact size, and what it costs in VRAM](images/latent.webp)
 
@@ -235,24 +268,28 @@ how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same s
 
 ![The Auto prompt page: the caption it wrote, six caption engines, and where the words go](images/auto-prompt.webp)
 
-**Img2Img.** A source picture, the pass over it, and three edit stages. Denoise is a
-full-width bar, and with several passes each one can have its own denoise and its own scale.
-RE-ANGLE re-shoots the picture from another viewpoint with the multi-angle edit model, from three
-bands or from the Camera tab's studio. REALISM converts an illustration into a photograph before
-the pass, on the Models tab's own rig plus a conversion LoRA you choose, so it needs no second
-model in VRAM and no extra node pack; the reference boost is the dial that decides how far it
-goes, and the source is desaturated a little first because an illustration's colour otherwise
-lands in real skin. SWAP puts a face, head or whole person onto the picture:
-the Subject's, another picked person's, or a picture from Swap's own gallery. The three run in that order, so the medium is converted
-after the viewpoint is settled and before a face lands on it. Re-angle and Swap work on the
-Img2Img source before its pass, or on the new render, a Latent tab render too with Img2Img off
-if you like, where a polish pass by the rig follows the edit; on the source, both carry Skip the
-i2i pass, which sends the edited picture straight to the image output so the rig never enters
-VRAM beside the edit model. Swap has a Fast switch for the Lightning LoRA and quick phrase
-buttons for its prompt. Both stages show their steps on the Run tab and run the edit model on
-PyTorch attention, so SageAttention does not break them. Its Auto prompt page also holds IMAGE TO TEXT: Style,
+**Img2Img.** A source picture and the pass over it. Denoise is a full-width bar, and with
+several passes each one can have its own denoise and its own scale, and a folder of pictures can
+run as a batch. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
+
+**Editor.** The edits, on a picture of their own, in six pages. **Source** holds the Editor's own
+gallery and one choice for Re-angle, Realism and Swap together: edit the gallery picture, or render
+first and edit the new render. The edited picture is the image output. **Upscale** runs one upscale
+on one picture or a folder, SeedVR2, VOSR 2.0 or the tiled one, with a fit step first and a before
+and after in the result, and it can take its picture from the Source gallery. **Realism** turns an
+illustration into a photograph. Its Exact engine is the Anything2Real workflow node for node, with
+an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
+Alternative engine is the pack's own and needs no other pack. It finds the conversion LoRA among
+your files by name and hash. **Re-angle** re-shoots the picture from another viewpoint with the
+multi-angle edit model, from three bands or from the Camera tab's studio. **Swap** puts a face, head
+or whole person onto the picture: the Subject's, another picked person's, or a picture from Swap's
+own gallery, with a Fast switch for the Lightning LoRA. They run in the order Re-angle, Realism,
+Swap, so the medium is converted after the viewpoint is settled and before a face lands on it. On
+the new render, a polish pass by the rig follows the edit. The edit models run on PyTorch
+attention, so SageAttention does not break them, and each shows its steps on the Run tab.
+**Converter** reworks the final prompt, with an optional rewrite by a local Ollama model.
 
 ![The Paint tab: the mask on the picture, the result under it, and the paint settings](images/paint.webp)
 
@@ -271,8 +308,10 @@ and Clear canvas takes the picture off as well as the paint, where Clear paint k
 
 ![The Subject page of Krea 2 Identity: the gallery, with the main subject picked](images/workspace-subject.webp)
 
-**Krea 2 Identity: Subject, Scene, Masks.** One tab with a sub-tab for each, and a light on
-each showing what is in use. Subject is one gallery where you pick the people in order: the
+**Krea 2 Identity: Subject, Hero Creator, Scene, Masks.** One tab with a sub-tab for each, and a
+light on each showing what is in use. The Hero Creator makes a clean front-on headshot out of a
+gallery picture, crops the clothing out of frame, and can redesign it with a render; the result
+goes back to the gallery as a subject reference. Subject is one gallery where you pick the people in order: the
 first is the main subject, and the others follow as Person 2, 3 and on (more than three still
 runs, with a warning that faces may blend). Scene is a place rebuilt as in-context latents.
 Subject and Scene each have Gallery, Boosts, Auto prompt and Converter tabs; the Subject boosts
@@ -321,9 +360,10 @@ your own name to change it, since the shipped ones cannot be edited or deleted.
 
 ![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
 
-**Advanced.** The workspace's preferences for this install rather than this workflow: the paint
-layout, the mask overlay, whether prompts echo to the console, and a button to unload the caption
-models.
+**Advanced.** The workspace's preferences for this install rather than this workflow: the page
+size and the rail's own size, which tabs the rail shows and your saved UI presets, whether the
+rail's Generate opens the Run page, the paint layout, the mask overlay, whether prompts echo to the
+console, and a button to unload the caption models.
 
 ## The Detailer
 
@@ -661,12 +701,13 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_V1.4.json` is the full rig and the one to start with. One Workspace panel
+- `RedNodeStudio_V1.5.json` is the full rig and the one to start with. One Workspace panel
   drives the models, the prompts and the sampler, and runs the Detailer passes, the grading
-  chain and the save itself, so none of that needs wiring any more. Three rigs sit on its
-  Models tab: one that loads its files there, and two built from their own nodes on the
-  canvas, which is how you plug your own sampler in. A note inside the workflow lists every
-  model file it loads and where to get each one.
+  chain and the save itself, so none of that needs wiring any more. Six rigs sit on its
+  Models tab: two Krea 2 models, Qwen Image 2.1 and an SDXL checkpoint that load their files
+  there, and two built from their own nodes on the canvas, which is how you plug your own
+  sampler in. A note inside the workflow lists every model file it loads and where to get each
+  one; you only need the files for the rigs you use.
 - `RedNode_Start_Here_Install.json` renders nothing. It holds one node from each pack the
   Workspace can use so ComfyUI Manager finds them in one pass. Open it first, let Manager
   install, restart, then open the rig above.
@@ -755,9 +796,32 @@ step aside; Florence, WD14, JoyCaption, QwenVL and CLIP gen run in-process and n
 
 Without the small VAE the live frames still stream, as the colour smear rather than a decode.
 
+### Qwen Image 2.1
+
+A rig of its own, and a Setup family. Needs ComfyUI 0.37.0 or newer.
+
+| File | Goes in | Where from |
+|---|---|---|
+| `qwen_image_2.1_bf16.safetensors`, or the `int8_convrot` one for a smaller card | `models/diffusion_models` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+| `qwen3vl_8b_int8_convrot.safetensors` | `models/text_encoders` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+| `qwen_image_2.1_vae_bf16.safetensors` | `models/vae` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) |
+
+Qwen Image 2.1 is under Alibaba's Qwen research licence: personal and research use, not commercial
+work without their agreement. Its VAE decodes a transparency channel; the pack keeps the colour and
+drops the transparency, so every stage after the render works as it does on any other model.
+
+### Realism
+
+| File | Goes in | Where from |
+|---|---|---|
+| Anything2Real Characters V3, the conversion LoRA | `models/loras` | [search Civitai](https://civitai.com/search/models?query=Anything2Real) |
+
+The Exact engine also wants the packs marked Realism in the optional packs table, and says which
+one is missing before it loads anything. The Alternative engine needs only the LoRA and your rig.
+
 ### Re-angle and swap
 
-The Img2Img tab's RE-ANGLE and the multi-angle workflow run on Qwen-Image-Edit-2511; the SWAP
+The Editor's RE-ANGLE and the multi-angle workflow run on Qwen-Image-Edit-2511; the SWAP
 stage and the Detailer's swap presets run on the BFS files.
 
 | File | Goes in | Where from |
