@@ -11878,8 +11878,16 @@ export function guessClipType(r) {
   const c = n(r?.clip);
   const u = n(r?.unet) + n(r?.checkpoint);
   if (!c) return "";
-  // Qwen3-VL 4B is Krea 2's encoder; Qwen 2.5 VL 7B is Qwen-Image's
-  if (/qwen3vl|qwen3vl4b/.test(c) || (c.includes("qwen3") && c.includes("vl"))) return "krea2";
+  // Qwen3 0.6B is Anima's; core picks its encoder from the file, the type is the default
+  if (c.includes("qwen306b") || c.includes("qwen306")) return "stable_diffusion";
+  // Qwen3-VL: the 8B reads for Qwen Image 2.1, the 4B for Krea 2; the 32B is
+  // MiniMax's, which no rig here renders, so it is left for you to set
+  if (/qwen3vl|qwen3vl4b/.test(c) || (c.includes("qwen3") && c.includes("vl"))) {
+    if (c.includes("32b")) return "";
+    if (c.includes("8b") || u.includes("qwenimage21")) return "qwen_image";
+    return "krea2";
+  }
+  // Qwen 2.5 VL 7B is Qwen-Image's (the 2509 / 2511 edit models)
   if (c.includes("qwen25vl") || c.includes("qwen2vl")) return "qwen_image";
   // plain Qwen 3 4B is Z-Image's (Lumina 2's loader); Gemma 2 2B is Lumina 2's own
   if (c.includes("qwen34b") || c.includes("qwen3") || c.includes("gemma")) return "lumina2";
