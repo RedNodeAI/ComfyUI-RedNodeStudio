@@ -16701,7 +16701,10 @@ function heroBody(node, body, sub, page) {
       const res = await api.fetchApi("/rednode/hero_edit", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          base, extra: want, source: parseName(from).filename,
+          // the whole gallery entry, as Create hero and the front-on send it: the
+          // file name alone hashed to another folder, so after a reload the set
+          // lost its redesigns
+          base, extra: want, source: from,
           // a different seed each time, or the same words would hand back the
           // same picture and "apply" would look like it had done nothing
           seed: (Date.now() % 2000000000) || 1,
