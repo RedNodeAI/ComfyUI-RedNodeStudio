@@ -32,8 +32,8 @@ two days later. The RedNode Studio template is now V1.5.
   picture, cropped above the clothing, which can be redesigned with a render and sent back
   to the gallery as a subject
 - Models tab: rig cards in a column, and Model, CLIP, VAE, Sampling, Seed and Setup pages.
-  Setup makes a rig in one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL /
-  Illustrious / Pony from the files in your folders. Set and Missing badges on each file
+  Setup makes a rig in one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1, Anima
+  (Nova Anime AM included) or SDXL / Illustrious / Pony from the files in your folders. Set and Missing badges on each file
   card, one Next step in the warning bar, and Match CLIP type from the text encoder file
 - Seed page: link each part of a run (Re-angle, Realism, Swap, Upscale, Detailer, LoRA
   ranges, Post's random ranges, the auto prompt) to the main seed, a named seed or its own,

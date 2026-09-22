@@ -38,7 +38,8 @@ FAMILIES = (
                      "example": "krea2_turbo_fp8.safetensors in models/diffusion_models"},
             "clip": {"all": ("qwen3", "vl", "4b"), "none": (),
                      "example": "qwen3vl_4b_fp8_scaled.safetensors in models/text_encoders"},
-            "vae": {"all": (), "any": ("qwenimagevae", "wan21vae"), "none": (),
+            # an upscale VAE decodes at twice the size: never a rig's VAE
+            "vae": {"all": (), "any": ("qwenimagevae", "wan21vae"), "none": ("upscale",),
                     "example": "qwen_image_vae.safetensors in models/vae"},
         },
         "rig": {"clip_type": "krea2", "steps": 8, "cfg": 1.0, "sampler": "euler",
@@ -76,6 +77,28 @@ FAMILIES = (
         },
         "rig": {"clip_type": "qwen_image", "steps": 25, "cfg": 1.0, "sampler": "euler",
                 "scheduler": "simple"},
+    },
+    {
+        "id": "anima",
+        "label": "Anima",
+        "blurb": "Circlestone's 2B anime model and its fine-tunes (Nova Anime AM and the "
+                 "other Nova ...AM builds). Qwen3 0.6B reads the prompt; the VAE is the "
+                 "Krea 2 one.",
+        "roles": {
+            # the Nova fine-tunes are named ...AM, not Anima; "animeam" catches them
+            "unet": {"all": (), "any": ("anima", "animeam", "novaam", "3dcgam", "orangeam"),
+                     "none": ("lora", "nag", "animatediff", "animation"),
+                     "example": "anima-base-v1.0.safetensors or novaAnimeAM_v5029B.safetensors "
+                                "in models/diffusion_models"},
+            "clip": {"all": ("qwen", "06b"), "none": ("vl",),
+                     "example": "qwen_3_06b_base.safetensors in models/text_encoders"},
+            "vae": {"all": (), "any": ("qwenimagevae", "wan21vae"), "none": ("21vaebf16", "upscale"),
+                    "example": "qwen_image_vae.safetensors in models/vae"},
+        },
+        # Nova Anime AM's own card: Euler a, normal, 20 to 30 steps, CFG 4 to 6;
+        # inside Anima's own ranges (20 to 40 steps, CFG 4.5 to 6.5)
+        "rig": {"clip_type": "stable_diffusion", "steps": 25, "cfg": 5.0,
+                "sampler": "euler_ancestral", "scheduler": "normal"},
     },
     {
         "id": "sdxl",

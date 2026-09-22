@@ -85,7 +85,7 @@ before it and let Manager install them.
 If you would rather build it yourself, the graph is short:
 
 1. Add **RedNode Studio Workspace**. On its Models tab, open **Setup** and press the family you
-   have: Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL / Illustrious / Pony. It finds the
+   have: Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1, Anima or SDXL / Illustrious / Pony. It finds the
    files in your model folders and makes the rig with that model's numbers. Choose **Built-in
    sampler** and the node renders on its own; the red **Generate** at the top of the tab rail
    queues it.
@@ -183,7 +183,7 @@ model switch, and the identity edit warns until it is set.
 
 The rigs sit in a column of cards on the left, each with its model family and a tick per file, and
 the pages beside them are Model, CLIP, VAE, then Sampling, Seed and Setup. **Setup** makes a rig in
-one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1 or SDXL / Illustrious / Pony: it finds the
+one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1, Anima or SDXL / Illustrious / Pony: it finds the
 files in your model folders by name, newest first, and sets that model's steps, cfg, sampler and
 CLIP type, all of it editable afterwards. It reads file names and dates and nothing else, and
 downloads nothing. The warning bar names the one next step a rig is missing, and **Match CLIP
@@ -795,6 +795,18 @@ step aside; Florence, WD14, JoyCaption, QwenVL and CLIP gen run in-process and n
 | [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux), the pack | Manager | the Post FX Depth card's estimators; each fetches its own weights on first use |
 
 Without the small VAE the live frames still stream, as the colour smear rather than a decode.
+
+### Anima
+
+A Setup family: Circlestone's 2B anime model and the fine-tunes built on it, Nova Anime AM
+among them. Setup sets 25 steps, cfg 5, euler_ancestral / normal, Nova Anime AM's own numbers.
+The turbo builds want far fewer steps; change them on the rig's Sampling page.
+
+| File | Goes in | Where from |
+|---|---|---|
+| `anima-base-v1.0.safetensors`, or a fine-tune such as Nova Anime AM | `models/diffusion_models` | [circlestone-labs/Anima](https://huggingface.co/circlestone-labs/Anima/tree/main/split_files/diffusion_models), [Nova Anime AM on Civitai](https://civitai.com/models/2604424/nova-anime-am) |
+| `qwen_3_06b_base.safetensors` | `models/text_encoders` | [circlestone-labs/Anima](https://huggingface.co/circlestone-labs/Anima/tree/main/split_files/text_encoders) |
+| `qwen_image_vae.safetensors` | `models/vae` | the same file as the Krea 2 one above |
 
 ### Qwen Image 2.1
 

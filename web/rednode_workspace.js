@@ -11828,6 +11828,8 @@ export function rigFamily(r) {
   if (r.clip_type === "krea2") return "Krea 2";
   if (u.includes("zimage")) return u.includes("turbo") ? "Z-Image Turbo" : "Z-Image";
   if (u.includes("qwenimage21")) return "Qwen Image 2.1";
+  if (u.includes("anima") && !u.includes("animat")) return "Anima";
+  if (/(animeam|novaam|3dcgam|orangeam)/.test(u)) return "Anima";
   if (u.includes("qwenimage")) return u.includes("edit") ? "Qwen Image Edit" : "Qwen Image";
   if (/(sdxl|xl|pony|illustrious|noobai)/.test(u + c)) return "SDXL / Pony";
   return (r.unet || r.checkpoint || r.clip || r.vae) ? "Unknown model" : "Not set up";
