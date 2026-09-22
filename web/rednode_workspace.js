@@ -20207,6 +20207,19 @@ app.registerExtension({
   },
   async setup() {
     injectStyle();
+    // ComfyUI's Refresh (R) reloads the node lists but not the Models page's own
+    // copy, so a model added while the page was open never showed in its pickers
+    if (app.refreshComboInNodes && !app._rnWsModelsRefreshHooked) {
+      app._rnWsModelsRefreshHooked = true;
+      const origRefresh = app.refreshComboInNodes;
+      app.refreshComboInNodes = async function (...args) {
+        const out = await origRefresh.apply(app, args);
+        MODEL_LISTS = null;
+        await fetchModelLists();
+        for (const n of allNodes()) if (n?.type === NODE_NAME) render(n);
+        return out;
+      };
+    }
     refreshVisionPrompts();
     refreshInstructions();
     refreshAutoStatus();
