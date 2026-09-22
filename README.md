@@ -160,7 +160,7 @@ actually call for, which of them are already here, and where to get the rest. It
 ComfyUI has loaded and the file lists it already hands the panel. It downloads and installs
 nothing: ComfyUI Manager does the installing, where you can see what it is doing.
 
-![The Models tab: the rigs, the files one loads, its sampling numbers, and the seed](images/workspace-models.webp)
+![The Models tab: the rigs in a column, and the active rig's model, text encoder and decoder](images/workspace-models.webp)
 
 **Models.** A rig is a model with its CLIP and VAE, its sampler numbers, its detailer steps, a
 second sampler pair for image to image runs, and which LoRA set it carries. Keep several and switch
@@ -194,6 +194,8 @@ falls back to the built-in one where that node cannot take the run. **Seed** hol
 named seeds of your own, and a link for each part of a run: Re-angle, Realism, Swap, Upscale, the
 Detailer, the LoRA ranges, Post's random ranges and the auto prompt each follow the main seed, a
 named one or their own, and Same seed every pass stops the passes stepping it.
+
+![Models, Setup: one card per model family, three to a row, each with the files it found and Apply](images/models-setup.webp)
 
 **Run.** Queue the workflow and watch it. The rail's Generate queues from any tab, and an
 Advanced switch, off by default, makes it open this page as well. Generate here sits beside Full
@@ -240,6 +242,8 @@ Wildcards and `@keyword` macros resolve on the run's seed.
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
 LoRAs, and a separate one for the Editor's Re-angle.
 
+![The Camera tab: the stage from above, the camera's height, lens and aim, and the camera LoRAs](images/camera.webp)
+
 ![The LoRAs tab: a tab per set, stack presets, and grouped slots that fold and switch off together](images/lora-stack.webp)
 
 **LoRAs.** The main stack, plus named sets on their own sub-tabs. Rows drag by their grip, switch
@@ -274,6 +278,10 @@ run as a batch. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
 
+![The Editor's Source page: the Edit choice, gallery picture or new render, and its own gallery](images/editor.webp)
+
+![The Editor's Realism page: the engine, the conversion LoRA found by name, and the photo finish](images/editor-realism.webp)
+
 **Editor.** The edits, on a picture of their own, in six pages. **Source** holds the Editor's own
 gallery and one choice for Re-angle, Realism and Swap together: edit the gallery picture, or render
 first and edit the new render. The edited picture is the image output. **Upscale** runs one upscale
@@ -306,7 +314,9 @@ Subject, Scene and Moodboard reference toggles follow the Model choice's rig. Bl
 a white sheet at the Latent tab's size to paint on from nothing, grey or black on a right-click,
 and Clear canvas takes the picture off as well as the paint, where Clear paint keeps it.
 
-![The Subject page of Krea 2 Identity: the gallery, with the main subject picked](images/workspace-subject.webp)
+![The Hero Creator's Headshot page: the source photo, the head cut out above the clothing, and the front-on headshot](images/hero-headshot.webp)
+
+![The Hero Creator's Redesign page: the headshot it works from, a redesign and the instruction that made it](images/hero-redesign.webp)
 
 **Krea 2 Identity: Subject, Hero Creator, Scene, Masks.** One tab with a sub-tab for each, and a
 light on each showing what is in use. The Hero Creator makes a clean front-on headshot out of a
