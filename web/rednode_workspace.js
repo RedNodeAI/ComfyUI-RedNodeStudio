@@ -296,7 +296,9 @@ css.textContent = `
 .rn-ws-managefoot>button{flex:1 1 0;min-height:50px!important;font-size:15px;border-radius:9px}
 .rn-ws-managefoot>.add{border:1px dashed #4a505a!important;background:transparent!important}
 /* the Setup tab's family cards: side by side, labels over the boxes */
-.rn-ws-modelslay .rn-ws-mbox.rn-ws-famcard{flex:1 1 260px;min-width:250px;align-self:stretch;gap:6px}
+.rn-ws-famgrid{flex:1 1 100%;width:100%;display:grid;gap:12px;align-items:stretch;
+  grid-template-columns:repeat(auto-fill,minmax(max(250px,calc((100% - 24px) / 3)),1fr))}
+.rn-ws-modelslay .rn-ws-famgrid>.rn-ws-mbox.rn-ws-famcard{flex:none;min-width:0;margin:0;gap:6px}
 .rn-ws-famcard .rn-ws-famlab{font-size:13px;color:#c8ccd2;margin-top:6px}
 .rn-ws-famrow{display:flex;align-items:center;gap:8px;background:#101216;border:1px solid #2f333a;
   border-radius:8px;padding:0 8px;min-height:40px}
@@ -11649,6 +11651,11 @@ function modelsSetupPage(node, host) {
   }
   const picks = (node._rnFamilyPicks ||= {});
   const samplers = MODEL_LISTS?.samplers || [];
+  // THREE TO A ROW, never squeezed: a family added later starts a new row and
+  // the page scrolls (the user, 2026-09-22)
+  const grid = document.createElement("div");
+  grid.className = "rn-ws-famgrid";
+  host.appendChild(grid);
   for (const fam of node._rnFamilies) {
     const card = document.createElement("div");
     card.className = "rn-ws-card rn-ws-mbox rn-ws-famcard";
@@ -11724,7 +11731,9 @@ function modelsSetupPage(node, host) {
     br.className = "rn-ws-row rn-ws-fambtns";
     const use = document.createElement("button");
     use.className = "rn-ws-btn rn-ws-famuse";
-    use.textContent = rig ? `Set up ${rig.name}` : "Set up a rig";
+    // names the rig it lands on: "Set up Anima" under the Krea 2 card read as
+    // setting up Anima
+    use.textContent = rig ? `Apply to ${rig.name}` : "Make a rig";
     use.disabled = missing > 0;
     use.title = missing ? "A file this model needs is missing: see above."
       : rig ? `Give ${rig.name} these files and settings.` : "Make a rig with these files and settings.";
@@ -11749,7 +11758,7 @@ function modelsSetupPage(node, host) {
     };
     br.append(use, add);
     card.appendChild(br);
-    host.appendChild(card);
+    grid.appendChild(card);
   }
 }
 
