@@ -1397,6 +1397,7 @@ export function postBody(node, body, opts = {}) {
     sbar.className = "rn-ws-row";
     const seg = document.createElement("div");
     seg.className = "rn-ws-seg";
+    seg.dataset.rnbar = "1";
     for (const [v, l, tip] of [["effects", "Effects", "Switch effects on, pick one and set its dials. The eye switches "
                                            + "an effect on; click its name to edit it. The list is "
                                            + "the order the chain runs in."],

@@ -923,6 +923,7 @@ export function runTabBody(node, body) {
   if (!RUN_SUBS.some(([id]) => id === sub)) sub = "run";
   node._rnRunSub = sub;
   const strip = el("div", "rn-ws-sub");
+  strip.dataset.rnbar = "1";
   for (const [id, label, tip] of RUN_SUBS) {
     const b = el("button", "rn-ws-subt" + (id === sub ? " cur" : ""));
     b.dataset.sub = id;
@@ -987,11 +988,11 @@ function runPage(node, body) {
   node._rnRunGen = (node._rnRunGen || 0) + 1;
   const view = { node, root, refs: {}, gen: node._rnRunGen };
 
-  // TOP ROW: Generate, Full or Draft, the VRAM limit; the run's facts on the right
+  // TOP ROW: Full or Draft, the VRAM limit, the run's facts on the right. Generate
+  // is not here any more: it sits in the page bar above, where every page keeps it
+  // (you, 2026-09-23). The folder batch below stays, because it queues something
+  // else: one run per picture in the folder.
   const top = el("div", "rn-ws-card rn-run-top");
-  const gen = el("button", "rn-run-go", "Generate");
-  gen.title = "Queue the whole workflow, the same as ComfyUI's Queue button.";
-  gen.onclick = () => queueWorkflow(gen);
   // THE FOLDER BATCH, here too, when Img2Img is on and its source is the folder.
   // Generate above queues the workflow ONCE, which is one picture however many
   // are in the folder, so without this the Run page cannot start the thing the
@@ -1068,7 +1069,6 @@ function runPage(node, body) {
   }
   const facts = el("div", "rn-run-facts");
   view.refs.facts = facts;
-  top.append(gen);
   if (batchGo) top.append(batchGo);
   top.append(mode, tierWrap, facts);
   root.appendChild(top);

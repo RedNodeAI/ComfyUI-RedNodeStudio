@@ -197,18 +197,17 @@ css.textContent = `
   justify-content:center;gap:12px;min-height:66px;padding:9px 220px 9px 16px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
-.rn-ws-pbar .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
-  justify-content:center;overflow-x:auto;scrollbar-width:none}
-.rn-ws-pbar .rn-ws-sub::-webkit-scrollbar{display:none}
+.rn-ws-pbar .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
+  justify-content:center}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
    the tab in use carries the red underline rather than a filled red block */
-/* EVERY SUB-TAB THE SAME SIZE, on every page: a flat 250 wide and 46 tall. Letting
-   them flex meant the flex algorithm picked a different width per page, which is the
-   opposite of the point. Too many to fit and the strip scrolls sideways. */
-.rn-ws-sub.dressed .rn-ws-subt{flex:0 0 auto;width:250px;min-width:250px;
-  height:46px;min-height:46px;box-sizing:border-box;justify-content:center;gap:11px;
+/* 250 WIDE IS THE SIZE THEY WANT, and on a page with six of them they all give way
+   together rather than one being clipped (you, 2026-09-23). Same height everywhere,
+   and every tab on a page is the same width as its neighbours. */
+.rn-ws-sub.dressed .rn-ws-subt{flex:0 1 250px;width:auto;min-width:96px;max-width:250px;
+  height:46px;min-height:46px;box-sizing:border-box;justify-content:center;gap:9px;
   font-size:14px;font-weight:600;letter-spacing:0;text-transform:none;
-  background:#15171b;border-color:#20242a;color:#aab0b8;padding:0 30px;
+  background:#15171b;border-color:#20242a;color:#aab0b8;padding:0 14px;
   position:relative;overflow:hidden}
 .rn-ws-sub.dressed .rn-ws-subt>span:not(.lt):not(.rn-ws-subic){overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
@@ -216,8 +215,7 @@ css.textContent = `
 .rn-ws-sub.dressed .rn-ws-subt.cur{background:linear-gradient(180deg,#241519,#1a1216);
   border-color:#3d2129;color:#fff;box-shadow:inset 0 -2px 0 0 #d13a4f}
 .rn-ws-sub.dressed .rn-ws-subt.cur::before{content:none}
-.rn-ws-sub.dressed{flex-wrap:nowrap;gap:8px;overflow-x:auto;scrollbar-width:none}
-.rn-ws-sub.dressed::-webkit-scrollbar{display:none}
+.rn-ws-sub.dressed{flex-wrap:nowrap;gap:8px}
 /* the light is pinned to the right edge, so it never shifts the centred words */
 .rn-ws-sub.dressed .rn-ws-subt .lt{position:absolute;right:14px;margin-left:0}
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
@@ -235,6 +233,24 @@ css.textContent = `
   border-color:#e0455c;box-shadow:0 2px 10px rgba(184,40,60,.35)}
 .rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
 .rn-ws-pbargen svg{width:18px;height:18px}
+/* A STRIP CARRIED UP INTO THE BAR: whatever shape the page built, it reads as the
+   bar's own tabs. The segmented pages (Camera, Post) and the LoRAs tab's set chips
+   are the same size as a sub-tab, and many of them wrap onto a second line. */
+.rn-ws-pbar .rn-ws-seg{flex:0 1 auto;gap:10px;background:transparent;border:0;padding:0}
+.rn-ws-pbar .rn-ws-segb{flex:0 1 250px;min-width:96px;max-width:250px;min-height:46px;
+  border-radius:9px;font-size:14px;
+  font-weight:600;background:#15171b;border:1px solid #20242a;color:#aab0b8}
+.rn-ws-pbar .rn-ws-segb.on{background:linear-gradient(180deg,#241519,#1a1216);
+  border-color:#3d2129;color:#fff;box-shadow:inset 0 -2px 0 0 #d13a4f}
+.rn-ws-pbar .rn-ws-tabs{flex:1 1 auto;min-width:0;gap:8px;padding:0;
+  justify-content:center;flex-wrap:wrap}
+.rn-ws-pbar .rn-ws-tabs .rn-ws-tab{flex:0 1 190px;min-width:90px;max-width:190px;
+  min-height:46px;font-size:14px;border-radius:9px}
+.rn-ws-pbar.wrap{min-height:66px;height:auto;padding-top:10px;padding-bottom:10px;
+  flex-wrap:wrap}
+/* the Identity tab's pages-within-pages, on their own row under the bar */
+.rn-ws-pbar2{display:flex;gap:8px;flex-wrap:wrap;margin:0}
+.rn-ws-pbar2 .rn-ws-subt{min-height:34px;font-size:12px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 /* a sub-page of the open tab: indented under it, smaller, no icon or light. Depth 2
    is the Identity tab's pages-within-pages, indented again. */
@@ -3646,6 +3662,7 @@ function cameraBody(node, body) {
   bar.style.flexWrap = "wrap";
   const seg = document.createElement("div");
   seg.className = "rn-ws-seg";
+  seg.dataset.rnbar = "1";
   for (const [v, l, tip] of [["prompt", "Prompt", "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs."],
                              ["i2i", "Re-angle", "A separate studio whose camera drives the Editor's Re-angle (re-shooting the picture from another viewpoint)."]]) {
     const b = document.createElement("button");
@@ -6476,6 +6493,7 @@ function lorasBody(node, body) {
   {
     const tabs = document.createElement("div");
     tabs.className = "rn-ws-tabs";
+    tabs.dataset.rnbar = "1";
     const mk = (name, label) => {
       const t = document.createElement("div");
       t.className = "rn-ws-tab g-model" + (name === curName ? " cur" : "");
@@ -13495,16 +13513,7 @@ function promptsBody(node, body) {
   // the mock's masthead: title, subtitle, and the RIG bar so the prompt you
   // are writing is visibly the active rig's
   {
-    const head = document.createElement("div");
-    head.style.cssText = "display:flex;flex-direction:column;gap:2px";
-    const h1 = document.createElement("div");
-    h1.style.cssText = "font-size:19px;font-weight:700;color:#e8ecf1";
-    h1.textContent = "Prompts";
-    const sub = document.createElement("div");
-    sub.className = "rn-ws-note";
-    sub.textContent = "Your prompts: the active one renders on whichever rig is active.";
-    head.append(h1, sub);
-    body.appendChild(head);
+    // the bar above names the page and says what it is for
     // the PROMPT bar: switch and add prompts up here, one
     // editor below for the active one. The chip names the prompt and its
     // rig; the active prompt is lit and badged.
@@ -14051,6 +14060,10 @@ function dressSubTabs(strip) {
   strip._rnDressed = true;
   strip.classList.add("dressed");
   for (const b of strip.children || []) {
+    // the strips shout their labels; the bar says them
+    const words = [...(b.children || [])].find((c) => c.textContent && !c._classes?.has?.("lt")
+      && !(c.className || "").includes("lt"));
+    if (words) words.textContent = railLabel(words.textContent);
     const ic = document.createElement("span");
     ic.className = "rn-ws-subic";
     ic.innerHTML = SUB_ICON(b.dataset?.sub || b.dataset?.inner);
@@ -14075,6 +14088,53 @@ function railLabel(text) {
   if (t !== t.toUpperCase()) return t;                    // already written properly
   return t.toLowerCase().replace(/[a-z]+/g, (w, i) => (RAIL_ACRONYMS[w] ? RAIL_ACRONYMS[w]
     : i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w));
+}
+
+// THE BAR EVERY PAGE OPENS WITH: its name, the line under it, and Generate. A page
+// marks the strip it wants carried up into the bar with data-rnbar (and data-rnbar2
+// for a second row, which is the Identity tab's pages-within-pages).
+const PAGE_BAR = {
+  prompts: { title: "Prompts",
+             note: "Your prompts: the active one renders on whichever rig is active." },
+  camera: { title: "Camera",
+            note: "Place the subject and the camera; the prompt and the camera LoRAs follow." },
+  loras: { title: "LoRAs", note: "The stack this workflow renders with. A set switches the "
+                                 + "whole stack at once." },
+  i2i: { title: "Img2Img", note: "Render from a picture instead of a blank canvas, in as "
+                                 + "many passes as you like." },
+  editor: { title: "Editor", note: "Edit a picture: realism, a new angle, a face swap or an "
+                                   + "upscale." },
+  moodboard: { title: "Moodboard", note: "Pictures that set the style, and the words taken "
+                                         + "from them." },
+  identity: { title: "Krea 2 Identity", note: "The people to keep across a render, and the "
+                                              + "place to put them in." },
+  detailer: { title: "Detailer", note: "Passes that re-render parts of the picture at higher "
+                                       + "detail." },
+  post: { title: "Post FX", note: "The finishing chain, in camera order." },
+  advanced: { title: "Advanced", note: "Settings for this node and this install.", gen: false },
+  run: { title: "Run", note: "Queue the workflow and watch it, or look back at what it made." },
+};
+
+/** Carry a page's own tab strip up into its bar, once the page has built it. */
+function adoptBarStrip(bar, body) {
+  if (!bar || !body) return;
+  const take = (sel, into) => {
+    const el = body.querySelector?.(sel);
+    if (!el) return null;
+    el.remove();
+    if (el.classList?.contains("rn-ws-sub")) dressSubTabs(el);
+    into.appendChild(el);
+    return el;
+  };
+  const first = take("[data-rnbar]", bar);
+  // many tabs (the LoRAs tab grows a set at a time) wrap onto a second line rather
+  // than scrolling, because they are the page's own navigation
+  if (first && (first.children?.length || 0) > 4) bar.classList.add("wrap");
+  const second = take("[data-rnbar2]", bar.parentElement);
+  if (second) {
+    second.classList.add("rn-ws-pbar2");
+    bar.parentElement.insertBefore(second, bar.nextSibling);
+  }
 }
 
 function railSubRows(node, cfg, tab) {
@@ -14154,7 +14214,8 @@ function railSubRows(node, cfg, tab) {
   return rows;
 }
 
-function pageHeader(node, body, { strip = null, title = "", note = "", first = false } = {}) {
+function pageHeader(node, body, { strip = null, title = "", note = "", first = false,
+                                 gen = true } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-pbarwrap";
   const head = document.createElement("div");
@@ -14165,7 +14226,7 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
   }
   // Generate is taken OUT of the flow, so the tabs sit in the middle of the BAR
   // and not in the middle of whatever is left beside the button
-  head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pbargen"));
+  if (gen) head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pbargen"));
   wrap.appendChild(head);
   if (title || note) {
     // ONE ROW, not two: the page's name and the line explaining it sit side by side,
@@ -15337,6 +15398,7 @@ function i2iTabs(node, body) {
 
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
+  strip.dataset.rnbar = "1";
   for (const [id, label] of I2I_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt tint s-" + id + (id === sub ? " cur" : "");
@@ -15439,6 +15501,7 @@ function editorTabs(node, body) {
 
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
+  strip.dataset.rnbar = "1";
   for (const s of EDITOR_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt tint s-" + s.id + (s.id === sub ? " cur" : "");
@@ -15635,6 +15698,7 @@ function identityTabs(node, body) {
 
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
+  strip.dataset.rnbar = "1";
   for (const s of IDENTITY_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (s.id === sub ? " cur" : "");
@@ -15701,6 +15765,7 @@ function identityTabs(node, body) {
   if (!innerSubs.some(([id]) => id === inner)) inner = "gallery";
   const istrip = document.createElement("div");
   istrip.className = "rn-ws-sub inner";
+  istrip.dataset.rnbar2 = "1";
   for (const [id, label, lit] of innerSubs) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (id === inner ? " cur" : "");
@@ -17168,6 +17233,7 @@ function moodboardTabs(node, body) {
 
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub inner";
+  strip.dataset.rnbar = "1";
   for (const [id, label, lit] of subs) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
@@ -19947,6 +20013,14 @@ function renderPage(node) {
   // list's scroll, the Order view's cards) and clearing it further down wiped the
   // hook before it could run, which put both lists back to the top on every click
   node._rnAfterMount = null;
+  // THE BAR FIRST, then the page under it, then the page's own strip is carried up
+  // into the bar. Models and Latent build their own; Paint, Overview and Run keep
+  // what they have.
+  const barSpec = PAGE_BAR[cur];
+  const pageBar = barSpec
+    ? pageHeader(node, body, { title: barSpec.title, note: barSpec.note,
+                               gen: barSpec.gen !== false })
+    : null;
   if (cur === "identity") identityTabs(node, body);
   else if (cur === "models") modelsBody(node, body);
   else if (cur === "prompts") promptsBody(node, body);
@@ -19992,6 +20066,7 @@ function renderPage(node) {
   else if (cur === "run") runTabBody(node, body);
   else if (cur === "detailer") detailerTab(node, body);
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
+  if (pageBar) adoptBarStrip(pageBar, body);
   // Section order, the same on every tab: what the tab DOES (its dials), then how
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
