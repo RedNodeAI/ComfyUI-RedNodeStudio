@@ -42,6 +42,17 @@ const entryOf = (rec) => {
   return rec.type && rec.type !== "input" ? `${name} [${rec.type}]` : name;
 };
 
+/** Put an entry on the shelf, newest first. Returns whether it was new. */
+function addEntry(node, entry) {
+  const cfg = node._rnShelf;
+  if (!entry) return false;
+  const at = cfg.items.indexOf(entry);
+  if (at >= 0) cfg.items.splice(at, 1);        // already here: it comes back to the top
+  cfg.items.unshift(entry);
+  cfg.sel = 0;
+  return at < 0;
+}
+
 function readCfg(node) {
   const w = (node.widgets || []).find((x) => x.name === "config");
   let d;
@@ -172,7 +183,9 @@ function dragOut(cell, entry) {
 }
 
 async function addFiles(node, files) {
-  for (const file of files) {
+  // dropped together: the last one added ends up on top, so they are taken in
+  // reverse and the pile reads in the order they were dropped
+  for (const file of [...files].reverse()) {
     if (!/^image\//.test(file.type || "")) continue;
     try {
       const body = new FormData();
@@ -180,8 +193,7 @@ async function addFiles(node, files) {
       body.append("overwrite", "false");
       const res = await api.fetchApi("/upload/image", { method: "POST", body });
       const d = await res.json();
-      const entry = entryOf({ filename: d.name, subfolder: d.subfolder, type: d.type });
-      if (entry && !node._rnShelf.items.includes(entry)) node._rnShelf.items.push(entry);
+      addEntry(node, entryOf({ filename: d.name, subfolder: d.subfolder, type: d.type }));
     } catch (e) {
       console.error("[RedNode Shelf] could not take that file:", e);
     }
@@ -284,8 +296,7 @@ function build(node) {
     const inApp = e.dataTransfer?.getData?.("application/x-rednode-result");
     if (inApp) {
       try {
-        const entry = entryOf(JSON.parse(inApp));
-        if (entry && !node._rnShelf.items.includes(entry)) node._rnShelf.items.push(entry);
+        addEntry(node, entryOf(JSON.parse(inApp)));
         writeCfg(node);
         render(node);
         return;
@@ -357,4 +368,4 @@ app.registerExtension({
   },
 });
 
-export { readCfg, entryOf, parseEntry, sendTo, render, SEND_TO };
+export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, SEND_TO };
