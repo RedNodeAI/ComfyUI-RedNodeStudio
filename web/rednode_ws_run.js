@@ -924,6 +924,7 @@ export function runTabBody(node, body) {
   node._rnRunSub = sub;
   const strip = el("div", "rn-ws-sub");
   strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
   for (const [id, label, tip] of RUN_SUBS) {
     const b = el("button", "rn-ws-subt" + (id === sub ? " cur" : ""));
     b.dataset.sub = id;

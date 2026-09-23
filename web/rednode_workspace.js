@@ -225,6 +225,9 @@ css.textContent = `
 /* the page's name sits under the bar with its line beside it, not below it */
 .rn-ws-pbartrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:0 2px}
 .rn-ws-pbart{flex:none;font-weight:700;font-size:15px;letter-spacing:.02em;color:#a9c6ff}
+/* the same name, standing in for the tabs on a page that has none */
+.rn-ws-pbart.inbar{flex:0 1 auto;min-width:0;font-size:18px;color:#e8ecf1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-pbarnote{flex:1 1 auto;min-width:0;font-size:12px;color:#8a919b;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
@@ -3669,6 +3672,7 @@ function cameraBody(node, body) {
   const seg = document.createElement("div");
   seg.className = "rn-ws-seg";
   seg.dataset.rnbar = "1";
+  seg.classList.add("rn-barstrip");
   for (const [v, l, tip] of [["prompt", "Prompt", "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs."],
                              ["i2i", "Re-angle", "A separate studio whose camera drives the Editor's Re-angle (re-shooting the picture from another viewpoint)."]]) {
     const b = document.createElement("button");
@@ -6500,6 +6504,7 @@ function lorasBody(node, body) {
     const tabs = document.createElement("div");
     tabs.className = "rn-ws-tabs";
     tabs.dataset.rnbar = "1";
+    tabs.classList.add("rn-barstrip");
     const mk = (name, label) => {
       const t = document.createElement("div");
       t.className = "rn-ws-tab g-model" + (name === curName ? " cur" : "");
@@ -14117,13 +14122,16 @@ const PAGE_BAR = {
   detailer: { title: "Detailer", note: "Passes that re-render parts of the picture at higher "
                                        + "detail." },
   post: { title: "Post FX", note: "The finishing chain, in camera order." },
-  advanced: { title: "Advanced", note: "Settings for this node and this install.", gen: false },
+  advanced: { title: "Advanced", note: "Settings for this node and this install." },
   run: { title: "Run", note: "Queue the workflow and watch it, or look back at what it made." },
 };
 
 /** Carry a page's own tab strip up into its bar, once the page has built it. */
 function adoptBarStrip(bar, body) {
   if (!bar || !body) return;
+  // a second row left over from an earlier draw goes first: the page rebuilds its
+  // own strip every time, and two of them in the wrap reads as doubled tabs
+  for (const old of bar._rnWrap?.querySelectorAll?.(".rn-ws-pbar2") || []) old.remove();
   const take = (sel, into) => {
     const el = body.querySelector?.(sel);
     if (!el) return null;
@@ -14132,14 +14140,29 @@ function adoptBarStrip(bar, body) {
     into.appendChild(el);
     return el;
   };
-  const first = take("[data-rnbar]", bar);
+  const first = take(".rn-barstrip", bar);
+  if (!first) {
+    // no tabs on this page: the name moves up into the bar rather than leaving it
+    // empty, and the line stays under it (you, 2026-09-23)
+    const row = bar._rnWrap?.querySelector?.(".rn-ws-pbartrow");
+    const name = row?.querySelector?.(".rn-ws-pbart");
+    if (name) {
+      name.remove();
+      name.classList.add("inbar");
+      bar.insertBefore(name, bar.firstChild);
+      if (!row.children?.length) row.remove();
+    }
+  }
   // many tabs (the LoRAs tab grows a set at a time) wrap onto a second line rather
   // than scrolling, because they are the page's own navigation
   if (first && (first.children?.length || 0) > 4) bar.classList.add("wrap");
-  const second = take("[data-rnbar2]", bar.parentElement);
+  const second = take(".rn-barstrip2", bar._rnWrap);
+  // one second row, whatever the page built: a strip left behind anywhere else in
+  // the page would read as the tabs appearing twice
+  for (const extra of body.querySelectorAll?.(".rn-barstrip2") || []) extra.remove();
   if (second) {
     second.classList.add("rn-ws-pbar2");
-    bar.parentElement.insertBefore(second, bar.nextSibling);
+    bar._rnWrap.insertBefore(second, bar._rnWrap.children[1] || null);
   }
 }
 
@@ -14226,6 +14249,7 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
   wrap.className = "rn-ws-pbarwrap";
   const head = document.createElement("div");
   head.className = "rn-ws-pbar";
+  head._rnWrap = wrap;                      // the shim has no parentElement
   if (strip) {
     dressSubTabs(strip);
     head.appendChild(strip);
@@ -15405,6 +15429,7 @@ function i2iTabs(node, body) {
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
   strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
   for (const [id, label] of I2I_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt tint s-" + id + (id === sub ? " cur" : "");
@@ -15508,6 +15533,7 @@ function editorTabs(node, body) {
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
   strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
   for (const s of EDITOR_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt tint s-" + s.id + (s.id === sub ? " cur" : "");
@@ -15705,6 +15731,7 @@ function identityTabs(node, body) {
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
   strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
   for (const s of IDENTITY_SUBS) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (s.id === sub ? " cur" : "");
@@ -15772,6 +15799,7 @@ function identityTabs(node, body) {
   const istrip = document.createElement("div");
   istrip.className = "rn-ws-sub inner";
   istrip.dataset.rnbar2 = "1";
+  istrip.classList.add("rn-barstrip2");
   for (const [id, label, lit] of innerSubs) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (id === inner ? " cur" : "");
@@ -17240,6 +17268,7 @@ function moodboardTabs(node, body) {
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub inner";
   strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
   for (const [id, label, lit] of subs) {
     const b = document.createElement("button");
     b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
