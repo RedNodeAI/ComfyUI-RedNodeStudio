@@ -235,6 +235,12 @@ css.textContent = `
 .rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
 .rn-ws-pbargen svg{width:18px;height:18px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
+/* a sub-page of the open tab: indented under it, smaller, no icon or light */
+.rn-ws-tab.rail.railsub{padding-left:34px;font-size:12px;font-weight:500;min-height:28px;
+  color:#9aa0a8;justify-content:flex-start}
+.rn-ws-rail .rn-ws-tab.rail.railsub:hover{background:#20242a;color:#e8ecf1}
+.rn-ws-rail .rn-ws-tab.rail.railsub.cur{background:#241519;color:#fff;font-weight:600;
+  box-shadow:inset 3px 0 0 0 #c42a3c}
 .rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
 .rn-ws-rail.compact .rn-ws-rgroup{padding-left:3px}
@@ -19759,6 +19765,25 @@ function renderPage(node) {
     };
     b.addEventListener("contextmenu", (e) => openRailMenu(node, t, e));
     grp.appendChild(b);
+    // THE OPEN TAB'S OWN PAGES, indented under it: the rail says where you are, and
+    // the page you want is one click from the rail instead of two (you, 2026-09-23).
+    // Models first, to be looked at before the other tabs follow.
+    if (t.id === cur && t.id === "models" && !compact) {
+      const at = modelsSub(node, cfg);
+      for (const [id, label] of MODELS_SUBS) {
+        const sb = document.createElement("button");
+        sb.className = "rn-ws-tab rail railsub" + (id === at ? " cur" : "");
+        sb.dataset.railsub = id;
+        sb.textContent = label;
+        sb.title = label + " on the Models page.";
+        sb.onclick = () => {
+          node._rnModelsSub = id;
+          (node.properties ||= {}).rn_models_sub = id;
+          render(node);
+        };
+        grp.appendChild(sb);
+      }
+    }
     }
   }
   const tmode = tuckMode(node);
