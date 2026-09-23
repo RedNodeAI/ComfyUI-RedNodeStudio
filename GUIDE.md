@@ -535,6 +535,8 @@ Control Panel drives other nodes' dropdowns, sliders and toggles from one node, 
 inside subgraphs. Palette and Router route the graph by colour. Sender and Grabber replace a
 canvas of Get and Set nodes with named channels. The wires that are not there are the point.
 
+**Copy and paste on the Shelf.** Point at a picture on the shelf and **Ctrl+C** puts it on the system clipboard, full size, ready for any other app. **Ctrl+V** with the pointer over the shelf takes whatever picture is on the clipboard, a screenshot included, and puts it on top. The shelf your pointer is over is the one the keys drive, and a prompt box you are typing in keeps its own copy and paste.
+
 **The Shelf as the picture.** A RedNode Shelf beside the Workspace has an **Override** switch.
 With it on, the picture picked on the shelf is what the ticked tabs render from, in place of
 whatever their galleries hold: tick **Img2Img** and every run works on the shelf's picture,

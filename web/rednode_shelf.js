@@ -14,9 +14,27 @@ import * as _appmod from "../../scripts/app.js";
 const { app } = _appmod;
 import * as _apimod from "../../scripts/api.js";
 const { api } = _apimod;
+import { panelHotkey, forgetHotkeys, panelPaste, forgetPaste } from "./rednode_keys.js";
 
 const NODE = "RedNodeShelf";
 const MIN_H = 150;
+
+// Pull a picture out of a clipboard event. `files` covers a copied image FILE, and
+// the items walk covers a screenshot or a browser's "copy image", which arrive as
+// raw data with no file entry. getAsFile must be called here, synchronously: the
+// item is dead once the handler returns. (The galleries read a paste the same way.)
+function clipboardImage(e) {
+  const dt = e.clipboardData;
+  const direct = [...(dt?.files || [])].find((f) => f.type?.startsWith("image/"));
+  if (direct) return direct;
+  for (const item of dt?.items || []) {
+    if (item.kind === "file" && item.type?.startsWith("image/")) {
+      const f = item.getAsFile();
+      if (f) return f;
+    }
+  }
+  return null;
+}
 
 const parseEntry = (entry) => {
   const m = /^(.*?)(?:\s*\[(input|output|temp)\])?$/.exec(String(entry));
@@ -41,6 +59,48 @@ const entryOf = (rec) => {
   const name = rec.subfolder ? `${rec.subfolder}/${rec.filename}` : rec.filename;
   return rec.type && rec.type !== "input" ? `${name} [${rec.type}]` : name;
 };
+
+/** Put a picture on the system clipboard, as the PNG every other app expects.
+ *
+ *  The clipboard takes PNG and nothing else, so anything already PNG goes straight
+ *  over and a JPEG or a WebP is drawn through a canvas first. What lands is the
+ *  full picture, never the thumbnail the cell is showing.
+ */
+async function copyPicture(entry) {
+  const blob = await (await fetch(viewUrl(entry))).blob();
+  if (blob.type === "image/png" && navigator.clipboard?.write) {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    return;
+  }
+  const img = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.getContext("2d").drawImage(img, 0, 0);
+  const png = await new Promise((r) => canvas.toBlob(r, "image/png"));
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+}
+
+/** Say what just happened, on the picture it happened to. A keypress with no visible
+ *  answer is indistinguishable from a keypress that did nothing. */
+function flash(node, entry, text) {
+  const cells = [...(node._rnShelfEl?.querySelectorAll?.(".rn-shelf-cell") || [])];
+  const cell = cells.find((c) => c.dataset?.entry === entry);
+  if (!cell) return;
+  const tag = document.createElement("div");
+  tag.className = "rn-shelf-flash";
+  tag.textContent = text;
+  cell.appendChild(tag);
+  setTimeout(() => tag.remove(), 900);
+}
+
+/** The picture Ctrl+C means: the one under the pointer, else the one picked. */
+function keyEntry(node) {
+  const cfg = node._rnShelf;
+  if (!cfg?.items.length) return "";
+  const over = node._rnShelfOver;
+  return cfg.items[typeof over === "number" && cfg.items[over] ? over : cfg.sel] || "";
+}
 
 /** Put an entry on the shelf, newest first. Returns whether it was new. */
 function addEntry(node, entry) {
@@ -360,14 +420,16 @@ function render(node) {
   if (!cfg.items.length) {
     const empty = document.createElement("div");
     empty.className = "rn-shelf-empty";
-    empty.textContent = "Drop pictures here. Drag them off onto a gallery, the Paint "
-      + "pane or a folder; right-click one to send it to a tab.";
+    empty.textContent = "Drop pictures here, or hover and press Ctrl+V. Drag them off "
+      + "onto a gallery, the Paint pane or a folder, press Ctrl+C to copy the one you "
+      + "are pointing at, and right-click one to send it to a tab.";
     list.appendChild(empty);
   }
   cfg.items.forEach((entry, i) => {
     const cell = document.createElement("div");
     cell.className = "rn-shelf-cell" + (i === cfg.sel ? " cur" : "");
     cell.dataset.shelf = String(i);
+    cell.dataset.entry = entry;
     cell.title = `${entry}\nDrag it off, or right-click for where to send it.`;
     const img = document.createElement("img");
     img.className = "rn-shelf-img";
@@ -388,6 +450,11 @@ function render(node) {
     dragOut(cell, entry);
     cell.onclick = () => { cfg.sel = i; writeCfg(node); render(node); };
     cell.addEventListener("contextmenu", (ev) => cellMenu(node, entry, i, ev));
+    // which picture Ctrl+C means: a photo viewer copies what you are pointing at
+    cell.addEventListener("pointerenter", () => { node._rnShelfOver = i; });
+    cell.addEventListener("pointerleave", () => {
+      if (node._rnShelfOver === i) node._rnShelfOver = null;
+    });
     list.appendChild(cell);
   });
 }
@@ -443,6 +510,31 @@ function build(node) {
   });
   node._rnShelfEl = wrap;
 
+  // COPY AND PASTE, the way a photo viewer does it: the shelf your pointer is over is
+  // the shelf the keys drive, and nothing is taken unless there is a picture to take.
+  // Both go through rednode_keys.js, so a prompt box that has focus keeps its own
+  // Ctrl+C and Ctrl+V, and a press the shelf declines reaches ComfyUI untouched.
+  const onPaste = (e) => {
+    const file = clipboardImage(e);
+    if (!file) return false;              // text is not ours: let ComfyUI have it
+    wrap.classList.add("pasting");
+    return addFiles(node, [file]).finally(() => wrap.classList.remove("pasting"));
+  };
+  const onCopy = () => {
+    const entry = keyEntry(node);
+    if (!entry) return false;             // an empty shelf copies nothing
+    return copyPicture(entry).then(() => flash(node, entry, "Copied"),
+                                   (err) => {
+                                     console.error("[RedNode Shelf] could not copy that:", err);
+                                     flash(node, entry, "Could not copy");
+                                   });
+  };
+  panelPaste(wrap, onPaste);
+  panelHotkey(wrap, "ctrl+c", onCopy);
+  // the same two handlers the keys run, reachable without a real keyboard
+  node._rnShelfPaste = onPaste;
+  node._rnShelfCopy = onCopy;
+
   const w = node.addDOMWidget("rednode_shelf_ui", "rednode_shelf_ui", wrap, {
     serialize: false,
     getValue: () => cfgW.value,
@@ -492,6 +584,11 @@ style.textContent = `
   pointer-events:none}
 .rn-shelf-name{font-size:11px;color:#8a919b;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
+.rn-shelf-cell{position:relative}
+.rn-shelf-flash{position:absolute;top:8px;left:8px;right:8px;text-align:center;
+  background:#0f1114e6;border:1px solid #b8283c;border-radius:6px;color:#f3b0ba;
+  font-size:11px;padding:3px 6px;pointer-events:none}
+.rn-shelf-wrap.pasting{outline:2px dashed #4a8fe0;outline-offset:-2px}
 .rn-shelf-cell.gone{border-color:#7d2233;background:#1a1216}
 .rn-shelf-cell.gone .rn-shelf-img{opacity:.25}
 .rn-shelf-cell.gone .rn-shelf-name::after{content:" - gone";color:#e0405a}
@@ -516,8 +613,19 @@ app.registerExtension({
         render(this);
       });
     };
+    // a deleted shelf takes its key bindings with it, or the pointer could land on a
+    // panel that is no longer on the canvas and a press would reach a dead node
+    const onRemoved = nodeType.prototype.onRemoved;
+    nodeType.prototype.onRemoved = function () {
+      if (this._rnShelfEl) {
+        forgetHotkeys(this._rnShelfEl);
+        forgetPaste(this._rnShelfEl);
+      }
+      onRemoved?.apply(this, arguments);
+    };
   },
 });
 
 export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO,
-         setOverride, shelves, OVERRIDE_DEFAULT };
+         setOverride, shelves, OVERRIDE_DEFAULT, clipboardImage, keyEntry, copyPicture,
+         build };
