@@ -14144,6 +14144,13 @@ function latentBody(node, body) {
   const mpOf = () => (typeof L.mp === "number" && L.mp > 0)
     ? L.mp
     : Math.max(0.25, Math.round((L.w * L.h * (L.scale || 1) * (L.scale || 1)) / 1e6 * 20) / 20);
+  // 1 = 1024 x 1024 worth of pixels, 1.5 = 1536 x 1536, and the aspect chip spends
+  // the same pixels on a different shape. Megapixels are what the canvas is stored
+  // and budgeted in; this is the same number in the units you asked for
+  // (you, 2026-09-23). scale = the square edge that holds that many pixels / 1024.
+  const MP_AT_1 = 1024 * 1024 / 1e6;
+  const scaleOf = () => Math.round(Math.sqrt(mpOf() / MP_AT_1) * 20) / 20;
+  const mpFromScale = (sc) => Math.max(0.05, (sc * sc) * MP_AT_1);
   const mpCalc = (wr, hr, mp) => {
     const total = Math.max(0.05, mp) * 1e6;
     const w = Math.sqrt(total * wr / hr);
@@ -14302,23 +14309,23 @@ function latentBody(node, body) {
   // (you, 2026-09-23). The readout says the canvas's real megapixels, which is
   // what the slider's budget lands on once the ratio and the 64s have had their
   // say, so it agrees with the Megapixels card below it.
-  slab.textContent = "Pixel budget";
+  slab.textContent = "Scale";
   const sr = document.createElement("input");
   sr.type = "range";
-  sr.min = 0.25; sr.max = 4; sr.step = 0.05;
-  sr.value = mpOf();
+  sr.min = 0.5; sr.max = 2; sr.step = 0.05;
+  sr.value = scaleOf();
   sr.style.cssText = "width:160px;height:20px;accent-color:#4a8fe0";
   const sv = document.createElement("span");
   sv.className = "rn-ws-note";
-  const svText = () => (eff(L.w) * eff(L.h) / 1e6).toFixed(2) + " MP · "
-                     + eff(L.w) + " x " + eff(L.h);
+  const svText = () => scaleOf().toFixed(2) + " = " + eff(L.w) + " x " + eff(L.h)
+                     + " · " + (eff(L.w) * eff(L.h) / 1e6).toFixed(2) + " MP";
   sv.textContent = svText();
-  sr.title = "The canvas in megapixels, shaped by the aspect "
-           + "chip above (the Sick Ollie numbers, our name). 1.00 is Krea 2's "
-           + "native training size, 2.00 is twice the pixels and the VRAM to "
-           + "match. Snaps to 64s.";
+  sr.title = "The canvas size in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536. "
+           + "A non-square aspect spends the same pixels on that shape instead. "
+           + "1.00 is Krea 2's native training size; every step up costs pixels and "
+           + "the VRAM to match. Snaps to 64s.";
   sr.addEventListener("input", () => {
-    L.mp = parseFloat(sr.value);
+    L.mp = mpFromScale(parseFloat(sr.value) || 1);
     const a = ASPECTS.find((x) => x[0] === L.aspect);
     const wr = a ? a[1] : L.w, hr = a ? a[2] : L.h;
     const wh = mpCalc(wr, hr, L.mp);
@@ -14331,6 +14338,37 @@ function latentBody(node, body) {
   sr.addEventListener("change", () => render(node));
   srow.append(slab, sr, sv);
   canvasCard.appendChild(srow);
+
+  // THE FIVE SIZES, one press each: 1024 up to 2048 in quarter steps. The slider
+  // is there for anything between; this is for the sizes actually used.
+  const qrow = document.createElement("div");
+  qrow.className = "rn-ws-row";
+  const qlab = document.createElement("span");
+  qlab.className = "rn-ws-note";
+  qlab.textContent = "Quick";
+  const qseg = document.createElement("div");
+  qseg.className = "rn-ws-seg rn-ws-latquick";
+  const atNow = scaleOf();
+  for (const sc of [1, 1.25, 1.5, 1.75, 2]) {
+    const edge = Math.round(sc * 1024);
+    const b2 = document.createElement("button");
+    b2.className = "rn-ws-segb" + (Math.abs(atNow - sc) < 0.026 ? " on" : "");
+    b2.textContent = sc.toFixed(2);
+    b2.dataset.scale = String(sc);
+    b2.title = `${sc.toFixed(2)} · ${edge} x ${edge} on a square canvas, or the same `
+             + "pixels shaped by the aspect above.";
+    b2.onclick = () => {
+      L.mp = mpFromScale(sc);
+      const a2 = ASPECTS.find((x) => x[0] === L.aspect);
+      const wh2 = mpCalc(a2 ? a2[1] : L.w, a2 ? a2[2] : L.h, L.mp);
+      L.w = wh2[0]; L.h = wh2[1];
+      L.scale = 1;
+      writeCfg(node); render(node);
+    };
+    qseg.appendChild(b2);
+  }
+  qrow.append(qlab, qseg);
+  canvasCard.appendChild(qrow);
 
   const drow = document.createElement("div");
   drow.style.cssText = "display:flex;flex-direction:column;gap:6px";
