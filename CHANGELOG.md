@@ -6,7 +6,55 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.5.1** - 2026-09-23
 
+### New
+
+- RedNode Shelf: a place to put pictures while you move them around. Drop them on, drag
+  them off onto any gallery, the Paint pane, another shelf or a folder on your desktop,
+  and right-click one to send it straight to a Workspace tab. Dragging out copies, so
+  nothing leaves the shelf until you take it off. The picture picked on it also comes out
+  of an image socket, which makes it a Load Image you can drag out of
+- AI tab: pictures to words on a page of its own, with its own gallery saved with the
+  workflow. Picture captions the one you picked with the same engines the rest of the pack
+  uses; Batch captions every picture on the page and writes each caption beside its own
+  picture as a .txt, which is the layout a LoRA trainer expects. The Img2Img tab keeps its
+  own Auto prompt
+- Image to Text, a Detailer pass that renders nothing: it reads the picture at its place in
+  the chain and hands those words to the passes after it, so a chain that has already
+  changed the picture can describe what it has. It reads the picture arriving at the pass
+  or the AI tab's picked one, with the AI tab's engines or its own, and the words typed on
+  its card are combined with what it read. A pass can take them by its Prompt picker: the
+  last Image to Text, or a named one. Nothing of this reaches the metadata, which still
+  carries the prompt the run was asked for
+- Every page opens with the same bar: the page's own tabs in the middle, Generate on the
+  right, the page's name and its line underneath. Paint keeps its tool bar. The bar holds
+  its size whatever Page size is set to
+- The rail lists the open tab's pages under it, with the light each page carries, and the
+  Krea 2 Identity tab goes one level further. Advanced has Pages on the rail, on by
+  default, and Generate on the rail, off by default now that every page header carries one
+- The Run page keeps this session's runs in a column of pictures down its left, click one
+  to open it again. The finished picture and every thumbnail drag out onto the Paint pane
+  or into a folder, and a Raw / Before Post / After Post switch appears for a run that kept
+  more than one version
+- The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
+  Quick sizes from 1024 to 2048 in quarter steps
+
 ### Fixes
+
+- The finished picture reaches ComfyUI's media assets, queue and history again. Silencing
+  core's previewer had left the run with no standard images key
+- Paint and Upscale runs no longer fire the Editor's Realism, Re-angle and Swap stages
+- ComfyUI's keyboard shortcuts work with the pointer over the panel. Only keys going into a
+  box you are typing in are held back, and Delete and Backspace stay blocked everywhere on
+  the panel, since the panel's own node is the selected one
+- A panel that fails to build is retried and comes back; clicking a bare node builds it
+  again, and a page that throws says so with a Try again instead of leaving a black
+  rectangle
+- A caption that outlives the config it started on is dropped rather than replacing the
+  Paint prompt that is there now
+- The Paint tab's LoRA column scrolls inside itself instead of stretching the whole page
+- A Hero Creator redesign is filed beside its headshot
+- A brand new Workspace no longer warns that its converter does nothing
+- The Realism page's conversion LoRA dropdown stays inside its card
 
 - The two Pro Grade looks are now Camera Ready Krea 2 and Camera Ready Z-Image. Same
   dials, same pictures, new names. A saved copy you made under the old name is your own

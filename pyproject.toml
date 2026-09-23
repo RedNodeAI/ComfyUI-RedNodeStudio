@@ -9,7 +9,7 @@ keywords = ["comfyui", "workspace", "panel", "inpainting", "lora", "krea2", "red
 
 [project.urls]
 Repository = "https://github.com/RedNodeAI/ComfyUI-RedNodeStudio"
-Documentation = "https://github.com/RedNodeAI/ComfyUI-RedNodeStudio#readme"
+Documentation = "https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/blob/main/GUIDE.md"
 
 [tool.comfy]
 PublisherId = "rednodeai"

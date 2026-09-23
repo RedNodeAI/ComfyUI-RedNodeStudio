@@ -16,7 +16,7 @@ single node in ComfyUI, on Krea 2, Qwen Image 2.1, Z-Image, Anima, SDXL, Illustr
 </tr>
 </table>
 
-**62 nodes · No pip dependencies · Every model, every purpose**
+**63 nodes · No pip dependencies · Every model, every purpose**
 
 Search **RedNode Studio** in ComfyUI Manager, or clone it:
 
