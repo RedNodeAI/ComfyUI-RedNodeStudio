@@ -238,10 +238,13 @@ css.textContent = `
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 /* a sub-page of the open tab: indented under it, smaller, no icon or light. Depth 2
    is the Identity tab's pages-within-pages, indented again. */
-.rn-ws-railsub{display:flex;align-items:center;width:100%;background:transparent;
+.rn-ws-railsub{display:flex;align-items:center;gap:8px;width:100%;background:transparent;
   border:0;border-radius:6px;cursor:pointer;text-align:left;justify-content:flex-start;
-  padding:0 8px 0 34px;font:500 12px system-ui,sans-serif;min-height:28px;color:#9aa0a8}
-.rn-ws-railsub.d2{padding-left:50px;font-size:11.5px;color:#868d96}
+  padding:0 8px 0 30px;font:500 12px system-ui,sans-serif;min-height:28px;color:#9aa0a8}
+.rn-ws-railsub .dot{width:7px;height:7px;border-radius:50%;background:#3a3f47;flex:none}
+.rn-ws-railsub .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
+.rn-ws-railsub .dot.skip{background:#e0a84a;box-shadow:0 0 5px #e0a84a}
+.rn-ws-railsub.d2{padding-left:46px;font-size:11.5px;color:#868d96}
 .rn-ws-railsub:hover{background:#20242a;color:#e8ecf1}
 .rn-ws-railsub.cur{background:#241519;color:#fff;font-weight:600;
   box-shadow:inset 3px 0 0 0 #c42a3c}
@@ -14077,56 +14080,73 @@ function railLabel(text) {
 function railSubRows(node, cfg, tab) {
   const props = (node.properties ||= {});
   const rows = [];
-  const add = (id, label, cur, pick, depth = 1) =>
-    rows.push({ id, label: railLabel(label), cur, pick, depth });
-  const simple = (list, at, set) => {
+  const add = (id, label, cur, pick, depth = 1, lit = null) =>
+    rows.push({ id, label: railLabel(label), cur, pick, depth, lit });
+  const simple = (list, at, set, litOf = () => null) => {
     for (const item of list) {
       const [id, label] = Array.isArray(item) ? item : [item.id, item.label];
-      add(id, label, id === at, () => set(id));
+      add(id, label, id === at, () => set(id), 1, litOf(id));
     }
   };
   if (tab === "models") {
     simple(MODELS_SUBS, modelsSub(node, cfg),
            (id) => { node._rnModelsSub = id; props.rn_models_sub = id; });
   } else if (tab === "latent") {
+    const L = cfg.latent;
+    const nP = Math.max(1, Math.round(Number(L.passes) || 1));
     simple([["canvas", "Canvas"], ["passes", "Passes"]],
            node._rnLatSub || props.rn_latent_sub || "canvas",
-           (id) => { node._rnLatSub = id; props.rn_latent_sub = id; });
+           (id) => { node._rnLatSub = id; props.rn_latent_sub = id; },
+           (id) => (id === "canvas" ? !!L.on : !!(L.on && nP > 1)));
   } else if (tab === "i2i") {
     simple(I2I_SUBS, node._rnI2iSub || props.rn_i2i_sub || "source",
-           (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; });
+           (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; },
+           (id) => i2iSubLit(cfg, id));
   } else if (tab === "editor") {
     simple(EDITOR_SUBS, node._rnEdSub || props.rn_editor_sub || "esource",
-           (id) => { node._rnEdSub = id; props.rn_editor_sub = id; });
+           (id) => { node._rnEdSub = id; props.rn_editor_sub = id; },
+           (id) => i2iSubLit(cfg, id));
   } else if (tab === "moodboard") {
+    const M = cfg.tabs.moodboard || {};
     simple([["gallery", "Gallery"], ["boosts", "Boosts"], ["auto", "Auto prompt"]],
            node._rnMbSub || props.rn_moodboard_sub || "gallery",
-           (id) => { node._rnMbSub = id; props.rn_moodboard_sub = id; });
+           (id) => { node._rnMbSub = id; props.rn_moodboard_sub = id; },
+           (id) => (id === "gallery" ? tabLit(cfg, "moodboard")
+                  : id === "boosts" ? !!(M.on && dialsOn(cfg, "moodboard"))
+                  : !!(M.on && M.auto?.on)));
   } else if (tab === "run") {
     simple(RUN_SUBS, node._rnRunSub || props.rn_run_sub || "run",
-           (id) => { node._rnRunSub = id; props.rn_run_sub = id; });
+           (id) => { node._rnRunSub = id; props.rn_run_sub = id; },
+           (id) => (id === "run" ? runLit()
+                  : id === "save" ? !!cfg.save_on : null));
   } else if (tab === "identity") {
     const at = node._rnIdSub || props.rn_identity_sub || "subject";
     for (const s of IDENTITY_SUBS) {
       add(s.id, s.label, s.id === at,
-          () => { node._rnIdSub = s.id; props.rn_identity_sub = s.id; });
+          () => { node._rnIdSub = s.id; props.rn_identity_sub = s.id; }, 1,
+          s.id === "hero" ? null : tabLit(cfg, s.id));
       if (s.id !== at) continue;
       // THE THIRD LAYER: this page's own pages, indented again
       if (s.id === "hero") {
         const hat = node._rnHeroSub || props.rn_hero_sub || "headshot";
         for (const [id, label] of [["headshot", "Headshot"], ["redesign", "Redesign"]]) {
           add(id, label, id === hat,
-              () => { node._rnHeroSub = id; props.rn_hero_sub = id; }, 2);
+              () => { node._rnHeroSub = id; props.rn_hero_sub = id; }, 2, null);
         }
       } else {
         const key = "rn_identity_" + s.id;
         const iat = (node._rnIdInner || {})[s.id] || props[key] || "gallery";
+        const t = cfg.tabs[s.id] || {};
+        const litOf = (id) => (id === "gallery" ? tabLit(cfg, s.id)
+                             : id === "boosts" ? !!(t.on && dialsOn(cfg, s.id))
+                             : id === "auto" ? !!(t.on && t.auto?.on)
+                             : !!(t.on && convActive(t.conv)));
         for (const [id, label] of [["gallery", "Gallery"], ["boosts", "Boosts"],
                                    ["auto", "Auto prompt"], ["converter", "Converter"]]) {
           add(id, label, id === iat, () => {
             (node._rnIdInner ||= {})[s.id] = id;
             props[key] = id;
-          }, 2);
+          }, 2, litOf(id));
         }
       }
     }
@@ -19874,7 +19894,15 @@ function renderPage(node) {
         const sb = document.createElement("button");
         sb.className = "rn-ws-railsub d" + row.depth + (row.cur ? " cur" : "");
         sb.dataset.railsub = row.id;
-        sb.textContent = row.label;
+        if (row.lit !== null) {
+          const sdot = document.createElement("span");
+          sdot.className = "dot" + (row.lit === "skip" ? " skip" : row.lit ? " on" : "");
+          sb.appendChild(sdot);
+        }
+        const slab = document.createElement("span");
+        slab.className = "lb";
+        slab.textContent = row.label;
+        sb.appendChild(slab);
         sb.title = `${row.label}, on the ${t.label} tab.`;
         sb.onclick = () => { row.pick(); render(node); };
         grp.appendChild(sb);
