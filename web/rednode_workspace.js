@@ -185,7 +185,13 @@ css.textContent = `
 .rn-ws-railgen:hover{background:#cc3148}
 /* THE TOP BAR: the same height on every page, the sub-tabs centred in it and
    Generate pinned to the right edge so the centring never shifts with them */
+/* THE BAR IGNORES THE PAGE'S OWN WIDTH RULES. A page column is capped (940, or
+   1400 on the wide pages) and centred, which made the bar a different width on
+   every page. It spans the panel instead, always (you, 2026-09-23). */
 .rn-ws-pbarwrap{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.rn-ws-body:not(.full)>.rn-ws-pbarwrap,
+.rn-ws-body.wide:not(.full)>.rn-ws-pbarwrap{max-width:none;width:100%;
+  align-self:stretch;margin-left:0;margin-right:0}
 .rn-ws-pbar{position:relative;display:flex;flex-wrap:nowrap;align-items:center;
   justify-content:center;gap:12px;min-height:66px;padding:9px 220px 9px 16px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
@@ -20166,12 +20172,21 @@ async function fetchPresetNames(node) {
 // happening sometimes"). The build is retried on a short ladder, clicking the node
 // retries as well, and a graph that finished loading without a panel gets one.
 function build(node, attempt = 0) {
-  if (!node || !node.addDOMWidget || node._rnWidget) return;
+  if (!node || node._rnWidget) return;
+  const wait = [150, 400, 1200, 3000][attempt];
+  // A NODE MADE BEFORE THE FRONTEND CAN TAKE DOM WIDGETS used to be dropped here
+  // and never looked at again, which is how a Workspace came up bare with its
+  // sockets and the config JSON showing. It waits its turn instead.
+  if (!node.addDOMWidget) {
+    if (wait !== undefined) setTimeout(() => build(node, attempt + 1), wait);
+    else console.error("[RedNode Workspace] this ComfyUI never offered addDOMWidget, so "
+      + "the panel cannot be built. Click the node to try again.");
+    return;
+  }
   try {
     buildPanel(node);
   } catch (e) {
     console.error(`[RedNode Workspace] the panel did not build (try ${attempt + 1}):`, e);
-    const wait = [150, 400, 1200, 3000][attempt];
     if (wait !== undefined) setTimeout(() => build(node, attempt + 1), wait);
     else {
       console.error("[RedNode Workspace] the panel is not building. The node keeps its "
