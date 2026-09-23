@@ -915,14 +915,18 @@ def pass_name(s):
     return PASS_NAMES.get(s.get("type"), str(s.get("type") or "pass").capitalize())
 
 
-def _say(line, level=None):
-    """A Detailer line on the console and in the Run tab's log."""
+def _say(line, level=None, data=None):
+    """A Detailer line on the console and in the Run tab's log.
+
+    `data` is for a line with something behind it worth opening; see
+    `run_events.note`.
+    """
     print("[RedNode Detailer] " + line, flush=True)
     if level is None:
         low = line.lower()
         level = "warn" if any(w in low for w in WARN_WORDS) else "info"
     lead = "Detailer " if re.match(r"pass \d+ of \d+", line) else "Detailer: "
-    _run_events.note(lead + line, level)
+    _run_events.note(lead + line, level, data)
 
 class RedNodeStudioDetailer:
     @classmethod
@@ -1104,7 +1108,14 @@ class RedNodeStudioDetailer:
                     if words.strip():
                         read_words = words.strip()
                         read_by_name[name] = read_words
-                        _say("%s read %s: %s" % (tag, src_what, read_words[:300]))
+                        # The words are the point of the pass, so they go to the
+                        # console whole and ride to the Run tab's log as something
+                        # to open, rather than 300 characters cut off mid-sentence.
+                        print("[RedNode Detailer] %s read: %s" % (tag, read_words),
+                              flush=True)
+                        _say("%s read %s · Prompt completed" % (tag, src_what),
+                             data={"prompt": read_words, "title": name,
+                                   "what": src_what, "pass": i})
                     else:
                         _say("%s read nothing; the passes after it keep their own words"
                              % tag)

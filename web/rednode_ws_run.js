@@ -100,8 +100,10 @@ const clock = (s) => {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 };
 
-function logLine(text, level = "info", t = secs()) {
-  RUN.log.push({ t, level, text });
+function logLine(text, level = "info", t = secs(), data = null) {
+  // `data` is a line with more behind it than a log should hold: an Image to Text
+  // pass sends the whole prompt it read, and the row becomes one you can open.
+  RUN.log.push(data ? { t, level, text, data } : { t, level, text });
   if (RUN.log.length > LOG_MAX) RUN.log.splice(0, RUN.log.length - LOG_MAX);
   if (level === "load" || level === "unload") RUN.marks.push({ t, level });
 }
@@ -236,7 +238,7 @@ export function onRunEvent(d) {
     }
     RUN.stages.set(d.key, s);
   } else if (d.kind === "note") {
-    logLine(d.text, d.level || "info", d.t ?? secs());
+    logLine(d.text, d.level || "info", d.t ?? secs(), d.data || null);
   } else if (d.kind === "vram") {
     const v = d.vram || {};
     if (v.total) {
@@ -869,6 +871,50 @@ const el = (tag, cls, text) => {
   return n;
 };
 
+/** THE WHOLE OF WHAT A LOG LINE CARRIES, big enough to read and take away.
+ *
+ *  An Image to Text pass reads a paragraph off the picture and the log can only
+ *  hold a line of it. This is where the rest of it lives. The box is a real
+ *  textarea, so selecting half of it, dragging it into a prompt box and Ctrl+A
+ *  all behave the way they do everywhere else; it is read-only because the pass
+ *  has already handed these words on, and editing them here would change nothing.
+ */
+export function promptSheet(data) {
+  const text = String(data?.prompt || "");
+  if (!text) return null;
+  const ov = el("div", "rn-run-textov");
+  const panel = el("div", "rn-run-textpanel");
+  const head = el("div", "rn-run-texthead");
+  head.append(el("span", "t", data.title || "Image to Text"),
+              el("span", "w", data.what ? `Read ${data.what}` : ""));
+  const box = document.createElement("textarea");
+  box.className = "rn-run-textbox";
+  box.readOnly = true;
+  box.value = text;
+  const row = el("div", "rn-run-textrow");
+  const copy = el("button", "rn-ws-btn rn-run-textcopy", "Copy");
+  copy.onclick = () => {
+    try { box.select?.(); } catch (err) { /* nothing to select is not a failure */ }
+    navigator.clipboard?.writeText?.(text);
+    copy.textContent = "Copied";
+    setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+  };
+  const close = el("button", "rn-ws-btn rn-run-textclose", "Close");
+  const shut = () => { ov.remove(); window.removeEventListener("keydown", esc, true); };
+  const esc = (e) => { if (e.key === "Escape") shut(); };
+  close.onclick = shut;
+  row.append(el("span", "n", `${text.length} characters`), copy, close);
+  panel.append(head, box, row);
+  ov.appendChild(panel);
+  // the panel keeps its own clicks: only the dark around it closes the sheet
+  panel.addEventListener("pointerdown", (e) => e.stopPropagation());
+  ov.addEventListener("pointerdown", (e) => { if (e.target === ov) shut(); });
+  window.addEventListener("keydown", esc, true);
+  document.body.appendChild(ov);
+  box.focus?.();
+  return ov;
+}
+
 export async function queueWorkflow(btn) {
   btn.disabled = true;
   try {
@@ -1466,9 +1512,22 @@ function refresh(view) {
       a.onclick = (e) => e.stopPropagation();   // the row's own jump stays put
       tx.append(el("span", "", " "), a);
     }
+    // A LINE CARRYING A PROMPT opens it rather than jumping anywhere: an Image to
+    // Text pass writes a paragraph, and reading and copying it is the whole reason
+    // to click the line (you, 2026-09-23).
+    if (l.data?.prompt) {
+      const read = el("button", "rn-run-readbtn", "Read it");
+      read.title = "See the whole prompt this pass wrote, and copy it.";
+      read.onclick = (e) => { e.stopPropagation(); promptSheet(l.data); };
+      tx.append(el("span", "", " "), read);
+    }
     row.append(el("span", "tm", clock(l.t)), el("i", "dot"), tx);
     const target = jumpForLine(l.text, node._rnCfg);
-    if (target) {
+    if (l.data?.prompt) {
+      row.classList.add("link", "hasprompt");
+      row.title = "See the whole prompt this pass wrote, and copy it.";
+      row.onclick = () => promptSheet(l.data);
+    } else if (target) {
       row.classList.add("link");
       row.title = "Open where this is set.";
       row.onclick = () => goTo(node, target);
@@ -1782,6 +1841,25 @@ export const RUN_CSS = `
 .rn-run-line.unload .dot{background:#e0a84a}
 .rn-run-line.skip .dot{background:#6b7280}
 .rn-run-line.warn .dot{background:#e0435a}
+.rn-run-line.hasprompt .dot{background:#8fc0ff}
+.rn-run-line.hasprompt .tx{color:#e6ebf2}
+.rn-run-readbtn{background:#1d2735;border:1px solid #3d5a80;color:#9ecbff;
+  border-radius:5px;padding:1px 8px;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.rn-run-readbtn:hover{border-color:#8fc0ff;color:#fff}
+.rn-run-textov{position:fixed;inset:0;z-index:10050;background:#0c0d10cc;display:flex;
+  align-items:center;justify-content:center}
+.rn-run-textpanel{width:min(820px,94vw);max-height:84vh;background:#16181c;color:#e2e5ea;
+  border:1px solid #3a3f47;border-radius:10px;padding:18px 20px;display:flex;
+  flex-direction:column;gap:12px}
+.rn-run-texthead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.rn-run-texthead .t{font-weight:700;font-size:16px}
+.rn-run-texthead .w{color:#9aa0a8;font-size:12.5px}
+.rn-run-textbox{flex:1;min-height:38vh;max-height:60vh;resize:none;background:#111316;
+  border:1px solid #2a2e34;border-radius:6px;padding:12px 14px;color:#d6d9de;
+  font-size:14px;line-height:1.55;white-space:pre-wrap;font-family:inherit}
+.rn-run-textrow{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+.rn-run-textrow .n{flex:1;color:#8a919b;font-size:12px}
+.rn-run-textcopy,.rn-run-textclose{width:auto;padding:0 18px;min-height:34px;font-size:13px}
 .rn-ws-tab.g-run{--rn-g:#e0435a}
 .rn-ws-tab.cur.g-run{border-color:#e0435a;background:#e0435a1a}
 @media (max-width:560px){.rn-run-facts{margin-left:0}}

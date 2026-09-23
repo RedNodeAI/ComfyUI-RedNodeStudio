@@ -375,10 +375,18 @@ def note_once(key, text, level="info"):
     note(text, level)
 
 
-def note(text, level="info"):
-    """One line for the Run tab's log."""
+def note(text, level="info", data=None):
+    """One line for the Run tab's log.
+
+    `data` rides along when a line has more behind it than belongs in a log: an
+    Image to Text pass sends the whole prompt it read, and the panel turns the
+    line into one you can open and copy from. The log itself stays one line.
+    """
     try:
-        _send({"run": _state["run"], "t": round(_now(), 2), "kind": "note",
-               "node": _state["node"], "text": str(text), "level": level})
+        payload = {"run": _state["run"], "t": round(_now(), 2), "kind": "note",
+                   "node": _state["node"], "text": str(text), "level": level}
+        if isinstance(data, dict) and data:
+            payload["data"] = data
+        _send(payload)
     except Exception:
         pass

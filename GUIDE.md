@@ -471,6 +471,11 @@ choose in its **Prompt** picker: a Prompts-tab row as before, **The last Image t
 particular reader by name when the chain has more than one. Nothing about this reaches what
 is saved: the metadata still carries the prompt the run was asked for.
 
+To read what it wrote, watch **What's happening** on the Run tab. The pass puts a
+**Prompt completed** line there, and clicking that line opens the whole prompt in a box you
+can select from, with **Copy**. The line belongs to the run, so opening an older run from the
+column down the left brings its prompts back with it.
+
 ## Watching a render
 
 ![The Run tab: the stages with their times, the estimate against the card, the live picture, the VRAM chart and the log](images/run-tab.webp)
