@@ -3298,7 +3298,12 @@ class RedNodeStudioWorkspace:
         _ed = tabs["editor_src"]
         ed_img = None
         _ed_ran = []
-        if any((it.get(_k) or {}).get("on")
+        # NOT ON A PAINT OR UPSCALE RUN: those tabs queue this node with a token of
+        # their own and want their own pass, nothing else. A paint Generate was
+        # running Realism, Re-angle and Swap first, on the Editor's own picture.
+        _own_run = bool(str(cfg["paint"].get("run_token") or "")
+                        or str(cfg["upscale"].get("run_token") or ""))
+        if not _own_run and any((it.get(_k) or {}).get("on")
                and (it.get(_k) or {}).get("target", "source") == "source"
                for _k in ("reangle", "realism", "swap")):
             ed_img = tab_image("editor_src")
@@ -5230,6 +5235,15 @@ class RedNodeStudioWorkspace:
                 if _fimgs:
                     ui_extra = dict(ui_extra or {})
                     ui_extra["rn_final_images"] = _fimgs
+            # AND ComfyUI'S OWN PANELS: its assets, queue and history read the
+            # standard ui "images" key, so the finished picture goes there too. The
+            # node sets hideOutputImages, so the frontend does not draw it a second
+            # time under the panel, the way core's Painter and Image Crop nodes do.
+            _shown = ((ui_extra or {}).get("rn_run_images")
+                      or (ui_extra or {}).get("rn_final_images"))
+            if _shown:
+                ui_extra = dict(ui_extra or {})
+                ui_extra["images"] = _shown
 
         _empty = None
         if rig_image is None or result_latent_out is None:

@@ -19966,7 +19966,14 @@ function build(node) {
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-wrap";
   for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick", "keydown", "contextmenu"]) {
-    wrap.addEventListener(t, (e) => e.stopPropagation());
+    wrap.addEventListener(t, (e) => {
+      // Every key is kept off the canvas, so typing in a box never deletes a node.
+      // ComfyUI's own queue shortcut is the exception: Ctrl+Enter and Ctrl+Shift+Enter
+      // are not typing, and blocking them meant the shortcut died whenever the panel
+      // had focus.
+      if (t === "keydown" && (e.ctrlKey || e.metaKey) && e.key === "Enter") return;
+      e.stopPropagation();
+    });
   }
   // The panel is tall enough to scroll, so a plain wheel belongs to the panel.
   // Shift+wheel hands the gesture to the canvas instead, so the node can be
@@ -20196,10 +20203,39 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function () {
       onCreated?.apply(this, arguments);
       injectStyle();
+      // The finished picture goes out under the standard ui "images" key, so
+      // ComfyUI's assets, queue and history hold it. This keeps the frontend from
+      // ALSO painting it under the panel, as core's own Painter and Image Crop
+      // panels do. An older frontend that does not know the flag is handled in
+      // onExecuted below.
+      this.hideOutputImages = true;
       // a NEW node opens wide, for the rail beside the pages; a loaded one takes
       // its saved size when configure runs after this
       this.setSize([Math.max(this.size?.[0] || 0, 1400), Math.max(this.size?.[1] || 0, 900)]);
       build(this);
+    };
+
+    // THE PICTURE GOES OUT UNDER core's "images" KEY so ComfyUI's assets, queue and
+    // history hold it, and those read the run from the server. What is not wanted is
+    // the second copy drawn under the panel: hideOutputImages covers one of the
+    // frontend's two paths, and the node's own image list and output entry are the
+    // other. Cleared again on the next frames, because core fills them after this.
+    const onExec = nodeType.prototype.onExecuted;
+    nodeType.prototype.onExecuted = function () {
+      onExec?.apply(this, arguments);
+      const drop = () => {
+        this.imgs = undefined;
+        this.images = undefined;
+        try {
+          const store = app.nodeOutputs;
+          if (store && store[this.id]) delete store[this.id];
+        } catch (e) { /* an older frontend with no store */ }
+        app.canvas?.setDirty(true, true);
+      };
+      drop();
+      requestAnimationFrame(drop);
+      setTimeout(drop, 60);
+      setTimeout(drop, 400);
     };
 
     const onConfigure = nodeType.prototype.onConfigure;
