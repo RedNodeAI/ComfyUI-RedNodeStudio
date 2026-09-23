@@ -53,6 +53,26 @@ function addEntry(node, entry) {
   return at < 0;
 }
 
+/** A ComfyUI picture URL as a gallery entry, or "".
+ *
+ *  A picture dragged from somewhere that draws it small - ComfyUI's own queue strip,
+ *  the assets panel, a thumbnail anywhere - hands over the SMALL file, and uploading
+ *  that would put a 260px copy on the shelf (you, 2026-09-23). Both our thumbnail
+ *  route and core's /view name the real file in their query, so the entry is read
+ *  from the URL and the full picture is what the shelf holds.
+ */
+function entryFromUrl(text) {
+  const raw = String(text || "").split("\n")[0].split("\r")[0].trim();
+  if (!raw || !/(\/view|\/rednode\/thumb)\?/.test(raw)) return "";
+  let q;
+  try { q = new URL(raw, window.location?.href || "http://localhost").searchParams; }
+  catch (e) { return ""; }
+  const filename = q.get("filename") || "";
+  if (!filename) return "";
+  return entryOf({ filename, subfolder: q.get("subfolder") || "",
+                   type: q.get("type") || "input" });
+}
+
 function readCfg(node) {
   const w = (node.widgets || []).find((x) => x.name === "config");
   let d;
@@ -302,6 +322,16 @@ function build(node) {
         return;
       } catch (err) { /* fall through to the files below */ }
     }
+    // a picture from ComfyUI's own panels arrives as a URL and, alongside it, the
+    // small file it was drawn from: the URL wins, because it names the real one
+    const fromUrl = entryFromUrl(e.dataTransfer?.getData?.("text/uri-list")
+      || e.dataTransfer?.getData?.("text/plain"));
+    if (fromUrl) {
+      addEntry(node, fromUrl);
+      writeCfg(node);
+      render(node);
+      return;
+    }
     const files = [...(e.dataTransfer?.files || [])];
     if (files.length) await addFiles(node, files);
   });
@@ -368,4 +398,4 @@ app.registerExtension({
   },
 });
 
-export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, SEND_TO };
+export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO };
