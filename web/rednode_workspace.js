@@ -194,11 +194,13 @@ css.textContent = `
 .rn-ws-body.wide:not(.full)>.rn-ws-pbarwrap{max-width:none;width:100%;
   align-self:stretch;margin-left:0;margin-right:0}
 .rn-ws-pbar{position:relative;display:flex;flex-wrap:nowrap;align-items:center;
-  justify-content:center;gap:12px;min-height:66px;padding:9px 16px;
+  justify-content:center;gap:calc(12px / var(--rnws-scale,1));
+  min-height:calc(66px / var(--rnws-scale,1));
+  padding:calc(9px / var(--rnws-scale,1)) calc(16px / var(--rnws-scale,1));
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
 .rn-ws-pbar>.rn-ws-sub,.rn-ws-pbar>.rn-ws-seg,.rn-ws-pbar>.rn-ws-tabs{
-  max-width:calc(100% - 400px)}
+  max-width:calc(100% - (400px / var(--rnws-scale,1)))}
 .rn-ws-pbar .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
   justify-content:center}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
@@ -206,11 +208,16 @@ css.textContent = `
 /* 250 WIDE IS THE SIZE THEY WANT, and on a page with six of them they all give way
    together rather than one being clipped (you, 2026-09-23). Same height everywhere,
    and every tab on a page is the same width as its neighbours. */
-.rn-ws-sub.dressed .rn-ws-subt{flex:0 1 250px;width:auto;min-width:96px;max-width:250px;
-  height:46px;min-height:46px;box-sizing:border-box;justify-content:center;gap:9px;
-  font-size:14px;font-weight:600;letter-spacing:0;text-transform:none;
-  background:#15171b;border-color:#20242a;color:#aab0b8;padding:0 14px;
+.rn-ws-sub.dressed .rn-ws-subt{flex:0 1 calc(250px / var(--rnws-scale,1));width:auto;
+  min-width:calc(120px / var(--rnws-scale,1));max-width:calc(250px / var(--rnws-scale,1));
+  height:calc(46px / var(--rnws-scale,1));min-height:calc(46px / var(--rnws-scale,1));
+  box-sizing:border-box;justify-content:center;gap:calc(9px / var(--rnws-scale,1));
+  font-size:calc(14px / var(--rnws-scale,1));font-weight:600;letter-spacing:0;text-transform:none;
+  background:#15171b;border-color:#20242a;color:#aab0b8;padding:0 26px 0 12px;
   position:relative;overflow:hidden}
+/* six tabs on one bar: the icons give up their room so the words keep theirs */
+.rn-ws-sub.dressed.tight .rn-ws-subic{display:none}
+.rn-ws-sub.dressed.tight .rn-ws-subt{font-size:13px;padding:0 22px 0 10px}
 .rn-ws-sub.dressed .rn-ws-subt>span:not(.lt):not(.rn-ws-subic){overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-sub.dressed .rn-ws-subt:hover{background:#181b20;border-color:#2e333b;color:#d6dae0}
@@ -226,14 +233,17 @@ css.textContent = `
 .rn-ws-pbartrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:0 2px}
 .rn-ws-pbart{flex:none;font-weight:700;font-size:15px;letter-spacing:.02em;color:#a9c6ff}
 /* the same name, standing in for the tabs on a page that has none */
-.rn-ws-pbart.inbar{flex:0 1 auto;min-width:0;font-size:18px;color:#e8ecf1;
+.rn-ws-pbart.inbar{flex:0 1 auto;min-width:0;font-size:calc(18px / var(--rnws-scale,1));
+  color:#e8ecf1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-pbarnote{flex:1 1 auto;min-width:0;font-size:12px;color:#8a919b;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
    a fade rather than a flat fill so it reads as the primary action */
-.rn-ws-pbargen{position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  min-height:46px;padding:0 26px;font-size:15px;font-weight:700;
+.rn-ws-pbargen{position:absolute;right:calc(12px / var(--rnws-scale,1));top:50%;
+  transform:translateY(-50%);min-height:calc(46px / var(--rnws-scale,1));
+  padding:0 calc(26px / var(--rnws-scale,1));font-size:calc(15px / var(--rnws-scale,1));
+  font-weight:700;
   border-radius:10px;background:linear-gradient(100deg,#d5324a 0%,#a3253a 55%,#6d1826 100%);
   border-color:#e0455c;box-shadow:0 2px 10px rgba(184,40,60,.35)}
 .rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
@@ -242,8 +252,10 @@ css.textContent = `
    bar's own tabs. The segmented pages (Camera, Post) and the LoRAs tab's set chips
    are the same size as a sub-tab, and many of them wrap onto a second line. */
 .rn-ws-pbar .rn-ws-seg{flex:0 1 auto;gap:10px;background:transparent;border:0;padding:0}
-.rn-ws-pbar .rn-ws-segb{flex:0 1 250px;min-width:96px;max-width:250px;min-height:46px;
-  border-radius:9px;font-size:14px;
+.rn-ws-pbar .rn-ws-segb{flex:0 1 calc(250px / var(--rnws-scale,1));
+  min-width:calc(96px / var(--rnws-scale,1));max-width:calc(250px / var(--rnws-scale,1));
+  min-height:calc(46px / var(--rnws-scale,1));border-radius:9px;
+  font-size:calc(14px / var(--rnws-scale,1));
   font-weight:600;background:#15171b;border:1px solid #20242a;color:#aab0b8}
 .rn-ws-pbar .rn-ws-segb.on{background:linear-gradient(180deg,#241519,#1a1216);
   border-color:#3d2129;color:#fff;box-shadow:inset 0 -2px 0 0 #d13a4f}
@@ -254,12 +266,16 @@ css.textContent = `
 .rn-ws-pbar.wrap{min-height:66px;height:auto;padding-top:10px;padding-bottom:10px;
   flex-wrap:wrap}
 /* the Identity tab's pages-within-pages: their own box under the bar, centred in it */
-.rn-ws-pbar2{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;
-  margin:0;padding:7px 16px;min-height:52px;box-sizing:border-box;
+.rn-ws-pbar2{display:flex;gap:calc(10px / var(--rnws-scale,1));flex-wrap:wrap;
+  justify-content:center;align-items:center;margin:0;
+  padding:calc(7px / var(--rnws-scale,1)) calc(16px / var(--rnws-scale,1));
+  min-height:calc(52px / var(--rnws-scale,1));box-sizing:border-box;
   background:linear-gradient(180deg,#171a1e,#121417);border:1px solid #24282f;
   border-radius:12px}
-.rn-ws-pbar2 .rn-ws-subt{flex:0 1 220px;min-width:96px;max-width:220px;height:38px;
-  min-height:38px;font-size:13px}
+.rn-ws-pbar2 .rn-ws-subt{flex:0 1 calc(220px / var(--rnws-scale,1));
+  min-width:calc(96px / var(--rnws-scale,1));max-width:calc(220px / var(--rnws-scale,1));
+  height:calc(38px / var(--rnws-scale,1));min-height:calc(38px / var(--rnws-scale,1));
+  font-size:calc(13px / var(--rnws-scale,1))}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 /* a sub-page of the open tab: indented under it, smaller, no icon or light. Depth 2
    is the Identity tab's pages-within-pages, indented again. */
@@ -14070,6 +14086,7 @@ function dressSubTabs(strip) {
   if (!strip || strip._rnDressed) return strip;
   strip._rnDressed = true;
   strip.classList.add("dressed");
+  if ((strip.children?.length || 0) >= 5) strip.classList.add("tight");
   for (const b of strip.children || []) {
     // the strips shout their labels; the bar says them
     const words = [...(b.children || [])].find((c) => c.textContent && !c._classes?.has?.("lt")
