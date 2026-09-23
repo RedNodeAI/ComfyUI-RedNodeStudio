@@ -184,40 +184,46 @@ css.textContent = `
   font-weight:600;font-size:13px;cursor:pointer;padding:0 10px}
 .rn-ws-railgen:hover{background:#cc3148}
 /* THE PAGE HEADER: the page's sub-tabs or its name, and Generate */
-.rn-ws-phead{display:flex;align-items:center;gap:12px;padding:9px 10px;margin-bottom:10px;
+.rn-ws-pbar{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;padding:9px 10px;
+  margin-bottom:10px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
 /* the strip does NOT stretch: a page with two sub-tabs had two bars half a metre
    wide each. The tabs size to their words, the gap after them pushes Generate to
    the right edge. */
-.rn-ws-phead .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:8px;flex-wrap:nowrap;
+.rn-ws-pbar .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:8px;flex-wrap:nowrap;
   overflow-x:auto;scrollbar-width:none}
-.rn-ws-phead .rn-ws-sub::-webkit-scrollbar{display:none}
-.rn-ws-pheadsp{flex:1 1 auto;min-width:8px}
+.rn-ws-pbar .rn-ws-sub::-webkit-scrollbar{display:none}
+.rn-ws-pbarsp{flex:1 1 auto;min-width:8px}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
    the tab in use carries the red underline rather than a filled red block */
-.rn-ws-sub.dressed .rn-ws-subt{flex:0 0 auto;min-width:220px;min-height:46px;
-  justify-content:flex-start;gap:11px;font-size:14px;font-weight:600;letter-spacing:0;
-  text-transform:none;background:#15171b;border-color:#20242a;color:#aab0b8;
-  padding:0 18px;position:relative}
+/* 250px is the size they want to be; they give way to about half that before the
+   strip starts scrolling, so a page with four sub-tabs never clips one to a sliver */
+.rn-ws-sub.dressed .rn-ws-subt{flex:0 1 250px;min-width:136px;max-width:320px;
+  min-height:46px;justify-content:center;gap:11px;font-size:14px;font-weight:600;
+  letter-spacing:0;text-transform:none;background:#15171b;border-color:#20242a;
+  color:#aab0b8;padding:0 30px;position:relative;overflow:hidden}
+.rn-ws-sub.dressed .rn-ws-subt>span:not(.lt):not(.rn-ws-subic){overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-sub.dressed .rn-ws-subt:hover{background:#181b20;border-color:#2e333b;color:#d6dae0}
 .rn-ws-sub.dressed .rn-ws-subt.cur{background:linear-gradient(180deg,#241519,#1a1216);
   border-color:#3d2129;color:#fff;box-shadow:inset 0 -2px 0 0 #d13a4f}
 .rn-ws-sub.dressed .rn-ws-subt.cur::before{content:none}
 .rn-ws-sub.dressed{flex-wrap:nowrap;gap:8px;overflow-x:auto;scrollbar-width:none}
 .rn-ws-sub.dressed::-webkit-scrollbar{display:none}
-.rn-ws-sub.dressed .rn-ws-subt .lt{margin-left:auto}
+/* the light is pinned to the right edge, so it never shifts the centred words */
+.rn-ws-sub.dressed .rn-ws-subt .lt{position:absolute;right:14px;margin-left:0}
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
 .rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
-.rn-ws-pheadt{flex:1 1 auto;min-width:0;font-weight:600;font-size:15px;color:#e8ecf1;
-  padding-left:4px}
+.rn-ws-pbart{flex:0 0 auto;min-width:0;font-weight:700;font-size:16px;color:#e8ecf1;
+  padding:0 14px 0 6px}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
    a fade rather than a flat fill so it reads as the primary action */
-.rn-ws-pheadgen{min-height:44px;padding:0 24px;font-size:15px;font-weight:700;
+.rn-ws-pbargen{min-height:44px;padding:0 24px;font-size:15px;font-weight:700;
   border-radius:10px;background:linear-gradient(100deg,#d5324a 0%,#a3253a 55%,#6d1826 100%);
   border-color:#e0455c;box-shadow:0 2px 10px rgba(184,40,60,.35)}
-.rn-ws-pheadgen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
-.rn-ws-pheadgen svg{width:18px;height:18px}
+.rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
+.rn-ws-pbargen svg{width:18px;height:18px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 .rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
@@ -7281,7 +7287,7 @@ function workspacePrefs(node, body) {
     rl.style.cssText = "flex:none;width:110px";
     rl.textContent = "Generate on the rail";
     const rb = document.createElement("button");
-    const ron = wsPref("RailGenerate", true) !== false;
+    const ron = !!wsPref("RailGenerate", false);
     rb.className = "rn-ws-btn rn-ws-compact" + (ron ? " on" : "");
     rb.style.cssText = "width:auto;padding:0 12px";
     rb.textContent = ron ? "On" : "Off";
@@ -7292,7 +7298,7 @@ function workspacePrefs(node, body) {
     const rh = document.createElement("span");
     rh.className = "hint";
     rh.style.cssText = "flex:0 1 320px;min-width:0";
-    rh.textContent = "On by default: it never scrolls away. This install only.";
+    rh.textContent = "Off by default: the page header carries Generate. This install only.";
     rr.append(rl, rb, rh);
     sect.appendChild(rr);
   }
@@ -12336,19 +12342,18 @@ function modelsBody(node, page) {
     // The Models page's own tabs belong BESIDE the rig column, not across the top:
     // that layout is deliberate, so the rig being edited stays in view. The header
     // carries the page's name instead, and the same Generate as everywhere else.
-    dressSubTabs(strip);
-    pageHeader(node, page, { title: "Models", first: true });
+    pageHeader(node, page, { title: "Models", strip, first: true });
     if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
     // are editing stays in view whichever tab is open (the user, 2026-09-21)
     const lay = document.createElement("div");
     lay.className = "rn-ws-modelslay";
     page.insertBefore(lay, bar);
-    for (const el of [bar, strip, mwrap]) el.remove();
+    for (const el of [bar, mwrap]) el.remove();
     const col = document.createElement("div");
     col.className = "rn-ws-modelsmain";
     lay.append(bar, col);
-    col.append(strip, mwrap);
+    col.append(mwrap);
     // the banner sits with the tabs it points into, above the cards
     if (warn) { warn.remove(); col.insertBefore(warn, mwrap); }
   }
@@ -14016,20 +14021,21 @@ function dressSubTabs(strip) {
  *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
 function pageHeader(node, body, { strip = null, title = "", first = false } = {}) {
   const head = document.createElement("div");
-  head.className = "rn-ws-phead";
-  if (strip) {
-    dressSubTabs(strip);
-    head.appendChild(strip);
-    const sp = document.createElement("div");
-    sp.className = "rn-ws-pheadsp";
-    head.appendChild(sp);
-  } else {
+  head.className = "rn-ws-pbar";
+  if (title) {
     const t = document.createElement("div");
-    t.className = "rn-ws-pheadt";
+    t.className = "rn-ws-pbart";
     t.textContent = title;
     head.appendChild(t);
   }
-  head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pheadgen"));
+  if (strip) {
+    dressSubTabs(strip);
+    head.appendChild(strip);
+  }
+  const sp = document.createElement("div");
+  sp.className = "rn-ws-pbarsp";
+  head.appendChild(sp);
+  head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pbargen"));
   if (first && body.firstChild) body.insertBefore(head, body.firstChild);
   else body.appendChild(head);
   return head;
@@ -19687,7 +19693,7 @@ function renderPage(node) {
   // GENERATE: queue the workflow from the rail, above the Run group. The pages
   // carry one in their header now, so this one can be switched off on Advanced;
   // it stays on by default, because it is the one that never scrolls away.
-  if (wsPref("RailGenerate", true)) rail.appendChild(generateButton(node, "rn-ws-railgen"));
+  if (wsPref("RailGenerate", false)) rail.appendChild(generateButton(node, "rn-ws-railgen"));
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
     const ids = g.tabs.filter((id) => shownIds.has(id));
