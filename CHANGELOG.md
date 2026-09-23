@@ -25,6 +25,9 @@ format matters: **version** then a date, notes below until the next bold line.
   its card are combined with what it read. A pass can take them by its Prompt picker: the
   last Image to Text, or a named one. Nothing of this reaches the metadata, which still
   carries the prompt the run was asked for
+- What's happening says Prompt completed once an Image to Text pass has read the picture,
+  and that line opens the whole prompt it wrote in a box you can select from, with Copy.
+  It stays with the run, so a run reopened from the column still holds its words
 - Every page opens with the same bar: the page's own tabs in the middle, Generate on the
   right, the page's name and its line underneath. Paint keeps its tool bar. The bar holds
   its size whatever Page size is set to
@@ -55,6 +58,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Hero Creator redesign is filed beside its headshot
 - A brand new Workspace no longer warns that its converter does nothing
 - The Realism page's conversion LoRA dropdown stays inside its card
+- A picture kept in a folder you junctioned or linked into ComfyUI's output, input or temp
+  folder loads again. It resolves onto another drive, which newer cores refuse, so a
+  picture you could see in a gallery and drag around came back as "not in the ComfyUI input
+  folder any more" when the run reached it. A name that climbs out of a folder is still
+  refused, and the message now names the folder it actually looked in
 
 - The two Pro Grade looks are now Camera Ready Krea 2 and Camera Ready Z-Image. Same
   dials, same pictures, new names. A saved copy you made under the old name is your own

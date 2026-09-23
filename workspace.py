@@ -2381,11 +2381,29 @@ def resize_dims(w, h, target):
 
 
 def _inside_dir(path, root):
-    """True when a resolved path really sits inside `root` (or is it)."""
+    """True when `path` sits inside `root` (or is it), by name or after links.
+
+    Two readings, and either one is enough.
+
+    The first is lexical, on the normalised name: ".." is collapsed before the
+    comparison, so "rednode/../../secrets.txt" is refused exactly as it was. The
+    second follows links, which catches the same climb spelled through one.
+
+    Both are needed because A FOLDER SOMEBODY LINKED IN THEMSELVES is ordinary
+    here: an output folder junctioned onto another drive resolves outside the
+    root and is still precisely where the pictures live. ComfyUI's own helper
+    refuses those since it started resolving links, which is how a picture you
+    can see in a gallery, and drag, came back as "not in the input folder any
+    more" (you, 2026-09-23).
+    """
     try:
-        root = os.path.realpath(root)
-        real = os.path.realpath(path)
-        return real == root or real.startswith(root + os.sep)
+        rootn = os.path.normcase(os.path.abspath(root))
+        pathn = os.path.normcase(os.path.abspath(path))
+        if pathn == rootn or pathn.startswith(rootn + os.sep):
+            return True
+        rootr = os.path.normcase(os.path.realpath(root))
+        realp = os.path.normcase(os.path.realpath(path))
+        return realp == rootr or realp.startswith(rootr + os.sep)
     except Exception:
         return False
 
@@ -2399,6 +2417,14 @@ def _inside_input(path):
     HTTP request gets resolved and checked against the folder itself.
     """
     return _inside_dir(path, folder_paths.get_input_directory())
+
+
+def _same_dir(a, b):
+    """The same folder, whatever the case and the trailing slash say."""
+    try:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+    except Exception:
+        return False
 
 
 def _entry_base(name):
@@ -2417,11 +2443,17 @@ def _filepath(name):
     try:
         path = folder_paths.get_annotated_filepath(str(name))
     except ValueError:
-        path = None
+        # Core refuses any name that RESOLVES outside the folder, which a junction
+        # inside the folder does. Build the path ourselves and let _inside_dir
+        # decide: it takes a link somebody put there and still refuses a climb.
+        path = os.path.abspath(os.path.join(base, bare))
     if not path or not _inside_dir(path, base) or not os.path.isfile(path):
+        folder = ("output" if _same_dir(base, folder_paths.get_output_directory())
+                  else "temp" if _same_dir(base, folder_paths.get_temp_directory())
+                  else "input")
         raise ValueError(
-            f"RedNode Workspace: the image {name!r} is not in the ComfyUI input folder any "
-            "more. Re-add it on the panel (its gallery slot will show as missing).")
+            f"RedNode Workspace: the image {name!r} is not in the ComfyUI {folder} folder "
+            "any more. Re-add it on the panel (its gallery slot will show as missing).")
     return path
 
 

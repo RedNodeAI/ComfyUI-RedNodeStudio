@@ -2442,14 +2442,11 @@ def file_reference(name, long_edge=1024):
         return None
     try:
         import numpy as np
-        import folder_paths
         from PIL import Image, ImageOps
-        bare, base = folder_paths.annotated_filepath(name)
-        base = os.path.realpath(base or folder_paths.get_input_directory())
-        path = folder_paths.get_annotated_filepath(name)
-        real = os.path.realpath(path)
-        if not (real == base or real.startswith(base + os.sep)):
-            raise ValueError("the reference picture is outside ComfyUI's folders")
+        # the Workspace's rule, kept in one place: it takes a folder linked in from
+        # another drive and still refuses a name that climbs out of one
+        from . import workspace as _ws
+        path = _ws._filepath(name)
         with Image.open(path) as im:
             im = ImageOps.exif_transpose(im).convert("RGB")
             im.thumbnail((long_edge, long_edge))
