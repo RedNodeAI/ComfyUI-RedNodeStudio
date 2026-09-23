@@ -669,6 +669,7 @@ from .sampler_config import RedNodeSamplerConfig  # noqa: E402
 from .postprocess import RedNodePostProcess, RedNodePostFX  # noqa: E402
 from .stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
 from .custom_rig import RedNodeRigModel, RedNodeRigInputs, RedNodeRigResult  # noqa: E402
+from .shelf import RedNodeShelf  # noqa: E402
 from .paint_render import RedNodePaintRender  # noqa: E402
 from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
 from .save_node import RedNodeSave  # noqa: E402
@@ -725,6 +726,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodePass": RedNodePass,
     "RedNodeFreeVRAM": RedNodeFreeVRAM,
     "RedNodeStudioWorkspace": RedNodeStudioWorkspace,
+    "RedNodeShelf": RedNodeShelf,
     "RedNodeImageReview": RedNodeImageReview,
     "RedNodeLivePreview": RedNodeLivePreview,
     "RedNodeSamplerConfig": RedNodeSamplerConfig,
@@ -779,6 +781,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePass": "RedNode Pass (colour trigger)",
     "RedNodeFreeVRAM": "RedNode Free VRAM",
     "RedNodeStudioWorkspace": "RedNode Studio Workspace",
+    "RedNodeShelf": "RedNode Shelf",
     "RedNodeImageReview": "RedNode Image Review",
     "RedNodeLivePreview": "RedNode Live Preview",
     "RedNodeSamplerConfig": "RedNode Sampler Config (auto turbo)",
