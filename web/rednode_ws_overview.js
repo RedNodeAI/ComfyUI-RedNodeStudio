@@ -5,6 +5,7 @@ import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, s
 import { jumpForStage, goTo, autoPageOf, CAPTION_TABS } from "./rednode_ws_run.js";
 import { POST_FX, EXTRA_PACKS, packLink } from "./rednode_ws_tables.js";
 import { postStatusNow, refreshPostStatus } from "./rednode_ws_post.js";
+import { TAB_ICONS, SUB_ICON } from "./rednode_ws_icons.js";
 
 const CAPTION_NAME = Object.fromEntries(CAPTION_TABS.map(([label, id]) => [id, label]));
 // an Image to text gallery (Style, Subject, Scene words) is always "on": its page
@@ -45,6 +46,21 @@ const SUB_NAME = {
   swap: "Swap", converter: "Converter", canvas: "Canvas", save: "Save",
   gallery: "Gallery", subject: "Subject",
 };
+// A box's icon. Most keys are a tab or a sub-tab already, so they reuse that
+// drawing; the few that are neither borrow the nearest one. TAB_ICONS wins,
+// then SUB_ICON, which picks the PNG when icons/<id>.png exists.
+const BOX_ICON = {
+  models: "models", prompts: "prompts", camera: "camera", loras: "loras",
+  moodboard: "moodboard", identity: "identity", paint: "paint", captions: "auto",
+  canvas: "canvas", source: "source", reangle_polish: "reangle", swap_polish: "swap",
+  encode: "encode", sampler: "generate", decode: "decode", detailer: "detailer",
+  post: "post", save: "save",
+};
+const boxIcon = (key) => {
+  const id = BOX_ICON[String(key || "")];
+  return id ? (TAB_ICONS[id] || SUB_ICON(id)) : "";
+};
+
 const pageOf = (to) => !to ? "" : PAGE_NAME[to.tab] + (to.sub ? " · " + (SUB_NAME[to.sub] || capFirst(to.sub)) : "");
 
 // ---- the boxes ------------------------------------------------------------------
@@ -520,6 +536,15 @@ export function overviewBody(node, body) {
       const bx = el("button", "rn-ov-box " + b.state);
       bx.dataset.key = b.key;
       bx.dataset.state = b.state;
+      // the icon, the label and the note are all DIRECT children: the box is read
+      // by its text elsewhere, so the label must not be nested inside a wrapper
+      const mark = boxIcon(b.key);
+      if (mark) {
+        const ic = el("span", "ic");
+        ic.innerHTML = mark;
+        bx.appendChild(ic);
+        bx.classList.add("hasic");
+      }
       bx.append(el("span", "t", b.label), el("span", "st", b.note));
       bx.title = (b.why ? b.why + "\n" : "") + "Opens " + pageOf(b.to) + "."
                + (boxSwitches(node, cfg, b.key).length ? " Right-click to turn it on or off." : "");
@@ -619,6 +644,11 @@ export const OVERVIEW_CSS = `
 .rn-ov-box{flex:0 1 auto;min-width:104px;background:#15171b;border:1px solid #33373d;
   border-radius:8px;padding:7px 10px;display:flex;flex-direction:column;gap:3px;cursor:pointer;
   text-align:left;color:inherit;font:inherit;position:relative}
+.rn-ov-box.hasic{display:grid;grid-template-columns:auto 1fr;column-gap:8px;align-items:center}
+.rn-ov-box.hasic .ic{grid-row:1 / span 2;display:block;width:14px;height:14px;color:#c6ccd4}
+.rn-ov-box.hasic .t,.rn-ov-box.hasic .st{grid-column:2}
+.rn-ov-box .ic svg,.rn-ov-box .ic .rn-ws-icimg{width:14px;height:14px}
+.rn-ov-box.on .ic{color:#9fe0b4}
 .rn-ov-box .t{font-weight:700;font-size:12.5px;color:#e8ecf1;white-space:nowrap}
 .rn-ov-box .st{font-size:11px;color:#9aa0a8;white-space:nowrap}
 .rn-ov-box.on{border-color:#2e7d4f}

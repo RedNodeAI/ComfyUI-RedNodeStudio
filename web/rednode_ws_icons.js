@@ -36,6 +36,16 @@ const SUB_PATHS = {
   gallery: '<rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="6" width="8" height="12" rx="1.5"/>',
   auto: '<path d="M12 4l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>',
   boosts: '<path d="M6 19V9M12 19V5M18 19v-7"/>',
+  subject: '<circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.7 3.1-5.7 7-5.7s7 2 7 5.7"/>',
+  scene: '<path d="M3 18h18"/><path d="M5 18l4.5-6 3 3.5L16 10l3 8"/><circle cx="7.5" cy="6.5" r="2"/>',
+  hero: '<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="10" r="2.6"/><path d="M8 18.5c0-2.3 1.8-3.6 4-3.6s4 1.3 4 3.6"/>',
+  converter: '<path d="M7 4.5L3.5 8 7 11.5"/><path d="M3.5 8H14a4 4 0 014 4"/><path d="M17 19.5L20.5 16 17 12.5"/><path d="M20.5 16H10a4 4 0 01-4-4"/>',
+  picture: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="M4 17l5-4.5 3.5 3L17 11l4 4"/>',
+  batch: '<rect x="8" y="3" width="13" height="13" rx="2"/><path d="M16 20H5a2 2 0 01-2-2V7"/><path d="M9 12l3-3 2.5 2.5L17 9"/>',
+  effects: '<path d="M4 20L14.5 9.5"/><path d="M12.5 7.5l4 4"/><path d="M18 3v3.5M16.25 4.75h3.5"/><path d="M6 5.5v2.5M4.75 6.75h2.5"/>',
+  order: '<path d="M9 6.5h12M9 12h12M9 17.5h12"/><path d="M4 7.5V16"/><path d="M2.3 14.3L4 16l1.7-1.7"/>',
+  reangle: '<circle cx="12" cy="12" r="2.6"/><path d="M4.5 12a7.5 7.5 0 0113-5"/><path d="M19.5 12a7.5 7.5 0 01-13 5"/><path d="M17.5 3.5V7h-3.5M6.5 20.5V17h3.5"/>',
+  swap: '<circle cx="7" cy="8.5" r="3.2"/><circle cx="17" cy="15.5" r="3.2"/><path d="M11.5 6.5h5.5l-2-2"/><path d="M12.5 17.5H7l2 2"/>',
 };
 // Ids with a drawn icon in icons/ use it rather than the line art here: the Run
 // page's own pages, and the Pipeline's stages, added 2026-09-23 in the icon set.
