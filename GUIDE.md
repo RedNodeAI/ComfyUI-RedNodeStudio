@@ -459,7 +459,7 @@ output into a Stage View strip, so a chain can be read step by step. A batch goe
 pass one picture at a time, SeedVR2 included, and the Run tab's log names each pass with what it
 did.
 
-**AI reader.** A pass that renders nothing. It reads the picture as it stands at its place
+**Image to Text.** A pass that renders nothing. It reads the picture as it stands at its place
 in the chain and hands those words to the passes after it, so a long chain can describe what
 it actually has rather than what the run started from. It reads with the AI tab's engines,
 so there is one place to pick them and one place to see what they cost, and the box on its
@@ -467,7 +467,7 @@ card is combined with what it read: your words lead by default, and a switch put
 reading first.
 
 Every pass after it takes those words when its own prompt box is empty, and a pass can also
-choose in its **Prompt** picker: a Prompts-tab row as before, **The last AI reader**, or a
+choose in its **Prompt** picker: a Prompts-tab row as before, **The last Image to Text**, or a
 particular reader by name when the chain has more than one. Nothing about this reaches what
 is saved: the metadata still carries the prompt the run was asked for.
 

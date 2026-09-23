@@ -94,13 +94,18 @@ def parse_pipeline(config_json):
             "start_step": _num("start_step", 0, 200, 0, int),
             "end_step": _num("end_step", 0, 200, 0, int),    # 0 = to the end
             "target": str(s.get("target") or "face"),
-            # AI READER: this pass renders nothing. It reads the picture as it
+            # IMAGE TO TEXT: this pass renders nothing. It reads the picture as it
             # stands and writes the words the passes AFTER it render with, so a
             # chain can describe what it actually has rather than what the run
             # started from (you, 2026-09-23). The typed box here is combined with
             # what it reads; reader_first says which of the two leads.
             "reader_mode": str(s.get("reader_mode") or ""),     # "" = the AI tab's
             "reader_first": bool(s.get("reader_first", False)),
+            # None = read with whatever the AI tab is set to; a dict is this pass's
+            # own choice of engines, and its own Ollama model when it names one
+            "reader_engines": (dict(s["reader_engines"])
+                               if isinstance(s.get("reader_engines"), dict)
+                               and s["reader_engines"] else None),
             "reader_keep": bool(s.get("reader_keep", True)),
             "sam_model": str(s.get("sam_model") or ""),      # "" = the loader default
             # 1.0 is the picture as it arrives. A sampler pass at 0.5 then another
@@ -539,7 +544,7 @@ EXPRESSIONS = [
 
 
 def read_picture(ws_cfg, s, image):
-    """The words an AI reader pass takes off the picture in front of it.
+    """The words an Image to Text pass takes off the picture in front of it.
 
     The engines are the AI tab's, so there is one place to choose them and one
     place to see what they cost; the pass carries only what is peculiar to it,
@@ -548,8 +553,16 @@ def read_picture(ws_cfg, s, image):
     """
     from . import autoprompt
     tabs = ws_cfg.get("tabs") or {}
-    a = (tabs.get("ai") or {}).get("auto") or {}
+    a = dict((tabs.get("ai") or {}).get("auto") or {})
     ga = ws_cfg.get("auto") or {}
+    # THE PASS'S OWN ENGINES, when it was given some: one chain can then read
+    # cheaply with tags early and properly with a vision model later
+    own = s.get("reader_engines")
+    if isinstance(own, dict) and own:
+        for k in ("ollama", "wd14", "joy", "qwen", "florence"):
+            a[k] = bool(own.get(k))
+        if str(own.get("model") or "").strip():
+            ga = dict(ga, model=str(own["model"]).strip())
     mode = str(s.get("reader_mode") or "") or str(a.get("mode") or "i2i")
     on = [k for k in ("ollama", "wd14", "joy", "qwen", "florence") if a.get(k)]
     if not on:
@@ -631,7 +644,7 @@ def pass_words(ws_cfg, s, seed, subject_words="", read_words="", read_by_name=No
             pass
     if not text.strip() and str(s.get("words") or "") == "subject":
         text = str(subject_words or "")
-    # AN AI READER EARLIER IN THE CHAIN speaks for the passes after it: it read
+    # AN IMAGE TO TEXT EARLIER IN THE CHAIN speaks for the passes after it: it read
     # the picture they are about to work on, which the run's original row cannot
     # describe once two passes have changed it. A pass can also NAME the reader it
     # wants, the same way it names a Prompts row, which is what the Prompt picker
@@ -643,7 +656,7 @@ def pass_words(ws_cfg, s, seed, subject_words="", read_words="", read_by_name=No
         if want and want in by_name:
             text = str(by_name[want] or "").strip()
         elif want:
-            _say("no AI reader called %r has run in this chain yet; "
+            _say("no Image to Text called %r has run in this chain yet; "
                  "using the words of the last one that did" % want)
             text = str(read_words or "").strip()
         else:
@@ -853,7 +866,7 @@ from . import run_events as _run_events
 
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
               "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
-              "reader": "AI reader"}
+              "reader": "Image to Text"}
 WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 

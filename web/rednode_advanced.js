@@ -223,6 +223,96 @@ function wireProgress() {
 // V3 node (Easy-Sam3 is one) says "COMBO" and keeps the list under options. Reading
 // only the first shape is why the SAM picker showed nothing but its placeholder.
 const optionsOf = comboOptions;   // the shared reader; both combo shapes
+// WHAT THE CAPTION ENGINES CAN DO, asked once: whether Ollama answers and which
+// models it holds, and whether the WD14 tagger is installed. The Image to Text pass
+// picks from these; the Workspace's AI tab asks the same route.
+let AUTO_STATUS = { ollama: false, models: [], wd14: false };
+let autoAsked = false;
+async function fetchAutoStatus(after) {
+  if (autoAsked) return AUTO_STATUS;
+  autoAsked = true;
+  try {
+    const r = await api.fetchApi("/rednode/autoprompt_status");
+    AUTO_STATUS = await r.json();
+  } catch (e) { /* the card then says the engines are not answering */ }
+  after?.();
+  return AUTO_STATUS;
+}
+
+/** The Image to Text card: which engines read the picture, and the words typed here.
+ *
+ *  Off by itself it follows the AI tab, which is where the engines are chosen for
+ *  everything else; switching any engine here makes this pass's choice its own, so a
+ *  chain can read cheaply with tags and read again properly with a vision model.
+ */
+function readerCard(s, card, group, lab, A, changed) {
+  const eng = (s.reader_engines && typeof s.reader_engines === "object")
+    ? s.reader_engines : null;
+  const g = group("Reads with");
+  const follow = document.createElement("button");
+  follow.className = "rn-adv-btn" + (eng ? "" : " on");
+  follow.textContent = eng ? "Its own engines" : "The AI tab's engines";
+  follow.title = "Off, this pass reads with whatever the Workspace's AI tab is set to. "
+               + "On, it keeps its own choice, so one chain can read twice in "
+               + "different ways.";
+  follow.onclick = () => {
+    s.reader_engines = eng ? null : { ollama: true, wd14: false, florence: false,
+                                      joy: false, qwen: false, model: "" };
+    changed();
+  };
+  g.line.appendChild(follow);
+  if (eng) {
+    for (const [key, label, tip] of [
+      ["ollama", "Ollama", "A vision model through Ollama: the fullest description, and "
+                           + "the one that costs the most time."],
+      ["wd14", "WD14 tags", "Booru tags. Fast, cheap, and the right reading for anime."],
+      ["florence", "Florence", "Florence-2 captions: a sentence or two, locally."],
+      ["joy", "JoyCaption", "JoyCaption: long, natural descriptions."],
+      ["qwen", "Qwen-VL", "Qwen2.5-VL locally, without Ollama."],
+    ]) {
+      const b = document.createElement("button");
+      b.className = "rn-adv-btn" + (eng[key] ? " on" : "");
+      b.textContent = label;
+      b.title = tip;
+      b.onclick = () => { eng[key] = !eng[key]; changed(); };
+      g.line.appendChild(b);
+    }
+    if (eng.ollama) {
+      const models = AUTO_STATUS.models || [];
+      const sel = document.createElement("select");
+      for (const [v, l] of [["", "(the AI tab's model)"], ...models.map((m) => [m, m])]) {
+        const o = document.createElement("option");
+        o.value = v; o.textContent = l; o.selected = v === String(eng.model || "");
+        sel.appendChild(o);
+      }
+      sel.title = models.length
+        ? "Which Ollama model reads the picture."
+        : "Ollama is not answering, so there are no models to pick. The pass falls "
+          + "back to the AI tab's choice.";
+      sel.onchange = () => { eng.model = sel.value; changed(); };
+      g.line.append(lab("Model"), sel);
+    }
+  }
+  A(g.box);
+  card.appendChild(g.box);
+
+  // THE WORDS THIS PASS ADDS to what it read. The generic prompt row is gone from
+  // this card with the sampler rows it belonged to, so the box lives here.
+  const w = group("Your words");
+  const box = document.createElement("input");
+  box.type = "text";
+  box.className = "ptext";
+  box.style.flex = "1";
+  box.value = String(s.prompt || "");
+  box.placeholder = "Anything to keep in the words, whatever the picture says";
+  box.title = "Combined with what this pass reads. Which one leads is the switch above.";
+  box.onchange = () => { s.prompt = box.value; changed(); };
+  w.line.appendChild(box);
+  A(w.box);
+  card.appendChild(w.box);
+  if (!AUTO_STATUS.ollama && !autoAsked) fetchAutoStatus(changed);
+}
+
 let LISTS = null;
 async function fetchLists() {
   if (LISTS) return LISTS;
@@ -963,7 +1053,7 @@ function buildPanel(node, hostEl = null) {
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
-                vosr2: "VOSR2 upscale", reader: "AI reader" })[x.type] || "Pass";
+                vosr2: "VOSR2 upscale", reader: "Image to Text" })[x.type] || "Pass";
     };
     const uniqueName = (base, taken) => {
       if (!taken.has(base)) return base;
@@ -1096,9 +1186,9 @@ function buildPanel(node, hostEl = null) {
       chip.textContent = s.type === "sampler" ? "SAMPLER"
                        : s.type === "upscale" ? "VR2 UPSCALE"
                        : s.type === "vosr2" ? "VOSR2 UPSCALE"
-                       : s.type === "reader" ? "AI READER"
+                       : s.type === "reader" ? "IMAGE TO TEXT"
                        : s.type === "usdu" ? "TILE UPSCALE" : "DETAILER";
-      chip.title = s.type === "reader" ? "An AI reader: it renders nothing. It reads "
+      chip.title = s.type === "reader" ? "Image to Text: it renders nothing. It reads "
                    + "the picture as it stands and hands those words to the passes "
                    + "after it that have none of their own."
                  : s.type === "upscale" ? "A SeedVR2 upscale pass."
@@ -1457,6 +1547,11 @@ function buildPanel(node, hostEl = null) {
                          + "has the link and says whether it is here.";
           card.appendChild(warn);
         }
+      } else if (!isFolded && s.type === "reader") {
+        // IMAGE TO TEXT HAS NO SAMPLER. No steps, no denoise, no LoRAs, no rig:
+        // it reads the picture. What belongs here is which engines do the reading
+        // (you, 2026-09-23), and the words you want combined with what they say.
+        readerCard(s, card, group, lab, A, () => { writeCfg(node, d); render(); });
       } else if (!isFolded) {
         const isDet = s.type === "detailer";
         // SAMPLING: the numbers a KSampler wants plus the step window. Empty
@@ -1747,7 +1842,7 @@ function buildPanel(node, hostEl = null) {
         // a chain no longer has to say the same thing on every pass.
         const rowsAvail = promptRows();
         const curRow = String(s.prompt_row || "");
-        // AN AI READER EARLIER IN THE LIST is a prompt source too: it writes its
+        // AN IMAGE TO TEXT EARLIER IN THE LIST is a prompt source too: it writes its
         // words during the run, so a pass can take the reading of the picture it is
         // about to work on instead of the row the run started from (you,
         // 2026-09-23). Only readers ABOVE this pass are offered, since a reader
@@ -1756,7 +1851,7 @@ function buildPanel(node, hostEl = null) {
           .map((x, n) => ({ key: "@reader:" + (x.name || baseName(x) + (n ? " " + (n + 1) : "")),
                             label: (x.name || baseName(x) + (n ? " " + (n + 1) : "")) }));
         const ropts = [["", "(active prompt)"], ...rowsAvail.map((r) => [r.key, r.label]),
-                       ...(readersAbove.length ? [["@reader", "The last AI reader"]] : []),
+                       ...(readersAbove.length ? [["@reader", "The last Image to Text"]] : []),
                        ...readersAbove.map((r) => [r.key, r.label])];
         if (curRow && !ropts.some(([v]) => v === curRow)) {
           ropts.push([curRow, curRow + " (missing)"]);
@@ -1769,7 +1864,7 @@ function buildPanel(node, hostEl = null) {
         }
         rsel.title = "Where this pass takes its words when the box beside it is empty. "
                    + "(active prompt) is the row the main render used; a Prompts-tab row "
-                   + "is that row; an AI reader above this pass is what it read off the "
+                   + "is that row; an Image to Text above this pass is what it read off the "
                    + "picture during the run. Typed text still wins.";
         rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
         bottom.append(...A(lab("Prompt"), rsel));
@@ -1860,9 +1955,9 @@ function buildPanel(node, hostEl = null) {
                                    usdu_padding: 128, usdu_blur: 8, usdu_mode: "Linear",
                                    seam_mode: "None", seam_denoise: 0.35,
                                    tiled_decode: false, prompt: "" }));
-    // THE AI READER: reads the picture mid-chain and speaks for the passes after
+    // THE IMAGE TO TEXT: reads the picture mid-chain and speaks for the passes after
     // it. No render, no dials, so its card is the shortest in the list.
-    mk("＋ AI reader", () => ({ on: true, type: "reader", prompt: "",
+    mk("＋ Image to Text", () => ({ on: true, type: "reader", prompt: "",
                                reader_mode: "", reader_first: false }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
