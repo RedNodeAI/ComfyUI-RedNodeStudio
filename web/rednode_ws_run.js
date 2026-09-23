@@ -50,6 +50,8 @@ const RUN = {
   finalIdx: 0,
   before: null,        // the same picture before Post FX, when the run kept one
   beforeFile: null,    // its file record, for the drag payload
+  raw: null,           // the render before the Detailer and Post, when Save kept one
+  rawFile: null,
   batch: 1,            // the largest batch a pass sampled
   paint: false,        // a Paint tab run: the paint pass, not the render plan
   promptId: null,
@@ -88,6 +90,7 @@ function keepSheet() {
     final: RUN.final, finals: RUN.finals.slice(),
     finalFiles: RUN.finalFiles.map((f) => ({ ...f })), finalIdx: RUN.finalIdx,
     before: RUN.before, beforeFile: RUN.beforeFile ? { ...RUN.beforeFile } : null,
+    raw: RUN.raw, rawFile: RUN.rawFile ? { ...RUN.rawFile } : null,
     promptId: RUN.promptId, limitGb: wsn?._rnCfg?.vram_gb || 0,
   });
   if (HISTORY.length > HISTORY_MAX) HISTORY.length = HISTORY_MAX;
@@ -125,6 +128,8 @@ function resetRun() {
   RUN.finalIdx = 0;
   RUN.before = null;
   RUN.beforeFile = null;
+  RUN.raw = null;
+  RUN.rawFile = null;
   RUN.batch = 1;
   RUN.paint = false;
   for (const v of views) v.node._rnRunSheet = null;
@@ -554,6 +559,13 @@ function onExecuted(d) {
   if (Array.isArray(pre) && pre.length && RUN.status === "running") {
     RUN.beforeFile = { ...pre[0] };
     RUN.before = viewUrl(pre[0]);
+  }
+  // the render as it left the sampler, before the Detailer and Post FX, when the
+  // Save tab's raw copy is on
+  const raw = d?.output?.rn_raw;
+  if (Array.isArray(raw) && raw.length && RUN.status === "running") {
+    RUN.rawFile = { ...raw[0] };
+    RUN.raw = viewUrl(raw[0]);
   }
   const images = d?.output?.images;
   if (!Array.isArray(images) || !images.length || RUN.status !== "running") return;
@@ -1106,14 +1118,16 @@ function runPage(node, body) {
   const postSeg = el("div", "rn-ws-seg rn-run-postseg");
   postSeg.dataset.choice = "run_show_post";
   for (const [value, label, tip] of [
-    ["after", "After Post", "The finished picture, Post FX and all."],
+    ["raw", "Raw", "The render as it left the sampler, before the Detailer and Post FX. "
+                   + "Kept only while Also: raw output is on, on the Save tab."],
     ["before", "Before Post", "The same picture as it went into Post FX. Kept only while "
                               + "Also: before Post FX is on, on the Save tab."],
+    ["after", "After Post", "The finished picture, Post FX and all."],
   ]) {
     const b = el("button", "rn-ws-segb", label);
     b.title = tip;
     b.dataset.value = value;
-    b.onclick = () => { node._rnRunShowBefore = value === "before"; refreshAll(); };
+    b.onclick = () => { node._rnRunShowStage = value; refreshAll(); };
     postSeg.appendChild(b);
   }
   picHead.appendChild(postSeg);
@@ -1332,24 +1346,30 @@ function refresh(view) {
 
   // picture
   const fr = S.frame;
-  // the Before / After Post switch only exists for a run that kept both
-  const hasBefore = !!(S.before && S.final && S.status === "done");
-  const showBefore = hasBefore && !!node._rnRunShowBefore;
-  refs.postSeg.style.display = hasBefore ? "" : "none";
+  // WHICH VERSION OF THE RUN: only the ones this run actually kept are offered,
+  // and a run that kept only the finished picture has no switch at all
+  const done = !!(S.final && S.status === "done");
+  const have = { raw: done && !!S.raw, before: done && !!S.before, after: done };
+  let stage = String(node._rnRunShowStage || "after");
+  if (!have[stage]) stage = "after";
+  refs.postSeg.style.display = (have.raw || have.before) ? "" : "none";
   for (const b of refs.postSeg.children || []) {
-    const on = (b.dataset.value === "before") === showBefore;
-    b.className = "rn-ws-segb" + (on ? " on" : "");
+    const v = b.dataset.value;
+    b.style.display = have[v] ? "" : "none";
+    b.className = "rn-ws-segb" + (v === stage ? " on" : "");
   }
-  if (S.final && S.status === "done") {
-    const src = showBefore ? S.before : S.final;
+  if (done) {
+    const src = stage === "raw" ? S.raw : stage === "before" ? S.before : S.final;
     if (refs.img.src !== src) refs.img.src = src;
-    dragPicture(refs.img, showBefore ? S.beforeFile : S.finalFiles[S.finalIdx]);
+    dragPicture(refs.img, stage === "raw" ? S.rawFile
+                : stage === "before" ? S.beforeFile : S.finalFiles[S.finalIdx]);
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
     const n = S.finals.length;
-    refs.picLabel.textContent = showBefore
-      ? (n > 1 ? `Before Post FX ${S.finalIdx + 1} of ${n}` : "Before Post FX")
-      : (n > 1 ? `Finished picture ${S.finalIdx + 1} of ${n}` : "Finished picture");
+    const what = stage === "raw" ? "Raw render"
+               : stage === "before" ? "Before Post FX" : "Finished picture";
+    refs.picLabel.textContent = n > 1 && stage === "after"
+      ? `${what} ${S.finalIdx + 1} of ${n}` : what;
     refs.strip.replaceChildren();
     refs.strip.style.display = n > 1 ? "" : "none";
     if (n > 1) {
@@ -1472,9 +1492,6 @@ function refresh(view) {
     b.onclick = onPick;
     refs.histList.appendChild(b);
   };
-  item("Live", RUN.status === "running" ? `Running ${clock(secs())}`
-       : RUN.final ? "The run now" : "Nothing rendered yet",
-       !S.past, () => { node._rnRunSheet = null; refreshAll(); }, "", RUN);
   for (const H of HISTORY) {
     const how = H.status === "done" ? `Done in ${clock(sheetSecs(H))}`
       : H.status === "stopped" ? "Stopped" : "Failed";
@@ -1507,8 +1524,15 @@ function dragPicture(elm, file) {
                   type: f.type || "output", rand: (Math.random() * 1e9) | 0 };
     ev.dataTransfer?.setData?.("application/x-rednode-result", JSON.stringify(rec));
     const base = window.location?.href;
+    const url = viewUrl(rec);
+    const abs = base ? new URL(url, base).href : url;
+    // A dragged <img> carries its own src by default, and in the runs column that
+    // src is the small server-made thumbnail. Anything that reads a URL rather than
+    // the record above has to get the real picture, so both are overwritten.
+    ev.dataTransfer?.setData?.("text/uri-list", abs);
+    ev.dataTransfer?.setData?.("text/plain", abs);
     if (base && ev.dataTransfer?.setData) {
-      const abs = new URL(viewUrl(rec), base).href;
+      // Chromium's drag-out: dropping on a folder downloads the file there
       const name = String(rec.filename || "rednode_result.png").split("/").pop();
       const mime = /\.webp$/i.test(name) ? "image/webp"
                  : /\.jpe?g$/i.test(name) ? "image/jpeg" : "image/png";
@@ -1670,9 +1694,11 @@ export const RUN_CSS = `
 .rn-run-box .bar i,.rn-run-model .bar i{display:block;height:100%;background:#4a8fe0}
 .rn-run-shell{display:flex;gap:10px;align-items:flex-start}
 .rn-run-shell>.rn-run{flex:1 1 auto;min-width:0}
-.rn-run-side{flex:0 0 196px;display:flex;flex-direction:column;gap:6px;
-  position:sticky;top:0;max-height:760px;overflow-y:auto}
-.rn-run-histth{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;
+.rn-run-side{flex:0 0 208px;display:flex;flex-direction:column;gap:8px;
+  position:sticky;top:0;max-height:760px;overflow-y:auto;box-sizing:border-box;
+  background:#101216;border:1px solid #23262c;border-radius:10px;padding:9px}
+.rn-run-side>.ch{position:sticky;top:-9px;background:#101216;padding:2px 0;z-index:1}
+.rn-run-histth{width:100%;height:138px;object-fit:contain;border-radius:5px;
   background:#0f1114;cursor:grab}
 .rn-run-histempty{padding:10px 2px}
 .rn-run-postseg{width:auto;flex:none}
@@ -1725,9 +1751,10 @@ export const RUN_CSS = `
 .rn-run-histrow{display:flex;margin-top:8px}
 .rn-run-histbtn{width:auto;padding:0 12px}
 .rn-run-hist{display:flex;flex-direction:column;gap:6px}
-.rn-run-histitem{display:flex;flex-direction:column;gap:3px;align-items:stretch;
-  text-align:left;cursor:pointer;height:auto;line-height:1.35;
-  background:#15171b;border:1px solid #2a2e35;border-radius:6px;padding:6px;color:#d6d9de}
+.rn-run-histitem{display:flex;flex-direction:column;gap:4px;align-items:stretch;
+  text-align:left;cursor:pointer;height:auto;min-height:0;line-height:1.35;
+  background:#15171b;border:1px solid #2a2e35;border-radius:6px;padding:7px;
+  color:#d6d9de;overflow:hidden;word-break:break-word}
 .rn-run-histitem:hover{border-color:#8fa8c8}
 .rn-run-histitem.cur{border-color:#b8283c;background:#221519}
 .rn-run-histitem .n{font-weight:600}

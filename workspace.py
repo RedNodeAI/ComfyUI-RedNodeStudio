@@ -2014,6 +2014,13 @@ def keep_before_post(image):
     return _write_temp_batch(image, "rednode_prepost_", "the picture before Post")
 
 
+def keep_raw_render(image):
+    """The render as it left the sampler, before the Detailer and Post FX, written to
+    the temp folder as file records. The Run page's Raw / Before Post / After Post
+    switch reads these; only written when the Save tab's raw copy is on."""
+    return _write_temp_batch(image, "rednode_raw_", "the raw render")
+
+
 def keep_final_result(image):
     """The finished picture, written to the temp folder, when the Save switch is
     off or the built-in save failed. So the Run tab's Live picture and the Review
@@ -5166,6 +5173,12 @@ class RedNodeStudioWorkspace:
             _ran_detailer = False
             if _want_raw:
                 _stage_save(rig_image, "raw")
+                # the same picture for the Run page's Raw view, as a temp file: the
+                # saved copy's path depends on the Save panel's pattern, this does not
+                _raw_files = keep_raw_render(rig_image)
+                if _raw_files:
+                    ui_extra = dict(ui_extra or {})
+                    ui_extra["rn_raw"] = _raw_files
             if cfg["detailer_on"] and (cfg["detailer"].get("stages") or []):
                 try:
                     from .refine_pipeline import RedNodeStudioDetailer
