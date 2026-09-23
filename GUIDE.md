@@ -461,7 +461,7 @@ did.
 
 **Image to Text.** A pass that renders nothing. It reads the picture as it stands at its place
 in the chain and hands those words to the passes after it, so a long chain can describe what
-it actually has rather than what the run started from. It reads with the AI tab's engines,
+it actually has rather than what the run started from. **Picture** says which one it reads: the one arriving at this pass, after everything above it has run, which is the usual choice, or the picture picked on the AI tab when a chain should describe a reference instead. It reads with the AI tab's engines,
 so there is one place to pick them and one place to see what they cost, and the box on its
 card is combined with what it read: your words lead by default, and a switch puts the
 reading first.

@@ -99,6 +99,11 @@ def parse_pipeline(config_json):
             # chain can describe what it actually has rather than what the run
             # started from (you, 2026-09-23). The typed box here is combined with
             # what it reads; reader_first says which of the two leads.
+            # WHICH PICTURE it reads: the one in the chain at this point, which is
+            # the whole idea of the pass, or the picture picked on the AI tab, for a
+            # chain that should describe a reference instead (you, 2026-09-23)
+            "reader_source": ("ai_tab" if str(s.get("reader_source") or "") == "ai_tab"
+                              else "chain"),
             "reader_mode": str(s.get("reader_mode") or ""),     # "" = the AI tab's
             "reader_first": bool(s.get("reader_first", False)),
             # None = read with whatever the AI tab is set to; a dict is this pass's
@@ -541,6 +546,33 @@ EXPRESSIONS = [
     "blushing", "pouting", "disgusted expression", "shouting",
     "eyes closed", "looking away", "looking at the viewer",
 ]
+
+
+def reader_image(ws_cfg, s, image):
+    """The picture an Image to Text pass reads: the chain's, or the AI tab's.
+
+    The chain's is the default and the point of the pass: it reads what the passes
+    before it produced. The AI tab's picked picture is the other choice, for a chain
+    that should describe a reference rather than its own work.
+    """
+    if str(s.get("reader_source") or "chain") != "ai_tab":
+        return image, "the picture here"
+    tab = (ws_cfg.get("tabs") or {}).get("ai") or {}
+    images = [str(x) for x in (tab.get("images") or []) if str(x).strip()]
+    if not images:
+        _say("Image to Text: the AI tab has no picture, so it reads the one here")
+        return image, "the picture here"
+    try:
+        sel = int(tab.get("sel") or 0)
+    except (TypeError, ValueError):
+        sel = 0
+    entry = images[max(0, min(sel, len(images) - 1))]
+    try:
+        return _ws.load_image(entry, 0), "the AI tab's %s" % entry
+    except Exception as exc:
+        _say("Image to Text: the AI tab's %r could not be read (%s); reading the "
+             "picture here instead" % (entry, exc))
+        return image, "the picture here"
 
 
 def read_picture(ws_cfg, s, image):
@@ -1066,12 +1098,13 @@ class RedNodeStudioDetailer:
                 # RENDERS NOTHING. It reads the picture as it stands and hands the
                 # words to every pass after it that has none of its own.
                 try:
-                    read = read_picture(ws_cfg, s, out)
+                    src_img, src_what = reader_image(ws_cfg, s, out)
+                    read = read_picture(ws_cfg, s, src_img)
                     words = reader_words(s, read, seed + i)
                     if words.strip():
                         read_words = words.strip()
                         read_by_name[name] = read_words
-                        _say("%s read: %s" % (tag, read_words[:300]))
+                        _say("%s read %s: %s" % (tag, src_what, read_words[:300]))
                     else:
                         _say("%s read nothing; the passes after it keep their own words"
                              % tag)

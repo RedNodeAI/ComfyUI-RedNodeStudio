@@ -15345,6 +15345,17 @@ export function convActive(c) {
     || c.remove_cum || c.shave || String(c.rules || "").trim() || c.lock));
 }
 
+/** The converter with something TYPED on it, rather than merely standing there.
+ *
+ *  Its lock is on by default on Img2Img, so convActive is true on a node nobody has
+ *  touched; a brand new Workspace then warned that its converter does nothing, about
+ *  a converter the user had never opened (you, 2026-09-23). Needs attention asks
+ *  this instead. */
+export function convConfigured(c) {
+  return !!(c && c.on !== false && (c.gender !== "off" || c.style !== "off"
+    || c.act !== "off" || c.remove_cum || c.shave || String(c.rules || "").trim()));
+}
+
 // An Editor edit that is the image output: the Img2Img pass stands aside for it
 export function i2iSkipped(t, E) {
   return !!skippedBy(t, E);
@@ -15466,7 +15477,7 @@ export function i2iIssues(cfg, node) {
     // the Editor's stages have their own picture, so only these are idle here
     const idle = [];
     if (t.auto?.on) idle.push({ page: "auto", name: "its auto prompt" });
-    if (convActive(t.conv)) idle.push({ page: "converter", name: "the converter" });
+    if (convConfigured(t.conv)) idle.push({ page: "converter", name: "the converter" });
     for (const it of idle) {
       out.push({ sub: it.page, text: `Img2Img is off, so ${it.name} does nothing` });
     }

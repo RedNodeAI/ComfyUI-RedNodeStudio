@@ -666,12 +666,13 @@ function buildPanel(node, hostEl = null) {
   const wrap = hostEl || document.createElement("div");
   wrap.classList.add("rn-adv");
 
-  const sel = (values, current, title, onpick, emptyLabel) => {
+  // `labels` names the options that should not read as their stored value
+  const sel = (values, current, title, onpick, emptyLabel, labels) => {
     const el = document.createElement("select");
     for (const v of [...(emptyLabel !== undefined ? [""] : []), ...values]) {
       const o = document.createElement("option");
       o.value = v;
-      o.textContent = v || emptyLabel;
+      o.textContent = (labels && labels[v]) || v || emptyLabel;
       o.selected = v === (current || "");
       el.appendChild(o);
     }
@@ -1271,12 +1272,25 @@ function buildPanel(node, hostEl = null) {
       } else if (s.type === "reader") {
         // NO RIG, NO DIALS: it renders nothing. What it needs is which kind of
         // reading to take, and whose words lead when both are there.
-        top.append(lab("Reads"),
-                   sel(["", "i2i", "subject", "scene_view", "style"], s.reader_mode || "",
+        // WHICH PICTURE: the one arriving at this pass, which is the point of it,
+        // or the picture picked on the AI tab for a chain that should describe a
+        // reference instead (you, 2026-09-23)
+        top.append(lab("Picture"),
+                   sel(["chain", "ai_tab"], s.reader_source || "chain",
+                       "Which picture it reads: the one arriving at this pass, after "
+                       + "everything above it has run, or the picture picked on the "
+                       + "Workspace's AI tab.",
+                       (v) => { s.reader_source = v; writeCfg(node, d); },
+                       undefined,
+                       { chain: "The picture here", ai_tab: "The AI tab's picture" }));
+        top.append(lab("Reads for"),
+                   sel(["i2i", "subject", "scene_view", "style"], s.reader_mode || "",
                        "What to read for: the whole picture, the subject, the place or "
                        + "the look. (AI tab's) follows the AI tab's own choice, which is "
                        + "also where the engines are picked.",
-                       (v) => { s.reader_mode = v; writeCfg(node, d); }, "(AI tab's)"));
+                       (v) => { s.reader_mode = v; writeCfg(node, d); }, "(the AI tab's)",
+                       { i2i: "Everything in it", subject: "The subject",
+                         scene_view: "The place", style: "The look" }));
         const lead = document.createElement("button");
         lead.className = "tog" + (s.reader_first ? " on" : "");
         lead.textContent = s.reader_first ? "Reading leads" : "Your words lead";
