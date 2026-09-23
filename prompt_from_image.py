@@ -37,7 +37,7 @@ SPLIT_INSTRUCTION = (
 
 # Ollama looks at the picture itself. Florence + Ollama has Florence-2 (kijai's
 # pack) write the caption and Ollama, text only, sort it into the sections: the
-# eyes and the words split the way Lonecat's flow splits them.
+# eyes and the words kept as their own sections rather than folded into the body.
 ENGINES = ["Ollama", "Florence + Ollama"]
 
 TEXT_SPLIT_INSTRUCTION = SPLIT_INSTRUCTION.replace(

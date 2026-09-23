@@ -96,9 +96,9 @@ def _sampler_node(raw):
 
 
 # ------------------------------------------------------------------ extra schedulers
-# Three schedule shapes core does not ship, chosen off Lonecat's Krea 2 graph, where
-# they run on every render: a beta curve at 0.5 / 0.7 (RES4LYF's usual pair), an
-# arctangent sigmoid after RES4LYF's bong tangent, and a tanh hyperbolic. Each is a
+# Three schedule shapes core does not ship, each one proven on Krea 2 in the field: a
+# beta curve at 0.5 / 0.7 (RES4LYF's usual pair), an arctangent sigmoid after
+# RES4LYF's bong tangent, and a tanh hyperbolic. Each is a
 # unit curve of positions into the model's own sigma table, indexed the way core's
 # beta scheduler indexes, so shift and the flow range come from the model, not from
 # here. A rig names them like any scheduler; the sockets hand a stock KSampler

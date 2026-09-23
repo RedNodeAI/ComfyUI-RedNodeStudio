@@ -1817,7 +1817,7 @@ function buildPanel(node, hostEl = null) {
                                        vosr2_color: "wavelet", vosr2_tile: 512,
                                        vosr2_tile_overlap: 32, vosr2_vae_tile: 1024,
                                        vosr2_vae_overlap: 32 }));
-    // Ultimate SD Upscale as a pass, opened on the Pro Grade notes: 6 steps of
+    // Ultimate SD Upscale as a pass, opened on settings that hold detail: 6 steps of
     // deis/simple at 0.25, x2, 1024 tiles padded 128, no seam fix
     mk("＋ Tiled upscale", () => ({ on: true, type: "usdu", rig: "", steps: 6,
                                    sampler: "deis", scheduler: "simple", denoise: 0.25,

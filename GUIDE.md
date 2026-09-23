@@ -393,7 +393,7 @@ held back, and LUT applies a .cube file from models/luts.
 
 Saved effects has two tabs. Mine keeps the effects you save, every dial and the order, with a
 picture of what they did. Shipped is a library of seventeen looks that come with the pack, each
-with a picture: Pro Grade starting points for Krea 2 and Z-Image, portrait, beauty and product
+with a picture: Camera Ready starting points for Krea 2 and Z-Image, portrait, beauty and product
 advertising grades, food, cinematic and night looks, a faded 70s print, 90s instant film,
 disposable flash, an early digital compact and black and white. Apply one freely; save a copy under
 your own name to change it, since the shipped ones cannot be edited or deleted.

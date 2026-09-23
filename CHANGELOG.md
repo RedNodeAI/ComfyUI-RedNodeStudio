@@ -8,7 +8,10 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
-- Pro Grade Krea 2, the shipped look, was smoothing more than it needed to. Noise cleanup
+- The two Pro Grade looks are now Camera Ready Krea 2 and Camera Ready Z-Image. Same
+  dials, same pictures, new names. A saved copy you made under the old name is your own
+  and is left alone
+- Camera Ready Krea 2, the shipped look, was smoothing more than it needed to. Noise cleanup
   drops from 0.75 to 0.65, the skin pass eases back about a seventh, and the local contrast
   pass comes off. Pores and fabric survive it now. The colour trim is unchanged, and the
   other sixteen looks are untouched
@@ -929,7 +932,7 @@ makes no network call, runs no program and reads no environment variable.
 ### Post FX
 
 - Seventeen looks ship with the pack, each with a picture of what it does:
-  Pro Grade starting points for Krea 2 and Z-Image, natural photo, soft and
+  Camera Ready starting points for Krea 2 and Z-Image, natural photo, soft and
   Portra portraits, beauty editorial, clean and dark luxury product grades,
   warm food, teal and orange, Cinestill night, low key, faded 70s print, 90s
   Polaroid, disposable flash, early digital compact and black and white.

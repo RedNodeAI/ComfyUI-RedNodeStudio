@@ -1829,7 +1829,7 @@ def delete_preset(name):
 # The recipes below are a first pass, tuned by eye against sandbox renders before
 # they ship in a release; see SHIPPED_LOOKS_NEXT.md in the hub.
 BUILTIN_LOOKS = {
-    "Pro Grade Krea 2": {
+    "Camera Ready Krea 2": {
         "swatch": ("#3a2f28", "#e8cdb0"),
         "blurb": "A clean, camera-ready grade: gentle noise cleanup, a light skin pass "
                 "and a cool, restrained colour trim.",
@@ -1844,7 +1844,7 @@ BUILTIN_LOOKS = {
                      "split_shadow": -0.12},
         },
     },
-    "Pro Grade Z-Image": {
+    "Camera Ready Z-Image": {
         "swatch": ("#2c342f", "#d8dfc8"),
         "blurb": "The same clean base at half the skin strength, with a light film grain "
                 "and a softer highlight roll-off.",
