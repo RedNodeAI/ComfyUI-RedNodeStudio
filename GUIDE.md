@@ -398,6 +398,16 @@ advertising grades, food, cinematic and night looks, a faded 70s print, 90s inst
 disposable flash, an early digital compact and black and white. Apply one freely; save a copy under
 your own name to change it, since the shipped ones cannot be edited or deleted.
 
+**AI.** Pictures to words, on a page of its own so captioning never means switching Img2Img on
+and walking through its pages. It has its own gallery, saved with the workflow: drop pictures on
+it, drag them in from the Shelf or from any result, and pick one. **Picture** captions the one you
+picked with the same engines the rest of the pack uses, and the words are yours to copy or send
+on. **Batch** captions every picture on the page in turn and writes each caption beside its own
+picture as `picture.txt`, which is the layout a LoRA trainer expects, so a folder of pictures
+becomes a folder ready to train from. It runs one at a time, says which picture it is on, and
+stops when you press Stop. Nothing on this tab reaches a render: the Img2Img tab keeps its own
+Auto prompt for that.
+
 ![The Advanced tab: workspace preferences and the studio settings](images/advanced.webp)
 
 **Advanced.** The workspace's preferences for this install rather than this workflow: the page

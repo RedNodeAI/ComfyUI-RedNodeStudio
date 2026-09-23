@@ -96,6 +96,8 @@ export const TAB_ORDER = [
   { id: "moodboard", label: "Moodboard", group: "mood" },
   // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
+  // captioning on its own page: a gallery, one picture to words, and a batch
+  { id: "ai", label: "AI", group: "edit" },
   // the Detailer passes, run by the Workspace itself (refine_pipeline.py)
   { id: "detailer", label: "Detailer", group: "edit" },
   { id: "post", label: "Post", group: "post" },
@@ -114,7 +116,7 @@ export const RAIL_GROUPS = [
   { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "editor", "paint"] },
   { id: "mood", label: "Mood", color: "#e08a3c", tabs: ["moodboard"] },
   { id: "identity", label: "Identity", color: "#eab308", tabs: ["identity"] },
-  { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["detailer", "post"] },
+  { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["ai", "detailer", "post"] },
   { id: "settings", label: "Settings", color: "#8a919b", tabs: ["advanced"] },
 ];
 
@@ -169,6 +171,8 @@ export const IMAGE_TABS = {
   subject: { label: "Subject", hint: "The person to preserve. The face you want kept." },
   scene: { label: "Scene", hint: "The place. A real image rebuilt as in-context latents." },
   moodboard: { label: "Moodboard", hint: "The look. Select several and they batch into one style signal." },
+  ai: { label: "AI gallery", hint: "Pictures to turn into words. Nothing here reaches a "
+       + "render: it is a work surface for captioning, one picture or a batch." },
 };
 
 export const PEOPLE_TABS = {

@@ -18,6 +18,9 @@ const png = (id) => {
 const TAB_IDS = ["overview", "models", "prompts", "camera", "loras", "latent", "i2i", "editor",
                  "paint", "moodboard", "identity", "detailer", "post", "run", "advanced"];
 export const TAB_ICONS = Object.fromEntries(TAB_IDS.map((id) => [id, png(id)]));
+// the AI tab has no drawn icon in icons/, so it carries a line-art one: a spark,
+// the same mark the auto prompt sections use
+TAB_ICONS.ai = svg('<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>');
 
 // THE SUB-TABS' ICONS, for the strip in a page header: the same weight as the rail's,
 // drawn as line art so they read at 14px on the dark strip. An id with no icon here

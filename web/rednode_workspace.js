@@ -1524,7 +1524,7 @@ const TEXT_TABS_META = {
   text_scene: { label: "Scene", hint: "Pictures whose place or situation is described in words." },
 };
 const MULTI_TAB_IDS = ["moodboard", ...TEXT_TAB_IDS];
-export const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", ...TEXT_TAB_IDS];
+export const AUTO_TAB_IDS = ["subject", "scene", "moodboard", "i2i", "ai", ...TEXT_TAB_IDS];
 // INJECT INTO, stored as "follow the rig" rather than as a row's name, so the
 // choice still points at the right words after the rig is switched. Resolved by
 // injectTarget() here and by prompt_row_for() at queue time, the same rule the
@@ -1540,7 +1540,7 @@ const TAB_DEFAULT_ON = new Set(["subject", "scene", "moodboard", "swap_ref", "ed
 // flat fields t.images / t.sel stay mirrored from the ACTIVE collection, so workspace.py
 // and old workflows read exactly what they always did.
 const GALLERY_TABS = ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      "swap_ref", "editor_src", ...TEXT_TAB_IDS];
+                      "swap_ref", "editor_src", "ai", ...TEXT_TAB_IDS];
 // tabs that carry a built-in Prompt Converter, matching workspace.py
 const CONVERTER_TABS = ["i2i", "subject", "scene"];
 const AUTO_MODES = new Set(["subject", "scene_view", "scene_action", "scene_style",
@@ -1657,7 +1657,8 @@ export function readCfg(node) {
     }
   }
   for (const name of ["i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-                      "swap_ref", "editor_src", ...TEXT_TAB_IDS, "boost_mask", "edit_mask"]) {
+                      "swap_ref", "editor_src", "ai", ...TEXT_TAB_IDS,
+                      "boost_mask", "edit_mask"]) {
     const t = (d.tabs[name] = d.tabs[name] && typeof d.tabs[name] === "object" ? d.tabs[name] : {});
     t.images = Array.isArray(t.images) ? t.images : [];
     if (MULTI_TAB_IDS.includes(name)) t.sel = Array.isArray(t.sel) ? t.sel : (typeof t.sel === "number" ? [t.sel] : []);
@@ -1665,7 +1666,7 @@ export function readCfg(node) {
     if (t.on === undefined) t.on = TAB_DEFAULT_ON.has(name);
     const autoMode = name === "scene" || name === "text_scene" ? "scene_view"
                    : name === "moodboard" || name === "text_style" ? "style"
-                   : name === "i2i" ? "i2i" : "subject";
+                   : name === "i2i" || name === "ai" ? "i2i" : "subject";
     t.auto = normaliseAutoUi(t.auto, autoMode, name);
     if (TEXT_TAB_IDS.includes(name)) t.auto.on = !!t.on;   // the tab's switch runs it
     if (name === "swap_ref") t.on = true;                  // Swap's switch decides
@@ -14165,6 +14166,7 @@ const PAGE_BAR = {
   post: { title: "Post FX", note: "The finishing chain, in camera order." },
   advanced: { title: "Advanced", note: "Settings for this node and this install." },
   run: { title: "Run", note: "Queue the workflow and watch it, or look back at what it made." },
+  ai: { title: "AI", note: "Pictures to words: one picture, or every picture here at once." },
 };
 
 /** Carry a page's own tab strip up into its bar, once the page has built it. */
@@ -14321,6 +14323,133 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
   if (first && body.firstChild) body.insertBefore(wrap, body.firstChild);
   else body.appendChild(wrap);
   return head;
+}
+
+function aiBody(node, body) {
+  const cfg = node._rnCfg;
+  const props = (node.properties ||= {});
+  let sub = node._rnAiSub || props.rn_ai_sub || "picture";
+  if (sub !== "picture" && sub !== "batch") sub = "picture";
+  node._rnAiSub = sub;
+  const t = cfg.tabs.ai;
+
+  const strip = document.createElement("div");
+  strip.className = "rn-ws-sub";
+  strip.dataset.rnbar = "1";
+  strip.classList.add("rn-barstrip");
+  for (const [id, label, lit, tip] of [
+    ["picture", "Picture", !!t.images.length,
+     "One picture to words: drop it here, press the button, take the text."],
+    ["batch", "Batch", !!(t.images.length > 1),
+     "Every picture on this page to words, each written beside its picture as a .txt."],
+  ]) {
+    const b = document.createElement("button");
+    b.className = "rn-ws-subt" + (id === sub ? " cur" : "");
+    b.dataset.sub = id;
+    b.title = tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = label;
+    b.append(lt, tx);
+    b.onclick = () => { node._rnAiSub = id; props.rn_ai_sub = id; render(node); };
+    strip.appendChild(b);
+  }
+  body.appendChild(strip);
+
+  galleryBody(node, body, "ai", IMAGE_TABS.ai, { layout: "tabs" });
+  if (sub === "picture") {
+    autoSection(node, body, "ai", { flat: true });
+    return;
+  }
+  aiBatchCard(node, body);
+}
+
+/** THE BATCH: every picture on the AI tab to words, each written beside its own
+ *  picture as picture.txt, which is the layout a LoRA trainer expects (you,
+ *  2026-09-23). One at a time, because the engines hold a model each, and it stops
+ *  the moment you press Stop. */
+function aiBatchCard(node, body) {
+  const cfg = node._rnCfg;
+  const t = cfg.tabs.ai;
+  const state = (node._rnAiBatch ||= { running: false, done: 0, total: 0, stop: false,
+                                       last: "", failed: [] });
+  const box = document.createElement("div");
+  box.className = "rn-ws-card";
+  const head = document.createElement("div");
+  head.className = "ch";
+  head.textContent = "BATCH";
+  box.appendChild(head);
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.textContent = t.images.length
+    ? `${t.images.length} picture${t.images.length === 1 ? "" : "s"} here. Each one is `
+      + "captioned with the settings on the Picture page, and the words are written "
+      + "beside it as a .txt."
+    : "Drop pictures on the gallery above, then press Caption them all.";
+  box.appendChild(note);
+
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const go = document.createElement("button");
+  go.className = "rn-ws-btn" + (state.running ? "" : " on");
+  go.style.cssText = "width:auto;padding:0 16px";
+  go.textContent = state.running ? "Stop" : "Caption them all";
+  go.disabled = !t.images.length && !state.running;
+  go.onclick = () => {
+    if (state.running) { state.stop = true; render(node); return; }
+    runAiBatch(node);
+  };
+  const prog = document.createElement("span");
+  prog.className = "rn-ws-note";
+  prog.textContent = state.running
+    ? `${state.done} of ${state.total}${state.last ? " · " + state.last : ""}`
+    : state.total ? `Last run: ${state.done} of ${state.total} captioned`
+      + (state.failed.length ? `, ${state.failed.length} could not be written` : "")
+    : "";
+  row.append(go, prog);
+  box.appendChild(row);
+
+  if (state.failed.length && !state.running) {
+    const bad = document.createElement("div");
+    bad.className = "rn-ws-note rn-ws-skipnote";
+    bad.textContent = "Not written: " + state.failed.slice(0, 6).join(", ")
+      + (state.failed.length > 6 ? ` and ${state.failed.length - 6} more` : "");
+    box.appendChild(bad);
+  }
+  body.appendChild(box);
+}
+
+async function runAiBatch(node) {
+  const t = node._rnCfg.tabs.ai;
+  const state = node._rnAiBatch;
+  const list = [...t.images];
+  Object.assign(state, { running: true, done: 0, total: list.length, stop: false,
+                         last: "", failed: [] });
+  render(node);
+  for (const entry of list) {
+    if (state.stop) break;
+    state.last = parseName(entry).filename;
+    render(node);
+    try {
+      const text = await runStandaloneAutoPrompt(node, "ai", entry, { keepTab: true });
+      const res = await api.fetchApi("/rednode/caption_write", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entry, text }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || d.error) throw new Error(d.error || `write failed (${res.status})`);
+      state.done += 1;
+    } catch (e) {
+      console.error("[RedNode Workspace] batch caption:", entry, e);
+      state.failed.push(parseName(entry).filename);
+    }
+    render(node);
+  }
+  state.running = false;
+  state.last = "";
+  render(node);
 }
 
 function latentBody(node, body) {
@@ -20140,6 +20269,7 @@ function renderPage(node) {
   else if (cur === "i2i") i2iTabs(node, body);     // its sections as sub-tabs
   else if (cur === "moodboard") moodboardTabs(node, body);
   else if (cur === "run") runTabBody(node, body);
+  else if (cur === "ai") aiBody(node, body);
   else if (cur === "detailer") detailerTab(node, body);
   else galleryBody(node, body, cur, IMAGE_TABS[cur], { multi: cur === "moodboard" });
   if (pageBar) adoptBarStrip(pageBar, body);

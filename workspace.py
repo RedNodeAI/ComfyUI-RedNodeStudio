@@ -471,10 +471,11 @@ RUN_TAB_NAMES = {"subject": "Subject", "scene": "Scene", "moodboard": "Moodboard
 TEXT_TABS = ("text_style", "text_subject", "text_scene")
 # swap_ref: the Swap page's own gallery, read only when Swap's reference is "own"
 # editor_src: the Editor tab's source, what Re-angle, Realism and Swap edit
+# ai: the AI tab's own gallery, for captioning a picture without turning anything on
 IMAGE_TABS = ("i2i", "subject", "subject2", "subject3", "scene", "moodboard",
-              "swap_ref", "editor_src") + TEXT_TABS
+              "swap_ref", "editor_src", "ai") + TEXT_TABS
 # the tabs with an auto prompt, and the ones whose selection is a list
-AUTO_TABS = ("subject", "scene", "moodboard", "i2i") + TEXT_TABS
+AUTO_TABS = ("subject", "scene", "moodboard", "i2i", "ai") + TEXT_TABS
 # Inject into, stored as "follow the rig": the caption joins whichever row this
 # rig renders, so switching rigs moves it with them instead of leaving it aimed
 # at another rig's words. The panel writes this; prompt_row_for resolves it.
@@ -1105,7 +1106,8 @@ def parse_config(config_json):
             if not (0 <= sel < len(images)):
                 sel = 0
         default_mode = {"scene": "scene_view", "moodboard": "style", "i2i": "i2i",
-                        "text_style": "style", "text_scene": "scene_view"}.get(name, "subject")
+                        "ai": "i2i", "text_style": "style",
+                        "text_scene": "scene_view"}.get(name, "subject")
         tabs[name] = {
             "on": bool(t.get("on", name in ("subject", "scene", "moodboard") + TEXT_TABS)),
             "images": images,
@@ -5492,6 +5494,40 @@ try:
             return web.json_response({"error": str(e)}, status=400)
         finally:
             _standalone_busy["on"] = False
+
+    @PromptServer.instance.routes.post("/rednode/caption_write")
+    async def _rednode_caption_write(request):
+        """Write a caption beside its picture, as picture.txt.
+
+        The AI tab's batch: a folder of captioned pictures is what a LoRA trainer
+        expects, so the text goes next to the file rather than into a folder of its
+        own (you, 2026-09-23). Only inside ComfyUI's input or output folders, only
+        beside a picture that is really there, and only ever a .txt.
+        """
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request body"}, status=400)
+        entry = str(data.get("entry") or "")
+        text = str(data.get("text") or "")
+        if not entry:
+            return web.json_response({"error": "no picture given"}, status=400)
+        try:
+            path = _filepath(entry)
+        except ValueError as exc:
+            return web.json_response({"error": str(exc)}, status=404)
+        roots = [folder_paths.get_input_directory(), folder_paths.get_output_directory()]
+        if not any(_inside_dir(path, r) for r in roots):
+            return web.json_response(
+                {"error": "that picture is outside ComfyUI's input and output folders"},
+                status=403)
+        txt = os.path.splitext(path)[0] + ".txt"
+        try:
+            with open(txt, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        except OSError as exc:
+            return web.json_response({"error": str(exc)}, status=500)
+        return web.json_response({"written": os.path.basename(txt)})
 
     @PromptServer.instance.routes.get("/rednode/image_prompts")
     async def _rednode_image_prompts(request):
