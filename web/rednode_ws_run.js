@@ -48,6 +48,8 @@ const RUN = {
   finals: [],          // every frame of the finished picture, a batch's worth
   finalFiles: [],      // the same as file records, for the thumbnail strip
   finalIdx: 0,
+  before: null,        // the same picture before Post FX, when the run kept one
+  beforeFile: null,    // its file record, for the drag payload
   batch: 1,            // the largest batch a pass sampled
   paint: false,        // a Paint tab run: the paint pass, not the render plan
   promptId: null,
@@ -85,6 +87,7 @@ function keepSheet() {
     models: RUN.models.map((m) => ({ ...m })), total: RUN.total,
     final: RUN.final, finals: RUN.finals.slice(),
     finalFiles: RUN.finalFiles.map((f) => ({ ...f })), finalIdx: RUN.finalIdx,
+    before: RUN.before, beforeFile: RUN.beforeFile ? { ...RUN.beforeFile } : null,
     promptId: RUN.promptId, limitGb: wsn?._rnCfg?.vram_gb || 0,
   });
   if (HISTORY.length > HISTORY_MAX) HISTORY.length = HISTORY_MAX;
@@ -120,6 +123,8 @@ function resetRun() {
   RUN.finals = [];
   RUN.finalFiles = [];
   RUN.finalIdx = 0;
+  RUN.before = null;
+  RUN.beforeFile = null;
   RUN.batch = 1;
   RUN.paint = false;
   for (const v of views) v.node._rnRunSheet = null;
@@ -543,6 +548,13 @@ function onExecuted(d) {
   if (Array.isArray(kept) && kept.length && RUN.status === "running") {
     RUN.outputs.push({ rank: 0, images: kept.map((f) => ({ ...f })) });
   }
+  // the copy Save writes before Post FX runs, when that is switched on: the page
+  // can then show the run either way round
+  const pre = d?.output?.rn_before_post;
+  if (Array.isArray(pre) && pre.length && RUN.status === "running") {
+    RUN.beforeFile = { ...pre[0] };
+    RUN.before = viewUrl(pre[0]);
+  }
   const images = d?.output?.images;
   if (!Array.isArray(images) || !images.length || RUN.status !== "running") return;
   const n = nodeById(d.display_node ?? d.node);
@@ -950,6 +962,15 @@ export function runTabBody(node, body) {
 
 function runPage(node, body) {
   const cfg = node._rnCfg;
+  // THE RUNS COLUMN, down the left of the whole page: this session's runs as
+  // pictures, each with its own line under it, always open and scrolling on its
+  // own (you, 2026-09-23). It used to be a fold under the log, which meant the
+  // runs were both hidden and a page away from the picture they belong to.
+  const shell = el("div", "rn-run-shell");
+  const side = el("div", "rn-run-side");
+  side.appendChild(el("div", "ch", "RUNS"));
+  const histList = el("div", "rn-run-hist");
+  side.appendChild(histList);
   const root = el("div", "rn-run");
   node._rnRunGen = (node._rnRunGen || 0) + 1;
   const view = { node, root, refs: {}, gen: node._rnRunGen };
@@ -1079,6 +1100,24 @@ function runPage(node, body) {
   const pic = el("div", "rn-ws-card rn-run-pic");
   const picHead = el("div", "rn-run-pichead");
   picHead.appendChild(el("div", "ch", "LIVE PICTURE"));
+  // BEFORE / AFTER POST, only when Save kept the picture as it went into Post FX.
+  // Same run, same frame, two versions: this is the comparison that says whether the
+  // grade helped, and it was only reachable by opening the two saved files.
+  const postSeg = el("div", "rn-ws-seg rn-run-postseg");
+  postSeg.dataset.choice = "run_show_post";
+  for (const [value, label, tip] of [
+    ["after", "After Post", "The finished picture, Post FX and all."],
+    ["before", "Before Post", "The same picture as it went into Post FX. Kept only while "
+                              + "Also: before Post FX is on, on the Save tab."],
+  ]) {
+    const b = el("button", "rn-ws-segb", label);
+    b.title = tip;
+    b.dataset.value = value;
+    b.onclick = () => { node._rnRunShowBefore = value === "before"; refreshAll(); };
+    postSeg.appendChild(b);
+  }
+  picHead.appendChild(postSeg);
+  view.refs.postSeg = postSeg;
   const fsBtn = el("button", "rn-ws-btn rn-run-fs", "\u26F6 Full screen");
   fsBtn.title = "See the picture full size. Clicking the picture does the same; "
               + "right-click it for Copy, Copy prompt, Rerun and the rest.";
@@ -1170,19 +1209,12 @@ function runPage(node, body) {
   const log = el("div", "rn-run-log");
   logCard.appendChild(log);
   view.refs.log = log;
-  // HISTORY: this session's finished runs, opened on the same page
-  const histRow = el("div", "rn-run-histrow");
-  const histBtn = el("button", "rn-ws-btn rn-run-histbtn");
-  histBtn.title = "This session's finished runs. Pick one to see its sheet again.";
-  histBtn.onclick = () => { node._rnRunHistOpen = !node._rnRunHistOpen; refreshAll(); };
-  histRow.appendChild(histBtn);
-  const histList = el("div", "rn-run-hist");
-  logCard.append(histRow, histList);
-  view.refs.histBtn = histBtn;
-  view.refs.histList = histList;
   root.appendChild(logCard);
+  view.refs.histList = histList;
+  view.refs.side = side;
 
-  body.appendChild(root);
+  shell.append(side, root);
+  body.appendChild(shell);
   // one view per node: a re-render replaces the last one
   for (const v of [...views]) if (v.node === node) views.delete(v);
   views.add(view);
@@ -1300,12 +1332,24 @@ function refresh(view) {
 
   // picture
   const fr = S.frame;
+  // the Before / After Post switch only exists for a run that kept both
+  const hasBefore = !!(S.before && S.final && S.status === "done");
+  const showBefore = hasBefore && !!node._rnRunShowBefore;
+  refs.postSeg.style.display = hasBefore ? "" : "none";
+  for (const b of refs.postSeg.children || []) {
+    const on = (b.dataset.value === "before") === showBefore;
+    b.className = "rn-ws-segb" + (on ? " on" : "");
+  }
   if (S.final && S.status === "done") {
-    if (refs.img.src !== S.final) refs.img.src = S.final;
+    const src = showBefore ? S.before : S.final;
+    if (refs.img.src !== src) refs.img.src = src;
+    dragPicture(refs.img, showBefore ? S.beforeFile : S.finalFiles[S.finalIdx]);
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
     const n = S.finals.length;
-    refs.picLabel.textContent = n > 1 ? `Finished picture ${S.finalIdx + 1} of ${n}` : "Finished picture";
+    refs.picLabel.textContent = showBefore
+      ? (n > 1 ? `Before Post FX ${S.finalIdx + 1} of ${n}` : "Before Post FX")
+      : (n > 1 ? `Finished picture ${S.finalIdx + 1} of ${n}` : "Finished picture");
     refs.strip.replaceChildren();
     refs.strip.style.display = n > 1 ? "" : "none";
     if (n > 1) {
@@ -1412,32 +1456,66 @@ function refresh(view) {
   }
   if (atBottom) refs.log.scrollTop = refs.log.scrollHeight;
 
-  // history
-  const open = !!node._rnRunHistOpen && HISTORY.length > 0;
-  refs.histBtn.textContent = HISTORY.length
-    ? `${open ? "\u25BE" : "\u25B8"} History (${HISTORY.length})` : "History: no finished runs yet";
-  refs.histBtn.disabled = !HISTORY.length;
+  // the runs column: this session's runs as pictures, newest first, always open
   refs.histList.replaceChildren();
-  refs.histList.style.display = open ? "" : "none";
-  if (open) {
-    const item = (label, meta, cur, onPick, cls = "") => {
-      const b = el("button", "rn-run-histitem" + (cur ? " cur" : "") + (cls ? " " + cls : ""));
-      b.append(el("span", "n", label), el("span", "m", meta));
-      b.onclick = onPick;
-      refs.histList.appendChild(b);
-    };
-    item("Live", RUN.status === "running" ? `Running ${clock(secs())}` : "The run now",
-         !S.past, () => { node._rnRunSheet = null; refreshAll(); });
-    for (const H of HISTORY) {
-      const how = H.status === "done" ? `Done in ${clock(sheetSecs(H))}`
-        : H.status === "stopped" ? "Stopped" : "Failed";
-      const bits = [timeOfDay(H.t0), how, H.paint ? "paint" : "",
-                    H.batch > 1 ? `batch of ${H.batch}` : "",
-                    H.seed != null ? `seed ${H.seed}` : ""].filter(Boolean);
-      item(`Run ${H.count}`, bits.join(" · "), S === H,
-           () => { node._rnRunSheet = H; refreshAll(); }, H.status);
+  const item = (label, meta, cur, onPick, cls = "", sheet = null) => {
+    const b = el("button", "rn-run-histitem" + (cur ? " cur" : "") + (cls ? " " + cls : ""));
+    const file = sheet?.finalFiles?.[sheet.finalIdx || 0];
+    if (file) {
+      const th = el("img", "rn-run-histth");
+      th.src = thumbUrl(file);
+      th.alt = "";
+      dragPicture(th, file);        // onto the Paint pane, or out to a folder
+      b.appendChild(th);
     }
+    b.append(el("span", "n", label), el("span", "m", meta));
+    b.onclick = onPick;
+    refs.histList.appendChild(b);
+  };
+  item("Live", RUN.status === "running" ? `Running ${clock(secs())}`
+       : RUN.final ? "The run now" : "Nothing rendered yet",
+       !S.past, () => { node._rnRunSheet = null; refreshAll(); }, "", RUN);
+  for (const H of HISTORY) {
+    const how = H.status === "done" ? `Done in ${clock(sheetSecs(H))}`
+      : H.status === "stopped" ? "Stopped" : "Failed";
+    const bits = [timeOfDay(H.t0), how, H.paint ? "paint" : "",
+                  H.batch > 1 ? `batch of ${H.batch}` : "",
+                  H.seed != null ? `seed ${H.seed}` : ""].filter(Boolean);
+    item(`Run ${H.count}`, bits.join(" · "), S === H,
+         () => { node._rnRunSheet = H; refreshAll(); }, H.status, H);
   }
+  if (!HISTORY.length) {
+    refs.histList.appendChild(el("div", "rn-ws-note rn-run-histempty",
+                                 "Finished runs collect here."));
+  }
+}
+
+/** Drag a picture off the Run page: onto the Paint pane, or out to a folder. The
+ *  payload is the record the result pane already sends, so both ends agree. */
+function dragPicture(elm, file) {
+  if (!elm || !file) return;
+  elm.draggable = true;
+  // the picture changes on every refresh and the element does not, so the file
+  // rides the element and the listener is bound once
+  elm._rnDragFile = file;
+  if (elm._rnDragBound) return;
+  elm._rnDragBound = true;
+  elm.addEventListener("dragstart", (ev) => {
+    const f = elm._rnDragFile;
+    if (!f) return;
+    const rec = { filename: f.filename, subfolder: f.subfolder || "",
+                  type: f.type || "output", rand: (Math.random() * 1e9) | 0 };
+    ev.dataTransfer?.setData?.("application/x-rednode-result", JSON.stringify(rec));
+    const base = window.location?.href;
+    if (base && ev.dataTransfer?.setData) {
+      const abs = new URL(viewUrl(rec), base).href;
+      const name = String(rec.filename || "rednode_result.png").split("/").pop();
+      const mime = /\.webp$/i.test(name) ? "image/webp"
+                 : /\.jpe?g$/i.test(name) ? "image/jpeg" : "image/png";
+      ev.dataTransfer.setData("DownloadURL", `${mime}:${name}:${abs}`);
+    }
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "copy";
+  });
 }
 
 // What each VRAM limit is sized for. The limit itself only holds the expensive dials
@@ -1590,6 +1668,15 @@ export const RUN_CSS = `
 .rn-run-box.error .st{color:#f3b0ba}
 .rn-run-box .bar,.rn-run-model .bar{height:5px;border-radius:3px;background:#262a30;overflow:hidden}
 .rn-run-box .bar i,.rn-run-model .bar i{display:block;height:100%;background:#4a8fe0}
+.rn-run-shell{display:flex;gap:10px;align-items:flex-start}
+.rn-run-shell>.rn-run{flex:1 1 auto;min-width:0}
+.rn-run-side{flex:0 0 196px;display:flex;flex-direction:column;gap:6px;
+  position:sticky;top:0;max-height:760px;overflow-y:auto}
+.rn-run-histth{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;
+  background:#0f1114;cursor:grab}
+.rn-run-histempty{padding:10px 2px}
+.rn-run-postseg{width:auto;flex:none}
+.rn-run-postseg .rn-ws-segb{padding:0 10px;font-size:11.5px}
 .rn-run-cols{display:flex;gap:10px;flex-wrap:wrap}
 .rn-run-pic{flex:1 1 300px;min-width:0}
 .rn-run-mem{flex:1 1 300px;min-width:0}
@@ -1637,13 +1724,14 @@ export const RUN_CSS = `
 .rn-run-live{width:auto;padding:0 12px}
 .rn-run-histrow{display:flex;margin-top:8px}
 .rn-run-histbtn{width:auto;padding:0 12px}
-.rn-run-hist{display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:220px;
-  overflow-y:auto}
-.rn-run-histitem{display:flex;gap:12px;align-items:center;text-align:left;cursor:pointer;
-  background:#15171b;border:1px solid #2a2e35;border-radius:6px;padding:5px 10px;color:#d6d9de}
+.rn-run-hist{display:flex;flex-direction:column;gap:6px}
+.rn-run-histitem{display:flex;flex-direction:column;gap:3px;align-items:stretch;
+  text-align:left;cursor:pointer;height:auto;line-height:1.35;
+  background:#15171b;border:1px solid #2a2e35;border-radius:6px;padding:6px;color:#d6d9de}
 .rn-run-histitem:hover{border-color:#8fa8c8}
 .rn-run-histitem.cur{border-color:#b8283c;background:#221519}
-.rn-run-histitem .n{font-weight:600;min-width:64px}
+.rn-run-histitem .n{font-weight:600}
+.rn-run-histitem .m{font-size:11px;white-space:normal}
 .rn-run-histitem .m{color:#8a919b;font-variant-numeric:tabular-nums}
 .rn-run-histitem.error .m,.rn-run-histitem.stopped .m{color:#e0a84a}
 .rn-run-line .dot{width:8px;height:8px;border-radius:50%;background:#4a8fe0}
