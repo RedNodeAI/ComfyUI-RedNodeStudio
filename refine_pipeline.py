@@ -68,7 +68,8 @@ def parse_pipeline(config_json):
                            "name": str(s.get("name") or ""),
                            "color": str(s.get("color") or "")})
             continue
-        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2"):
+        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2",
+                                 "reader"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -93,6 +94,14 @@ def parse_pipeline(config_json):
             "start_step": _num("start_step", 0, 200, 0, int),
             "end_step": _num("end_step", 0, 200, 0, int),    # 0 = to the end
             "target": str(s.get("target") or "face"),
+            # AI READER: this pass renders nothing. It reads the picture as it
+            # stands and writes the words the passes AFTER it render with, so a
+            # chain can describe what it actually has rather than what the run
+            # started from (you, 2026-09-23). The typed box here is combined with
+            # what it reads; reader_first says which of the two leads.
+            "reader_mode": str(s.get("reader_mode") or ""),     # "" = the AI tab's
+            "reader_first": bool(s.get("reader_first", False)),
+            "reader_keep": bool(s.get("reader_keep", True)),
             "sam_model": str(s.get("sam_model") or ""),      # "" = the loader default
             # 1.0 is the picture as it arrives. A sampler pass at 0.5 then another
             # at 2.0 is the shrink-and-regrow chain that invents detail, which is
@@ -529,7 +538,74 @@ EXPRESSIONS = [
 ]
 
 
-def pass_words(ws_cfg, s, seed, subject_words=""):
+def read_picture(ws_cfg, s, image):
+    """The words an AI reader pass takes off the picture in front of it.
+
+    The engines are the AI tab's, so there is one place to choose them and one
+    place to see what they cost; the pass carries only what is peculiar to it,
+    which is the mode and the typed words it is combined with. A reader that
+    cannot caption says so and leaves the chain alone rather than failing it.
+    """
+    from . import autoprompt
+    tabs = ws_cfg.get("tabs") or {}
+    a = (tabs.get("ai") or {}).get("auto") or {}
+    ga = ws_cfg.get("auto") or {}
+    mode = str(s.get("reader_mode") or "") or str(a.get("mode") or "i2i")
+    on = [k for k in ("ollama", "wd14", "joy", "qwen", "florence") if a.get(k)]
+    if not on:
+        raise ValueError("no caption engine is on for the AI tab, so the reader has "
+                         "nothing to read with")
+    img_bytes = None
+    if a.get("ollama"):
+        try:
+            img_bytes = autoprompt.tensor_payload(image)
+        except Exception as exc:
+            _say("reader: the picture could not be encoded for Ollama: %s" % exc)
+    return autoprompt.build_prompt(
+        mode, image_bytes=img_bytes, image_tensor=image, wired=(),
+        use_ollama=bool(a.get("ollama")), use_wd14=bool(a.get("wd14")),
+        use_joy=bool(a.get("joy")), use_qwen=bool(a.get("qwen")),
+        use_clip=False, clip=None, use_florence=bool(a.get("florence")),
+        florence_opts={"model": ga.get("florence_model", ""),
+                       "task": ga.get("florence_task", "")},
+        unload_heavy=bool(ga.get("wd14_unload") or ga.get("low_vram")),
+        combine=str(a.get("combine") or "append"), max_words=int(a.get("length") or 0),
+        model=str(ga.get("model") or ""), url=str(ga.get("url") or ""),
+        wd14_model=str(ga.get("wd14_model") or ""),
+        threshold=float(ga.get("threshold", 0.35)),
+        character_threshold=float(ga.get("character_threshold", 0.85)),
+        replace_underscore=bool(ga.get("replace_underscore")),
+        exclude_tags=str(ga.get("exclude_tags") or ""),
+        instruction=str(a.get("instruction") or ""),
+        question=str(a.get("question") or ""),
+        cache_base=None, use_cache=False)
+
+
+def reader_words(s, read, seed=0):
+    """What a reader pass hands on: what it read, and the words typed on it.
+
+    Typed text leads by default, because it is the thing being asked for; the
+    switch puts the reading first for a pass whose typing is a footnote.
+    """
+    typed = str(s.get("prompt") or "").strip()
+    if typed:
+        try:
+            from .prompt_frame import expand as _pf_expand
+            typed = _pf_expand(typed, seed, True)
+        except Exception:
+            pass
+    read = str(read or "").strip()
+    if not typed:
+        return read
+    if not read:
+        return typed
+    return "%s, %s" % (read, typed) if s.get("reader_first") else "%s, %s" % (typed, read)
+
+
+READER_PICK = "@reader"
+
+
+def pass_words(ws_cfg, s, seed, subject_words="", read_words="", read_by_name=None):
     """The words a pass renders with: its own box, else the source it names,
     with its expression in front.
 
@@ -555,7 +631,26 @@ def pass_words(ws_cfg, s, seed, subject_words=""):
             pass
     if not text.strip() and str(s.get("words") or "") == "subject":
         text = str(subject_words or "")
-    if not text.strip():
+    # AN AI READER EARLIER IN THE CHAIN speaks for the passes after it: it read
+    # the picture they are about to work on, which the run's original row cannot
+    # describe once two passes have changed it. A pass can also NAME the reader it
+    # wants, the same way it names a Prompts row, which is what the Prompt picker
+    # on the card offers (you, 2026-09-23).
+    picked = str(s.get("prompt_row") or "").strip()
+    if not text.strip() and picked.startswith(READER_PICK):
+        want = picked[len(READER_PICK):].lstrip(":").strip()
+        by_name = read_by_name or {}
+        if want and want in by_name:
+            text = str(by_name[want] or "").strip()
+        elif want:
+            _say("no AI reader called %r has run in this chain yet; "
+                 "using the words of the last one that did" % want)
+            text = str(read_words or "").strip()
+        else:
+            text = str(read_words or "").strip()
+    if not text.strip() and str(read_words or "").strip():
+        text = str(read_words).strip()
+    if not text.strip() and not picked.startswith(READER_PICK):
         row = _pass_prompt_row(ws_cfg, s)
         if row is not None:
             try:
@@ -757,7 +852,8 @@ def _sam3_mask(image, target, threshold, sam_model="", precision=""):
 from . import run_events as _run_events
 
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
-              "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale"}
+              "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
+              "reader": "AI reader"}
 WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 
@@ -928,6 +1024,11 @@ class RedNodeStudioDetailer:
             tap(image, "Detailer in")
 
         out = image
+        # WHAT THE READER READ, for this run only. It is not saved, not sent to
+        # the panel and not written into any picture's metadata: the saved
+        # prompt stays the one the run was asked for (you, 2026-09-23).
+        read_words = ""
+        read_by_name = {}
         for i, (card_idx, s) in enumerate(stages, 1):
             self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
             name = pass_name(s)
@@ -948,6 +1049,26 @@ class RedNodeStudioDetailer:
                     "is not deliberate."))
             nimg = int(out.shape[0])
             _say("%s started%s" % (tag, " on %d images" % nimg if nimg > 1 else ""))
+            if s["type"] == "reader":
+                # RENDERS NOTHING. It reads the picture as it stands and hands the
+                # words to every pass after it that has none of its own.
+                try:
+                    read = read_picture(ws_cfg, s, out)
+                    words = reader_words(s, read, seed + i)
+                    if words.strip():
+                        read_words = words.strip()
+                        read_by_name[name] = read_words
+                        _say("%s read: %s" % (tag, read_words[:300]))
+                    else:
+                        _say("%s read nothing; the passes after it keep their own words"
+                             % tag)
+                except Exception as exc:
+                    _say("%s failed: %s; the passes after it keep their own words"
+                         % (tag, exc))
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d read" % i)
+                continue
             s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
                      sam_precision=cfg["sam_precision"])
             pass_in = out
@@ -1061,7 +1182,8 @@ class RedNodeStudioDetailer:
             # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
             # the same text the main render used, wildcards rolled on this seed.
             # Typed text in the pass wins, the standing rule.
-            text = pass_words(ws_cfg, s, seed + i, self._rn_subject_words)
+            text = pass_words(ws_cfg, s, seed + i, self._rn_subject_words, read_words,
+                              read_by_name)
             # THE REFERENCES, for a Krea 2 rig: any of the three toggles routes
             # this pass through the Studio encode with the tab images loaded, the
             # identity system instead of plain text. On any other rig they are

@@ -373,6 +373,29 @@ def _http_json(url, payload=None, timeout=TIMEOUT):
 VISION_MAX_EDGE = 1024
 
 
+def tensor_payload(image, max_edge=VISION_MAX_EDGE):
+    """The same JPEG bytes as vision_payload, from an IMAGE tensor.
+
+    A picture mid-chain has no file: the Detailer's AI reader captions what the
+    passes before it produced, which exists only as [B,H,W,C] in 0..1.
+    """
+    from PIL import Image
+    import numpy as _np
+    arr = image[0] if getattr(image, "ndim", 3) == 4 else image
+    try:
+        arr = arr.detach().cpu().numpy()
+    except AttributeError:
+        arr = _np.asarray(arr)
+    im = Image.fromarray(_np.clip(arr[..., :3] * 255.0, 0, 255).astype("uint8"))
+    if max(im.size) > max_edge:
+        scale = max_edge / max(im.size)
+        im = im.resize((max(1, int(im.width * scale)),
+                        max(1, int(im.height * scale))), Image.LANCZOS)
+    buf = _io_bytes()
+    im.save(buf, format="JPEG", quality=90, optimize=True)
+    return buf.getvalue()
+
+
 def vision_payload(path, max_edge=VISION_MAX_EDGE):
     """JPEG bytes at a sane size, whatever the source format was."""
     try:

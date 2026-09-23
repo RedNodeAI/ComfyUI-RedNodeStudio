@@ -963,7 +963,7 @@ function buildPanel(node, hostEl = null) {
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
-                vosr2: "VOSR2 upscale" })[x.type] || "Pass";
+                vosr2: "VOSR2 upscale", reader: "AI reader" })[x.type] || "Pass";
     };
     const uniqueName = (base, taken) => {
       if (!taken.has(base)) return base;
@@ -1096,8 +1096,12 @@ function buildPanel(node, hostEl = null) {
       chip.textContent = s.type === "sampler" ? "SAMPLER"
                        : s.type === "upscale" ? "VR2 UPSCALE"
                        : s.type === "vosr2" ? "VOSR2 UPSCALE"
+                       : s.type === "reader" ? "AI READER"
                        : s.type === "usdu" ? "TILE UPSCALE" : "DETAILER";
-      chip.title = s.type === "upscale" ? "A SeedVR2 upscale pass."
+      chip.title = s.type === "reader" ? "An AI reader: it renders nothing. It reads "
+                   + "the picture as it stands and hands those words to the passes "
+                   + "after it that have none of their own."
+                 : s.type === "upscale" ? "A SeedVR2 upscale pass."
                  : s.type === "vosr2" ? "A VOSR 2.0 upscale pass: it enlarges what is "
                    + "there instead of inventing detail, which is what you want on "
                    + "anime and lineart, and ahead of a tiled upscale."
@@ -1125,7 +1129,10 @@ function buildPanel(node, hostEl = null) {
         const sum = document.createElement("span");
         sum.className = "k";
         sum.style.fontSize = "12px";
-        sum.textContent = s.type === "upscale"
+        sum.textContent = s.type === "reader"
+          ? "reads the picture" + (s.reader_mode ? " \u00b7 " + s.reader_mode : "")
+            + (String(s.prompt || "").trim() ? " \u00b7 plus your words" : "")
+          : s.type === "upscale"
           ? "SeedVR2 \u00b7 " + (s.size || "1080p")
             + (s.region ? " \u00b7 " + s.region : "")
             + (s.dit_model ? " \u00b7 " + s.dit_model.replace(/\.safetensors$/i, "") : "")
@@ -1171,6 +1178,23 @@ function buildPanel(node, hostEl = null) {
                        + "the region gains the detail. (whole frame) upscales "
                        + "everything and grows the frame.",
                        (v) => { s.region = v; writeCfg(node, d); }, "(whole frame)"));
+      } else if (s.type === "reader") {
+        // NO RIG, NO DIALS: it renders nothing. What it needs is which kind of
+        // reading to take, and whose words lead when both are there.
+        top.append(lab("Reads"),
+                   sel(["", "i2i", "subject", "scene_view", "style"], s.reader_mode || "",
+                       "What to read for: the whole picture, the subject, the place or "
+                       + "the look. (AI tab's) follows the AI tab's own choice, which is "
+                       + "also where the engines are picked.",
+                       (v) => { s.reader_mode = v; writeCfg(node, d); }, "(AI tab's)"));
+        const lead = document.createElement("button");
+        lead.className = "rn-adv-btn" + (s.reader_first ? " on" : "");
+        lead.textContent = s.reader_first ? "Reading leads" : "Your words lead";
+        lead.title = "Which comes first when the box below has words in it: what the "
+                   + "reader saw, or what you typed. What is being asked for usually "
+                   + "reads best at the front.";
+        lead.onclick = () => { s.reader_first = !s.reader_first; writeCfg(node, d); render(); };
+        top.append(lead);
       } else if (s.type === "vosr2") {
         // no rig and no pixel budget: VOSR 2.0 takes an INTEGER multiplier, and
         // the reason to reach for it is that it does not invent, so a budget
@@ -1723,8 +1747,18 @@ function buildPanel(node, hostEl = null) {
         // a chain no longer has to say the same thing on every pass.
         const rowsAvail = promptRows();
         const curRow = String(s.prompt_row || "");
-        const ropts = [["", "(active prompt)"], ...rowsAvail.map((r) => [r.key, r.label])];
-        if (curRow && !rowsAvail.some((r) => r.key === curRow)) {
+        // AN AI READER EARLIER IN THE LIST is a prompt source too: it writes its
+        // words during the run, so a pass can take the reading of the picture it is
+        // about to work on instead of the row the run started from (you,
+        // 2026-09-23). Only readers ABOVE this pass are offered, since a reader
+        // below it has not read anything by the time this pass runs.
+        const readersAbove = d.stages.slice(0, i).filter((x) => x.type === "reader")
+          .map((x, n) => ({ key: "@reader:" + (x.name || baseName(x) + (n ? " " + (n + 1) : "")),
+                            label: (x.name || baseName(x) + (n ? " " + (n + 1) : "")) }));
+        const ropts = [["", "(active prompt)"], ...rowsAvail.map((r) => [r.key, r.label]),
+                       ...(readersAbove.length ? [["@reader", "The last AI reader"]] : []),
+                       ...readersAbove.map((r) => [r.key, r.label])];
+        if (curRow && !ropts.some(([v]) => v === curRow)) {
           ropts.push([curRow, curRow + " (missing)"]);
         }
         const rsel = document.createElement("select");
@@ -1733,9 +1767,10 @@ function buildPanel(node, hostEl = null) {
           o.value = v; o.textContent = l; o.selected = v === curRow;
           rsel.appendChild(o);
         }
-        rsel.title = "Which Prompts-tab row this pass reads when the box beside it is "
-                   + "empty. (active prompt) is the row the main render used. Typed "
-                   + "text still wins.";
+        rsel.title = "Where this pass takes its words when the box beside it is empty. "
+                   + "(active prompt) is the row the main render used; a Prompts-tab row "
+                   + "is that row; an AI reader above this pass is what it read off the "
+                   + "picture during the run. Typed text still wins.";
         rsel.onchange = () => { s.prompt_row = rsel.value; writeCfg(node, d); };
         bottom.append(...A(lab("Prompt"), rsel));
         // WHERE THE WORDS COME FROM. The Subject tab's caption describes the
@@ -1825,6 +1860,10 @@ function buildPanel(node, hostEl = null) {
                                    usdu_padding: 128, usdu_blur: 8, usdu_mode: "Linear",
                                    seam_mode: "None", seam_denoise: 0.35,
                                    tiled_decode: false, prompt: "" }));
+    // THE AI READER: reads the picture mid-chain and speaks for the passes after
+    // it. No render, no dials, so its card is the shortest in the list.
+    mk("＋ AI reader", () => ({ on: true, type: "reader", prompt: "",
+                               reader_mode: "", reader_first: false }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");
