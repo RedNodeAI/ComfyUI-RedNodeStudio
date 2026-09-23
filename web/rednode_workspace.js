@@ -19965,13 +19965,30 @@ function build(node) {
 
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-wrap";
+  // A key is kept off the canvas only when it is going into a box you are typing in,
+  // so a prompt with a "d" in it never deletes a node. Everywhere else on the panel
+  // the key belongs to ComfyUI: its queue shortcut, r, and the rest of its keymap all
+  // work with the pointer over the Workspace. Delete and Backspace stay blocked even
+  // off a box, because the panel's own node is the selected one and that key would
+  // take the whole workspace with it.
+  const typingIn = (el) => {
+    while (el && el.nodeType === 1) {
+      if (el.isContentEditable) return true;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el === wrap) return false;
+      el = el.parentElement;
+    }
+    return false;
+  };
+  const eatKey = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") return false;   // ComfyUI's queue
+    if (typingIn(e.target)) return true;
+    return e.key === "Delete" || e.key === "Backspace";
+  };
   for (const t of ["pointerdown", "pointerup", "pointermove", "click", "dblclick", "keydown", "contextmenu"]) {
     wrap.addEventListener(t, (e) => {
-      // Every key is kept off the canvas, so typing in a box never deletes a node.
-      // ComfyUI's own queue shortcut is the exception: Ctrl+Enter and Ctrl+Shift+Enter
-      // are not typing, and blocking them meant the shortcut died whenever the panel
-      // had focus.
-      if (t === "keydown" && (e.ctrlKey || e.metaKey) && e.key === "Enter") return;
+      if (t === "keydown" && !eatKey(e)) return;
       e.stopPropagation();
     });
   }
