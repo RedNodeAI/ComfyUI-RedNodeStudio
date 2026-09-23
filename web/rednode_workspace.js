@@ -182,6 +182,16 @@ css.textContent = `
   min-height:38px;border:1px solid #d13a4f;border-radius:8px;background:#b8283c;color:#fff;
   font-weight:600;font-size:13px;cursor:pointer;padding:0 10px}
 .rn-ws-railgen:hover{background:#cc3148}
+/* THE PAGE HEADER: sub-tabs or the page name, what the page is for, and Generate */
+.rn-ws-phead{display:flex;align-items:center;gap:10px;padding:7px 8px;margin-bottom:8px;
+  background:#15171b;border:1px solid #262a31;border-radius:10px}
+.rn-ws-phead .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0}
+.rn-ws-phead .rn-ws-sub.in-head .rn-ws-subt{min-height:32px}
+.rn-ws-pheadt{flex:1 1 auto;min-width:0;font-weight:600;font-size:14px;color:#e8ecf1;
+  padding-left:4px}
+.rn-ws-pheadn{flex:0 1 auto;min-width:0;color:#8a919b;font-size:12px;text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rn-ws-pheadgen{min-height:34px;padding:0 16px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 .rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
@@ -7235,6 +7245,32 @@ function workspacePrefs(node, body) {
   pr.append(prLab, prWrap, prHint);
   sect.appendChild(pr);
 
+  // ---- GENERATE ON THE RAIL: the pages have one in their header ---------------
+  {
+    const rr = document.createElement("div");
+    rr.className = "rn-ws-row";
+    rr.style.flexWrap = "wrap";
+    const rl = document.createElement("span");
+    rl.className = "hint";
+    rl.style.cssText = "flex:none;width:110px";
+    rl.textContent = "Generate on the rail";
+    const rb = document.createElement("button");
+    const ron = wsPref("RailGenerate", true) !== false;
+    rb.className = "rn-ws-btn rn-ws-compact" + (ron ? " on" : "");
+    rb.style.cssText = "width:auto;padding:0 12px";
+    rb.textContent = ron ? "On" : "Off";
+    rb.dataset.choice = "rail_generate_on";
+    rb.title = "Off, the rail drops its red Generate and the one in each page's header "
+             + "is the only one. Paint and Run keep their own buttons either way.";
+    rb.onclick = () => { setWsPref("RailGenerate", !ron); render(node); };
+    const rh = document.createElement("span");
+    rh.className = "hint";
+    rh.style.cssText = "flex:0 1 320px;min-width:0";
+    rh.textContent = "On by default: it never scrolls away. This install only.";
+    rr.append(rl, rb, rh);
+    sect.appendChild(rr);
+  }
+
   // ---- GENERATE: the rail's red button can open the Run page as it queues ------
   {
     const gr = document.createElement("div");
@@ -12276,7 +12312,11 @@ function modelsBody(node, page) {
       };
       strip.appendChild(b);
     }
-    page.insertBefore(strip, mwrap);
+    // The Models page's own tabs belong BESIDE the rig column, not across the top:
+    // that layout is deliberate, so the rig being edited stays in view. The header
+    // carries the page's name instead, and the same Generate as everywhere else.
+    pageHeader(node, page, { title: "Models", first: true,
+                             note: "Your rigs: the model, its text encoder and its VAE." });
     if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
     // are editing stays in view whichever tab is open (the user, 2026-09-21)
@@ -13903,6 +13943,58 @@ export function expandable(ta, title, onSave) {
   return wrap;
 }
 
+/** The red Generate, wherever it is asked for: the rail, or a page header. One
+ *  path, so a change to what queueing means lands in every copy at once. */
+function generateButton(node, cls) {
+  const b = document.createElement("button");
+  b.className = cls;
+  b.dataset.choice = "rail_generate";
+  b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16">'
+    + '<path fill="currentColor" d="M7 4v16l13-8z"/></svg>';
+  const lab = document.createElement("span");
+  lab.className = "lb";
+  lab.textContent = "Generate";
+  b.appendChild(lab);
+  b.title = "Queue the workflow, the same as ComfyUI's Run button.";
+  b.onclick = () => {
+    // optional, off by default: land on the Run page to watch the stages
+    if (wsPref("GenerateOpensRun", false)) {
+      node._rnTab = "run";
+      node._rnRunSub = "run";
+      Object.assign((node.properties ||= {}), { rn_tab: "run", rn_run_sub: "run" });
+      render(node);
+    }
+    queueWorkflow(b);
+  };
+  return b;
+}
+
+/** ONE HEADER FOR EVERY PAGE: the page's sub-tabs (or its name) on the left, a line
+ *  saying what the page is for, and Generate on the right. The tops of the pages grew
+ *  one at a time and no two looked alike; this is the row that makes them agree
+ *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
+function pageHeader(node, body, { strip = null, title = "", note = "", first = false } = {}) {
+  const head = document.createElement("div");
+  head.className = "rn-ws-phead";
+  if (strip) {
+    strip.classList.add("in-head");
+    head.appendChild(strip);
+  } else {
+    const t = document.createElement("div");
+    t.className = "rn-ws-pheadt";
+    t.textContent = title;
+    head.appendChild(t);
+  }
+  const n = document.createElement("div");
+  n.className = "rn-ws-pheadn";
+  n.textContent = note;
+  head.appendChild(n);
+  head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pheadgen"));
+  if (first && body.firstChild) body.insertBefore(head, body.firstChild);
+  else body.appendChild(head);
+  return head;
+}
+
 function latentBody(node, body) {
   const cfg = node._rnCfg;
   const L = cfg.latent;
@@ -13933,7 +14025,7 @@ function latentBody(node, body) {
     b.onclick = () => { node._rnLatSub = id; props.rn_latent_sub = id; render(node); };
     strip.appendChild(b);
   }
-  body.appendChild(strip);
+  pageHeader(node, body, { strip, note: "The canvas a plain generation renders on." });
 
   const bar = document.createElement("div");
   bar.className = "rn-ws-status";
@@ -19552,27 +19644,10 @@ function renderPage(node) {
   railPreset.onclick = (e) => { e.stopPropagation(); openPresetMenu(node, railPreset); };
   railHead.append(railTog, railFull, railSide, railPreset);
   rail.appendChild(railHead);
-  // GENERATE: queue the workflow from the rail, above the Run group
-  const railGen = document.createElement("button");
-  railGen.className = "rn-ws-railgen";
-  railGen.dataset.choice = "rail_generate";
-  railGen.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M7 4v16l13-8z"/></svg>';
-  const genLab = document.createElement("span");
-  genLab.className = "lb";
-  genLab.textContent = "Generate";
-  railGen.appendChild(genLab);
-  railGen.title = "Queue the workflow, the same as ComfyUI's Run button.";
-  railGen.onclick = () => {
-    // optional, off by default: land on the Run page to watch the stages
-    if (wsPref("GenerateOpensRun", false)) {
-      node._rnTab = "run";
-      node._rnRunSub = "run";
-      Object.assign((node.properties ||= {}), { rn_tab: "run", rn_run_sub: "run" });
-      render(node);
-    }
-    queueWorkflow(railGen);
-  };
-  rail.appendChild(railGen);
+  // GENERATE: queue the workflow from the rail, above the Run group. The pages
+  // carry one in their header now, so this one can be switched off on Advanced;
+  // it stays on by default, because it is the one that never scrolls away.
+  if (wsPref("RailGenerate", true)) rail.appendChild(generateButton(node, "rn-ws-railgen"));
   const shownIds = new Set(tabsShown.map((t) => t.id));
   for (const g of RAIL_GROUPS) {
     const ids = g.tabs.filter((id) => shownIds.has(id));
