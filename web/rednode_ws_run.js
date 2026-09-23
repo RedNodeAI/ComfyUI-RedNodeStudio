@@ -883,7 +883,7 @@ export async function queueWorkflow(btn) {
   }
 }
 
-const RUN_SUBS = [
+export const RUN_SUBS = [
   ["run", "RUN", "Queue the workflow and watch the stages, the picture and the memory."],
   ["review", "REVIEW", "Every finished picture from this Workspace's runs, newest first. "
                        + "Right-click one to copy it, open its folder, or run it again."],

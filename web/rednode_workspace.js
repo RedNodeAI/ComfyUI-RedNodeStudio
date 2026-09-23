@@ -11,7 +11,8 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { runTabBody, RUN_CSS, runLit, listenRun, configHost, queueWorkflow } from "./rednode_ws_run.js";
+import { runTabBody, RUN_CSS, runLit, listenRun, configHost, queueWorkflow,
+         RUN_SUBS } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
 import { batchStrip, sourceSwitch, sourceView,
@@ -235,11 +236,14 @@ css.textContent = `
 .rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
 .rn-ws-pbargen svg{width:18px;height:18px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
-/* a sub-page of the open tab: indented under it, smaller, no icon or light */
-.rn-ws-tab.rail.railsub{padding-left:34px;font-size:12px;font-weight:500;min-height:28px;
-  color:#9aa0a8;justify-content:flex-start}
-.rn-ws-rail .rn-ws-tab.rail.railsub:hover{background:#20242a;color:#e8ecf1}
-.rn-ws-rail .rn-ws-tab.rail.railsub.cur{background:#241519;color:#fff;font-weight:600;
+/* a sub-page of the open tab: indented under it, smaller, no icon or light. Depth 2
+   is the Identity tab's pages-within-pages, indented again. */
+.rn-ws-railsub{display:flex;align-items:center;width:100%;background:transparent;
+  border:0;border-radius:6px;cursor:pointer;text-align:left;justify-content:flex-start;
+  padding:0 8px 0 34px;font:500 12px system-ui,sans-serif;min-height:28px;color:#9aa0a8}
+.rn-ws-railsub.d2{padding-left:50px;font-size:11.5px;color:#868d96}
+.rn-ws-railsub:hover{background:#20242a;color:#e8ecf1}
+.rn-ws-railsub.cur{background:#241519;color:#fff;font-weight:600;
   box-shadow:inset 3px 0 0 0 #c42a3c}
 .rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
@@ -7293,6 +7297,32 @@ function workspacePrefs(node, body) {
   pr.append(prLab, prWrap, prHint);
   sect.appendChild(pr);
 
+  // ---- THE RAIL'S PAGE LIST: the open tab's pages, indented under it ----------
+  {
+    const pr = document.createElement("div");
+    pr.className = "rn-ws-row";
+    pr.style.flexWrap = "wrap";
+    const pl = document.createElement("span");
+    pl.className = "hint";
+    pl.style.cssText = "flex:none;width:110px";
+    pl.textContent = "Pages on the rail";
+    const pb = document.createElement("button");
+    const pon = wsPref("RailSubPages", true) !== false;
+    pb.className = "rn-ws-btn rn-ws-compact" + (pon ? " on" : "");
+    pb.style.cssText = "width:auto;padding:0 12px";
+    pb.textContent = pon ? "On" : "Off";
+    pb.dataset.choice = "rail_sub_pages";
+    pb.title = "On, the rail lists the open tab's own pages under it, so a page is one "
+             + "click away. Off, the rail shows the tabs alone.";
+    pb.onclick = () => { setWsPref("RailSubPages", !pon); render(node); };
+    const ph = document.createElement("span");
+    ph.className = "hint";
+    ph.style.cssText = "flex:0 1 320px;min-width:0";
+    ph.textContent = "On by default. The folded rail never shows them. This install only.";
+    pr.append(pl, pb, ph);
+    sect.appendChild(pr);
+  }
+
   // ---- GENERATE ON THE RAIL: the pages have one in their header ---------------
   {
     const rr = document.createElement("div");
@@ -14033,6 +14063,77 @@ function dressSubTabs(strip) {
  *  saying what the page is for, and Generate on the right. The tops of the pages grew
  *  one at a time and no two looked alike; this is the row that makes them agree
  *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
+// THE OPEN TAB'S PAGES, for the rail. One row per page, depth 1, plus depth 2 for
+// the Identity tab, whose pages have pages of their own. Labels are shouted in the
+// strips and quiet here, so they are put back into sentence case on the way out.
+const RAIL_ACRONYMS = { clip: "CLIP", vae: "VAE", lora: "LoRA", loras: "LoRAs", fx: "FX" };
+function railLabel(text) {
+  const t = String(text || "");
+  if (t !== t.toUpperCase()) return t;                    // already written properly
+  return t.toLowerCase().replace(/[a-z]+/g, (w, i) => (RAIL_ACRONYMS[w] ? RAIL_ACRONYMS[w]
+    : i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w));
+}
+
+function railSubRows(node, cfg, tab) {
+  const props = (node.properties ||= {});
+  const rows = [];
+  const add = (id, label, cur, pick, depth = 1) =>
+    rows.push({ id, label: railLabel(label), cur, pick, depth });
+  const simple = (list, at, set) => {
+    for (const item of list) {
+      const [id, label] = Array.isArray(item) ? item : [item.id, item.label];
+      add(id, label, id === at, () => set(id));
+    }
+  };
+  if (tab === "models") {
+    simple(MODELS_SUBS, modelsSub(node, cfg),
+           (id) => { node._rnModelsSub = id; props.rn_models_sub = id; });
+  } else if (tab === "latent") {
+    simple([["canvas", "Canvas"], ["passes", "Passes"]],
+           node._rnLatSub || props.rn_latent_sub || "canvas",
+           (id) => { node._rnLatSub = id; props.rn_latent_sub = id; });
+  } else if (tab === "i2i") {
+    simple(I2I_SUBS, node._rnI2iSub || props.rn_i2i_sub || "source",
+           (id) => { node._rnI2iSub = id; props.rn_i2i_sub = id; });
+  } else if (tab === "editor") {
+    simple(EDITOR_SUBS, node._rnEdSub || props.rn_editor_sub || "esource",
+           (id) => { node._rnEdSub = id; props.rn_editor_sub = id; });
+  } else if (tab === "moodboard") {
+    simple([["gallery", "Gallery"], ["boosts", "Boosts"], ["auto", "Auto prompt"]],
+           node._rnMbSub || props.rn_moodboard_sub || "gallery",
+           (id) => { node._rnMbSub = id; props.rn_moodboard_sub = id; });
+  } else if (tab === "run") {
+    simple(RUN_SUBS, node._rnRunSub || props.rn_run_sub || "run",
+           (id) => { node._rnRunSub = id; props.rn_run_sub = id; });
+  } else if (tab === "identity") {
+    const at = node._rnIdSub || props.rn_identity_sub || "subject";
+    for (const s of IDENTITY_SUBS) {
+      add(s.id, s.label, s.id === at,
+          () => { node._rnIdSub = s.id; props.rn_identity_sub = s.id; });
+      if (s.id !== at) continue;
+      // THE THIRD LAYER: this page's own pages, indented again
+      if (s.id === "hero") {
+        const hat = node._rnHeroSub || props.rn_hero_sub || "headshot";
+        for (const [id, label] of [["headshot", "Headshot"], ["redesign", "Redesign"]]) {
+          add(id, label, id === hat,
+              () => { node._rnHeroSub = id; props.rn_hero_sub = id; }, 2);
+        }
+      } else {
+        const key = "rn_identity_" + s.id;
+        const iat = (node._rnIdInner || {})[s.id] || props[key] || "gallery";
+        for (const [id, label] of [["gallery", "Gallery"], ["boosts", "Boosts"],
+                                   ["auto", "Auto prompt"], ["converter", "Converter"]]) {
+          add(id, label, id === iat, () => {
+            (node._rnIdInner ||= {})[s.id] = id;
+            props[key] = id;
+          }, 2);
+        }
+      }
+    }
+  }
+  return rows;
+}
+
 function pageHeader(node, body, { strip = null, title = "", note = "", first = false } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-pbarwrap";
@@ -19767,20 +19868,15 @@ function renderPage(node) {
     grp.appendChild(b);
     // THE OPEN TAB'S OWN PAGES, indented under it: the rail says where you are, and
     // the page you want is one click from the rail instead of two (you, 2026-09-23).
-    // Models first, to be looked at before the other tabs follow.
-    if (t.id === cur && t.id === "models" && !compact) {
-      const at = modelsSub(node, cfg);
-      for (const [id, label] of MODELS_SUBS) {
+    // The Identity tab's pages have pages of their own, so they indent twice.
+    if (t.id === cur && !compact && wsPref("RailSubPages", true) !== false) {
+      for (const row of railSubRows(node, cfg, t.id)) {
         const sb = document.createElement("button");
-        sb.className = "rn-ws-tab rail railsub" + (id === at ? " cur" : "");
-        sb.dataset.railsub = id;
-        sb.textContent = label;
-        sb.title = label + " on the Models page.";
-        sb.onclick = () => {
-          node._rnModelsSub = id;
-          (node.properties ||= {}).rn_models_sub = id;
-          render(node);
-        };
+        sb.className = "rn-ws-railsub d" + row.depth + (row.cur ? " cur" : "");
+        sb.dataset.railsub = row.id;
+        sb.textContent = row.label;
+        sb.title = `${row.label}, on the ${t.label} tab.`;
+        sb.onclick = () => { row.pick(); render(node); };
         grp.appendChild(sb);
       }
     }
