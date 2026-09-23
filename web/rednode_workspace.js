@@ -15711,9 +15711,69 @@ function i2iTabs(node, body) {
     // with the gallery pointed at each in turn, in the QUEUED copy only.
       batchStrip(node, "i2i", body, i2iBatchOpts(node));
     }
+    i2iQuickDials(node, body, t);
   }
   else if (sub === "passes") passesTab(node, body);
   else i2iAutoPage(node, body);
+}
+
+/** Denoise and Scale, right under the Source picture, for the common one-pass case.
+ *
+ *  The Passes tab has the real dials, plus per-pass ramps and rigs, which is more
+ *  than a single pass ever needs. Two passes and up already vary these per pass,
+ *  so a shared number here would say nothing true; the box only appears at one
+ *  pass, and Prompt only routes the canvas through the Latent tab instead, where
+ *  neither dial does anything (you, 2026-09-23).
+ */
+function i2iQuickDials(node, body, t) {
+  const npass = Math.max(1, Math.min(PASS_MAX, Math.round(Number(t.passes) || 1)));
+  if (npass > 1 || t.prompt_only) return;
+  const card = document.createElement("div");
+  card.className = "rn-ws-card rn-ws-i2iquick";
+  const h = document.createElement("div");
+  h.className = "ch";
+  h.textContent = "DENOISE & SCALE";
+  card.appendChild(h);
+  const fmtD = (v) => Number(v).toFixed(2);
+  const fmtS = (v) => Number(v).toFixed(2) + "x";
+  const dial = (label, key, min, max, step, accent, fmt, tip) => {
+    const w = document.createElement("div");
+    w.className = "rn-ws-shdial";
+    const k = document.createElement("span");
+    k.className = "k";
+    k.textContent = label;
+    const rg = document.createElement("input");
+    rg.type = "range";
+    rg.min = min; rg.max = max; rg.step = step;
+    rg.value = t[key];
+    rg.style.accentColor = accent;
+    rg.title = tip;
+    const val = document.createElement("span");
+    val.className = "v";
+    val.textContent = fmt(t[key]);
+    rg.addEventListener("input", () => {
+      t[key] = snapStep(rg.value, min, max, step);
+      val.textContent = fmt(t[key]);
+      writeCfg(node);
+    });
+    // the bar's chip reads the same number, so it catches up once the drag settles
+    rg.addEventListener("change", () => render(node));
+    rg.addEventListener("wheel", () => rg.blur(), { passive: true });
+    w.append(k, rg, val);
+    return w;
+  };
+  card.append(
+    dial("Denoise", "denoise", 0, 1, 0.01, "#b8283c", fmtD,
+      "How much the sampler repaints the source. 0.5 keeps composition, 0.75 reworks it."),
+    dial("Scale", "scale", 0.25, 3, 0.05, "#4a8fe0", fmtS,
+      "Scales the source before it is encoded, so the pass can come out bigger or smaller "
+      + "than the resize at the bottom."));
+  const note = document.createElement("div");
+  note.className = "rn-ws-note";
+  note.style.cssText = "font-style:italic;margin-top:2px";
+  note.textContent = "More to set per pass, or more than one pass: the Passes tab.";
+  card.appendChild(note);
+  body.appendChild(card);
 }
 
 // ---- the Editor tab ------------------------------------------------------------------

@@ -40,6 +40,9 @@ format matters: **version** then a date, notes below until the next bold line.
   more than one version
 - The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
   Quick sizes from 1024 to 2048 in quarter steps
+- Img2Img's Source page carries Denoise and Scale right under the picture, at one pass.
+  Two passes and up vary these per pass on the Passes tab instead, so the quick pair steps
+  aside once there is more than one
 
 ### Fixes
 

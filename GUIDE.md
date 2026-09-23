@@ -298,8 +298,9 @@ how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same s
 
 ![The Auto prompt page: the caption it wrote, six caption engines, and where the words go](images/auto-prompt.webp)
 
-**Img2Img.** A source picture and the pass over it. Denoise is a full-width bar, and with
-several passes each one can have its own denoise and its own scale, and a folder of pictures can
+**Img2Img.** A source picture and the pass over it. At one pass, Denoise and Scale sit right
+under the Source picture, so the common case needs no second tab. With several passes each one
+can have its own denoise and its own scale on the Passes tab instead, and a folder of pictures can
 run as a batch. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
