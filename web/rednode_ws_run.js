@@ -1482,11 +1482,18 @@ function refresh(view) {
     const b = el("button", "rn-run-histitem" + (cur ? " cur" : "") + (cls ? " " + cls : ""));
     const file = sheet?.finalFiles?.[sheet.finalIdx || 0];
     if (file) {
+      // The picture is drawn from the server's small copy, but the DRAG is bound to
+      // the holder, not the img: Chromium attaches its own payload for a dragged
+      // image's src, and a Load Image node took that instead of ours, uploading the
+      // 160px thumbnail (you, 2026-09-23).
+      const hold = el("div", "rn-run-histhold");
       const th = el("img", "rn-run-histth");
       th.src = thumbUrl(file);
       th.alt = "";
-      dragPicture(th, file);        // onto the Paint pane, or out to a folder
-      b.appendChild(th);
+      th.draggable = false;
+      hold.appendChild(th);
+      dragPicture(hold, file, th);   // onto the Paint pane, a node, or out to a folder
+      b.appendChild(hold);
     }
     b.append(el("span", "n", label), el("span", "m", meta));
     b.onclick = onPick;
@@ -1509,7 +1516,7 @@ function refresh(view) {
 
 /** Drag a picture off the Run page: onto the Paint pane, or out to a folder. The
  *  payload is the record the result pane already sends, so both ends agree. */
-function dragPicture(elm, file) {
+function dragPicture(elm, file, preview) {
   if (!elm || !file) return;
   elm.draggable = true;
   // the picture changes on every refresh and the element does not, so the file
@@ -1537,6 +1544,12 @@ function dragPicture(elm, file) {
       const mime = /\.webp$/i.test(name) ? "image/webp"
                  : /\.jpe?g$/i.test(name) ? "image/jpeg" : "image/png";
       ev.dataTransfer.setData("DownloadURL", `${mime}:${name}:${abs}`);
+    }
+    // a picture dropped on a node: ComfyUI reads the HTML payload, so it has to
+    // name the full render too, not the copy the column draws
+    ev.dataTransfer?.setData?.("text/html", `<img src="${abs}">`);
+    if (preview && ev.dataTransfer?.setDragImage) {
+      try { ev.dataTransfer.setDragImage(preview, 20, 20); } catch (e) { /* no preview, no matter */ }
     }
     if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "copy";
   });
@@ -1698,8 +1711,9 @@ export const RUN_CSS = `
   position:sticky;top:0;max-height:760px;overflow-y:auto;box-sizing:border-box;
   background:#101216;border:1px solid #23262c;border-radius:10px;padding:9px}
 .rn-run-side>.ch{position:sticky;top:-9px;background:#101216;padding:2px 0;z-index:1}
+.rn-run-histhold{cursor:grab;line-height:0}
 .rn-run-histth{width:100%;height:138px;object-fit:contain;border-radius:5px;
-  background:#0f1114;cursor:grab}
+  background:#0f1114;pointer-events:none}
 .rn-run-histempty{padding:10px 2px}
 .rn-run-postseg{width:auto;flex:none}
 .rn-run-postseg .rn-ws-segb{padding:0 10px;font-size:11.5px}
