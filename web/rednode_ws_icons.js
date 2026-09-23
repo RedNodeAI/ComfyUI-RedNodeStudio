@@ -37,7 +37,16 @@ const SUB_PATHS = {
   auto: '<path d="M12 4l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>',
   boosts: '<path d="M6 19V9M12 19V5M18 19v-7"/>',
 };
-export const SUB_ICON = (id) => svg(SUB_PATHS[String(id || "")] || '<rect x="5" y="5" width="14" height="14" rx="2"/>');
+// Ids with a drawn icon in icons/ use it rather than the line art here: the Run
+// page's own pages, and the Pipeline's stages, added 2026-09-23 in the icon set.
+// Adding an icons/<id>.png for any of these is all it takes to use it.
+const SUB_PNGS = ["run", "review", "stages", "save", "encode", "decode", "generate",
+                  "detailer", "post", "paint"];
+export const SUB_ICON = (id) => {
+  const key = String(id || "");
+  if (SUB_PNGS.includes(key)) return png(key);
+  return svg(SUB_PATHS[key] || '<rect x="5" y="5" width="14" height="14" rx="2"/>');
+};
 
 // the rail's own two: fold it to icons, and open it back out to labels
 export const RAIL_ICONS = {
