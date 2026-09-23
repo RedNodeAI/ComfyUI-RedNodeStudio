@@ -221,8 +221,11 @@ css.textContent = `
 .rn-ws-sub.dressed .rn-ws-subt .lt{position:absolute;right:14px;margin-left:0}
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
 .rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
-/* the page's name sits UNDER the bar, where a page title belongs */
-.rn-ws-pbart{font-weight:700;font-size:19px;color:#e8ecf1;padding:0 2px}
+/* the page's name sits under the bar with its line beside it, not below it */
+.rn-ws-pbartrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:0 2px}
+.rn-ws-pbart{flex:none;font-weight:700;font-size:15px;letter-spacing:.02em;color:#a9c6ff}
+.rn-ws-pbarnote{flex:1 1 auto;min-width:0;font-size:12px;color:#8a919b;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
    a fade rather than a flat fill so it reads as the primary action */
 .rn-ws-pbargen{position:absolute;right:12px;top:50%;transform:translateY(-50%);
@@ -12131,11 +12134,7 @@ function modelsBody(node, page) {
   // ---- the page header and the RIG bar, your mock made real:
   // rig chips with an ACTIVE badge, add and manage on the same line
   {
-    // the page header above names the page, so only the line under it is left
-    const head = document.createElement("div");
-    head.className = "rn-ws-note";
-    head.textContent = "One rig is active and renders. Prompts elsewhere link to rigs by name.";
-    page.insertBefore(head, mwrap);
+    // the page's name and its line both ride the bar's title row
 
     const bar = document.createElement("div");
     bar.className = "rn-ws-card rn-ws-rigbar";
@@ -12349,7 +12348,9 @@ function modelsBody(node, page) {
     // The Models page's own tabs belong BESIDE the rig column, not across the top:
     // that layout is deliberate, so the rig being edited stays in view. The header
     // carries the page's name instead, and the same Generate as everywhere else.
-    pageHeader(node, page, { title: "Models", strip, first: true });
+    pageHeader(node, page, { title: "Models", strip, first: true,
+                             note: "One rig is active and renders. Prompts elsewhere "
+                                 + "link to rigs by name." });
     if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
     // are editing stays in view whichever tab is open (the user, 2026-09-21)
@@ -14026,7 +14027,7 @@ function dressSubTabs(strip) {
  *  saying what the page is for, and Generate on the right. The tops of the pages grew
  *  one at a time and no two looked alike; this is the row that makes them agree
  *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
-function pageHeader(node, body, { strip = null, title = "", first = false } = {}) {
+function pageHeader(node, body, { strip = null, title = "", note = "", first = false } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-pbarwrap";
   const head = document.createElement("div");
@@ -14039,11 +14040,24 @@ function pageHeader(node, body, { strip = null, title = "", first = false } = {}
   // and not in the middle of whatever is left beside the button
   head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pbargen"));
   wrap.appendChild(head);
-  if (title) {
-    const t = document.createElement("div");
-    t.className = "rn-ws-pbart";
-    t.textContent = title;
-    wrap.appendChild(t);
+  if (title || note) {
+    // ONE ROW, not two: the page's name and the line explaining it sit side by side,
+    // so the header costs as little height as it can (you, 2026-09-23)
+    const row = document.createElement("div");
+    row.className = "rn-ws-pbartrow";
+    if (title) {
+      const t = document.createElement("div");
+      t.className = "rn-ws-pbart";
+      t.textContent = title;
+      row.appendChild(t);
+    }
+    if (note) {
+      const nt = document.createElement("div");
+      nt.className = "rn-ws-pbarnote";
+      nt.textContent = note;
+      row.appendChild(nt);
+    }
+    wrap.appendChild(row);
   }
   if (first && body.firstChild) body.insertBefore(wrap, body.firstChild);
   else body.appendChild(wrap);
