@@ -94,12 +94,31 @@ function flash(node, entry, text) {
   setTimeout(() => tag.remove(), 900);
 }
 
-/** The picture Ctrl+C means: the one under the pointer, else the one picked. */
-function keyEntry(node) {
+/** The picture the keys mean: the one under the pointer, else the one picked. */
+function keyIndex(node) {
   const cfg = node._rnShelf;
-  if (!cfg?.items.length) return "";
+  if (!cfg?.items.length) return -1;
   const over = node._rnShelfOver;
-  return cfg.items[typeof over === "number" && cfg.items[over] ? over : cfg.sel] || "";
+  return typeof over === "number" && cfg.items[over] ? over : cfg.sel;
+}
+
+function keyEntry(node) {
+  const at = keyIndex(node);
+  return at < 0 ? "" : (node._rnShelf.items[at] || "");
+}
+
+/** Take one picture off the shelf. The FILE IS NEVER TOUCHED: the shelf holds the
+ *  same "name.png [output]" entries the galleries do, so this forgets a name, and
+ *  the picture is still wherever it was saved. */
+function takeOff(node, index) {
+  const cfg = node._rnShelf;
+  if (!cfg?.items[index]) return false;
+  cfg.items.splice(index, 1);
+  if (cfg.sel >= cfg.items.length) cfg.sel = Math.max(0, cfg.items.length - 1);
+  if (node._rnShelfOver === index) node._rnShelfOver = null;
+  writeCfg(node);
+  render(node);
+  return true;
 }
 
 /** Put an entry on the shelf, newest first. Returns whether it was new. */
@@ -280,14 +299,7 @@ function cellMenu(node, entry, index, ev) {
   for (const [tab, label] of SEND_TO) item(`Send to ${label}`, () => sendTo(entry, tab));
   item("Open the picture", () => window.open(viewUrl(entry), "_blank", "noopener"));
   item("Copy its name", () => navigator.clipboard?.writeText?.(entry));
-  item("Take it off the shelf", () => {
-    node._rnShelf.items.splice(index, 1);
-    if (node._rnShelf.sel >= node._rnShelf.items.length) {
-      node._rnShelf.sel = Math.max(0, node._rnShelf.items.length - 1);
-    }
-    writeCfg(node);
-    render(node);
-  });
+  item("Take it off the shelf (Delete)", () => takeOff(node, index));
   document.body.appendChild(menu);
   const away = (e) => {
     if (menu.contains(e.target)) return;
@@ -421,8 +433,8 @@ function render(node) {
     const empty = document.createElement("div");
     empty.className = "rn-shelf-empty";
     empty.textContent = "Drop pictures here, or hover and press Ctrl+V. Drag them off "
-      + "onto a gallery, the Paint pane or a folder, press Ctrl+C to copy the one you "
-      + "are pointing at, and right-click one to send it to a tab.";
+      + "onto a gallery, the Paint pane or a folder; point at one and press Ctrl+C to "
+      + "copy it or Delete to take it off, and right-click one to send it to a tab.";
     list.appendChild(empty);
   }
   cfg.items.forEach((entry, i) => {
@@ -430,7 +442,8 @@ function render(node) {
     cell.className = "rn-shelf-cell" + (i === cfg.sel ? " cur" : "");
     cell.dataset.shelf = String(i);
     cell.dataset.entry = entry;
-    cell.title = `${entry}\nDrag it off, or right-click for where to send it.`;
+    cell.title = `${entry}\nDrag it off, Ctrl+C to copy it, Delete to take it off the `
+      + "shelf, or right-click for where to send it.";
     const img = document.createElement("img");
     img.className = "rn-shelf-img";
     img.src = thumbUrl(entry);
@@ -529,11 +542,18 @@ function build(node) {
                                      flash(node, entry, "Could not copy");
                                    });
   };
+  // Delete takes the picture off the shelf, never off the disk. An EMPTY shelf
+  // declines, so Delete then reaches ComfyUI and removes the node itself, which is
+  // the only way to get rid of a shelf with the pointer over its panel.
+  const onDelete = () => takeOff(node, keyIndex(node)) || false;
   panelPaste(wrap, onPaste);
   panelHotkey(wrap, "ctrl+c", onCopy);
-  // the same two handlers the keys run, reachable without a real keyboard
+  panelHotkey(wrap, "Delete", onDelete);
+  panelHotkey(wrap, "Backspace", onDelete);     // the same key on a Mac
+  // the same handlers the keys run, reachable without a real keyboard
   node._rnShelfPaste = onPaste;
   node._rnShelfCopy = onCopy;
+  node._rnShelfDelete = onDelete;
 
   const w = node.addDOMWidget("rednode_shelf_ui", "rednode_shelf_ui", wrap, {
     serialize: false,
@@ -628,4 +648,4 @@ app.registerExtension({
 
 export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO,
          setOverride, shelves, OVERRIDE_DEFAULT, clipboardImage, keyEntry, copyPicture,
-         build };
+         build, keyIndex, takeOff };

@@ -40,6 +40,9 @@ format matters: **version** then a date, notes below until the next bold line.
   more than one version
 - The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
   Quick sizes from 1024 to 2048 in quarter steps
+- Delete takes a picture off the Shelf, the one you are pointing at, leaving the file on
+  disk exactly where it was. An empty shelf passes Delete on to ComfyUI, which is how the
+  node itself is still removed with the pointer over its panel
 - Copy and paste on the Shelf. Ctrl+C puts the picture you are pointing at on the system
   clipboard at full size, and Ctrl+V over the shelf takes a copied picture or a screenshot and
   puts it on top. The shelf under the pointer is the one the keys drive, a prompt box you are
