@@ -14297,7 +14297,12 @@ function latentBody(node, body) {
   srow.className = "rn-ws-row";
   const slab = document.createElement("span");
   slab.className = "rn-ws-note";
-  slab.textContent = "Scale";
+  // NOT A ZOOM: the number is megapixels, and calling it Scale read as a
+  // multiplier, so 1536 x 1536 looked like "2.40 times" instead of 2.4 MP
+  // (you, 2026-09-23). The readout says the canvas's real megapixels, which is
+  // what the slider's budget lands on once the ratio and the 64s have had their
+  // say, so it agrees with the Megapixels card below it.
+  slab.textContent = "Pixel budget";
   const sr = document.createElement("input");
   sr.type = "range";
   sr.min = 0.25; sr.max = 4; sr.step = 0.05;
@@ -14305,9 +14310,10 @@ function latentBody(node, body) {
   sr.style.cssText = "width:160px;height:20px;accent-color:#4a8fe0";
   const sv = document.createElement("span");
   sv.className = "rn-ws-note";
-  const svText = () => mpOf().toFixed(2) + " = " + eff(L.w) + " x " + eff(L.h);
+  const svText = () => (eff(L.w) * eff(L.h) / 1e6).toFixed(2) + " MP · "
+                     + eff(L.w) + " x " + eff(L.h);
   sv.textContent = svText();
-  sr.title = "The pixel budget, in millions of pixels, shaped by the aspect "
+  sr.title = "The canvas in megapixels, shaped by the aspect "
            + "chip above (the Sick Ollie numbers, our name). 1.00 is Krea 2's "
            + "native training size, 2.00 is twice the pixels and the VRAM to "
            + "match. Snaps to 64s.";
