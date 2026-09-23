@@ -236,6 +236,13 @@ function render(node) {
     img.src = thumbUrl(entry);
     img.alt = "";
     img.draggable = false;
+    // a picture deleted since it was put here says so rather than showing a broken
+    // tile, and the cell still drags and still names the file
+    img.addEventListener("error", () => {
+      if (img.dataset.tried === "full") { cell.classList.add("gone"); return; }
+      img.dataset.tried = "full";
+      img.src = viewUrl(entry);
+    });
     const name = document.createElement("div");
     name.className = "rn-shelf-name";
     name.textContent = parseEntry(entry).filename;
@@ -323,6 +330,9 @@ style.textContent = `
   pointer-events:none}
 .rn-shelf-name{font-size:11px;color:#8a919b;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap}
+.rn-shelf-cell.gone{border-color:#7d2233;background:#1a1216}
+.rn-shelf-cell.gone .rn-shelf-img{opacity:.25}
+.rn-shelf-cell.gone .rn-shelf-name::after{content:" - gone";color:#e0405a}
 `;
 document.head.appendChild(style);
 
