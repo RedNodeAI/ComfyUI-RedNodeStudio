@@ -187,18 +187,28 @@ css.textContent = `
 .rn-ws-phead{display:flex;align-items:center;gap:12px;padding:9px 10px;margin-bottom:10px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
-.rn-ws-phead .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:8px}
+/* the strip does NOT stretch: a page with two sub-tabs had two bars half a metre
+   wide each. The tabs size to their words, the gap after them pushes Generate to
+   the right edge. */
+.rn-ws-phead .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:8px;flex-wrap:nowrap;
+  overflow-x:auto;scrollbar-width:none}
+.rn-ws-phead .rn-ws-sub::-webkit-scrollbar{display:none}
+.rn-ws-pheadsp{flex:1 1 auto;min-width:8px}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
    the tab in use carries the red underline rather than a filled red block */
-.rn-ws-phead .rn-ws-subt{min-height:40px;justify-content:flex-start;gap:10px;
-  font-size:13.5px;font-weight:600;letter-spacing:0;text-transform:none;
-  background:#15171b;border-color:#262a31;padding:8px 14px;position:relative}
-.rn-ws-phead .rn-ws-subt.cur{background:#1d1418;border-color:#7d2233;color:#fff}
-.rn-ws-phead .rn-ws-subt.cur::before{content:"";position:absolute;left:12px;right:12px;
-  bottom:4px;height:2px;border-radius:2px;background:#d13a4f}
-.rn-ws-phead .rn-ws-subt .lt{margin-left:auto}
+.rn-ws-sub.dressed .rn-ws-subt{flex:0 0 auto;min-width:220px;min-height:46px;
+  justify-content:flex-start;gap:11px;font-size:14px;font-weight:600;letter-spacing:0;
+  text-transform:none;background:#15171b;border-color:#20242a;color:#aab0b8;
+  padding:0 18px;position:relative}
+.rn-ws-sub.dressed .rn-ws-subt:hover{background:#181b20;border-color:#2e333b;color:#d6dae0}
+.rn-ws-sub.dressed .rn-ws-subt.cur{background:linear-gradient(180deg,#241519,#1a1216);
+  border-color:#3d2129;color:#fff;box-shadow:inset 0 -2px 0 0 #d13a4f}
+.rn-ws-sub.dressed .rn-ws-subt.cur::before{content:none}
+.rn-ws-sub.dressed{flex-wrap:nowrap;gap:8px;overflow-x:auto;scrollbar-width:none}
+.rn-ws-sub.dressed::-webkit-scrollbar{display:none}
+.rn-ws-sub.dressed .rn-ws-subt .lt{margin-left:auto}
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
-.rn-ws-phead .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
+.rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
 .rn-ws-pheadt{flex:1 1 auto;min-width:0;font-weight:600;font-size:15px;color:#e8ecf1;
   padding-left:4px}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
@@ -12108,15 +12118,10 @@ function modelsBody(node, page) {
   // ---- the page header and the RIG bar, your mock made real:
   // rig chips with an ACTIVE badge, add and manage on the same line
   {
+    // the page header above names the page, so only the line under it is left
     const head = document.createElement("div");
-    head.style.cssText = "display:flex;flex-direction:column;gap:2px";
-    const h1 = document.createElement("div");
-    h1.style.cssText = "font-size:19px;font-weight:700;color:#e8ecf1";
-    h1.textContent = "Models";
-    const sub = document.createElement("div");
-    sub.className = "rn-ws-note";
-    sub.textContent = "One rig is active and renders. Prompts elsewhere link to rigs by name.";
-    head.append(h1, sub);
+    head.className = "rn-ws-note";
+    head.textContent = "One rig is active and renders. Prompts elsewhere link to rigs by name.";
     page.insertBefore(head, mwrap);
 
     const bar = document.createElement("div");
@@ -12331,6 +12336,7 @@ function modelsBody(node, page) {
     // The Models page's own tabs belong BESIDE the rig column, not across the top:
     // that layout is deliberate, so the rig being edited stays in view. The header
     // carries the page's name instead, and the same Generate as everywhere else.
+    dressSubTabs(strip);
     pageHeader(node, page, { title: "Models", first: true });
     if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
@@ -13984,6 +13990,26 @@ function generateButton(node, cls) {
   return b;
 }
 
+/** THE SUB-TAB, read left to right: what it is, its name, whether it is on. The icon
+ *  carries the recognition, the light carries the state, and a light in the middle of
+ *  a row did neither (you, 2026-09-23). Dressed strips do not stretch: two sub-tabs
+ *  used to become two bars half the panel wide each. */
+function dressSubTabs(strip) {
+  if (!strip || strip._rnDressed) return strip;
+  strip._rnDressed = true;
+  strip.classList.add("dressed");
+  for (const b of strip.children || []) {
+    const ic = document.createElement("span");
+    ic.className = "rn-ws-subic";
+    ic.innerHTML = SUB_ICON(b.dataset?.sub || b.dataset?.inner);
+    if (b.firstChild) b.insertBefore(ic, b.firstChild);
+    else b.appendChild(ic);
+    const lt = b.querySelector?.(".lt");
+    if (lt) b.appendChild(lt);                     // the light moves to the right edge
+  }
+  return strip;
+}
+
 /** ONE HEADER FOR EVERY PAGE: the page's sub-tabs (or its name) on the left, a line
  *  saying what the page is for, and Generate on the right. The tops of the pages grew
  *  one at a time and no two looked alike; this is the row that makes them agree
@@ -13992,20 +14018,11 @@ function pageHeader(node, body, { strip = null, title = "", first = false } = {}
   const head = document.createElement("div");
   head.className = "rn-ws-phead";
   if (strip) {
-    strip.classList.add("in-head");
-    // THE SUB-TAB, read left to right: what it is, its name, whether it is on. The
-    // icon carries the recognition, the light carries the state, and a light in the
-    // middle of a row did neither (you, 2026-09-23).
-    for (const b of strip.children || []) {
-      const ic = document.createElement("span");
-      ic.className = "rn-ws-subic";
-      ic.innerHTML = SUB_ICON(b.dataset?.sub || b.dataset?.inner);
-      if (b.firstChild) b.insertBefore(ic, b.firstChild);
-      else b.appendChild(ic);
-      const lt = b.querySelector?.(".lt");
-      if (lt) b.appendChild(lt);                   // the light moves to the right edge
-    }
+    dressSubTabs(strip);
     head.appendChild(strip);
+    const sp = document.createElement("div");
+    sp.className = "rn-ws-pheadsp";
+    head.appendChild(sp);
   } else {
     const t = document.createElement("div");
     t.className = "rn-ws-pheadt";
