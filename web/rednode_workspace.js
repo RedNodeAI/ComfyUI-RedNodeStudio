@@ -5100,6 +5100,9 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
   if (![...AUTO_TAB_IDS, "paint"].includes(tabName)) return;
   const cfg = node._rnCfg;
   const isPaint = tabName === "paint";
+  // the AI tab IS captioning: its section has no switch, and it is always on
+  const always = tabName === "ai";
+  if (always && !cfg.tabs.ai.auto.on) cfg.tabs.ai.auto.on = true;
   const a = isPaint ? cfg.paint.auto : cfg.tabs[tabName].auto;
   const open = flat || !!(node._rnAutoOpen ||= {})[tabName];
 
@@ -5149,6 +5152,11 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
     arr.style.display = "none";
     head.style.cursor = "default";
     ttl.textContent = `AUTO PROMPT (${a.mode.replace("_", " ")})`;
+    head.append(arr, ttl);
+  } else if (flat && always) {
+    arr.style.display = "none";
+    head.style.cursor = "default";
+    ttl.textContent = `READ WITH (${a.mode.replace("_", " ")})`;
     head.append(arr, ttl);
   } else if (flat) {
     arr.style.display = "none";
@@ -20277,7 +20285,7 @@ function renderPage(node) {
   // its prompt is made, then how that prompt is reworked. The converter reads the
   // auto prompt's output, so it reads top to bottom in the order it runs.
   if (!["overview", "i2i", "identity", "moodboard", "run", "detailer",
-        "editor"].includes(cur)) {
+        "editor", "ai"].includes(cur)) {
     dialSection(node, body, cur);                  // each tab carries its own dials
     if (cur !== "paint") {
       autoSection(node, body, cur);                // captions for this tab's image

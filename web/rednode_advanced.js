@@ -250,7 +250,7 @@ function readerCard(s, card, group, lab, A, changed) {
     ? s.reader_engines : null;
   const g = group("Reads with");
   const follow = document.createElement("button");
-  follow.className = "rn-adv-btn" + (eng ? "" : " on");
+  follow.className = "tog" + (eng ? "" : " on");
   follow.textContent = eng ? "Its own engines" : "The AI tab's engines";
   follow.title = "Off, this pass reads with whatever the Workspace's AI tab is set to. "
                + "On, it keeps its own choice, so one chain can read twice in "
@@ -271,7 +271,7 @@ function readerCard(s, card, group, lab, A, changed) {
       ["qwen", "Qwen-VL", "Qwen2.5-VL locally, without Ollama."],
     ]) {
       const b = document.createElement("button");
-      b.className = "rn-adv-btn" + (eng[key] ? " on" : "");
+      b.className = "tog" + (eng[key] ? " on" : "");
       b.textContent = label;
       b.title = tip;
       b.onclick = () => { eng[key] = !eng[key]; changed(); };
@@ -1278,7 +1278,7 @@ function buildPanel(node, hostEl = null) {
                        + "also where the engines are picked.",
                        (v) => { s.reader_mode = v; writeCfg(node, d); }, "(AI tab's)"));
         const lead = document.createElement("button");
-        lead.className = "rn-adv-btn" + (s.reader_first ? " on" : "");
+        lead.className = "tog" + (s.reader_first ? " on" : "");
         lead.textContent = s.reader_first ? "Reading leads" : "Your words lead";
         lead.title = "Which comes first when the box below has words in it: what the "
                    + "reader saw, or what you typed. What is being asked for usually "
