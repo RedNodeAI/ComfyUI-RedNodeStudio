@@ -8545,8 +8545,18 @@ function paintBody(node, body) {
   if (sideTab === "loras") {
     pside.style.display = "none";
     const ploras = document.createElement("div");
+    ploras.className = "rn-ws-ploras";
     ploras.style.cssText = "display:flex;flex-direction:column;gap:6px";
     if (Math.abs(tScale - 1) >= 0.001) ploras.style.zoom = String(tScale);
+    // NODE VIEW: a long stack used to push the whole Paint page taller instead of
+    // scrolling (you, 2026-09-23). Full screen already gives the column its own
+    // scrollbar above; here the LoRA column is capped at half the node and scrolls
+    // inside, so the strip above it and the canvases beside it stay where they are.
+    if (!fs) {
+      ploras.style.overflowY = "auto";
+      ploras.style.minHeight = "0";
+      ploras.style.maxHeight = Math.max(240, Math.round((node.size?.[1] || 700) * 0.55)) + "px";
+    }
     psideBox.appendChild(ploras);
     paintLorasBody(node, ploras);
   }
