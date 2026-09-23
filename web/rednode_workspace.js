@@ -199,8 +199,13 @@ css.textContent = `
   padding:calc(9px / var(--rnws-scale,1)) calc(16px / var(--rnws-scale,1));
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
+/* the room Generate takes on the right, and the same again on the left so the
+   tabs stay centred on the bar rather than on what is left beside the button */
 .rn-ws-pbar>.rn-ws-sub,.rn-ws-pbar>.rn-ws-seg,.rn-ws-pbar>.rn-ws-tabs{
-  max-width:calc(100% - (400px / var(--rnws-scale,1)))}
+  max-width:calc(100% - (320px / var(--rnws-scale,1)));
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.rn-ws-pbar>.rn-ws-sub::-webkit-scrollbar,.rn-ws-pbar>.rn-ws-tabs::-webkit-scrollbar{
+  display:none}
 .rn-ws-pbar .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
   justify-content:center}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
@@ -217,7 +222,8 @@ css.textContent = `
   position:relative;overflow:hidden}
 /* six tabs on one bar: the icons give up their room so the words keep theirs */
 .rn-ws-sub.dressed.tight .rn-ws-subic{display:none}
-.rn-ws-sub.dressed.tight .rn-ws-subt{font-size:13px;padding:0 22px 0 10px}
+.rn-ws-sub.dressed.tight .rn-ws-subt{font-size:13px;padding:0 22px 0 10px;
+  min-width:calc(96px / var(--rnws-scale,1))}
 .rn-ws-sub.dressed .rn-ws-subt>span:not(.lt):not(.rn-ws-subic){overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-sub.dressed .rn-ws-subt:hover{background:#181b20;border-color:#2e333b;color:#d6dae0}
@@ -852,6 +858,9 @@ css.textContent = `
   font-size:10.5px;letter-spacing:.4px}
 .rn-ws-sect > .head{min-height:20px}
 .rn-ws-grid{display:flex;flex-wrap:wrap;gap:6px;overflow:auto}
+/* a dropdown holding a file name is as wide as the name unless it is told it
+   may shrink: the Realism page's conversion LoRA ran past its card */
+.rn-ws-select{min-width:0;max-width:100%;text-overflow:ellipsis}
 .rn-ws-cell{position:relative;border-radius:5px;overflow:hidden;
   border:2px solid #2a2e35;cursor:pointer;flex:none;background:#111316}
 .rn-ws-cell img{width:100%;height:100%;object-fit:cover;display:block}
