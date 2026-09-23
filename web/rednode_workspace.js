@@ -19337,7 +19337,49 @@ function saveFolds(node) {
   (node.properties ||= {}).rn_folds = out;
 }
 
+// THE PAGE NEVER LEAVES A BLANK PANEL. One throw inside a page used to stop the
+// draw where it stood, and what was left on screen was a black rectangle with no way
+// back short of reloading the tab. The error is logged in full and the panel says so
+// with a Try again, so a bad page costs one click instead of the session.
 export function render(node) {
+  try {
+    renderPage(node);
+  } catch (e) {
+    console.error("[RedNode Workspace] the page did not draw:", e);
+    pageFailed(node, e);
+  }
+}
+
+function pageFailed(node, err) {
+  const root = node?._rnRootEl;
+  if (!root) return;
+  try {
+    root.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "rn-ws-failed";
+    box.style.cssText = "margin:auto;max-width:520px;display:flex;flex-direction:column;"
+      + "gap:10px;padding:16px;background:#1a1315;border:1px solid #b8283c;"
+      + "border-radius:10px;color:#e8ecf1;font:13px sans-serif";
+    const h = document.createElement("div");
+    h.style.cssText = "font-weight:600;font-size:15px";
+    h.textContent = "This page did not draw";
+    const why = document.createElement("div");
+    why.className = "rn-ws-note";
+    why.textContent = String(err && err.message ? err.message : err);
+    const tip = document.createElement("div");
+    tip.className = "rn-ws-note";
+    tip.textContent = "Nothing is lost: the settings are still in the node. Try again, or "
+      + "switch to another tab. The full error is in the browser console.";
+    const again = document.createElement("button");
+    again.className = "rn-ws-btn";
+    again.textContent = "Try again";
+    again.onclick = () => render(node);
+    box.append(h, why, tip, again);
+    root.appendChild(box);
+  } catch (e) { /* the panel is beyond saving; the console has both errors */ }
+}
+
+function renderPage(node) {
   // Newer frontends draw an input dot for EVERY widget, hidden ones included, which
   // leaks an unlabeled socket carrying the hidden JSON widget's tooltip. Strip those
   // dots on every render; the widget itself (and its serialisation) is untouched.
@@ -19951,7 +19993,26 @@ async function fetchPresetNames(node) {
 }
 
 // ---- build -----------------------------------------------------------------
-function build(node) {
+// THE PANEL COMES BACK. A throw in here left the node showing its raw sockets and
+// the config JSON, with nothing to press (you, 2026-09-23: "this error keeps
+// happening sometimes"). The build is retried on a short ladder, clicking the node
+// retries as well, and a graph that finished loading without a panel gets one.
+function build(node, attempt = 0) {
+  if (!node || !node.addDOMWidget || node._rnWidget) return;
+  try {
+    buildPanel(node);
+  } catch (e) {
+    console.error(`[RedNode Workspace] the panel did not build (try ${attempt + 1}):`, e);
+    const wait = [150, 400, 1200, 3000][attempt];
+    if (wait !== undefined) setTimeout(() => build(node, attempt + 1), wait);
+    else {
+      console.error("[RedNode Workspace] the panel is not building. The node keeps its "
+        + "settings, so nothing is lost: click the node to try again, or reload the page.");
+    }
+  }
+}
+
+function buildPanel(node) {
   if (!node.addDOMWidget || node._rnWidget) return;
   const cfgW = findWidget(node, "config");
   if (!cfgW) { requestAnimationFrame(() => build(node)); return; }
@@ -20165,6 +20226,17 @@ function labelStudioPrompt(node) {
 
 app.registerExtension({
   name: "RedNode.Workspace",
+  // THE LAST NET, after a workflow has finished loading: any Workspace still without
+  // a panel gets one. A node made before this file was ready, or one whose build
+  // threw while the page was loading, would otherwise sit there showing its sockets
+  // and the config JSON.
+  async afterConfigureGraph() {
+    requestAnimationFrame(() => {
+      for (const n of allNodes()) {
+        if (n?.type === NODE_NAME && !n._rnWidget) build(n);
+      }
+    });
+  },
   async beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData?.name === "Krea2RedNode") {
       const onCreatedS = nodeType.prototype.onNodeCreated;
@@ -20265,9 +20337,19 @@ app.registerExtension({
       setTimeout(drop, 400);
     };
 
+    // A bare node with no panel is one click from having one again: the build
+    // ladder may have run out while the page was busy, or the node may have been
+    // made before this file finished loading.
+    const onMouseDown = nodeType.prototype.onMouseDown;
+    nodeType.prototype.onMouseDown = function () {
+      if (!this._rnWidget) build(this);
+      return onMouseDown?.apply(this, arguments);
+    };
+
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
       onConfigure?.apply(this, arguments);
+      if (!this._rnWidget) build(this);
       requestAnimationFrame(() => {
         // A configure swaps the config wholesale: the persisted paint canvases may
         // no longer represent what it says, so adoption would show a mask that is
