@@ -3045,10 +3045,12 @@ function schedulePaintAutoPrompt(node, r) {
   const current = node._rnPaintAutoPending;
   node._rnPaintAutoPending = null;
   node._rnPaintAutoCombining = true;
+  const startedWith = node._rnCfg;
   (async () => {
     try {
       const prompt = await runStandaloneAutoPrompt(
         node, "paint", resultEntry(current));
+      if (node._rnCfg !== startedWith) return;        // a different config now
       // A newer result arrived while this caption was running. Let that one win
       // without briefly applying words that describe the previous picture.
       if (node._rnPaintAutoPending) return;
@@ -3072,6 +3074,7 @@ function schedulePaintAutoPrompt(node, r) {
 }
 
 async function autoPromptPaintResult(node, r) {
+  const startedWith = node._rnCfg;
   const starting = node._rnCfg?.paint;
   if (!starting) return;
   let beforePrompt = String(starting.prompt || "");
@@ -3082,6 +3085,9 @@ async function autoPromptPaintResult(node, r) {
     return;
   }
   const prompt = await runStandaloneAutoPrompt(node, "paint", resultEntry(r));
+  // the config this started on has been replaced (a workflow loaded, a preset
+  // applied): the words describe a setup that is not in front of you any more
+  if (node._rnCfg !== startedWith) return;
   const live = node._rnCfg?.paint;
   if (!live) return;
   const currentPrompt = String(live.prompt || "");
