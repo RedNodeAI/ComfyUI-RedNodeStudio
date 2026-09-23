@@ -19,6 +19,15 @@ import json
 
 from . import workspace as _ws
 
+# WHERE AN OVERRIDING SHELF PUTS ITS PICTURE. The same tabs the right-click "send
+# to" offers, because it is the same act said once instead of every time: this
+# picture, on that tab. Ticking one is as deliberate as a send, so an overridden
+# tab is switched on for the run the way a send switches it on.
+OVERRIDE_TABS = ("i2i", "editor_src", "subject", "scene", "moodboard")
+# Img2Img alone to begin with: it is the picture a run works on, and switching
+# Subject or Moodboard on by flicking one switch would rewrite the render.
+OVERRIDE_DEFAULT = ("i2i",)
+
 
 class RedNodeShelf:
     CATEGORY = "RedNode/Tools"
@@ -65,6 +74,33 @@ class RedNodeShelf:
         except (TypeError, ValueError):
             sel = 0
         return items, max(0, min(sel, len(items) - 1)) if items else 0
+
+    @classmethod
+    def parse(cls, config):
+        """{items, sel, entry, override, tabs, at} for one shelf's config widget.
+
+        `entry` is the picked picture, "" for an empty shelf. `at` is when the
+        override was switched on, which is how two of them are told apart.
+        Override with nothing ticked feeds nothing, and that is not an error: it
+        is a switch waiting to be told where to put the picture.
+        """
+        try:
+            raw = json.loads(config or "{}")
+        except (TypeError, ValueError):
+            raw = {}
+        if not isinstance(raw, dict):
+            raw = {}
+        items, sel = cls._entries(config)
+        want = raw.get("override_tabs")
+        tabs = ([t for t in OVERRIDE_TABS if t in want] if isinstance(want, list)
+                else list(OVERRIDE_DEFAULT))
+        try:
+            at = float(raw.get("override_at") or 0)
+        except (TypeError, ValueError):
+            at = 0.0
+        return {"items": items, "sel": sel,
+                "entry": items[sel] if items else "",
+                "override": bool(raw.get("override")), "tabs": tabs, "at": at}
 
     def pick(self, config="{}", resize=0):
         """The picked picture, or a blocked socket when the shelf is empty.

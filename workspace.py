@@ -1891,6 +1891,73 @@ def register_node_rig(name, model=None, clip=None, vae=None, node_id=None):
     return rec
 
 
+def shelf_override(prompt):
+    """The shelf that speaks for the galleries this run, or None.
+
+    A shelf with Override on hands its picked picture to the tabs it names, in
+    place of whatever those galleries hold. Nothing is written back: the
+    substitution lives for the length of one run, so switching Override off
+    hands every tab its own picture again.
+
+    ONE SHELF AT A TIME. The panel switches the others off as you turn one on, so
+    two can only meet here in a workflow saved with both, or a shelf pasted from
+    one. The one switched on LAST wins, because that is the one just chosen. With
+    no way to tell them apart the run stops instead of guessing: rendering from
+    the wrong picture quietly is worse than not rendering (you, 2026-09-24).
+    """
+    if not isinstance(prompt, dict):
+        return None
+    from . import shelf as _shelf
+    found = []
+    for nid, n in prompt.items():
+        if not isinstance(n, dict) or n.get("class_type") != "RedNodeShelf":
+            continue
+        rec = _shelf.RedNodeShelf.parse((n.get("inputs") or {}).get("config"))
+        if rec["override"] and rec["entry"] and rec["tabs"]:
+            rec["node"] = str(nid)
+            found.append(rec)
+    if not found:
+        return None
+    if len(found) > 1:
+        newest = max(f["at"] for f in found)
+        latest = [f for f in found if f["at"] == newest]
+        if len(latest) > 1 or not newest:
+            raise ValueError(
+                "RedNode Workspace: %d shelves have Override on (nodes %s) and nothing "
+                "says which was chosen last. Switch it off on all but one, then queue "
+                "again." % (len(found), ", ".join(sorted(f["node"] for f in found))))
+        print("[RedNode Workspace] %d shelves have Override on; the one switched on "
+              "last (node %s) speaks for the galleries"
+              % (len(found), latest[0]["node"]), flush=True)
+        return latest[0]
+    return found[0]
+
+
+def apply_shelf_override(cfg, rec):
+    """Put an overriding shelf's picture on the tabs it names. Returns the tab ids."""
+    if not rec:
+        return []
+    done = []
+    for name in rec["tabs"]:
+        t = cfg["tabs"].get(name)
+        if not isinstance(t, dict):
+            continue
+        t["images"] = [rec["entry"]]
+        # the list-selection tabs (moodboard and the Image to text ones) keep a list
+        t["sel"] = [0] if isinstance(t.get("sel"), list) else 0
+        # a dice roll over one picture is the same picture, but it prints as a roll
+        t["random"] = False
+        # ticking a tab on the shelf is as deliberate as a right-click send, and a
+        # send switches its tab on; an override onto a switched-off tab would do
+        # nothing at all and look like the switch was broken
+        t["on"] = True
+        done.append(name)
+    if done:
+        print("[RedNode Workspace] the shelf on node %s overrides %s with %r"
+              % (rec.get("node", "?"), ", ".join(done), rec["entry"]), flush=True)
+    return done
+
+
 def custom_rig_names(prompt):
     """The rig names on the Rig Model nodes in this queued prompt; None when there is no
     prompt to read, which callers take as "do not filter"."""
@@ -2969,6 +3036,11 @@ class RedNodeStudioWorkspace:
         # nodes (rn_rig_<id>). They only order the run; the records are read by name.
         latent_in = latent
         cfg = parse_config(config)
+        # A SHELF WITH OVERRIDE ON speaks for the galleries it names, before anything
+        # reads them: the VRAM estimate, the captioner and the sizes all have to see
+        # the picture that is actually going to be rendered.
+        _shelf_rec = shelf_override(prompt)
+        _shelf_tabs = apply_shelf_override(cfg, _shelf_rec)
         # the Upscale tab's own run, read EARLY: the rig load below happens long
         # before the doors, and an upscale must not drag a model onto the card
         _urt = str(cfg["upscale"].get("run_token") or "")
@@ -2987,6 +3059,9 @@ class RedNodeStudioWorkspace:
         # the Run tab's feed (run_events.py): a new run, then each stage as it goes
         from . import run_events as _run
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
+        if _shelf_tabs:
+            _run.note("The shelf is the picture: %s on %s"
+                      % (_shelf_rec["entry"], ", ".join(_shelf_tabs)))
         from . import vram_hold as _hold
         try:
             _est = estimate_vram(cfg, graph_rig_files(prompt))

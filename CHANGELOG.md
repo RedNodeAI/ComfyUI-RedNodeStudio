@@ -40,6 +40,13 @@ format matters: **version** then a date, notes below until the next bold line.
   more than one version
 - The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
   Quick sizes from 1024 to 2048 in quarter steps
+- The Shelf can be the picture. Its new Override switch hands the picture picked on it to the
+  tabs you tick (Img2Img, Editor, Subject, Scene, Moodboard) in place of what their galleries
+  hold, and switches those tabs on for the run. Nothing is written into the Workspace, so
+  switching it off gives every tab its own picture back; drop a new picture on the shelf and
+  the next run uses that one. Only one shelf can hold it: turning it on anywhere turns it off
+  everywhere else, and a workflow that arrives with two on runs the one switched on last, or
+  stops and says so if they cannot be told apart
 - Img2Img's Source page carries Denoise and Scale right under the picture, at one pass.
   Two passes and up vary these per pass on the Passes tab instead, so the quick pair steps
   aside once there is more than one

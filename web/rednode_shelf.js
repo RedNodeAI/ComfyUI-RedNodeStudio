@@ -81,6 +81,13 @@ function readCfg(node) {
   d.items = Array.isArray(d.items) ? d.items.filter((x) => String(x).trim()) : [];
   d.sel = typeof d.sel === "number" ? d.sel : 0;
   if (d.sel < 0 || d.sel >= d.items.length) d.sel = 0;
+  // the override, mirrored in shelf.py's parse(): the switch, where the picture
+  // goes, and when it was switched on, which is how two shelves are told apart
+  d.override = !!d.override;
+  d.override_tabs = Array.isArray(d.override_tabs)
+    ? SEND_TO.map(([id]) => id).filter((id) => d.override_tabs.includes(id))
+    : [...OVERRIDE_DEFAULT];
+  d.override_at = typeof d.override_at === "number" ? d.override_at : 0;
   return d;
 }
 
@@ -98,6 +105,12 @@ const SEND_TO = [
   ["scene", "Scene"],
   ["moodboard", "Moodboard"],
 ];
+// The chips an override offers, and the one it starts with. Img2Img alone,
+// because that is the picture a run works on: ticking Subject or Moodboard
+// switches those tabs on for the run, and one switch should not rewrite a render.
+const OVERRIDE_LABEL = { i2i: "Img2Img", editor_src: "Editor", subject: "Subject",
+                         scene: "Scene", moodboard: "Moodboard" };
+const OVERRIDE_DEFAULT = ["i2i"];
 
 function workspaces() {
   const out = [];
@@ -112,6 +125,49 @@ function workspaces() {
   };
   walk(app.graph);
   return out;
+}
+
+/** Every shelf on the canvas, this one included. */
+function shelves() {
+  const out = [];
+  const seen = new Set();
+  const walk = (graph) => {
+    if (!graph || seen.has(graph)) return;
+    seen.add(graph);
+    for (const n of (graph._nodes || graph.nodes || [])) {
+      if (n?.type === NODE) out.push(n);
+      if (n?.subgraph) walk(n.subgraph);
+    }
+  };
+  walk(app.graph);
+  return out;
+}
+
+/** Switch this shelf's override on or off, and off on every other shelf.
+ *
+ *  ONE OVERRIDE AT A TIME, decided here rather than at the run: two shelves both
+ *  claiming to be the picture is a question with no good answer, and the moment
+ *  to settle it is the click, while you can see both of them. The run keeps its
+ *  own guard for a workflow that arrives with two switched on already.
+ */
+function setOverride(node, on) {
+  node._rnShelf.override = !!on;
+  node._rnShelf.override_at = on ? Date.now() : 0;
+  writeCfg(node);
+  if (!on) return;
+  for (const other of shelves()) {
+    if (other === node) continue;
+    const w = (other.widgets || []).find((x) => x.name === "config");
+    let d;
+    try { d = JSON.parse(w?.value || "{}"); } catch (e) { d = {}; }
+    if (!d || typeof d !== "object" || !d.override) continue;
+    d.override = false;
+    d.override_at = 0;
+    if (w) w.value = JSON.stringify(d);
+    if (other._rnShelf) { other._rnShelf.override = false; other._rnShelf.override_at = 0; }
+    if (other._rnShelfEl) render(other);
+    other.setDirtyCanvas?.(true, true);
+  }
 }
 
 /** Put an entry on a Workspace tab's gallery, the way a drop on that tab would. */
@@ -247,6 +303,56 @@ function render(node) {
   head.append(title, count, clear);
   root.appendChild(head);
 
+  // THE OVERRIDE: the picked picture stands in for whatever the ticked tabs hold,
+  // for the length of a run. Nothing is written into the Workspace, so switching
+  // it off hands every tab its own picture back.
+  const ov = document.createElement("div");
+  ov.className = "rn-shelf-ov" + (cfg.override ? " on" : "");
+  const sw = document.createElement("button");
+  sw.className = "rn-shelf-sw" + (cfg.override ? " on" : "");
+  sw.dataset.shelfOverride = cfg.override ? "on" : "off";
+  sw.title = cfg.override
+    ? "On: the picture picked here is what the ticked tabs render from. Click to "
+      + "give them their own pictures back."
+    : "Off: every tab uses its own gallery. Click to make the picture picked here "
+      + "the one they render from.";
+  sw.onclick = () => { setOverride(node, !cfg.override); render(node); };
+  const ol = document.createElement("span");
+  ol.className = "rn-shelf-ovlab";
+  ol.textContent = "Override";
+  ov.append(sw, ol);
+  if (cfg.override) {
+    const chips = document.createElement("div");
+    chips.className = "rn-shelf-chips";
+    for (const [id, name] of SEND_TO) {
+      const b = document.createElement("button");
+      const ticked = cfg.override_tabs.includes(id);
+      b.className = "rn-shelf-chip" + (ticked ? " on" : "");
+      b.dataset.shelfTab = id;
+      b.textContent = OVERRIDE_LABEL[id] || name;
+      b.title = ticked
+        ? `${OVERRIDE_LABEL[id] || name} renders from this picture, and is switched `
+          + "on for the run."
+        : `Click to hand ${OVERRIDE_LABEL[id] || name} this picture too.`;
+      b.onclick = () => {
+        cfg.override_tabs = ticked ? cfg.override_tabs.filter((x) => x !== id)
+                                   : [...cfg.override_tabs, id];
+        writeCfg(node);
+        render(node);
+      };
+      chips.appendChild(b);
+    }
+    ov.appendChild(chips);
+  }
+  root.appendChild(ov);
+  if (cfg.override && !cfg.items.length) {
+    const warn = document.createElement("div");
+    warn.className = "rn-shelf-note rn-shelf-ovwarn";
+    warn.textContent = "Override is on with nothing on the shelf, so the tabs keep "
+      + "their own pictures.";
+    root.appendChild(warn);
+  }
+
   const list = document.createElement("div");
   list.className = "rn-shelf-list";
   root.appendChild(list);
@@ -361,6 +467,21 @@ style.textContent = `
 .rn-shelf-btn{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#d6d9de;
   cursor:pointer;font-size:11.5px;padding:4px 10px}
 .rn-shelf-btn:disabled{opacity:.5;cursor:default}
+.rn-shelf-ov{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:6px 7px;border:1px solid #2a2e35;border-radius:8px;background:#15171b}
+.rn-shelf-ov.on{border-color:#b8283c;background:#1d1418}
+.rn-shelf-sw{flex:none;width:34px;height:18px;border-radius:9px;border:1px solid #3a3f47;
+  background:#23262c;position:relative;cursor:pointer;padding:0}
+.rn-shelf-sw::after{content:"";position:absolute;top:1px;left:1px;width:14px;height:14px;
+  border-radius:50%;background:#6b7280;transition:left .12s,background .12s}
+.rn-shelf-sw.on{border-color:#b8283c;background:#3a1620}
+.rn-shelf-sw.on::after{left:17px;background:#e0435a}
+.rn-shelf-ovlab{font-size:12px;color:#d6d9de;font-weight:600}
+.rn-shelf-chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
+.rn-shelf-chip{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#8a919b;
+  font-size:11px;padding:2px 8px;cursor:pointer}
+.rn-shelf-chip.on{border-color:#b8283c;color:#f3b0ba;background:#241419}
+.rn-shelf-ovwarn{flex:none;color:#e0a84a;line-height:1.45;padding:2px 4px}
 .rn-shelf-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
 .rn-shelf-empty{color:#8a919b;line-height:1.5;padding:10px 4px}
 .rn-shelf-cell{flex:none;display:flex;flex-direction:column;gap:4px;padding:5px;cursor:grab;
@@ -398,4 +519,5 @@ app.registerExtension({
   },
 });
 
-export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO };
+export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO,
+         setOverride, shelves, OVERRIDE_DEFAULT };
