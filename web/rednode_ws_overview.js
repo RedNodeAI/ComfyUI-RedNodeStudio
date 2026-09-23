@@ -52,8 +52,11 @@ const SUB_NAME = {
 const BOX_ICON = {
   models: "models", prompts: "prompts", camera: "camera", loras: "loras",
   moodboard: "moodboard", identity: "identity", paint: "paint", captions: "auto",
-  canvas: "canvas", source: "source", reangle_polish: "reangle", swap_polish: "swap",
-  encode: "encode", sampler: "generate", decode: "decode", detailer: "detailer",
+  canvas: "canvas", source: "source",
+  // both spellings: the plain keys are the run's own stages, the _polish ones the
+  // Detailer's second pass, and Pass 1 is "pass1" here and "sampler" there
+  reangle: "reangle", reangle_polish: "reangle", swap: "swap", swap_polish: "swap",
+  encode: "encode", pass1: "generate", sampler: "generate", decode: "decode", detailer: "detailer",
   post: "post", save: "save",
 };
 const boxIcon = (key) => {
