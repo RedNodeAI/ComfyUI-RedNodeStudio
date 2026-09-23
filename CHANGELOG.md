@@ -59,6 +59,10 @@ format matters: **version** then a date, notes below until the next bold line.
   Paint prompt that is there now
 - The Paint tab's LoRA column scrolls inside itself instead of stretching the whole page
 - A Hero Creator redesign is filed beside its headshot
+- Image to image honours its denoise on a rig that runs your own nodes. That rig kind was
+  being read as an engine rig, whose own strength dial speaks for the denoise socket, so
+  it handed over a 1.0 nobody set and every i2i pass came out as a full repaint. External
+  and handled engine rigs keep their strength dial, which is theirs to set
 - A brand new Workspace no longer warns that its converter does nothing
 - The Realism page's conversion LoRA dropdown stays inside its card
 - A picture kept in a folder you junctioned or linked into ComfyUI's output, input or temp

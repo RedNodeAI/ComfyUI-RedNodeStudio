@@ -3559,10 +3559,16 @@ class RedNodeStudioWorkspace:
                   "it has no usable image, so there is nothing to encode. output_latent "
                   "falls back to the Latent tab and denoise stays 1.0.", flush=True)
 
-        # any ENGINE rig (external, or a handled kind like the personal NAI
-        # rig) is the cockpit for a renderer that is not a loaded checkpoint:
-        # the denoise socket and the handler both read ITS strength dial
-        if _ar.get("kind", "files") != "files":
+        # An ENGINE rig (external, or a handled kind like the personal NAI rig) is
+        # the cockpit for a renderer that is not a loaded checkpoint: the denoise
+        # socket and the handler both read ITS strength dial.
+        #
+        # A "node" rig is NOT one of those, however much it looks like one here. It
+        # samples through your own wired nodes, off this very socket, and the Models
+        # tab shows it no strength dial at all — so this was handing it a 1.0 nobody
+        # set and throwing the Img2Img denoise away (you, 2026-09-23). Every other
+        # test in this file reads "external or a handled kind"; this one had drifted.
+        if _ar.get("kind") == "external" or _ar.get("kind") in RIG_KIND_HANDLERS:
             denoise_out = _ar.get("denoise", 1.0)
 
         # the Latent tab: the canvas for a prompt-only pass, or for a plain
