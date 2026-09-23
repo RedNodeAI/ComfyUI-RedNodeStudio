@@ -4,6 +4,15 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.5.1** - 2026-09-23
+
+### Fixes
+
+- Pro Grade Krea 2, the shipped look, was smoothing more than it needed to. Noise cleanup
+  drops from 0.75 to 0.65, the skin pass eases back about a seventh, and the local contrast
+  pass comes off. Pores and fabric survive it now. The colour trim is unchanged, and the
+  other sixteen looks are untouched
+
 **1.5.0** - 2026-09-22
 
 The Workspace gets a new layout and four new jobs: an Editor tab, an Upscale page, Realism
