@@ -19,6 +19,23 @@ const TAB_IDS = ["overview", "models", "prompts", "camera", "loras", "latent", "
                  "paint", "moodboard", "identity", "detailer", "post", "run", "advanced"];
 export const TAB_ICONS = Object.fromEntries(TAB_IDS.map((id) => [id, png(id)]));
 
+// THE SUB-TABS' ICONS, for the strip in a page header: the same weight as the rail's,
+// drawn as line art so they read at 14px on the dark strip. An id with no icon here
+// gets the plain square rather than an empty box, so a new sub-tab is never blank.
+const SUB_PATHS = {
+  canvas: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 15l4-4 3 3 4-5 5 6"/>',
+  passes: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  files: '<path d="M4 6h7l2 2h7v10H4z"/>',
+  sampling: '<path d="M4 17c4 0 4-10 8-10s4 10 8 10"/>',
+  seed: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
+  setup: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"/>',
+  source: '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/>',
+  gallery: '<rect x="3" y="6" width="8" height="12" rx="1.5"/><rect x="13" y="6" width="8" height="12" rx="1.5"/>',
+  auto: '<path d="M12 4l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/>',
+  boosts: '<path d="M6 19V9M12 19V5M18 19v-7"/>',
+};
+export const SUB_ICON = (id) => svg(SUB_PATHS[String(id || "")] || '<rect x="5" y="5" width="14" height="14" rx="2"/>');
+
 // the rail's own two: fold it to icons, and open it back out to labels
 export const RAIL_ICONS = {
   fold: svg('<path d="M15 6l-6 6 6 6"/><path d="M20 4v16"/>'),

@@ -18,7 +18,7 @@ import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
-import { TAB_ICONS, RAIL_ICONS } from "./rednode_ws_icons.js";
+import { TAB_ICONS, RAIL_ICONS, SUB_ICON } from "./rednode_ws_icons.js";
 import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
          VRAM_CAPS, snapStep, MASK_POS_MAX, MASK_ZONE_FR, maskPosOf,
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
@@ -175,23 +175,39 @@ css.textContent = `
 .rn-ws-railpreset .pn{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .rn-ws-rail.compact .rn-ws-railpreset .pn{display:none}
 .rn-ws-rail.compact .rn-ws-railpreset{justify-content:center}
-.rn-ws-rgroup{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--rn-g,#4a5058);
-  padding-left:7px;border-radius:1px}
-.rn-ws-rglab{font-size:11px;color:#8a919b;padding:1px 2px 3px;letter-spacing:.02em}
+.rn-ws-rgroup{display:flex;flex-direction:column;gap:3px;border-left:3px solid var(--rn-g,#4a5058);
+  padding-left:9px;margin-bottom:9px;border-radius:2px}
+.rn-ws-rgroup:last-child{margin-bottom:0}
+.rn-ws-rglab{font-size:11px;color:#9aa1ab;padding:1px 2px 4px;letter-spacing:.02em}
 .rn-ws-railgen{display:flex;align-items:center;justify-content:center;gap:7px;flex:none;
   min-height:38px;border:1px solid #d13a4f;border-radius:8px;background:#b8283c;color:#fff;
   font-weight:600;font-size:13px;cursor:pointer;padding:0 10px}
 .rn-ws-railgen:hover{background:#cc3148}
-/* THE PAGE HEADER: sub-tabs or the page name, what the page is for, and Generate */
-.rn-ws-phead{display:flex;align-items:center;gap:10px;padding:7px 8px;margin-bottom:8px;
-  background:#15171b;border:1px solid #262a31;border-radius:10px}
-.rn-ws-phead .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0}
-.rn-ws-phead .rn-ws-sub.in-head .rn-ws-subt{min-height:32px}
-.rn-ws-pheadt{flex:1 1 auto;min-width:0;font-weight:600;font-size:14px;color:#e8ecf1;
+/* THE PAGE HEADER: the page's sub-tabs or its name, and Generate */
+.rn-ws-phead{display:flex;align-items:center;gap:12px;padding:9px 10px;margin-bottom:10px;
+  background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
+  border-radius:12px}
+.rn-ws-phead .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:8px}
+/* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
+   the tab in use carries the red underline rather than a filled red block */
+.rn-ws-phead .rn-ws-subt{min-height:40px;justify-content:flex-start;gap:10px;
+  font-size:13.5px;font-weight:600;letter-spacing:0;text-transform:none;
+  background:#15171b;border-color:#262a31;padding:8px 14px;position:relative}
+.rn-ws-phead .rn-ws-subt.cur{background:#1d1418;border-color:#7d2233;color:#fff}
+.rn-ws-phead .rn-ws-subt.cur::before{content:"";position:absolute;left:12px;right:12px;
+  bottom:4px;height:2px;border-radius:2px;background:#d13a4f}
+.rn-ws-phead .rn-ws-subt .lt{margin-left:auto}
+.rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
+.rn-ws-phead .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
+.rn-ws-pheadt{flex:1 1 auto;min-width:0;font-weight:600;font-size:15px;color:#e8ecf1;
   padding-left:4px}
-.rn-ws-pheadn{flex:0 1 auto;min-width:0;color:#8a919b;font-size:12px;text-align:right;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rn-ws-pheadgen{min-height:34px;padding:0 16px}
+/* GENERATE, the one button that is always in the same place: taller than a row, and
+   a fade rather than a flat fill so it reads as the primary action */
+.rn-ws-pheadgen{min-height:44px;padding:0 24px;font-size:15px;font-weight:700;
+  border-radius:10px;background:linear-gradient(100deg,#d5324a 0%,#a3253a 55%,#6d1826 100%);
+  border-color:#e0455c;box-shadow:0 2px 10px rgba(184,40,60,.35)}
+.rn-ws-pheadgen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
+.rn-ws-pheadgen svg{width:18px;height:18px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 .rn-ws-rail.compact .rn-ws-railgen .lb{display:none}
 .rn-ws-rail.compact .rn-ws-rglab{display:none}
@@ -11862,8 +11878,8 @@ const SEED_AREAS = [
 // THE MODELS PAGE'S TABS: Setup (one-click families and what a rig needs), then the
 // three cards that were stacked on one page, one each. A rig with no files opens on
 // Setup; after that the page remembers where it was left.
-const MODELS_SUBS = [["files", "MODEL, CLIP, VAE"], ["sampling", "SAMPLING"], ["seed", "SEED"],
-                     ["setup", "SETUP"]];
+const MODELS_SUBS = [["files", "Model, CLIP, VAE"], ["sampling", "Sampling"], ["seed", "Seed"],
+                     ["setup", "Setup"]];
 const MODELS_BOX_TAB = { Model: "files", "Text encoder": "files", Decoder: "files",
                          "Identity rescue": "files", Sampling: "sampling", Seed: "seed",
                          "Main render": "sampling", "Sampler node": "sampling",
@@ -12315,8 +12331,7 @@ function modelsBody(node, page) {
     // The Models page's own tabs belong BESIDE the rig column, not across the top:
     // that layout is deliberate, so the rig being edited stays in view. The header
     // carries the page's name instead, and the same Generate as everywhere else.
-    pageHeader(node, page, { title: "Models", first: true,
-                             note: "Your rigs: the model, its text encoder and its VAE." });
+    pageHeader(node, page, { title: "Models", first: true });
     if (curSub === "setup" && !node._rnRigManage) modelsSetupPage(node, mwrap);
     // THE RIGS IN A COLUMN on the left, the tabs and cards beside them: the rig you
     // are editing stays in view whichever tab is open (the user, 2026-09-21)
@@ -13973,11 +13988,23 @@ function generateButton(node, cls) {
  *  saying what the page is for, and Generate on the right. The tops of the pages grew
  *  one at a time and no two looked alike; this is the row that makes them agree
  *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
-function pageHeader(node, body, { strip = null, title = "", note = "", first = false } = {}) {
+function pageHeader(node, body, { strip = null, title = "", first = false } = {}) {
   const head = document.createElement("div");
   head.className = "rn-ws-phead";
   if (strip) {
     strip.classList.add("in-head");
+    // THE SUB-TAB, read left to right: what it is, its name, whether it is on. The
+    // icon carries the recognition, the light carries the state, and a light in the
+    // middle of a row did neither (you, 2026-09-23).
+    for (const b of strip.children || []) {
+      const ic = document.createElement("span");
+      ic.className = "rn-ws-subic";
+      ic.innerHTML = SUB_ICON(b.dataset?.sub || b.dataset?.inner);
+      if (b.firstChild) b.insertBefore(ic, b.firstChild);
+      else b.appendChild(ic);
+      const lt = b.querySelector?.(".lt");
+      if (lt) b.appendChild(lt);                   // the light moves to the right edge
+    }
     head.appendChild(strip);
   } else {
     const t = document.createElement("div");
@@ -13985,10 +14012,6 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
     t.textContent = title;
     head.appendChild(t);
   }
-  const n = document.createElement("div");
-  n.className = "rn-ws-pheadn";
-  n.textContent = note;
-  head.appendChild(n);
   head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pheadgen"));
   if (first && body.firstChild) body.insertBefore(head, body.firstChild);
   else body.appendChild(head);
@@ -14009,8 +14032,8 @@ function latentBody(node, body) {
   const strip = document.createElement("div");
   strip.className = "rn-ws-sub";
   for (const [id, label, lit, tip] of [
-    ["canvas", "CANVAS", !!L.on, "The empty latent: its shape, size and batch."],
-    ["passes", "PASSES", !!(L.on && nP > 1),
+    ["canvas", "Canvas", !!L.on, "The empty latent: its shape, size and batch."],
+    ["passes", "Passes", !!(L.on && nP > 1),
      "The built-in sampler's passes on this canvas: pass 1 generates, the rest refine."],
   ]) {
     const b = document.createElement("button");
@@ -14025,7 +14048,7 @@ function latentBody(node, body) {
     b.onclick = () => { node._rnLatSub = id; props.rn_latent_sub = id; render(node); };
     strip.appendChild(b);
   }
-  pageHeader(node, body, { strip, note: "The canvas a plain generation renders on." });
+  pageHeader(node, body, { strip });
 
   const bar = document.createElement("div");
   bar.className = "rn-ws-status";
