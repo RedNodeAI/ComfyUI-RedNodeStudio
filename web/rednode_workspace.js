@@ -3585,6 +3585,13 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
   grid.addEventListener("drop", (e) => {
     e.preventDefault();
     grid.classList.remove("drag");
+    // a picture dragged out of the pack is already on disk under a name every tab
+    // understands, so it is added by name and nothing is uploaded
+    const entry = packDragEntry(e);
+    if (entry) {
+      addEntryToTab(node, tabName, entry);
+      return;
+    }
     uploadFiles(node, tabName, [...(e.dataTransfer?.files || [])]);
   });
   // Ctrl+V while the pointer is over this grid, the road the Paint canvas already
@@ -13520,8 +13527,12 @@ function promptsBody(node, body) {
   // DROP A PICTURE ANYWHERE ON THIS PAGE to import its prompt, the same road
   // as the Import button. Stopped here so ComfyUI's canvas, which loads a
   // dropped PNG as a workflow, never sees it.
+  const packDrag = (e) => {
+    const t = [...(e.dataTransfer?.types || [])];
+    return t.includes("application/x-rednode-result") || t.includes("text/uri-list");
+  };
   body.addEventListener("dragover", (e) => {
-    if (![...(e.dataTransfer?.types || [])].includes("Files")) return;
+    if (![...(e.dataTransfer?.types || [])].includes("Files") && !packDrag(e)) return;
     e.preventDefault(); e.stopPropagation();
     body.classList.add("rn-ws-dropping");
   });
@@ -13530,11 +13541,18 @@ function promptsBody(node, body) {
   });
   body.addEventListener("drop", async (e) => {
     const files = [...(e.dataTransfer?.files || [])];
-    if (!files.length) return;
+    if (!files.length && !packDrag(e)) return;
     e.preventDefault(); e.stopPropagation();
     body.classList.remove("rn-ws-dropping");
-    const png = files.find((f) => /\.png$/i.test(f.name) || f.type === "image/png") || files[0];
-    await importPromptFromPng(node, cfg, R, png);
+    try {
+      const png = files.length
+        ? (files.find((f) => /\.png$/i.test(f.name) || f.type === "image/png") || files[0])
+        : await droppedPackPicture(e);
+      if (png) await importPromptFromPng(node, cfg, R, png);
+    } catch (err) {
+      console.error("[RedNode Workspace] that picture's prompt could not be read:", err);
+      alert(`Could not read that picture's prompt: ${err.message}`);
+    }
   });
 
   // the mock's masthead: title, subtitle, and the RIG bar so the prompt you
@@ -20321,6 +20339,65 @@ function importChoice(title, summary, choices) {
   ov.appendChild(panel);
   ov.addEventListener("pointerdown", (e) => { if (e.target === ov) close(); });
   document.body.appendChild(ov);
+}
+
+/** A gallery entry from a drag that came out of the pack: the Shelf, the result pane,
+ *  the Run page's runs column. "" when the drag is something else. */
+function packDragEntry(e) {
+  const rec = e.dataTransfer?.getData?.("application/x-rednode-result");
+  if (rec) {
+    try {
+      const r = JSON.parse(rec);
+      if (r.filename) {
+        const name = r.subfolder ? `${r.subfolder}/${r.filename}` : r.filename;
+        return r.type && r.type !== "input" ? `${name} [${r.type}]` : name;
+      }
+    } catch (err) { /* not ours after all */ }
+  }
+  const url = String(e.dataTransfer?.getData?.("text/uri-list")
+    || e.dataTransfer?.getData?.("text/plain") || "").split("\n")[0].trim();
+  if (!/(\/view|\/rednode\/thumb)\?/.test(url)) return "";
+  try {
+    const q = new URL(url, window.location.href).searchParams;
+    const file = q.get("filename");
+    if (!file) return "";
+    const sub = q.get("subfolder") || "";
+    const type = q.get("type") || "input";
+    const name = sub ? `${sub}/${file}` : file;
+    return type !== "input" ? `${name} [${type}]` : name;
+  } catch (err) {
+    return "";
+  }
+}
+
+/** Put an entry on a tab's gallery and make it the one in use. */
+function addEntryToTab(node, tabName, entry) {
+  const t = node._rnCfg.tabs[tabName];
+  if (!t) return;
+  t.images = Array.isArray(t.images) ? t.images : [];
+  if (!t.images.includes(entry)) t.images.push(entry);
+  const at = t.images.indexOf(entry);
+  if (Array.isArray(t.sel)) { if (!t.sel.includes(at)) t.sel.push(at); }
+  else t.sel = at;
+  writeCfg(node);
+  render(node);
+}
+
+/** The file behind a gallery entry, fetched back so it can be read like a drop.
+ *  A picture dragged off the Shelf arrives as a name, not as bytes; its prompt is
+ *  in the file, so the file is what has to be read (you, 2026-09-23). */
+async function fileForEntry(entry) {
+  const p = parseName(entry);
+  const res = await fetch(viewUrl(entry));
+  if (!res.ok) throw new Error(`${p.filename}: ${res.status}`);
+  const blob = await res.blob();
+  return new File([blob], p.filename, { type: blob.type || "image/png" });
+}
+
+/** A picture dragged from the Shelf (or anywhere in the pack), as a file. */
+async function droppedPackPicture(e) {
+  const entry = packDragEntry(e);
+  return entry ? fileForEntry(entry) : null;
 }
 
 async function importPromptFromPng(node, cfg, rows, file) {
