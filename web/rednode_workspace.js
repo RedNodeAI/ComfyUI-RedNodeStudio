@@ -183,26 +183,26 @@ css.textContent = `
   min-height:38px;border:1px solid #d13a4f;border-radius:8px;background:#b8283c;color:#fff;
   font-weight:600;font-size:13px;cursor:pointer;padding:0 10px}
 .rn-ws-railgen:hover{background:#cc3148}
-/* THE PAGE HEADER: the page's sub-tabs or its name, and Generate */
-.rn-ws-pbar{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;padding:9px 10px;
-  margin-bottom:10px;
+/* THE TOP BAR: the same height on every page, the sub-tabs centred in it and
+   Generate pinned to the right edge so the centring never shifts with them */
+.rn-ws-pbarwrap{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.rn-ws-pbar{position:relative;display:flex;flex-wrap:nowrap;align-items:center;
+  justify-content:center;gap:12px;min-height:66px;padding:9px 220px 9px 16px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
-/* the strip does NOT stretch: a page with two sub-tabs had two bars half a metre
-   wide each. The tabs size to their words, the gap after them pushes Generate to
-   the right edge. */
-.rn-ws-pbar .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:8px;flex-wrap:nowrap;
-  overflow-x:auto;scrollbar-width:none}
+.rn-ws-pbar .rn-ws-sub{flex:0 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
+  justify-content:center;overflow-x:auto;scrollbar-width:none}
 .rn-ws-pbar .rn-ws-sub::-webkit-scrollbar{display:none}
-.rn-ws-pbarsp{flex:1 1 auto;min-width:8px}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
    the tab in use carries the red underline rather than a filled red block */
-/* 250px is the size they want to be; they give way to about half that before the
-   strip starts scrolling, so a page with four sub-tabs never clips one to a sliver */
-.rn-ws-sub.dressed .rn-ws-subt{flex:0 1 250px;min-width:136px;max-width:320px;
-  min-height:46px;justify-content:center;gap:11px;font-size:14px;font-weight:600;
-  letter-spacing:0;text-transform:none;background:#15171b;border-color:#20242a;
-  color:#aab0b8;padding:0 30px;position:relative;overflow:hidden}
+/* EVERY SUB-TAB THE SAME SIZE, on every page: a flat 250 wide and 46 tall. Letting
+   them flex meant the flex algorithm picked a different width per page, which is the
+   opposite of the point. Too many to fit and the strip scrolls sideways. */
+.rn-ws-sub.dressed .rn-ws-subt{flex:0 0 auto;width:250px;min-width:250px;
+  height:46px;min-height:46px;box-sizing:border-box;justify-content:center;gap:11px;
+  font-size:14px;font-weight:600;letter-spacing:0;text-transform:none;
+  background:#15171b;border-color:#20242a;color:#aab0b8;padding:0 30px;
+  position:relative;overflow:hidden}
 .rn-ws-sub.dressed .rn-ws-subt>span:not(.lt):not(.rn-ws-subic){overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .rn-ws-sub.dressed .rn-ws-subt:hover{background:#181b20;border-color:#2e333b;color:#d6dae0}
@@ -215,11 +215,12 @@ css.textContent = `
 .rn-ws-sub.dressed .rn-ws-subt .lt{position:absolute;right:14px;margin-left:0}
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
 .rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
-.rn-ws-pbart{flex:0 0 auto;min-width:0;font-weight:700;font-size:16px;color:#e8ecf1;
-  padding:0 14px 0 6px}
+/* the page's name sits UNDER the bar, where a page title belongs */
+.rn-ws-pbart{font-weight:700;font-size:19px;color:#e8ecf1;padding:0 2px}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
    a fade rather than a flat fill so it reads as the primary action */
-.rn-ws-pbargen{min-height:44px;padding:0 24px;font-size:15px;font-weight:700;
+.rn-ws-pbargen{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  min-height:46px;padding:0 26px;font-size:15px;font-weight:700;
   border-radius:10px;background:linear-gradient(100deg,#d5324a 0%,#a3253a 55%,#6d1826 100%);
   border-color:#e0455c;box-shadow:0 2px 10px rgba(184,40,60,.35)}
 .rn-ws-pbargen:hover{background:linear-gradient(100deg,#e43a54 0%,#b42a41 55%,#7d1c2c 100%)}
@@ -14020,24 +14021,26 @@ function dressSubTabs(strip) {
  *  one at a time and no two looked alike; this is the row that makes them agree
  *  (you, 2026-09-23). Paint keeps its own tool bar and Run its Generate card. */
 function pageHeader(node, body, { strip = null, title = "", first = false } = {}) {
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-pbarwrap";
   const head = document.createElement("div");
   head.className = "rn-ws-pbar";
-  if (title) {
-    const t = document.createElement("div");
-    t.className = "rn-ws-pbart";
-    t.textContent = title;
-    head.appendChild(t);
-  }
   if (strip) {
     dressSubTabs(strip);
     head.appendChild(strip);
   }
-  const sp = document.createElement("div");
-  sp.className = "rn-ws-pbarsp";
-  head.appendChild(sp);
+  // Generate is taken OUT of the flow, so the tabs sit in the middle of the BAR
+  // and not in the middle of whatever is left beside the button
   head.appendChild(generateButton(node, "rn-ws-railgen rn-ws-pbargen"));
-  if (first && body.firstChild) body.insertBefore(head, body.firstChild);
-  else body.appendChild(head);
+  wrap.appendChild(head);
+  if (title) {
+    const t = document.createElement("div");
+    t.className = "rn-ws-pbart";
+    t.textContent = title;
+    wrap.appendChild(t);
+  }
+  if (first && body.firstChild) body.insertBefore(wrap, body.firstChild);
+  else body.appendChild(wrap);
   return head;
 }
 
