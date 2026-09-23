@@ -194,9 +194,11 @@ css.textContent = `
 .rn-ws-body.wide:not(.full)>.rn-ws-pbarwrap{max-width:none;width:100%;
   align-self:stretch;margin-left:0;margin-right:0}
 .rn-ws-pbar{position:relative;display:flex;flex-wrap:nowrap;align-items:center;
-  justify-content:center;gap:12px;min-height:66px;padding:9px 220px 9px 16px;
+  justify-content:center;gap:12px;min-height:66px;padding:9px 16px;
   background:linear-gradient(180deg,#191c21,#131519);border:1px solid #2a2e35;
   border-radius:12px}
+.rn-ws-pbar>.rn-ws-sub,.rn-ws-pbar>.rn-ws-seg,.rn-ws-pbar>.rn-ws-tabs{
+  max-width:calc(100% - 400px)}
 .rn-ws-pbar .rn-ws-sub{flex:1 1 auto;min-width:0;margin:0;gap:10px;flex-wrap:nowrap;
   justify-content:center}
 /* IN THE HEADER the tabs read icon, name, light: sentence case, not shouted, and
@@ -248,9 +250,13 @@ css.textContent = `
   min-height:46px;font-size:14px;border-radius:9px}
 .rn-ws-pbar.wrap{min-height:66px;height:auto;padding-top:10px;padding-bottom:10px;
   flex-wrap:wrap}
-/* the Identity tab's pages-within-pages, on their own row under the bar */
-.rn-ws-pbar2{display:flex;gap:8px;flex-wrap:wrap;margin:0}
-.rn-ws-pbar2 .rn-ws-subt{min-height:34px;font-size:12px}
+/* the Identity tab's pages-within-pages: their own box under the bar, centred in it */
+.rn-ws-pbar2{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;
+  margin:0;padding:7px 16px;min-height:52px;box-sizing:border-box;
+  background:linear-gradient(180deg,#171a1e,#121417);border:1px solid #24282f;
+  border-radius:12px}
+.rn-ws-pbar2 .rn-ws-subt{flex:0 1 220px;min-width:96px;max-width:220px;height:38px;
+  min-height:38px;font-size:13px}
 .rn-ws-railgen:disabled{opacity:.6;cursor:default}
 /* a sub-page of the open tab: indented under it, smaller, no icon or light. Depth 2
    is the Identity tab's pages-within-pages, indented again. */
