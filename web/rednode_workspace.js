@@ -18,6 +18,7 @@ import { upscaleBody } from "./rednode_ws_upscale.js";
 import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
+import { mountEmbeddedShelf } from "./rednode_shelf.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ICONS, RAIL_ICONS, SUB_ICON } from "./rednode_ws_icons.js";
 import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -153,6 +154,15 @@ css.textContent = `
 .rn-ws-railgrip{flex:none;width:6px;margin:0 -8px 0 -6px;cursor:col-resize;border-radius:3px;
   align-self:stretch;touch-action:none}
 .rn-ws-railgrip:hover,.rn-ws-railgrip.drag{background:#3d434c}
+.rn-ws-shelfcol{flex:none;width:196px;display:flex;flex-direction:column;gap:6px;min-height:0;
+  border-left:1px solid #262a31;padding:4px 0 4px 8px}
+.rn-ws-shell.right .rn-ws-shelfcol{border-left:0;border-right:1px solid #262a31;padding:4px 8px 4px 0}
+.rn-ws-shelfcolhead{display:flex;align-items:center;justify-content:space-between;
+  font-size:11px;font-weight:700;letter-spacing:.08em;color:#8a919b;padding:2px 4px}
+.rn-ws-shelfcolx{background:transparent;border:0;color:#8a919b;font-size:15px;cursor:pointer;
+  padding:0 4px;line-height:1}
+.rn-ws-shelfcolx:hover{color:#fff}
+.rn-ws-shelfin{flex:1 1 auto;min-height:0;height:auto}
 .rn-ws-shell.right{flex-direction:row-reverse}
 .rn-ws-shell.right .rn-ws-railgrip{margin:0 -6px 0 -8px}
 .rn-ws-shell.right .rn-ws-rail{border-right:0;border-left:1px solid #262a31;padding:4px 2px 4px 6px}
@@ -1939,6 +1949,9 @@ export function readCfg(node) {
   if (!Array.isArray(d.paint_loras.slots)) d.paint_loras.slots = [];
   if (typeof d.paint_loras.ui !== "object" || !d.paint_loras.ui) d.paint_loras.ui = {};
   if (typeof d.paint_loras.seed !== "number") d.paint_loras.seed = 0;
+  // the shelf the Workspace can carry beside its pages: pictures and a pick,
+  // the same shape the Shelf node stores, read by the shelf module itself
+  d.shelf = d.shelf && typeof d.shelf === "object" ? d.shelf : {};
   // the Camera tab's master switch: on unless a saved config says otherwise
   d.camera = d.camera && typeof d.camera === "object" ? d.camera : {};
   d.camera.on = d.camera.on === undefined ? true : !!d.camera.on;
@@ -7423,6 +7436,33 @@ function workspacePrefs(node, body) {
     ph.textContent = "On by default. The folded rail never shows them. This install only.";
     pr.append(pl, pb, ph);
     sect.appendChild(pr);
+  }
+
+  // ---- THE SHELF COLUMN: a shelf beside the pages, opposite the rail ----------
+  {
+    const sr = document.createElement("div");
+    sr.className = "rn-ws-row";
+    sr.style.flexWrap = "wrap";
+    const sl = document.createElement("span");
+    sl.className = "hint";
+    sl.style.cssText = "flex:none;width:110px";
+    sl.textContent = "Shelf column";
+    const sb = document.createElement("button");
+    const son = !!wsPref("ShelfColumn", false);
+    sb.className = "rn-ws-btn rn-ws-compact" + (son ? " on" : "");
+    sb.style.cssText = "width:auto;padding:0 12px";
+    sb.textContent = son ? "On" : "Off";
+    sb.dataset.choice = "shelf_column";
+    sb.title = "On, a shelf sits on the side opposite the rail: drop pictures on it, drag "
+             + "them onto any page, right-click to send. Its pictures are kept in this "
+             + "Workspace's config.";
+    sb.onclick = () => { setWsPref("ShelfColumn", !son); render(node); };
+    const sh = document.createElement("span");
+    sh.className = "hint";
+    sh.style.cssText = "flex:0 1 320px;min-width:0";
+    sh.textContent = "Off by default. The Shelf node stays for pictures shared between Workspaces. This install only.";
+    sr.append(sl, sb, sh);
+    sect.appendChild(sr);
   }
 
   // ---- GENERATE ON THE RAIL: the pages have one in their header ---------------
@@ -20389,6 +20429,34 @@ function renderPage(node) {
   main.className = "rn-ws-main";
   if (compact) shell.append(rail, main);
   else shell.append(rail, railGrip(node, rail, onRight), main);
+  // THE SHELF COLUMN, opposite the rail: the shelf's pictures a drag away from
+  // every page, kept in this Workspace's config. An option, off to begin with
+  // (you, 2026-09-25); the shell reverses with the rail, so "last" is always the
+  // far side from it.
+  if (wsPref("ShelfColumn", false)) {
+    const col = document.createElement("div");
+    col.className = "rn-ws-shelfcol";
+    const ch = document.createElement("div");
+    ch.className = "rn-ws-shelfcolhead";
+    const ct = document.createElement("span");
+    ct.textContent = "SHELF";
+    const cx = document.createElement("button");
+    cx.className = "rn-ws-shelfcolx";
+    cx.textContent = "\u00d7";
+    cx.title = "Hide the shelf column. Advanced brings it back.";
+    cx.onclick = () => { setWsPref("ShelfColumn", false); render(node); };
+    ch.append(ct, cx);
+    const el = document.createElement("div");
+    el.className = "rn-shelf-wrap rn-ws-shelfin";
+    col.append(ch, el);
+    shell.appendChild(col);
+    mountEmbeddedShelf(node, el,
+      () => JSON.stringify(node._rnCfg?.shelf || {}),
+      (v) => {
+        try { node._rnCfg.shelf = JSON.parse(v || "{}"); } catch (e) { node._rnCfg.shelf = {}; }
+        writeCfg(node);
+      });
+  }
   host.appendChild(shell);
 
   const body = document.createElement("div");

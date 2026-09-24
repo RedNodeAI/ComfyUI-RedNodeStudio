@@ -76,6 +76,10 @@ format matters: **version** then a date, notes below until the next bold line.
 - Delete takes a picture off the Shelf, the one you are pointing at, leaving the file on
   disk exactly where it was. An empty shelf passes Delete on to ComfyUI, which is how the
   node itself is still removed with the pointer over its panel
+- The Workspace can carry a shelf of its own: Shelf column on the Advanced tab puts one on the
+  side opposite the rail, the same shelf as the node (drop, drag out, right-click send, Ctrl+C,
+  Ctrl+V, Delete), with its pictures kept in that Workspace's config. Off by default; the
+  Shelf node stays for pictures shared between Workspaces
 - Copy and paste on the Shelf. Ctrl+C puts the picture you are pointing at on the system
   clipboard at full size, and Ctrl+V over the shelf takes a copied picture or a screenshot and
   puts it on top. The shelf under the pointer is the one the keys drive, a prompt box you are

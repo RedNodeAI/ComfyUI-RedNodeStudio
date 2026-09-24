@@ -250,8 +250,8 @@ function setOverride(node, on) {
 }
 
 /** Put an entry on a Workspace tab's gallery, the way a drop on that tab would. */
-function sendTo(entry, tab) {
-  const ws = workspaces()[0];
+function sendTo(entry, tab, owner = null) {
+  const ws = owner || workspaces()[0];
   if (!ws) {
     alert("No RedNode Studio Workspace on the canvas to send it to.");
     return;
@@ -296,7 +296,7 @@ function cellMenu(node, entry, index, ev) {
     b.onclick = () => { menu.remove(); run(); };
     menu.appendChild(b);
   };
-  for (const [tab, label] of SEND_TO) item(`Send to ${label}`, () => sendTo(entry, tab));
+  for (const [tab, label] of SEND_TO) item(`Send to ${label}`, () => sendTo(entry, tab, node._rnShelfOwner || null));
   item("Open the picture", () => window.open(viewUrl(entry), "_blank", "noopener"));
   item("Copy its name", () => navigator.clipboard?.writeText?.(entry));
   item("Take it off the shelf (Delete)", () => takeOff(node, index));
@@ -378,6 +378,7 @@ function render(node) {
   // THE OVERRIDE: the picked picture stands in for whatever the ticked tabs hold,
   // for the length of a run. Nothing is written into the Workspace, so switching
   // it off hands every tab its own picture back.
+  if (node._rnShelfNoOverride) { renderCells(node, root, cfg); return; }
   const ov = document.createElement("div");
   ov.className = "rn-shelf-ov" + (cfg.override ? " on" : "");
   const sw = document.createElement("button");
@@ -424,7 +425,11 @@ function render(node) {
       + "their own pictures.";
     root.appendChild(warn);
   }
+  renderCells(node, root, cfg);
+}
 
+/** The pictures themselves: the list, the empty note, every cell. */
+function renderCells(node, root, cfg) {
   const list = document.createElement("div");
   list.className = "rn-shelf-list";
   root.appendChild(list);
@@ -485,6 +490,23 @@ function build(node) {
 
   const wrap = document.createElement("div");
   wrap.className = "rn-shelf-wrap";
+  wireShelf(node, wrap);
+
+  const w = node.addDOMWidget("rednode_shelf_ui", "rednode_shelf_ui", wrap, {
+    serialize: false,
+    getValue: () => cfgW.value,
+    setValue: (v) => { cfgW.value = v ?? "{}"; node._rnShelf = readCfg(node); render(node); },
+    getMinHeight: () => MIN_H,
+  });
+  w.element = wrap;
+  node._rnShelfWidget = w;
+  node.size = [Math.max(node.size?.[0] || 0, 260), Math.max(node.size?.[1] || 0, 420)];
+  render(node);
+}
+
+/** Everything a shelf's element does: drops, the keys, the pointer fence. On the
+ *  Shelf node's own widget, and on the column a Workspace can carry (2026-09-25). */
+function wireShelf(node, wrap) {
   for (const t of ["pointerdown", "pointerup", "click", "dblclick", "contextmenu"]) {
     wrap.addEventListener(t, (e) => e.stopPropagation());
   }
@@ -554,17 +576,35 @@ function build(node) {
   node._rnShelfPaste = onPaste;
   node._rnShelfCopy = onCopy;
   node._rnShelfDelete = onDelete;
+}
 
-  const w = node.addDOMWidget("rednode_shelf_ui", "rednode_shelf_ui", wrap, {
-    serialize: false,
-    getValue: () => cfgW.value,
-    setValue: (v) => { cfgW.value = v ?? "{}"; node._rnShelf = readCfg(node); render(node); },
-    getMinHeight: () => MIN_H,
-  });
-  w.element = wrap;
-  node._rnShelfWidget = w;
-  node.size = [Math.max(node.size?.[0] || 0, 260), Math.max(node.size?.[1] || 0, 420)];
-  render(node);
+/** A SHELF INSIDE THE WORKSPACE: the same shelf, on a column the Workspace draws
+ *  beside its pages, its pictures kept in the Workspace's own config rather than
+ *  a node of their own. `read` gives the stored JSON, `write` takes it back. The
+ *  Workspace redraws its whole panel often, so the host is kept and re-wired onto
+ *  each new element; the old element's keys are forgotten. */
+function mountEmbeddedShelf(owner, el, read, write) {
+  let host = owner._rnShelfHost;
+  if (!host) {
+    host = {
+      type: "RedNodeShelfEmbedded",
+      graph: owner.graph,
+      widgets: [{ name: "config", get value() { return read(); }, set value(v) { write(v); } }],
+      _rnShelfOwner: owner,
+      // the override reads shelves off the queued prompt, and this one is not a
+      // node there; its pictures still send, drag and copy like any shelf
+      _rnShelfNoOverride: true,
+    };
+    owner._rnShelfHost = host;
+  }
+  if (host._rnShelfEl && host._rnShelfEl !== el) {
+    forgetHotkeys(host._rnShelfEl);
+    forgetPaste(host._rnShelfEl);
+  }
+  host._rnShelf = readCfg(host);
+  wireShelf(host, el);
+  render(host);
+  return host;
 }
 
 const style = document.createElement("style");
@@ -648,4 +688,4 @@ app.registerExtension({
 
 export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO,
          setOverride, shelves, OVERRIDE_DEFAULT, clipboardImage, keyEntry, copyPicture,
-         build, keyIndex, takeOff };
+         build, keyIndex, takeOff, mountEmbeddedShelf };
