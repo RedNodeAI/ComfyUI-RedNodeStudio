@@ -395,6 +395,47 @@ function realismCard(s, card, group, lab, A, L, changed) {
   w.line.appendChild(box);
   card.appendChild(w.box);
 
+  // TILES: the conversion a tile at a time, for an upscale that keeps every tile
+  // faithful to itself. Scale comes back here and only here, because upscaling is
+  // the point of it; 1 re-details the picture at its own size.
+  const tg = group("Tiles");
+  const tsw = document.createElement("button");
+  tsw.className = "tog" + (s.realism_tiles ? " on" : "");
+  tsw.dataset.realism = "tiles";
+  tsw.textContent = "Tiles";
+  tsw.title = "On: resize by Scale, then convert the picture a tile at a time, each tile "
+            + "its own reference, laid back under a cross-fade. A sampler's tiled upscale "
+            + "draws the whole prompt into every tile; this draws each tile from itself.";
+  tsw.onclick = () => { s.realism_tiles = !s.realism_tiles; changed(); };
+  tg.line.appendChild(tsw);
+  if (s.realism_tiles) {
+    const numBox = (key, dv, step, min, max, title, width) => {
+      const b = document.createElement("input");
+      b.type = "number";
+      b.dataset.realism = key;
+      b.step = String(step); b.min = String(min); b.max = String(max);
+      b.style.width = width;
+      b.value = String(s[key] ?? dv);
+      b.title = title;
+      b.onchange = () => {
+        const v = parseFloat(b.value);
+        s[key] = Number.isFinite(v) ? Math.max(min, Math.min(max, step >= 1 ? Math.round(v) : v)) : dv;
+        changed();
+      };
+      return b;
+    };
+    tg.line.append(
+      lab("Scale"), numBox("realism_scale", 1, 0.5, 1, 4,
+        "Resize before the tiles. 1 re-details at the picture's own size; 2 doubles both edges.", "52px"),
+      lab("Tile"), numBox("realism_tile", 1024, 64, 256, 2048,
+        "The tile's edge in pixels. 1024 is the edit encoder's own megapixel; bigger tiles get "
+        + "zoomed and invented.", "64px"),
+      lab("Overlap"), numBox("realism_overlap", 128, 16, 0, 512,
+        "How far neighbouring tiles overlap, cross-faded over that width. More hides seams and "
+        + "costs tiles.", "58px"));
+  }
+  card.appendChild(tg.box);
+
   const note = document.createElement("div");
   note.className = "hint";
   note.style.cssText = "margin:2px 0 0 2px";
@@ -1167,6 +1208,7 @@ function buildPanel(node, hostEl = null) {
         const t = String(x.target || "face").trim() || "face";
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
+      if (x.type === "realism" && x.realism_tiles) return "Realism tiles";
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
                 vosr2: "VOSR2 upscale", reader: "Image to Text",
                 realism: "Realism" })[x.type] || "Pass";
@@ -1336,7 +1378,8 @@ function buildPanel(node, hostEl = null) {
         sum.className = "k";
         sum.style.fontSize = "12px";
         sum.textContent = s.type === "realism"
-          ? "converts the picture"
+          ? (s.realism_tiles ? "converts the picture in tiles \u00b7 x" + (s.realism_scale ?? 1)
+                             : "converts the picture")
             + " · " + (s.realism_engine === "alternative" ? "Loose"
                             : s.realism_engine === "exact" ? "Faithful" : "the page's")
             + (s.realism_photo === "on" ? " · photo finish" : "")
@@ -2115,6 +2158,12 @@ function buildPanel(node, hostEl = null) {
     mk("＋ Realism", () => ({ on: true, type: "realism", denoise: 1.0, blend: 1.0,
                              realism_engine: "", realism_lora: "", realism_photo: "",
                              realism_prompt: "", loras: true, lora_set: "" }));
+    // the same kind with Tiles on, at the denoise a re-detail wants
+    mk("＋ Realism tiles", () => ({ on: true, type: "realism", denoise: 0.4, blend: 1.0,
+                                   realism_engine: "", realism_lora: "", realism_photo: "",
+                                   realism_prompt: "", loras: true, lora_set: "",
+                                   realism_tiles: true, realism_scale: 2, realism_tile: 1024,
+                                   realism_overlap: 128 }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");

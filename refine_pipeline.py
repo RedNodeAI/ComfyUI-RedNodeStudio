@@ -128,6 +128,14 @@ def parse_pipeline(config_json):
             "realism_photo": (s["realism_photo"] if s.get("realism_photo") in ("on", "off")
                               else ""),
             "realism_prompt": str(s.get("realism_prompt") or "")[:500],
+            # TILES: the conversion a tile at a time, each tile its own reference,
+            # so an upscale gets the engine's faithfulness instead of a sampler's
+            # habit of drawing the whole prompt into a patch of sky (you,
+            # 2026-09-25). Scale resizes first; 1 re-details at the frame's size.
+            "realism_tiles": bool(s.get("realism_tiles", False)),
+            "realism_scale": _num("realism_scale", 1.0, 4.0, 1.0),
+            "realism_tile": _num("realism_tile", 256, 2048, 1024, int),
+            "realism_overlap": _num("realism_overlap", 0, 512, 128, int),
             "sam_model": str(s.get("sam_model") or ""),      # "" = the loader default
             # 1.0 is the picture as it arrives. A sampler pass at 0.5 then another
             # at 2.0 is the shrink-and-regrow chain that invents detail, which is
@@ -1513,7 +1521,12 @@ class RedNodeStudioDetailer:
                 "denoise %.2f" % rc["denoise"]]
         if float(s["blend"]) < 1.0:
             bits.append("blend %.2f" % float(s["blend"]))
+        if s.get("realism_tiles"):
+            bits.append("tiles of %d, overlap %d, x%g" % (
+                int(s["realism_tile"]), int(s["realism_overlap"]), float(s["realism_scale"])))
         lines.append("%s: %s" % (tag, ", ".join(bits)))
+        if s.get("realism_tiles"):
+            return self._realism_tiles(img, s, rc, ws_cfg, seed, tag, node_id, lines)
         try:
             done = _rl.render(rc, img, ws_cfg, int(seed), node_id=node_id)
         except Exception as exc:
@@ -1536,6 +1549,92 @@ class RedNodeStudioDetailer:
                 done = done[:1].expand(img.shape[0], -1, -1, -1)
             done = (img[:, :, :, :3] * (1.0 - blend) + done * blend).clamp(0, 1)
         return done, lines
+
+    @staticmethod
+    def _tile_starts(length, tile, overlap):
+        """Where the tiles begin along one axis: every `tile - overlap`, and the
+        last one flush with the far edge so nothing is left uncovered."""
+        if length <= tile:
+            return [0]
+        step = max(1, tile - overlap)
+        starts = list(range(0, length - tile, step)) + [length - tile]
+        return sorted(set(starts))
+
+    @staticmethod
+    def _tile_weight(n, overlap, device, dtype):
+        """A ramp in from each end over `overlap` pixels, 1 between: two tiles
+        that share an overlap cross-fade instead of meeting at a line."""
+        w = torch.ones(n, device=device, dtype=dtype)
+        ov = max(0, min(int(overlap), n // 2))
+        if ov > 0:
+            ramp = (torch.arange(1, ov + 1, device=device, dtype=dtype) / float(ov))
+            w[:ov] = torch.minimum(w[:ov], ramp)
+            w[n - ov:] = torch.minimum(w[n - ov:], ramp.flip(0))
+        return w
+
+    def _realism_tiles(self, img, s, rc, ws_cfg, seed, tag, node_id, lines):
+        """The conversion a tile at a time. (IMAGE, lines).
+
+        Resize first by the pass's scale, snapped to 16, then convert every
+        tile with itself as the reference and lay them back under cross-faded
+        weights. Each tile is its own render, one at a time (a batch of tiles
+        through Krea 2's VAE is a clip), at the pass's denoise: the picture is
+        the starting point of every tile, which is what keeps a tile of sky
+        a tile of sky.
+        """
+        from . import realism as _rl
+        scale = max(1.0, float(s["realism_scale"]))
+        tile = int(s["realism_tile"])
+        overlap = int(s["realism_overlap"])
+        h0, w0 = int(img.shape[1]), int(img.shape[2])
+        h1 = max(16, int(round(h0 * scale / 16)) * 16)
+        w1 = max(16, int(round(w0 * scale / 16)) * 16)
+        base = img[:, :, :, :3]
+        if (h1, w1) != (h0, w0):
+            base = F.interpolate(base.permute(0, 3, 1, 2), size=(h1, w1), mode="bicubic",
+                                 align_corners=False, antialias=True).permute(0, 2, 3, 1).clamp(0, 1)
+        th, tw = min(tile, h1), min(tile, w1)
+        ys, xs = self._tile_starts(h1, th, overlap), self._tile_starts(w1, tw, overlap)
+        wy = self._tile_weight(th, overlap, base.device, base.dtype)
+        wx = self._tile_weight(tw, overlap, base.device, base.dtype)
+        w2 = (wy[:, None] * wx[None, :])[None, :, :, None]
+        rc_t = dict(rc, longest=max(th, tw), round_to="16", fit="letterbox")
+        out = torch.zeros_like(base)
+        acc = torch.zeros((1, h1, w1, 1), device=base.device, dtype=base.dtype)
+        n_tiles = len(ys) * len(xs)
+        lines.append("%s: %d x %d -> %d x %d, %d tile%s" % (
+            tag, w0, h0, w1, h1, n_tiles, "" if n_tiles == 1 else "s"))
+        k = 0
+        for b in range(int(base.shape[0])):
+            for y in ys:
+                for x in xs:
+                    k += 1
+                    sub = base[b:b + 1, y:y + th, x:x + tw, :]
+                    try:
+                        done = _rl.render(rc_t, sub, ws_cfg, int(seed) + k, node_id=node_id)
+                    except Exception as exc:
+                        lines.append("%s: tile %d of %d failed: %s; that tile is kept as it was"
+                                     % (tag, k, n_tiles * int(base.shape[0]), exc))
+                        done = sub
+                    if done is None:
+                        done = sub
+                    done = done.to(base.device, base.dtype)[:, :, :, :3]
+                    if done.shape[1:3] != sub.shape[1:3]:
+                        done = F.interpolate(done.permute(0, 3, 1, 2), size=sub.shape[1:3],
+                                             mode="bilinear", align_corners=False
+                                             ).permute(0, 2, 3, 1)
+                    out[b:b + 1, y:y + th, x:x + tw, :] += done * w2
+                    if b == 0:
+                        acc[:, y:y + th, x:x + tw, :] += w2
+        out = (out / acc.clamp(min=1e-6)).clamp(0, 1)
+        blend = max(0.0, min(1.0, float(s["blend"])))
+        if blend < 1.0:
+            out = (base * (1.0 - blend) + out * blend).clamp(0, 1)
+        if scale == 1.0 and (h1, w1) != (h0, w0):
+            # re-detailed at its own size: the 16-snap comes off again
+            out = F.interpolate(out.permute(0, 3, 1, 2), size=(h0, w0), mode="bilinear",
+                                align_corners=False).permute(0, 2, 3, 1)
+        return out, lines
 
     def _tone(self, img, src, s, tag, report):
         """Tone lock on a pass that asked for it: the result's detail, the

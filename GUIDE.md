@@ -462,6 +462,13 @@ The kinds of pass:
   is the starting point and only part of it is rewritten, so the original's own texture survives.
   **Blend** mixes the converted picture back over the one it came from, which takes a conversion
   part of the way for no extra render. No scale: the frame comes back the size it arrived.
+  **Tiles** turns the pass into an upscale that keeps faith with every tile: Scale resizes first
+  (1 re-details at the picture's own size), then the picture is converted a tile at a time, each
+  tile its own reference, laid back under a cross-fade over the Overlap. A sampler's tiled
+  upscale hands every tile the whole prompt and stack and invents a subject in a patch of sky;
+  this draws each tile from itself, so a low denoise sharpens what is there. Tiles of 1024 are
+  the edit encoder's own megapixel. The add row offers it ready-made as Realism tiles, at a
+  denoise of 0.40 and x2.
 - **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
   but takes the tone from the picture as it arrived, the drift fix for a long chain.
 
