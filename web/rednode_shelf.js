@@ -184,12 +184,13 @@ const SEND_TO = [
   ["scene", "Scene"],
   ["moodboard", "Moodboard"],
 ];
-// The chips an override offers, and the one it starts with. Img2Img alone,
-// because that is the picture a run works on: ticking Subject or Moodboard
-// switches those tabs on for the run, and one switch should not rewrite a render.
+// The chips an override offers, and the ones it starts with: Img2Img and the
+// Editor's source, both "the picture I am working on"; which of them renders is
+// the Editor's own switch. Subject or Moodboard would rewrite the render, so
+// they stay a choice.
 const OVERRIDE_LABEL = { i2i: "Img2Img", editor_src: "Editor", subject: "Subject",
                          scene: "Scene", moodboard: "Moodboard" };
-const OVERRIDE_DEFAULT = ["i2i"];
+const OVERRIDE_DEFAULT = ["i2i", "editor_src"];
 
 function workspaces() {
   const out = [];

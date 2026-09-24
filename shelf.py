@@ -24,9 +24,12 @@ from . import workspace as _ws
 # picture, on that tab. Ticking one is as deliberate as a send, so an overridden
 # tab is switched on for the run the way a send switches it on.
 OVERRIDE_TABS = ("i2i", "editor_src", "subject", "scene", "moodboard")
-# Img2Img alone to begin with: it is the picture a run works on, and switching
-# Subject or Moodboard on by flicking one switch would rewrite the render.
-OVERRIDE_DEFAULT = ("i2i",)
+# Img2Img and the Editor's source to begin with: both are "the picture I am
+# working on", and which of the two renders depends on the Editor's own switch
+# (Edit is the output), so an override aimed at one alone looked broken when the
+# other was the one rendering (you, 2026-09-25). Subject or Moodboard would rewrite
+# the render, so they stay a choice.
+OVERRIDE_DEFAULT = ("i2i", "editor_src")
 
 
 class RedNodeShelf:

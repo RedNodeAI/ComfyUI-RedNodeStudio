@@ -558,10 +558,10 @@ canvas of Get and Set nodes with named channels. The wires that are not there ar
 
 **The Shelf as the picture.** A RedNode Shelf beside the Workspace has an **Override** switch.
 With it on, the picture picked on the shelf is what the ticked tabs render from, in place of
-whatever their galleries hold: tick **Img2Img** and every run works on the shelf's picture,
-without touching a gallery. The chips choose where it lands (Img2Img, Editor, Subject, Scene,
-Moodboard), and a ticked tab is switched on for the run, the same as sending a picture to it by
-right-click. Nothing is written into the Workspace, so switching Override off hands every tab its
+whatever their galleries hold. It starts pointed at **Img2Img** and the **Editor**'s source, the
+two pictures a run works on (which of them renders is the Editor's own choice), and the chips add
+Subject, Scene or Moodboard when you mean those. A ticked tab is switched on for the run, the
+same as sending a picture to it by right-click. Nothing is written into the Workspace, so switching Override off hands every tab its
 own picture back, exactly as it was. Drop a new picture on the shelf and the next run uses that
 one. Only one shelf can hold the override: turning it on somewhere turns it off everywhere else,
 and if a workflow arrives with two of them on, the one switched on last speaks and the run says
