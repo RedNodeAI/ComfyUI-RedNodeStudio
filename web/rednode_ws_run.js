@@ -960,7 +960,10 @@ export async function queueWorkflow(btn) {
 }
 
 export const RUN_SUBS = [
-  ["run", "RUN", "Queue the workflow and watch the stages, the picture and the memory."],
+  // "Live", not "Run": the tab is Run, and a page called Run under a tab called
+  // Run under a title reading Run said nothing (you, 2026-09-25). This page is
+  // the run as it happens.
+  ["run", "LIVE", "Queue the workflow and watch the stages, the picture and the memory."],
   ["review", "REVIEW", "Every finished picture from this Workspace's runs, newest first. "
                        + "Right-click one to copy it, open its folder, or run it again."],
   ["stages", "STAGES", "What each Stage Tap and the Detailer's taps photographed in the "
