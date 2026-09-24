@@ -317,6 +317,13 @@ css.textContent = `
 .rn-ws-rail.compact .rn-ws-tab.rail{gap:5px;padding:7px 4px;justify-content:center}
 .rn-ws-rail.compact .rn-ws-tab.rail .lb{display:none}
 .rn-ws-rail.compact .rn-ws-tab.rail .dot{width:6px;height:6px}
+.rn-ws-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;min-height:280px;height:100%;color:#c8ccd2;background:#101215;padding:24px;text-align:center}
+.rn-ws-loading .t{font-weight:700;font-size:16px;color:#e8ecf1}
+.rn-ws-loading .s{font-size:12.5px;color:#8a919b;max-width:520px;line-height:1.5}
+@keyframes rnSpin{to{transform:rotate(360deg)}}
+.rn-ws-loading .spin{width:36px;height:36px;border-radius:50%;border:3px solid #2a2e35;
+  border-top-color:#e0435a;animation:rnSpin .9s linear infinite}
 @keyframes rnRailPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.7);opacity:.55}}
 .rn-ws-tab.rail.running .dot,.rn-ws-railsub.running .dot{background:#e0435a;
   box-shadow:0 0 8px #e0435a;animation:rnRailPulse 1.1s ease-in-out infinite}
@@ -20110,6 +20117,8 @@ function saveFolds(node) {
 // draw where it stood, and what was left on screen was a black rectangle with no way
 // back short of reloading the tab. The error is logged in full and the panel says so
 // with a Try again, so a bad page costs one click instead of the session.
+export const _buildForTests = (node, attempt = 0) => build(node, attempt);
+
 export function render(node) {
   try {
     renderPage(node);
@@ -20853,14 +20862,81 @@ async function fetchPresetNames(node) {
 // the config JSON, with nothing to press (you, 2026-09-23: "this error keeps
 // happening sometimes"). The build is retried on a short ladder, clicking the node
 // retries as well, and a graph that finished loading without a panel gets one.
+/** THE SHELL FIRST: the panel's element and its DOM widget, holding a loading
+ *  screen, mounted the moment the frontend can take a DOM widget. Everything the
+ *  real panel needs (the config widget, the lists, a page that draws) can come
+ *  later and be retried; what could not wait was the bare black node with its
+ *  sockets and the config JSON showing, which is what a slow first load used to
+ *  leave behind (you, 2026-09-25). The shell is what the user sees until then.
+ */
+function mountShell(node) {
+  if (node._rnShell) return node._rnShell;
+  if (!node.addDOMWidget) return null;
+  injectStyle();
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-wrap";
+  const card = document.createElement("div");
+  card.className = "rn-ws-loading";
+  const spin = document.createElement("div");
+  spin.className = "spin";
+  const title = document.createElement("div");
+  title.className = "t";
+  title.textContent = "RedNode Studio Workspace";
+  const status = document.createElement("div");
+  status.className = "s";
+  status.textContent = "Loading the panel\u2026";
+  const again = document.createElement("button");
+  again.className = "rn-ws-btn";
+  again.style.cssText = "width:auto;padding:0 16px;display:none";
+  again.textContent = "Try again";
+  again.onclick = () => { again.style.display = "none"; build(node, 0); };
+  card.append(spin, title, status, again);
+  wrap.appendChild(card);
+  // the config widget goes out of sight as soon as it exists, whether or not the
+  // panel is ready: a JSON box on the node was never something to look at
+  const cfgW = findWidget(node, "config");
+  if (cfgW) hideConfigWidget(cfgW);
+  const w = node.addDOMWidget("rednode_workspace_ui", "rednode_workspace_ui", wrap, {
+    serialize: false,
+    getValue: () => findWidget(node, "config")?.value,
+    setValue: (v) => {
+      const c = findWidget(node, "config");
+      if (c) c.value = v ?? "{}";
+      if (node._rnWidget) { node._rnCfg = readCfg(node); render(node); }
+    },
+    getMinHeight: () => MIN_PANEL_H,
+  });
+  w.element = wrap;
+  w.options.getMinHeight = () => MIN_PANEL_H;
+  w.options.minNodeSize = [NODE_MIN_W, MIN_PANEL_H + 60];
+  node._rnRootEl = wrap;
+  node._rnShell = { wrap, w, card, status, again };
+  return node._rnShell;
+}
+
+function hideConfigWidget(cfgW) {
+  cfgW.type = "hidden";
+  cfgW.hidden = true;
+  cfgW.computeSize = () => [0, -4];
+  if (cfgW.element) cfgW.element.style.display = "none";
+  if (cfgW.inputEl) cfgW.inputEl.style.display = "none";
+}
+
+// the wait before the next try: quick at first, then every two seconds for as
+// long as a slow first load can reasonably take, then the screen says so and
+// waits for a click. Never a silent give-up: the loading screen is on the node
+// the whole time, so a bare node cannot happen.
+const BUILD_WAITS = [150, 400, 1000, 2000];
+const BUILD_TRIES = 60;
+
 function build(node, attempt = 0) {
   if (!node || node._rnWidget) return;
-  const wait = [150, 400, 1200, 3000][attempt];
-  // A NODE MADE BEFORE THE FRONTEND CAN TAKE DOM WIDGETS used to be dropped here
-  // and never looked at again, which is how a Workspace came up bare with its
-  // sockets and the config JSON showing. It waits its turn instead.
-  if (!node.addDOMWidget) {
-    if (wait !== undefined) setTimeout(() => build(node, attempt + 1), wait);
+  const shell = mountShell(node);
+  const say = (t) => { if (shell) shell.status.textContent = t; };
+  if (!shell) {
+    // the frontend cannot take a DOM widget yet: nothing to show, so wait
+    if (attempt < BUILD_TRIES) setTimeout(() => build(node, attempt + 1),
+                                          BUILD_WAITS[Math.min(attempt, BUILD_WAITS.length - 1)]);
     else console.error("[RedNode Workspace] this ComfyUI never offered addDOMWidget, so "
       + "the panel cannot be built. Click the node to try again.");
     return;
@@ -20868,19 +20944,26 @@ function build(node, attempt = 0) {
   try {
     buildPanel(node);
   } catch (e) {
-    console.error(`[RedNode Workspace] the panel did not build (try ${attempt + 1}):`, e);
-    if (wait !== undefined) setTimeout(() => build(node, attempt + 1), wait);
-    else {
-      console.error("[RedNode Workspace] the panel is not building. The node keeps its "
-        + "settings, so nothing is lost: click the node to try again, or reload the page.");
+    const wait = BUILD_WAITS[Math.min(attempt, BUILD_WAITS.length - 1)];
+    if (attempt < BUILD_TRIES) {
+      if (attempt >= 2) console.warn(`[RedNode Workspace] the panel is not ready yet (try ${attempt + 1}):`, e?.message || e);
+      say(attempt < 3 ? "Loading the panel\u2026"
+          : `Still loading\u2026 (${e?.message || "not ready yet"})`);
+      setTimeout(() => build(node, attempt + 1), wait);
+    } else {
+      console.error("[RedNode Workspace] the panel did not build:", e);
+      say("The panel did not build: " + (e?.message || e) + ". Nothing is lost; the "
+          + "node keeps its settings.");
+      shell.again.style.display = "";
     }
   }
 }
 
 function buildPanel(node) {
   if (!node.addDOMWidget || node._rnWidget) return;
+  const shell = mountShell(node);
   const cfgW = findWidget(node, "config");
-  if (!cfgW) { requestAnimationFrame(() => build(node)); return; }
+  if (!cfgW) throw new Error("the config widget is not there yet");
   // a Workspace just dropped on the canvas starts ready to render: the built-in
   // sampler and a square latent. A loaded workflow's config replaces this on
   // configure, so nothing saved is touched.
@@ -20891,16 +20974,21 @@ function buildPanel(node) {
       latent: { on: true, aspect: "1:1", w: 1024, h: 1024, scale: 1 },
     });
   }
-  cfgW.type = "hidden";
-  cfgW.hidden = true;
-  cfgW.computeSize = () => [0, -4];
-  if (cfgW.element) cfgW.element.style.display = "none";
-  if (cfgW.inputEl) cfgW.inputEl.style.display = "none";
+  hideConfigWidget(cfgW);
 
   node._rnCfg = readCfg(node);
 
-  const wrap = document.createElement("div");
-  wrap.className = "rn-ws-wrap";
+  // the shell's element is the panel's: listeners go on once, whatever the try
+  const wrap = shell.wrap;
+  if (wrap._rnWired) {
+    shell.card.remove();
+    node._rnWidget = shell.w;
+    wireNodeHooks(node);
+    render(node);
+    pushStudioPreset(node);
+    return;
+  }
+  wrap._rnWired = true;
   // A key is kept off the canvas only when it is going into a box you are typing in,
   // so a prompt with a "d" in it never deletes a node. Everywhere else on the panel
   // the key belongs to ComfyUI: its queue shortcut, r, and the rest of its keymap all
@@ -20985,17 +21073,17 @@ function buildPanel(node) {
   bindSliderWheel(wrap);
   node._rnRootEl = wrap;
 
-  const w = node.addDOMWidget("rednode_workspace_ui", "rednode_workspace_ui", wrap, {
-    serialize: false,
-    getValue: () => cfgW.value,
-    setValue: (v) => { cfgW.value = v ?? "{}"; node._rnCfg = readCfg(node); render(node); },
-    getMinHeight: () => MIN_PANEL_H,
-  });
-  w.element = wrap;
-  w.options.getMinHeight = () => MIN_PANEL_H;
-  w.options.minNodeSize = [NODE_MIN_W, MIN_PANEL_H + 60];
-  node._rnWidget = w;
+  shell.card.remove();
+  node._rnWidget = shell.w;
+  wireNodeHooks(node);
 
+  render(node);
+  pushStudioPreset(node);                            // also hides the studio's own dropdown
+}
+
+function wireNodeHooks(node) {
+  if (node._rnHooksWired) return;
+  node._rnHooksWired = true;
   const prevSer = node.onSerialize;
   node.onSerialize = function (o) {
     prevSer?.apply(this, arguments);
@@ -21016,9 +21104,6 @@ function buildPanel(node) {
     prevRz?.apply(this, args);
     applyTuck(this);
   };
-
-  render(node);
-  pushStudioPreset(node);                            // also hides the studio's own dropdown
 }
 
 // the server tells us which images a random tab actually rolled

@@ -87,6 +87,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - ComfyUI's keyboard shortcuts work with the pointer over the panel. Only keys going into a
   box you are typing in are held back, and Delete and Backspace stay blocked everywhere on
   the panel, since the panel's own node is the selected one
+- The Workspace shows a loading screen from its first frame. The panel's shell goes up the
+  moment the frontend can hold it, with a spinner and a status line, and the panel builds
+  into it as soon as its widget and lists are there, retrying for as long as a slow first load
+  can take. A node can no longer come up as a black box with its sockets and the config JSON
+  showing; if the panel truly cannot build, the screen says why and offers Try again
 - A panel that fails to build is retried and comes back; clicking a bare node builds it
   again, and a page that throws says so with a Try again instead of leaving a black
   rectangle
