@@ -47,6 +47,7 @@ TWO ENGINES, chosen on the page, never switched between on their own:
 """
 
 import json
+import time
 
 import torch
 
@@ -330,6 +331,12 @@ def canvas_size(image):
     return (max(16, int(round(w * k / 16)) * 16), max(16, int(round(h * k / 16)) * 16))
 
 
+# WHERE A CONVERSION'S TIME GOES, per node, for the timing line render() prints.
+# A tiled upscale is many conversions, and "slow" is only fixable once it says
+# which part is slow (you, 2026-09-25).
+_TIMES = {}
+
+
 def _call(name, **kw):
     """A node through the entry point IT declares, looked up by name."""
     cls = _registry().get(name)
@@ -339,7 +346,11 @@ def _call(name, **kw):
     fn = getattr(cls(), getattr(cls, "FUNCTION", "") or "", None)
     if fn is None:
         raise ValueError("the %s node has no callable entry point" % name)
-    return fn(**kw)
+    t0 = time.perf_counter()
+    try:
+        return fn(**kw)
+    finally:
+        _TIMES[name] = _TIMES.get(name, 0.0) + (time.perf_counter() - t0)
 
 
 def sampler_for(node_id, label, node="KSampler"):
@@ -431,8 +442,27 @@ def _engine(rc, cfg, ws):
 
 def render(rc, source, cfg, seed, node_id=None):
     """IMAGE [1,H,W,3]: the source as a photograph. Cached by what made it."""
+    _TIMES.clear()
+    t0 = time.perf_counter()
     with torch.inference_mode():
-        return _render(rc, source, cfg, seed, node_id)
+        out = _render(rc, source, cfg, seed, node_id)
+    total = time.perf_counter() - t0
+    if total >= 0.5:
+        # the nodes called by name, largest first; what is left is the sampler
+        # and the pack's own encoders, which do not go through _call
+        parts = sorted(_TIMES.items(), key=lambda kv: -kv[1])[:5]
+        rest = max(0.0, total - sum(_TIMES.values()))
+        short = {"Easy_QwenEdit2509": "Qwen edit encode", "TextEncodeKrea2OstrisEdit": "Ostris encode",
+                 "VAEEncode": "VAE encode", "VAEDecode": "VAE decode", "LoraLoader": "LoRA",
+                 "Krea2OstrisEditModelPatch": "edit patch", "ColorCorrect": "colour",
+                 "LayerUtility: ImageScaleByAspectRatio V2": "resize",
+                 "FluxKontextMultiReferenceLatentMethod": "reference method",
+                 "ConditioningZeroOut": "zero negative", "EmptySD3LatentImage": "blank canvas",
+                 "ModelSamplingAuraFlow": "shift", "KSampler": "sampler", "KSamplerAdvanced": "sampler"}
+        print("[RedNode Realism] %.1f s: %s, sampling and the rest %.1f s"
+              % (total, ", ".join("%s %.1f s" % (short.get(n, n), t) for n, t in parts), rest),
+              flush=True)
+    return out
 
 
 def _render(rc, source, cfg, seed, node_id=None):

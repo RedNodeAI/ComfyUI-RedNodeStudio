@@ -1605,11 +1605,14 @@ class RedNodeStudioDetailer:
         lines.append("%s: %d x %d -> %d x %d, %d tile%s" % (
             tag, w0, h0, w1, h1, n_tiles, "" if n_tiles == 1 else "s"))
         k = 0
+        import time as _time
+        _t_tiles, _slowest = _time.perf_counter(), 0.0
         for b in range(int(base.shape[0])):
             for y in ys:
                 for x in xs:
                     k += 1
                     sub = base[b:b + 1, y:y + th, x:x + tw, :]
+                    _t1 = _time.perf_counter()
                     try:
                         done = _rl.render(rc_t, sub, ws_cfg, int(seed) + k, node_id=node_id)
                     except Exception as exc:
@@ -1626,6 +1629,11 @@ class RedNodeStudioDetailer:
                     out[b:b + 1, y:y + th, x:x + tw, :] += done * w2
                     if b == 0:
                         acc[:, y:y + th, x:x + tw, :] += w2
+                    _slowest = max(_slowest, _time.perf_counter() - _t1)
+        _spent = _time.perf_counter() - _t_tiles
+        if k:
+            lines.append("%s: %d tiles in %.1f s, %.1f s each, the slowest %.1f s"
+                         % (tag, k, _spent, _spent / k, _slowest))
         out = (out / acc.clamp(min=1e-6)).clamp(0, 1)
         blend = max(0.0, min(1.0, float(s["blend"])))
         if blend < 1.0:
