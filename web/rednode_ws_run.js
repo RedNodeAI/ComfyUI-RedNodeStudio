@@ -1237,15 +1237,22 @@ function runPage(node, body) {
     }
     const src = S.final || S.frame?.src;
     if (!src) return;
-    // a frame still forming: a plain full screen of it
+    // A FRAME STILL FORMING: a plain full screen of it, and a LIVE one. The live
+    // frame is a small preview, so it is shown at most of the screen's height
+    // rather than at its own few hundred pixels; the page's refresh keeps its
+    // source current, and when the run finishes the finished picture takes over
+    // at its own size, without closing and opening the view again (you,
+    // 2026-09-25).
     const ov = el("div", "rn-run-fsov");
     ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
       + "display:flex;align-items:center;justify-content:center;cursor:zoom-out";
     const big = el("img");
     big.src = src;
-    big.style.cssText = "max-width:96vw;max-height:96vh;object-fit:contain";
+    big.style.cssText = "max-width:96vw;max-height:96vh;object-fit:contain"
+      + (S.final ? "" : ";height:82vh");
     ov.appendChild(big);
-    ov.addEventListener("pointerdown", () => ov.remove());
+    ov.addEventListener("pointerdown", () => { ov.remove(); node._rnRunFsLive = null; });
+    node._rnRunFsLive = { ov, big };
     document.body.appendChild(ov);
   };
   fsBtn.onclick = showBig;
@@ -1421,6 +1428,17 @@ function refresh(view) {
     refs.boxes.appendChild(b);
   }
 
+  // the full-screen view of a run in progress follows the run: the newest frame
+  // while it renders, the finished picture as soon as there is one
+  const live = node._rnRunFsLive;
+  if (live) {
+    if (live.ov.isConnected === false) node._rnRunFsLive = null;
+    else {
+      const want = S.final || S.frame?.src;
+      if (want && live.big.src !== want) live.big.src = want;
+      if (S.final) live.big.style.height = "";
+    }
+  }
   // picture
   const fr = S.frame;
   // WHICH VERSION OF THE RUN: only the ones this run actually kept are offered,

@@ -103,6 +103,10 @@ format matters: **version** then a date, notes below until the next bold line.
   being read as an engine rig, whose own strength dial speaks for the denoise socket, so
   it handed over a 1.0 nobody set and every i2i pass came out as a full repaint. External
   and handled engine rigs keep their strength dial, which is theirs to set
+- The Run page's full-screen view follows the run. Opened on a live frame it shows each newer
+  frame at most of the screen's height, and when the run finishes the finished picture takes
+  over at its own size, instead of the view staying on the small frame until it was closed and
+  opened again
 - The Save tab's raw output is the model's own render again: the copy is taken before the
   Editor's edits on the render, the Detailer and Post FX. It was taken after Re-angle, Realism
   and Swap had run, so a raw copy could carry a converted or swapped picture
