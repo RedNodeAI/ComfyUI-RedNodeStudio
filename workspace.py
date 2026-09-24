@@ -907,7 +907,8 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
     raw = cfg.get("detailer") if isinstance(cfg.get("detailer"), dict) else {}
     stages = [s for s in (raw.get("stages") or []) if isinstance(s, dict)
               and s.get("on", True)
-              and s.get("type") in ("sampler", "detailer", "upscale", "usdu", "vosr2")]
+              and s.get("type") in ("sampler", "detailer", "upscale", "usdu", "vosr2",
+                                    "realism")]
     if not stages:
         return None
     from .refine_pipeline import UPSCALE_SIZES
@@ -916,7 +917,7 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         kind = s.get("type")
         label = {"sampler": "Sampler pass", "detailer": "Detailer pass",
                  "upscale": "SeedVR2 pass", "usdu": "Tiled upscale",
-                 "vosr2": "VOSR2 pass"}[kind]
+                 "vosr2": "VOSR2 pass", "realism": "Realism pass"}[kind]
         parts = []
         other = str(s.get("rig") or "").strip()
         active_name = str((cfg["models"].get("rigs") or [{}])[min(cfg["models"].get("active", 0),

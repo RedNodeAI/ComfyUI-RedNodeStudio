@@ -40,6 +40,14 @@ format matters: **version** then a date, notes below until the next bold line.
   more than one version
 - The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
   Quick sizes from 1024 to 2048 in quarter steps
+- Realism is a Detailer pass now, so an illustration can become a photograph in the middle of a
+  chain and every pass after it works on the photograph. The recipe stays on the Editor's Realism
+  page and the card carries what is worth changing per pass: the engine, the photo finish, the
+  conversion LoRA and its strength, which LoRA set runs under it, and the words it is asked for.
+  It also has a Denoise bar, which that page does not: 1.00 converts as the page does, and below
+  that the picture is the starting point and only part of it is rewritten, so the original's own
+  texture survives. Blend mixes the conversion back over the picture it came from for no extra
+  render. No scale on this one: the frame comes back the size it arrived
 - The Editor's Realism page picks which LoRA set runs under the conversion, rather than only
   whether one does. The switch had no picker beside it, so every conversion ran whatever the
   rig pointed at, which is Main unless a rig names another: the first set on the tab, for

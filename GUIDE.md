@@ -438,7 +438,7 @@ and the Repeat count, and a repeat above one offers a denoise and a scale per ro
 Prompt holds the LoRA stack switch and its set, the four Krea 2 references, a LoRA for this pass
 only, which Prompts-tab row it reads, and a box that wins over all of that when it has words.
 
-Three kinds of pass:
+The kinds of pass:
 
 - **Sampler**: the whole frame refined at a denoise, an image to image over what arrived. Its
   scale sticks, so 0.5 then 2.0 across two passes is the shrink-and-regrow chain.
@@ -453,6 +453,15 @@ Three kinds of pass:
 - **Tiled upscale**: Ultimate SD Upscale as a pass, the rig's model and the pass's prompt over
   tiles, an upscale model first or a plain resize, opened on 6 steps of deis at 0.25 denoise,
   1024 tiles padded 128 and no seam fix. Needs ComfyUI_UltimateSDUpscale.
+- **Realism**: the Editor's conversion as a pass, so an illustration can become a photograph in
+  the middle of a chain and the passes after it work on the photograph. The recipe is the Editor's
+  Realism page, so there is one place to tune the sizes, the encoder and the sampler; the card
+  carries what is worth changing per pass: the engine, the photo finish, the conversion LoRA and
+  its strength, which LoRA set runs under it, and the words it is asked for. It has a **Denoise**
+  bar, which the page does not: at 1.00 it converts as the page does, and below that the picture
+  is the starting point and only part of it is rewritten, so the original's own texture survives.
+  **Blend** mixes the converted picture back over the one it came from, which takes a conversion
+  part of the way for no extra render. No scale: the frame comes back the size it arrived.
 - **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
   but takes the tone from the picture as it arrived, the drift fix for a long chain.
 

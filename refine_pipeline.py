@@ -69,7 +69,7 @@ def parse_pipeline(config_json):
                            "color": str(s.get("color") or "")})
             continue
         if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2",
-                                 "reader"):
+                                 "reader", "realism"):
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -86,7 +86,8 @@ def parse_pipeline(config_json):
             "negative": str(s.get("negative") or ""),
             "denoise": _num("denoise", 0.0, 1.0,
                             0.15 if s["type"] == "detailer" else
-                            0.25 if s["type"] == "usdu" else 0.3),
+                            0.25 if s["type"] == "usdu" else
+                            1.0 if s["type"] == "realism" else 0.3),
             "steps": _num("steps", 0, 200, 0, int),          # 0 = the rig's
             "cfg": _num("cfg", 0.0, 30.0, 0.0),              # 0 = the rig's
             "sampler": str(s.get("sampler") or ""),          # "" = the rig's
@@ -112,6 +113,21 @@ def parse_pipeline(config_json):
                                if isinstance(s.get("reader_engines"), dict)
                                and s["reader_engines"] else None),
             "reader_keep": bool(s.get("reader_keep", True)),
+            # REALISM AS A PASS: the Editor's Realism page holds the recipe (the
+            # encoder, the sizes, the sampler, the system instruction), and a pass
+            # takes it whole and overrides the few things worth changing per pass.
+            # "" and 0 mean "the page's", the same as "" means "the rig's" above,
+            # so a page edited later still reaches every pass that did not disagree.
+            "realism_engine": (s["realism_engine"]
+                               if s.get("realism_engine") in ("exact", "alternative")
+                               else ""),
+            "realism_lora": str(s.get("realism_lora") or ""),
+            "realism_strength": _num("realism_strength", 0.0, 2.0, 0.0),
+            # tri-state on purpose: "" follows the page, so switching the page's
+            # photo finish on moves every pass that never said otherwise
+            "realism_photo": (s["realism_photo"] if s.get("realism_photo") in ("on", "off")
+                              else ""),
+            "realism_prompt": str(s.get("realism_prompt") or "")[:500],
             "sam_model": str(s.get("sam_model") or ""),      # "" = the loader default
             # 1.0 is the picture as it arrives. A sampler pass at 0.5 then another
             # at 2.0 is the shrink-and-regrow chain that invents detail, which is
@@ -898,7 +914,7 @@ from . import run_events as _run_events
 
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
               "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
-              "reader": "Image to Text"}
+              "reader": "Image to Text", "realism": "Realism"}
 WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 
@@ -1141,6 +1157,21 @@ class RedNodeStudioDetailer:
                     line = "%s: free VRAM failed: %s" % (tag, exc)
                 _say(line)
                 report.append(line)
+            if s["type"] == "realism":
+                # RENDERS ON ITS OWN ENGINE, not the pass rig: the conversion loads
+                # the files the Editor's page names (or the active rig's), the way
+                # that page does, so nothing here needs a rig resolved first. It
+                # sits after Free VRAM on purpose: it is the heaviest thing a chain
+                # can ask for, and that switch is there for exactly this.
+                out, lines = self._realism_pass(out, s, ws_cfg, seed + i, tag,
+                                                unique_id)
+                for line in lines:
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d realism" % i)
+                continue
             # A SEEDVR2 UPSCALE loads no rig: the pack's own loaders do the
             # loading, and a pass that could not run passes the picture on.
             # With a region it works the target's crop only, and the frame
@@ -1432,6 +1463,69 @@ class RedNodeStudioDetailer:
             if torch.is_tensor(v) and v.ndim == 4:
                 return v, None
         return frame, "the tiled upscale returned no image; passed through"
+
+    def _realism_pass(self, img, s, ws_cfg, seed, tag, node_id=None):
+        """The Editor's Realism conversion, run here as a pass. (IMAGE, [line]).
+
+        THE RECIPE IS THE EDITOR'S. Everything that took a sandbox week to settle -
+        the encoder, the sizes, the sampler pair, the system instruction - is read
+        off that page, so there is one place to tune it and a pass carries only the
+        handful of things worth changing per pass. Nothing of the Editor's own
+        stage runs: this reads its settings, not its switch.
+
+        THE FRAME KEEPS ITS SIZE. Realism renders at its own longest side, and a
+        pass in the middle of a chain that silently changed the frame would move
+        every pass after it; the conversion comes back at the size it arrived
+        (you, 2026-09-24, on not wanting a scale here).
+        """
+        from . import realism as _rl
+        lines = []
+        base = ((ws_cfg.get("tabs") or {}).get("i2i") or {}).get("realism") or {}
+        rc = dict(_rl.parse(base))
+        rc["on"] = True                  # the pass's own switch is the one that counts
+        rc["skip_pass"] = False
+        if s["realism_engine"]:
+            rc["engine"] = s["realism_engine"]
+        if s["realism_lora"] and s["realism_lora"] != "None":
+            # chosen here, so the page's recorded hash is not this file's
+            rc["lora"], rc["lora_sha256"] = s["realism_lora"], ""
+        if s["realism_strength"] > 0:
+            rc["strength"] = s["realism_strength"]
+        if s["realism_photo"]:
+            rc["photo"] = s["realism_photo"] == "on"
+        if s["realism_prompt"].strip():
+            rc["prompt"] = s["realism_prompt"].strip()
+        rc["denoise"] = float(s["denoise"])
+        rc["loras"] = bool(s["loras"])
+        rc["lora_set"] = s["lora_set"]
+        bits = ["%s engine" % rc["engine"],
+                "photo finish" if rc["photo"] else "one pass",
+                "denoise %.2f" % rc["denoise"]]
+        if float(s["blend"]) < 1.0:
+            bits.append("blend %.2f" % float(s["blend"]))
+        lines.append("%s: %s" % (tag, ", ".join(bits)))
+        try:
+            done = _rl.render(rc, img, ws_cfg, int(seed), node_id=node_id)
+        except Exception as exc:
+            lines.append("%s failed: %s; the picture is passed through" % (tag, exc))
+            return img, lines
+        if done is None:
+            return img, lines
+        done = done.to(img.device, img.dtype)
+        if done.shape[1:3] != img.shape[1:3]:
+            lines.append("%s: converted at %d x %d, back to the frame's %d x %d" % (
+                tag, done.shape[2], done.shape[1], img.shape[2], img.shape[1]))
+            done = F.interpolate(done[:, :, :, :3].permute(0, 3, 1, 2),
+                                 size=img.shape[1:3], mode="bilinear",
+                                 align_corners=False).permute(0, 2, 3, 1)
+        blend = max(0.0, min(1.0, float(s["blend"])))
+        if blend < 1.0:
+            # the whole frame, not a crop: a plain mix of the conversion over the
+            # picture it came from, which is what a half-converted picture means
+            if done.shape[0] != img.shape[0]:
+                done = done[:1].expand(img.shape[0], -1, -1, -1)
+            done = (img[:, :, :, :3] * (1.0 - blend) + done * blend).clamp(0, 1)
+        return done, lines
 
     def _tone(self, img, src, s, tag, report):
         """Tone lock on a pass that asked for it: the result's detail, the

@@ -237,6 +237,12 @@ def parse(raw):
         # KSampler
         "steps": num("steps", 8, 1, 100, int),
         "cfg": num("cfg", 1.0, 0.0, 20.0),
+        # HOW MUCH IS REPAINTED. 1.00 is the conversion as the workflow runs it and
+        # is what the Editor's page uses; below it the source is the starting point
+        # and only part of it is rewritten, which is how a conversion can be taken
+        # halfway. The two encoders that sample a blank canvas encode the source
+        # instead once this drops under 1, or there would be nothing to keep.
+        "denoise": num("denoise", 1.0, 0.0, 1.0),
         "sampler": str(r.get("sampler") or "euler"),
         "scheduler": str(r.get("scheduler") or "beta57"),
         "seed": num("seed", 0, 0, 2 ** 53, int),
@@ -403,7 +409,7 @@ def _render_alternative(rc, source, model, clip, vae, seed, node_id):
     negative = _call("CLIPTextEncode", clip=clip, text="")[0]
     return alt_sampler_for(node_id, "realism")(
         model, int(seed), int(rc["steps"]), float(rc["cfg"]), rc["sampler"],
-        rc["scheduler"], positive, negative, latent, denoise=1.0)
+        rc["scheduler"], positive, negative, latent, denoise=float(rc["denoise"]))
 
 
 def _engine(rc, cfg, ws):
@@ -530,7 +536,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     out = sampler_for(node_id, "realism")(
         model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
-        negative=negative, latent_image=latent, denoise=1.0)[0]
+        negative=negative, latent_image=latent, denoise=float(rc["denoise"]))[0]
     return _finish(key, _call("VAEDecode", samples=out, vae=vae)[0])
 
 
@@ -542,10 +548,18 @@ def _ostris_model(rc, model):
 
 
 def _ostris_encode(rc, img, clip, vae):
-    """The Ostris pack's own encode, a zeroed negative and a blank canvas at 1MP."""
+    """The Ostris pack's own encode, a zeroed negative and a blank canvas at 1MP.
+
+    THE CANVAS IS BLANK because the picture rides in the conditioning, not in the
+    latent: that is the workflow, and at the full denoise it is what runs. Under a
+    full denoise there has to be something to keep, so the source is encoded as the
+    starting point instead and the sampler rewrites only part of it.
+    """
     positive = _call("TextEncodeKrea2OstrisEdit", clip=clip, prompt=rc["prompt"],
                      vae=vae, image1=img)[0]
     negative = _call("ConditioningZeroOut", conditioning=positive)[0]
+    if float(rc.get("denoise", 1.0)) < 1.0:
+        return positive, negative, _call("VAEEncode", pixels=img, vae=vae)[0]
     w, h = canvas_size(img)
     latent = _call("EmptySD3LatentImage", width=w, height=h, batch_size=1)[0]
     return positive, negative, latent
@@ -561,7 +575,7 @@ def _render_ostris(rc, img, model, clip, vae, seed, node_id, rig_name):
     out = sampler_for(node_id, "realism")(
         model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
-        negative=negative, latent_image=latent, denoise=1.0)[0]
+        negative=negative, latent_image=latent, denoise=float(rc["denoise"]))[0]
     return _call("VAEDecode", samples=out, vae=vae)[0]
 
 
@@ -577,7 +591,12 @@ def _render_photo(rc, img, model, clip, vae, seed, node_id, rig_name):
                   strength_clip=rc["photo_strength2"])[0]
     positive, negative, latent = _ostris_encode(rc, img, strong_clip, vae)
     steps = int(rc["photo_steps"])
-    split = max(1, min(int(rc["photo_split"]), steps - 1))
+    # KSamplerAdvanced has no denoise of its own: a partial repaint is the same
+    # schedule started late, over the source latent the encode handed back
+    _dn = float(rc.get("denoise", 1.0))
+    start = int(round(steps * (1.0 - _dn))) if _dn < 1.0 else 0
+    start = max(0, min(start, steps - 2))
+    split = max(start + 1, min(int(rc["photo_split"]), steps - 1))
     print("[RedNode Realism] %s on %s, photo finish: steps 0-%d at %.2f (%s), %d-%d at "
           "%.2f (%s), %s, shift %s"
           % (rc["lora"], rig_name or "the active rig", split, rc["photo_strength1"],
@@ -589,7 +608,7 @@ def _render_photo(rc, img, model, clip, vae, seed, node_id, rig_name):
                   positive=positive, negative=negative,
                   return_with_leftover_noise="disable")
     first = run(model=strong, sampler_name=rc["photo_sampler1"], latent_image=latent,
-                start_at_step=0, end_at_step=split, **common)[0]
+                start_at_step=start, end_at_step=split, **common)[0]
     out = run(model=light, sampler_name=rc["photo_sampler2"], latent_image=first,
               start_at_step=split, end_at_step=10000, **common)[0]
     return _call("VAEDecode", samples=out, vae=vae)[0]

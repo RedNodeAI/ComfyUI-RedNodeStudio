@@ -313,6 +313,98 @@ function readerCard(s, card, group, lab, A, changed) {
   if (!AUTO_STATUS.ollama && !autoAsked) fetchAutoStatus(changed);
 }
 
+/** REALISM AS A PASS: the Editor page's recipe, and the few things worth saying
+ *  per pass. No sampler rows, because the conversion's sampler, sizes, encoder and
+ *  system instruction all live on that page and took a sandbox week to settle;
+ *  changing them in two places would only be a way to disagree with yourself.
+ *
+ *  No scale either: the conversion renders at its own longest side and the pass
+ *  hands the frame back at the size it arrived (you, 2026-09-24).
+ */
+function realismCard(s, card, group, lab, A, L, changed) {
+  const g = group("Conversion");
+  const pick = (label, value, opts, tip, onset) => {
+    const sel = document.createElement("select");
+    for (const [v, l] of opts) {
+      const o = document.createElement("option");
+      o.value = v; o.textContent = l; o.selected = v === value;
+      sel.appendChild(o);
+    }
+    sel.title = tip;
+    sel.onchange = () => { onset(sel.value); changed(); };
+    g.line.append(lab(label), sel);
+    return sel;
+  };
+  const eng = pick("Engine", String(s.realism_engine || ""),
+       [["", "(the page's)"], ["exact", "Faithful"], ["alternative", "Loose"]],
+       "Which engine converts on this pass. (the page's) follows the Editor's "
+       + "Realism page, so changing it there moves this pass with it.",
+       (v) => { s.realism_engine = v; });
+  eng.dataset.realism = "engine";
+  const ph = pick("Photo finish", String(s.realism_photo || ""),
+       [["", "(the page's)"], ["on", "On"], ["off", "Off"]],
+       "The v30 double pass: more photographic skin and light, the layout kept, "
+       + "about twice the time. The Faithful engine only.",
+       (v) => { s.realism_photo = v; });
+  ph.dataset.realism = "photo";
+  // the conversion LoRA, searchable like every other LoRA picker in the pack
+  const lp = document.createElement("input");
+  lp.type = "text";
+  lp.dataset.realism = "lora";
+  lp.value = s.realism_lora && s.realism_lora !== "None" ? s.realism_lora : "";
+  lp.placeholder = "(the page's conversion LoRA)";
+  lp.style.cssText = "flex:1;min-width:140px";
+  lp.title = "The conversion LoRA for this pass. Empty takes the Editor page's, "
+           + "which it finds by name and by hash, so a chain can run two of them "
+           + "against each other without touching that page.";
+  makePicker(lp, () => L.loras || [], (v) => { s.realism_lora = v; changed(); },
+             { current: () => (s.realism_lora && s.realism_lora !== "None" ? s.realism_lora : ""),
+               emptyLabel: "(the page's)", recent: "realism-lora" });
+  g.line.append(lab("LoRA"), lp);
+  if (s.realism_lora && s.realism_lora !== "None") {
+    const st = document.createElement("input");
+    st.type = "number";
+    st.dataset.realism = "strength";
+    st.step = "0.05"; st.min = "0"; st.max = "2";
+    st.style.width = "52px";
+    st.value = String(s.realism_strength || 0);
+    st.title = "Strength of the conversion LoRA on this pass. 0 takes the page's.";
+    st.onchange = () => {
+      const v = parseFloat(st.value);
+      s.realism_strength = Number.isFinite(v) ? Math.max(0, Math.min(2, v)) : 0;
+      changed();
+    };
+    g.line.append(lab("Strength"), st);
+  }
+  card.appendChild(g.box);
+
+  // WHAT IT IS ASKED FOR. The page's is "transform the image to realistic
+  // photograph"; a pass can ask for something else without moving the page, which
+  // is what makes two conversions in one chain worth having.
+  const w = group("Asked for");
+  const box = document.createElement("input");
+  box.type = "text";
+  box.className = "ptext";
+  box.dataset.realism = "prompt";
+  box.style.flex = "1";
+  box.value = String(s.realism_prompt || "");
+  box.placeholder = "(the page's: transform the image to realistic photograph)";
+  box.title = "What this pass asks the conversion for. Empty takes the Editor page's "
+            + "words. The system instruction behind it stays the page's.";
+  box.onchange = () => { s.realism_prompt = box.value; changed(); };
+  w.line.appendChild(box);
+  card.appendChild(w.box);
+
+  const note = document.createElement("div");
+  note.className = "hint";
+  note.style.cssText = "margin:2px 0 0 2px";
+  note.dataset.realism = "note";
+  note.textContent = "Everything else comes from the Editor's Realism page: the sizes, "
+                   + "the encoder, the sampler and the instruction.";
+  A(note);
+  card.appendChild(note);
+}
+
 let LISTS = null;
 async function fetchLists() {
   if (LISTS) return LISTS;
@@ -484,6 +576,28 @@ function loraSetNames() {
   };
   walk(app.graph);
   return names;
+}
+
+/** WHICH LoRAs-TAB SET a pass runs with: (rig's), Main, or a named set. One
+ *  implementation, because two of them would drift the moment one grew an option. */
+function loraSetPicker(s, changed) {
+  const names = loraSetNames();
+  const cur = String(s.lora_set || "");
+  const opts = [["", "(rig's set)"], ...names.map((n) => [n, n])];
+  // a picked name that no longer exists shows as missing rather than silently
+  // turning into Main
+  if (cur && !names.includes(cur)) opts.push([cur, cur + " (missing)"]);
+  const sel = document.createElement("select");
+  for (const [v, l] of opts) {
+    const o = document.createElement("option");
+    o.value = v; o.textContent = l; o.selected = v === cur;
+    sel.appendChild(o);
+  }
+  sel.dataset.loraSet = "1";
+  sel.title = "Which LoRAs-tab set this pass runs with. (rig's set) follows the "
+            + "Models tab; Main is the first tab there.";
+  sel.onchange = () => { s.lora_set = sel.value; changed(); };
+  return sel;
 }
 
 // the Prompts-tab rows of the workspace in the graph, as a pass can name them:
@@ -1054,7 +1168,8 @@ function buildPanel(node, hostEl = null) {
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
-                vosr2: "VOSR2 upscale", reader: "Image to Text" })[x.type] || "Pass";
+                vosr2: "VOSR2 upscale", reader: "Image to Text",
+                realism: "Realism" })[x.type] || "Pass";
     };
     const uniqueName = (base, taken) => {
       if (!taken.has(base)) return base;
@@ -1220,7 +1335,14 @@ function buildPanel(node, hostEl = null) {
         const sum = document.createElement("span");
         sum.className = "k";
         sum.style.fontSize = "12px";
-        sum.textContent = s.type === "reader"
+        sum.textContent = s.type === "realism"
+          ? "converts the picture"
+            + " · " + (s.realism_engine === "alternative" ? "Loose"
+                            : s.realism_engine === "exact" ? "Faithful" : "the page's")
+            + (s.realism_photo === "on" ? " · photo finish" : "")
+            + (Number(s.denoise ?? 1) < 1 ? " · denoise " + Number(s.denoise).toFixed(2) : "")
+            + (Number(s.blend ?? 1) < 1 ? " · blend " + Number(s.blend).toFixed(2) : "")
+          : s.type === "reader"
           ? "reads the picture" + (s.reader_mode ? " \u00b7 " + s.reader_mode : "")
             + (String(s.prompt || "").trim() ? " \u00b7 plus your words" : "")
           : s.type === "upscale"
@@ -1566,6 +1688,37 @@ function buildPanel(node, hostEl = null) {
         // it reads the picture. What belongs here is which engines do the reading
         // (you, 2026-09-23), and the words you want combined with what they say.
         readerCard(s, card, group, lab, A, () => { writeCfg(node, d); render(); });
+      } else if (!isFolded && s.type === "realism") {
+        // REALISM AS A PASS. The Editor page holds the recipe; the card holds what
+        // is worth saying per pass, plus the two dials that make a conversion
+        // partial: denoise repaints less of it, blend mixes less of it back.
+        realismCard(s, card, group, lab, A, L, () => { writeCfg(node, d); render(); });
+        const str = group("Strength");
+        str.line.append(
+          lab("Denoise"),
+          bar(s.denoise ?? 1.0, 0, 1, 0.01, fmt2,
+              "How much of the picture the conversion repaints. 1.00 is the "
+              + "conversion as the Editor page runs it, from a blank canvas; below "
+              + "that the picture is the starting point and only part of it is "
+              + "rewritten, so the original's own texture survives.",
+              "#b8283c", (v) => { s.denoise = v; writeCfg(node, d); }),
+          lab("Blend"),
+          bar(s.blend ?? 1.0, 0, 1, 0.05, fmt2,
+              "How much of the converted picture goes back over the one it came "
+              + "from. 1.00 is the conversion; 0.50 is half way there. The cheap "
+              + "way to take a conversion partly, since it costs no extra render.",
+              "#c9a24a", (v) => { s.blend = v; writeCfg(node, d); }));
+        card.appendChild(str.box);
+        const lr = group("LoRAs");
+        lr.line.append(
+          tog("Stack", "loras", true,
+              "Run a LoRAs-tab set under the conversion LoRA, as the Editor page "
+              + "does. Off: the conversion LoRA alone."));
+        if (s.loras !== false) {
+          lr.line.append(lab("Set"),
+                         loraSetPicker(s, () => { writeCfg(node, d); render(); }));
+        }
+        card.appendChild(lr.box);
       } else if (!isFolded) {
         const isDet = s.type === "detailer";
         // SAMPLING: the numbers a KSampler wants plus the step window. Empty
@@ -1798,23 +1951,8 @@ function buildPanel(node, hostEl = null) {
               + "Off runs the rig raw. With it on, the Set box next to it says WHICH "
               + "LoRAs-tab set: (rig's) = the rig's own choice from the Models tab."));
         if (s.loras !== false) {
-          // LORA SET for this pass: (rig's), Main, or a named set of the
-          // workspace's LoRAs tab. A picked name that no longer exists shows
-          // as missing rather than silently turning into Main.
-          const names = loraSetNames();
-          const cur = String(s.lora_set || "");
-          const opts = [["", "(rig's set)"], ...names.map((n) => [n, n])];
-          if (cur && !names.includes(cur)) opts.push([cur, cur + " (missing)"]);
-          const ssel = document.createElement("select");
-          for (const [v, l] of opts) {
-            const o = document.createElement("option");
-            o.value = v; o.textContent = l; o.selected = v === cur;
-            ssel.appendChild(o);
-          }
-          ssel.title = "Which LoRAs-tab set this pass runs with. (rig's set) follows the "
-                     + "Models tab; Main is the first tab there.";
-          ssel.onchange = () => { s.lora_set = ssel.value; writeCfg(node, d); render(); };
-          bottom.append(...A(lab("Set"), ssel));
+          bottom.append(...A(lab("Set"),
+            loraSetPicker(s, () => { writeCfg(node, d); render(); })));
         }
         bottom.append(
           tog("Subject", "use_subject", false,
@@ -1973,6 +2111,10 @@ function buildPanel(node, hostEl = null) {
     // it. No render, no dials, so its card is the shortest in the list.
     mk("＋ Image to Text", () => ({ on: true, type: "reader", prompt: "",
                                reader_mode: "", reader_first: false }));
+    // REALISM: the Editor's conversion as a pass, on the page's recipe
+    mk("＋ Realism", () => ({ on: true, type: "realism", denoise: 1.0, blend: 1.0,
+                             realism_engine: "", realism_lora: "", realism_photo: "",
+                             realism_prompt: "", loras: true, lora_set: "" }));
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");
