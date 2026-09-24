@@ -18226,7 +18226,11 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
     !R.on ? "off" : (R.engine === "alternative" ? "Loose \u00b7 "
                      : R.photo ? "Photo finish \u00b7 " : "Faithful \u00b7 ")
             + (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
-            + (R.loras ? " \u00b7 with the stack" : ""),
+            // the summary names the SET, since which one runs is the thing you
+            // cannot otherwise see without queueing and reading the console
+            + (R.loras ? " \u00b7 with " + (R.lora_set
+                || (node._rnCfg.models?.rigs || [])[node._rnCfg.models?.active || 0]?.lora_set
+                || MAIN_SET) : ""),
     flat ? null : { node, key: "i2i_realism", open: !!R.on });
 
   const row0 = document.createElement("div");
@@ -18402,9 +18406,46 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
           + "pull against each other: 1.0 converts, 1.5 holds the illustration.");
     }
     card.appendChild(front);
-    toggle("Run the rig's LoRA stack too", "loras",
-           "On: the LoRAs tab's stack goes under the conversion LoRA. Off: the "
-           + "conversion LoRA alone.");
+    toggle("Run a LoRA stack under the conversion", "loras",
+           "On: a LoRAs-tab set goes under the conversion LoRA, and the Set row says "
+           + "which. Off: the conversion LoRA alone.");
+    if (R.loras) {
+      // WHICH SET, not just whether. The backend has taken a set name all along
+      // (realism.py parse: lora_set), and with no picker here every conversion ran
+      // whatever the rig pointed at, which is Main unless a rig says otherwise: the
+      // first set on the tab, for everyone who never set one (you, 2026-09-24).
+      if (typeof R.lora_set !== "string") R.lora_set = "";
+      const srow = document.createElement("div");
+      srow.className = "rn-ws-row";
+      const sl = document.createElement("span");
+      sl.className = "rn-ws-note";
+      sl.textContent = "Set";
+      const ssel = loraSetSelect(node, node._rnCfg, () => R.lora_set,
+                                 (v) => { R.lora_set = v; }, "(rig's set)",
+                                 "Which LoRAs-tab set runs under the conversion LoRA. "
+                                 + "(rig's set) follows the Models tab, which is Main "
+                                 + "unless the rig names one.");
+      ssel.dataset.choice = "realism_lora_set";
+      srow.append(sl, ssel);
+      card.appendChild(srow);
+      // and what that resolves to, so the answer is on the card rather than in the
+      // console after a queue: the same line the Paint LoRAs routing carries
+      const cfgAll = node._rnCfg;
+      const rig = (cfgAll.models?.rigs || [])[cfgAll.models?.active || 0] || {};
+      const setName = R.lora_set || rig.lora_set || MAIN_SET;
+      const slots = setName === MAIN_SET
+        ? (cfgAll.loras?.slots || [])
+        : ((cfgAll.lora_sets || []).find((x) => x.name === setName)?.slots || []);
+      const n = slots.filter((x) => x && x.type !== "title" && x.name && x.name !== "None").length;
+      const line = document.createElement("div");
+      line.className = "rn-ws-note";
+      line.dataset.choice = "realism_lora_line";
+      line.style.cssText = "border-left:2px solid #8ad2f0;padding-left:7px";
+      line.textContent = "The conversion runs with the \"" + setName + "\" set"
+        + (R.lora_set ? " (picked here)" : " (the rig's own choice)")
+        + " · " + n + " LoRA" + (n === 1 ? "" : "s");
+      card.appendChild(line);
+    }
 
     const exact = R.engine !== "alternative";
     if (exact) {

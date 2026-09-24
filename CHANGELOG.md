@@ -40,6 +40,11 @@ format matters: **version** then a date, notes below until the next bold line.
   more than one version
 - The Latent tab's Scale reads in 1024s: 1.00 is 1024 x 1024, 1.50 is 1536 x 1536, with
   Quick sizes from 1024 to 2048 in quarter steps
+- The Editor's Realism page picks which LoRA set runs under the conversion, rather than only
+  whether one does. The switch had no picker beside it, so every conversion ran whatever the
+  rig pointed at, which is Main unless a rig names another: the first set on the tab, for
+  anyone who never set one. A line under the picker names the set that will actually run and
+  how many LoRAs are in it, and the page's summary names it too
 - Delete takes a picture off the Shelf, the one you are pointing at, leaving the file on
   disk exactly where it was. An empty shelf passes Delete on to ComfyUI, which is how the
   node itself is still removed with the pointer over its panel

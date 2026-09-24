@@ -317,7 +317,10 @@ and after in the result, and it can take its picture from the Source gallery. **
 illustration into a photograph. Its Exact engine is the Anything2Real workflow node for node, with
 an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
 Alternative engine is the pack's own and needs no other pack. It finds the conversion LoRA among
-your files by name and hash. **Re-angle** re-shoots the picture from another viewpoint with the
+your files by name and hash. A LoRAs-tab set can run underneath the conversion, and the **Set**
+row says which one: left on (rig's set) it follows the Models tab, which is Main unless a rig
+names another. The line under it says what will actually run, so the answer is on the page
+rather than in the console after a queue. **Re-angle** re-shoots the picture from another viewpoint with the
 multi-angle edit model, from three bands or from the Camera tab's studio. **Swap** puts a face, head
 or whole person onto the picture: the Subject's, another picked person's, or a picture from Swap's
 own gallery, with a Fast switch for the Lightning LoRA. They run in the order Re-angle, Realism,

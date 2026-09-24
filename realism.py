@@ -468,9 +468,14 @@ def _render(rc, source, cfg, seed, node_id=None):
                 model, _c2, _w, applied = _lora.apply_stack(
                     model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
-                    int(lc.get("seed", 0) or 0), None, tag="Realism LoRAs")
+                    int(lc.get("seed", 0) or 0), None,
+                    tag="Realism LoRAs (%s)" % lc.get("name", ""))
                 clip = _c2 if _c2 is not None else clip
-                print("[RedNode Realism] rig stack applied: %s" % applied, flush=True)
+                # NAME THE SET. The page picks one now, so "the stack" is no longer
+                # one thing, and which set ran is the first thing worth knowing when
+                # a conversion comes out carrying LoRAs nobody wanted.
+                print("[RedNode Realism] the %r set applied: %s"
+                      % (lc.get("name", ""), applied), flush=True)
         except Exception as exc:
             print("[RedNode Realism] the rig's LoRA stack could not be applied (%s); "
                   "the conversion LoRA runs alone" % exc, flush=True)
