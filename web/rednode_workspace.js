@@ -172,8 +172,10 @@ css.textContent = `
    drawn above (the user, 2026-09-21) */
 .rn-ws-shell:not(.right) .rn-ws-rgroup{border-left:0;border-right:3px solid var(--rn-g,#4a5058);
   padding-left:0;padding-right:7px}
-.rn-ws-shell:not(.right) .rn-ws-rglab{text-align:right}
-.rn-ws-shell:not(.right) .rn-ws-tab.rail{flex-direction:row-reverse;text-align:right}
+/* the rows read the same way on either side: icon, light, name, left to right, the
+   way the page rows under them already did; only the colour bar changes side */
+.rn-ws-shell:not(.right) .rn-ws-rglab{text-align:left}
+.rn-ws-shell:not(.right) .rn-ws-tab.rail{flex-direction:row;text-align:left}
 .rn-ws-shell:not(.right) .rn-ws-rail.compact .rn-ws-rgroup{padding-right:3px}
 .rn-ws-railhead{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex:none}
 .rn-ws-rail.compact .rn-ws-railhead{flex-direction:column;align-items:stretch}
