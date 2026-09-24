@@ -20766,6 +20766,15 @@ async function importPromptFromPng(node, cfg, rows, file) {
     importChoice("Import from " + file.name, summary, choices);
     return;
   }
+  // A PERSONAL-ONLY READER of another tool's pictures gets its turn before the
+  // file is called empty: a local web module may register one, and the shipped
+  // pack knows nothing about what it reads. It is handed what this function has
+  // and answers with a summary and choices, or nothing.
+  const ext = await window.rnLocalPngImport?.({ node, cfg, rows, file, chunks, addRow, clip });
+  if (ext && ext.choices) {
+    importChoice("Import from " + file.name, ext.summary || "", ext.choices);
+    return;
+  }
   importChoice("Import from " + file.name,
     "No prompt in this file. It reads the A1111 parameters text a gallery writes, and the "
     + "workflow RedNode Studio embeds; this picture carries neither, or it is not a PNG.", []);
