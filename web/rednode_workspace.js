@@ -236,9 +236,9 @@ css.textContent = `
 .rn-ws-subic{display:flex;align-items:center;flex:none;color:#8a919b}
 .rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
 /* the page's name sits under the bar with its line beside it, not below it */
-.rn-ws-pbartrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:0 2px}
-.rn-ws-pbartrow.center{justify-content:center;text-align:center}
-.rn-ws-pbartrow.center .rn-ws-pbarnote{flex:0 1 auto}
+.rn-ws-pbartrow{display:flex;align-items:baseline;justify-content:center;text-align:center;
+  gap:10px;min-width:0;padding:0 2px}
+.rn-ws-pbartrow .rn-ws-pbarnote{flex:0 1 auto}
 .rn-ws-pbart{flex:none;font-weight:700;font-size:15px;letter-spacing:.02em;color:#a9c6ff}
 /* the same name, standing in for the tabs on a page that has none */
 .rn-ws-pbart.inbar{flex:0 1 auto;min-width:0;font-size:calc(18px / var(--rnws-scale,1));
