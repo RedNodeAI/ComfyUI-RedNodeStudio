@@ -964,10 +964,12 @@ export const RUN_SUBS = [
   // Run under a title reading Run said nothing (you, 2026-09-25). This page is
   // the run as it happens.
   ["run", "LIVE", "Queue the workflow and watch the stages, the picture and the memory."],
-  ["review", "REVIEW", "Every finished picture from this Workspace's runs, newest first. "
-                       + "Right-click one to copy it, open its folder, or run it again."],
-  ["stages", "STAGES", "What each Stage Tap and the Detailer's taps photographed in the "
-                       + "last run, with a wipe to compare two."],
+  // REVIEW CARRIES THE STAGES: the finished pictures first, and under them what
+  // the taps photographed on the way, so one page reads the run start to finish
+  // (you, 2026-09-25). A saved "stages" page opens here.
+  ["review", "REVIEW", "Every finished picture from this Workspace's runs, newest first, "
+                       + "and under them what each Stage Tap and the Detailer's taps "
+                       + "photographed in the last run, with a wipe to compare two."],
   ["save", "SAVE", "Where and how the Workspace files each finished picture."],
 ];
 
@@ -999,6 +1001,7 @@ export function runTabBody(node, body) {
   listenRun();
   const props = (node.properties ||= {});
   let sub = node._rnRunSub || props.rn_run_sub || "run";
+  if (sub === "stages") sub = "review";           // the Stages page lives under Review now
   if (!RUN_SUBS.some(([id]) => id === sub)) sub = "run";
   node._rnRunSub = sub;
   const strip = el("div", "rn-ws-sub");
@@ -1012,7 +1015,7 @@ export function runTabBody(node, body) {
     const cfg0 = node._rnCfg || {};
     const lit = id === "run" ? RUN.status === "running"
       : id === "save" ? !!cfg0.save_on
-      : id === "stages" ? !!(cfg0.taps?.on && (cfg0.taps.points || []).length)
+      : id === "review" ? !!(cfg0.taps?.on && (cfg0.taps.points || []).length)
       : false;
     const lt = el("span", "lt" + (lit ? " on" : ""));
     b.append(lt, el("span", "", label));
@@ -1024,6 +1027,17 @@ export function runTabBody(node, body) {
     const host = el("div");
     body.appendChild(host);
     mountReviewPanel(reviewHost(node), host);
+    // THE STAGES, under the pictures: the taps card, then the Stage View strip
+    const sh = el("div", "rn-ws-sub2head");
+    sh.dataset.section = "stages";
+    sh.textContent = "STAGES";
+    sh.title = "What each Stage Tap and the Detailer's taps photographed in the last run, "
+             + "with a wipe to compare two.";
+    body.appendChild(sh);
+    body.appendChild(tapsCard(node));
+    const shost = el("div");
+    body.appendChild(shost);
+    mountStagePanel(stageHost(node), shost);
     return;
   }
   if (sub === "save") {
@@ -1041,13 +1055,6 @@ export function runTabBody(node, body) {
     const host = el("div");
     body.appendChild(host);
     mountSavePanel(configHost(node, "save", "RedNodeSave"), host);
-    return;
-  }
-  if (sub === "stages") {
-    body.appendChild(tapsCard(node));
-    const host = el("div");
-    body.appendChild(host);
-    mountStagePanel(stageHost(node), host);
     return;
   }
   runPage(node, body);
@@ -1864,6 +1871,7 @@ export const RUN_CSS = `
 .rn-run-tapname{min-width:90px;font-weight:600;color:#c8ccd2}
 .rn-run-tappoints .rn-ws-segb:disabled{opacity:.45;cursor:default}
 .rn-run-model .mb{color:#9aa0a8;font-variant-numeric:tabular-nums}
+.rn-ws-sub2head{font-size:11px;font-weight:700;letter-spacing:.08em;color:#8a919b;margin:14px 2px 6px;padding-top:10px;border-top:1px solid #2a2e35}
 .rn-run-log{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:3px}
 .rn-run-line{display:grid;grid-template-columns:44px 10px 1fr;gap:8px;align-items:center;
   font-size:12.5px;color:#c8ccd2}

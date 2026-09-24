@@ -37,6 +37,10 @@ format matters: **version** then a date, notes below until the next bold line.
 - Every LoRA set has a switch of its own, not only Main. Off, whoever picks that set renders raw
   and the set keeps its rows for when it is switched back on. The LoRAs page's title sits in the
   middle under the set tabs, and so does every other page's title and its line
+- The Run tab is three pages: Live, Review and Save. The Stages page sits under Review now, so
+  one page holds the run's finished pictures and what the taps photographed on the way; a
+  workflow saved on the old Stages page opens on Review. The first page is Live rather than a
+  second Run
 - The rail follows a run. The tab whose stage is running pulses red, the tabs whose stages have
   finished wear a green ring, and the open tab's own page rows do the same, so where the run is
   can be read from any tab rather than only from the Run page's pipeline

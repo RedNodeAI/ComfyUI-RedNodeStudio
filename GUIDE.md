@@ -240,10 +240,10 @@ never a silent empty run. A box or a line opens the page that decides it, the fi
 opens full screen with the Review's menu, and a run with Save off still hands the panel its
 finished picture, kept as a temp file, so the Live picture and the Review are never empty just
 because nothing was written to disk. History under the log
-reopens any run of the session. The Review sub-tab keeps every finished picture from this
-Workspace like an Image Review node, the Stages sub-tab shows the last run's Stage Taps like a
-Stage View node, and the Save sub-tab holds RedNode Save's settings: switched on, the Workspace
-files every finished picture itself.
+reopens any run of the session. The Review page keeps every finished picture from this
+Workspace like an Image Review node and, under them, the last run's Stage Taps like a Stage
+View node, so one page reads the run start to finish; the Save page holds RedNode Save's
+settings: switched on, the Workspace files every finished picture itself.
 
 **Detailer.** The RedNode Studio Detailer's passes, run by the Workspace after the render and
 before Post FX when switched on, so a single Workspace renders, details, grades and files. A
