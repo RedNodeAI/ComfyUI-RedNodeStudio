@@ -822,8 +822,8 @@ function render(node) {
   stages.className = "rn-sv-toggles";
   stages.append(
     toggle(node, cfg, "stage_raw", "Also: raw output",
-           "The render before the Detailer touches it, into a raw level under the "
-           + "same folder."),
+           "The model's own output, before the Editor's edits, the Detailer and Post FX "
+           + "touch it, into a raw level under the same folder."),
     toggle(node, cfg, "stage_prepost", "Also: before Post FX",
            "The picture as it goes into Post FX, into a before_post level. "
            + "With no Detailer that is the raw picture again, so it is not "

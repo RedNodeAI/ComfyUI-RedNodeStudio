@@ -2087,8 +2087,8 @@ def keep_before_post(image):
 
 
 def keep_raw_render(image):
-    """The render as it left the sampler, before the Detailer and Post FX, written to
-    the temp folder as file records. The Run page's Raw / Before Post / After Post
+    """The render as it left the sampler, before the Editor's edits on it, the
+    Detailer and Post FX, written to the temp folder as file records. The Run page's Raw / Before Post / After Post
     switch reads these; only written when the Save tab's raw copy is on."""
     return _write_temp_batch(image, "rednode_raw_", "the raw render")
 
@@ -5028,6 +5028,16 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] %s failed: %s; the edited picture is kept"
                       % (label.lower(), exc), flush=True)
 
+        # THE RAW RENDER IS THIS ONE: the model's own output, before the Editor's
+        # stages on the render (Re-angle, Realism, Swap), the Detailer and Post FX.
+        # The raw copy used to be taken after those edits, so "raw" carried a
+        # converted or swapped picture (you, 2026-09-25). Kept by reference, so it
+        # costs nothing unless the Save tab asks for it. Taken LAZILY, right before
+        # each edit that could change it: the render reaches this point by more
+        # than one road (the sampler, a re-shot source kept as the output), and
+        # not every road has set it yet by here.
+        _raw_img = rig_image
+
         # RE-ANGLE ON THE RENDER: the finished picture (a Latent tab render as much
         # as an Img2Img one) is re-shot from the camera on the page, then the rig
         # polishes it. Before the swap, so a swapped face lands on the final
@@ -5066,6 +5076,8 @@ class RedNodeStudioWorkspace:
         # Re-angle and before Swap, the order the stages run on the source
         # (_rl is reused for a pass rig's LoRA list further up, so read it fresh)
         _rl_cfg = (cfg["tabs"]["i2i"].get("realism") or {})
+        if _raw_img is None:
+            _raw_img = rig_image
         if (_rl_cfg.get("on") and _rl_cfg.get("target") == "render" and rig_image is not None
                 and not _norun and not _stage_only):
             try:
@@ -5091,6 +5103,8 @@ class RedNodeStudioWorkspace:
         # SWAP ON THE RENDER: the finished picture (a Latent tab render as much as
         # an Img2Img one) gets the person, then the rig polishes it at a low
         # denoise, the pass a source swap gets from the Img2Img pass
+        if _raw_img is None:
+            _raw_img = rig_image
         if (_sw.get("on") and _sw.get("target") == "render" and rig_image is not None
                 and not _norun and not _stage_only):
             _ref, _ref_name = _swap_ref()
@@ -5291,10 +5305,11 @@ class RedNodeStudioWorkspace:
             _want_det = bool(cfg["save_on"] and _stages_on.get("stage_prepost"))
             _ran_detailer = False
             if _want_raw:
-                _stage_save(rig_image, "raw")
+                _raw_src = _raw_img if _raw_img is not None else rig_image
+                _stage_save(_raw_src, "raw")
                 # the same picture for the Run page's Raw view, as a temp file: the
                 # saved copy's path depends on the Save panel's pattern, this does not
-                _raw_files = keep_raw_render(rig_image)
+                _raw_files = keep_raw_render(_raw_src)
                 if _raw_files:
                     ui_extra = dict(ui_extra or {})
                     ui_extra["rn_raw"] = _raw_files

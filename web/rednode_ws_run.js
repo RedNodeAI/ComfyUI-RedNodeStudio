@@ -1195,7 +1195,7 @@ function runPage(node, body) {
   const postSeg = el("div", "rn-ws-seg rn-run-postseg");
   postSeg.dataset.choice = "run_show_post";
   for (const [value, label, tip] of [
-    ["raw", "Raw", "The render as it left the sampler, before the Detailer and Post FX. "
+    ["raw", "Raw", "The model's own output, before the Editor's edits, the Detailer and Post FX. "
                    + "Kept only while Also: raw output is on, on the Save tab."],
     ["before", "Before Post", "The same picture as it went into Post FX. Kept only while "
                               + "Also: before Post FX is on, on the Save tab."],
