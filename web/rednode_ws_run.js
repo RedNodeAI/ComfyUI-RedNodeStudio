@@ -167,6 +167,11 @@ function refreshAll() {
           || v.gen !== v.node._rnRunGen) { views.delete(v); continue; }
       try { refresh(v); } catch (e) { console.warn("[RedNode Run] refresh failed:", e); }
     }
+    // every Workspace's rail follows the run, whichever tab is open: a class
+    // toggle per row, never a redraw
+    for (const n of workspaceNodes()) {
+      try { n._rnRailRun?.(); } catch (e) { /* a rail mid-rebuild */ }
+    }
   };
   (globalThis.requestAnimationFrame || ((f) => setTimeout(f, 16)))(go);
 }
@@ -818,6 +823,31 @@ function passesPage(cfg) {
   const I = cfg.tabs?.i2i || {};
   const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
   return i2iRun ? { tab: "i2i", sub: "passes" } : { tab: "latent", sub: "passes" };
+}
+
+/** WHERE THE RUN IS, as the rail sees it: the tab (and page) whose stage is
+ *  running now, and the tabs whose stages have finished this run. The pipeline
+ *  strip on the Run tab says the same thing; this is the same answer for the
+ *  rail, so a run can be followed from any tab (you, 2026-09-25). */
+export function railRunState(cfg) {
+  const target = (key) => {
+    if (key === "upscale") return { tab: "editor", sub: "upscale" };
+    const t = jumpForStage(key, cfg || {});
+    if (!t) return null;
+    // the Editor's pages were once the Img2Img tab's; the rail lists them under Editor
+    if (t.tab === "i2i" && ["reangle", "realism", "swap", "upscale", "converter"].includes(t.sub)) {
+      return { tab: "editor", sub: t.sub };
+    }
+    return t;
+  };
+  const ran = new Set();
+  if (RUN.status === "running" || RUN.stages.size) {
+    for (const [k, s] of RUN.stages) {
+      if (s.state === "done" || s.state === "cached") { const t = target(k); if (t) ran.add(t.tab); }
+    }
+  }
+  const now = RUN.status === "running" && RUN.running ? target(RUN.running) : null;
+  return { now, ran, running: RUN.status === "running" };
 }
 
 export function jumpForStage(key, cfg) {

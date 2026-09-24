@@ -11,7 +11,7 @@ import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
 import { buildStudio } from "./rednode_camera_studio.js";
-import { runTabBody, RUN_CSS, runLit, listenRun, configHost, queueWorkflow,
+import { runTabBody, RUN_CSS, runLit, railRunState, listenRun, configHost, queueWorkflow,
          RUN_SUBS } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
@@ -315,6 +315,12 @@ css.textContent = `
 .rn-ws-rail.compact .rn-ws-tab.rail{gap:5px;padding:7px 4px;justify-content:center}
 .rn-ws-rail.compact .rn-ws-tab.rail .lb{display:none}
 .rn-ws-rail.compact .rn-ws-tab.rail .dot{width:6px;height:6px}
+@keyframes rnRailPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.7);opacity:.55}}
+.rn-ws-tab.rail.running .dot,.rn-ws-railsub.running .dot{background:#e0435a;
+  box-shadow:0 0 8px #e0435a;animation:rnRailPulse 1.1s ease-in-out infinite}
+.rn-ws-tab.rail.running .lb,.rn-ws-railsub.running .lb{color:#fff}
+.rn-ws-tab.rail.running:not(.cur){background:#2a1216}
+.rn-ws-tab.rail.ran .dot{box-shadow:0 0 0 2px #22c55e66}
 /* the LoRA tab's SET strip carries this class too, so the rule stays what it was
    and only the strip inside the tab row grows to push the plug to the right */
 .rn-ws-tabs{display:flex;gap:6px;flex:none;flex-wrap:wrap;padding-bottom:7px}
@@ -14226,6 +14232,27 @@ function adoptBarStrip(bar, body) {
   }
 }
 
+/** The rail's run lights: the tab whose stage runs now pulses, tabs whose stages
+ *  have finished this run wear a ring, and the open tab's page rows follow suit.
+ *  Classes only, on the rail as drawn; the run module calls this on every event. */
+function railRunLights(node, cfg, rail) {
+  if (!rail) return;
+  let st;
+  try { st = railRunState(cfg); } catch (e) { return; }
+  const set = (el, cls, on) => { if (on) el.classList.add(cls); else el.classList.remove(cls); };
+  for (const b of rail.querySelectorAll(".rn-ws-tab")) {
+    if (!b.classList.contains("rail")) continue;
+    const id = b.dataset?.tab;
+    const isNow = !!(st.now && st.now.tab === id);
+    set(b, "running", isNow);
+    set(b, "ran", !isNow && st.ran.has(id));
+  }
+  for (const s of rail.querySelectorAll(".rn-ws-railsub")) {
+    set(s, "running", !!(st.now && st.now.tab === node._rnTab
+                         && st.now.sub && st.now.sub === s.dataset?.railsub));
+  }
+}
+
 function railSubRows(node, cfg, tab) {
   const props = (node.properties ||= {});
   const rows = [];
@@ -20310,6 +20337,10 @@ function renderPage(node) {
     }
     }
   }
+  // the run drives the lights from here on, without a redraw
+  node._rnRailEl = rail;
+  node._rnRailRun = () => railRunLights(node, node._rnCfg || cfg, node._rnRailEl);
+  node._rnRailRun();
   const tmode = tuckMode(node);
   const tuck = document.createElement("button");
   tuck.className = "rn-ws-tuck" + (tmode === 1 ? " on" : tmode === 2 ? " on all" : "");
