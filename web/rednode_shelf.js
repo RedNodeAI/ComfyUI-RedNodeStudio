@@ -234,7 +234,10 @@ function setOverride(node, on) {
   node._rnShelf.override_at = on ? Date.now() : 0;
   writeCfg(node);
   if (!on) return;
-  for (const other of shelves()) {
+  // every other shelf: the nodes on the canvas, and the column each Workspace
+  // may carry (its host reads and writes through the Workspace's config)
+  const others = [...shelves(), ...workspaces().map((w) => w._rnShelfHost).filter(Boolean)];
+  for (const other of others) {
     if (other === node) continue;
     const w = (other.widgets || []).find((x) => x.name === "config");
     let d;
@@ -378,7 +381,6 @@ function render(node) {
   // THE OVERRIDE: the picked picture stands in for whatever the ticked tabs hold,
   // for the length of a run. Nothing is written into the Workspace, so switching
   // it off hands every tab its own picture back.
-  if (node._rnShelfNoOverride) { renderCells(node, root, cfg); return; }
   const ov = document.createElement("div");
   ov.className = "rn-shelf-ov" + (cfg.override ? " on" : "");
   const sw = document.createElement("button");
@@ -591,9 +593,6 @@ function mountEmbeddedShelf(owner, el, read, write) {
       graph: owner.graph,
       widgets: [{ name: "config", get value() { return read(); }, set value(v) { write(v); } }],
       _rnShelfOwner: owner,
-      // the override reads shelves off the queued prompt, and this one is not a
-      // node there; its pictures still send, drag and copy like any shelf
-      _rnShelfNoOverride: true,
     };
     owner._rnShelfHost = host;
   }

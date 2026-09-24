@@ -1845,6 +1845,9 @@ def parse_config(config_json):
             "taps": _normalise_taps(data.get("taps")),
             "post": data.get("post") if isinstance(data.get("post"), dict) else {},
             "loras": loras_cfg, "paint_loras": paint_loras_cfg, "lora_sets": lora_sets,
+            # the shelf a Workspace carries beside its pages: the Shelf node's own
+            # shape, parsed by shelf.py, read here for its Override
+            "shelf": data.get("shelf") if isinstance(data.get("shelf"), dict) else {},
             "camera": camera_cfg,
             "models": models_cfg, "prompts": prompts_cfg,
             # LINKED SEEDS: which seed each part of a run takes (seeds.py)
@@ -1894,7 +1897,7 @@ def register_node_rig(name, model=None, clip=None, vae=None, node_id=None):
     return rec
 
 
-def shelf_override(prompt):
+def shelf_override(prompt, own=None):
     """The shelf that speaks for the galleries this run, or None.
 
     A shelf with Override on hands its picked picture to the tabs it names, in
@@ -1908,16 +1911,21 @@ def shelf_override(prompt):
     no way to tell them apart the run stops instead of guessing: rendering from
     the wrong picture quietly is worse than not rendering (you, 2026-09-24).
     """
-    if not isinstance(prompt, dict):
-        return None
     from . import shelf as _shelf
     found = []
-    for nid, n in prompt.items():
+    for nid, n in (prompt.items() if isinstance(prompt, dict) else []):
         if not isinstance(n, dict) or n.get("class_type") != "RedNodeShelf":
             continue
         rec = _shelf.RedNodeShelf.parse((n.get("inputs") or {}).get("config"))
         if rec["override"] and rec["entry"] and rec["tabs"]:
             rec["node"] = str(nid)
+            found.append(rec)
+    # THE WORKSPACE'S OWN SHELF, the column beside its pages: not a node in the
+    # prompt, so it is handed in by the Workspace itself and joins the same rule
+    if own and isinstance(own[0], dict) and own[0]:
+        rec = _shelf.RedNodeShelf.parse(json.dumps(own[0]))
+        if rec["override"] and rec["entry"] and rec["tabs"]:
+            rec["node"] = "%s (its own shelf)" % (own[1] if own[1] is not None else "?")
             found.append(rec)
     if not found:
         return None
@@ -3043,7 +3051,7 @@ class RedNodeStudioWorkspace:
         # A SHELF WITH OVERRIDE ON speaks for the galleries it names, before anything
         # reads them: the VRAM estimate, the captioner and the sizes all have to see
         # the picture that is actually going to be rendered.
-        _shelf_rec = shelf_override(prompt)
+        _shelf_rec = shelf_override(prompt, own=(cfg.get("shelf"), unique_id))
         _shelf_tabs = apply_shelf_override(cfg, _shelf_rec)
         # the Upscale tab's own run, read EARLY: the rig load below happens long
         # before the doors, and an upscale must not drag a model onto the card
