@@ -63,6 +63,11 @@ format matters: **version** then a date, notes below until the next bold line.
   offers it ready-made as Realism tiles. Without Tiles there is no scale: it converts at the
   frame's own size, snapped to 16 rather than
   the workflow's 512, so nothing is cropped away, and the frame comes back the size it arrived
+- Realism keeps its prepared model between calls. Every conversion built a fresh LoRA-patched
+  model, and ComfyUI unloaded and re-patched the card for each one; per picture that was
+  fine, per tile it was most of a tile's time and a sawtooth on the VRAM chart. The same rig,
+  set and conversion LoRA now hand back the same patched model, and the edit patch is reused
+  the same way
 - The Editor's Realism page picks which LoRA set runs under the conversion, rather than only
   whether one does. The switch had no picker beside it, so every conversion ran whatever the
   rig pointed at, which is Main unless a rig names another: the first set on the tab, for

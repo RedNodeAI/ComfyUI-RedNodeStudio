@@ -104,6 +104,11 @@ KNOWN_LORAS = (
 FIND_MAX = 5
 _RESULT_CACHE = []
 _CACHE_KEEP = 4
+# the patched model and clip for a rig, set and conversion LoRA: two, so a chain
+# that alternates between two passes keeps both
+_PREP_CACHE = []
+_PREP_KEEP = 2
+_OSTRIS_CACHE = []
 
 
 def _installed():
@@ -463,12 +468,35 @@ def _render(rc, source, cfg, seed, node_id=None):
                          "set them on the Models tab or on this page.")
 
     # the LoRAs: the rig's stack first, the conversion LoRA on top, on model AND
-    # clip, which is what the workflow's two stack nodes do
+    # clip, which is what the workflow's two stack nodes do.
+    #
+    # PREPARED ONCE, REUSED. Every LoRA here is a fresh patcher, and ComfyUI
+    # re-patches the weights on the card when the patcher it is asked to load is
+    # not the one it holds. Called once per picture that was fine; called once
+    # per TILE it was most of a tile's time: 4 steps instead of 8 saved thirty
+    # seconds of a two-minute-fifty tiled pass (you, 2026-09-25). The same rig,
+    # set and conversion LoRA now hand back the same patched pair.
+    lc = {}
     if rc["loras"]:
         try:
-            from . import lora_stack as _lora
             lc = _ws.lora_set_cfg(cfg, rc["lora_set"] or _ws.rig_lora_set(cfg),
                                   "Realism") or {}
+        except Exception:
+            lc = {}
+    conv_now = not (rc["photo"] and rc["engine"] != "alternative")
+    prep_key = json.dumps({"rig": rig_name, "m": id(model), "c": id(clip),
+                           "set": lc.get("name", ""), "slots": lc.get("slots") or [],
+                           "seed": int(lc.get("seed", 0) or 0), "on": bool(lc.get("on", True)),
+                           "loras": bool(rc["loras"]), "lora": rc["lora"],
+                           "strength": float(rc["strength"]), "conv": conv_now},
+                          sort_keys=True, default=str)
+    hit = next((p for k, p in _PREP_CACHE if k == prep_key), None)
+    if hit is not None:
+        model, clip, base_model, base_clip = hit
+        print("[RedNode Realism] the prepared model, reused", flush=True)
+    if hit is None and rc["loras"]:
+        try:
+            from . import lora_stack as _lora
             slots = lc.get("slots") or []
             if slots and lc.get("on", True):
                 model, _c2, _w, applied = _lora.apply_stack(
@@ -485,12 +513,15 @@ def _render(rc, source, cfg, seed, node_id=None):
         except Exception as exc:
             print("[RedNode Realism] the rig's LoRA stack could not be applied (%s); "
                   "the conversion LoRA runs alone" % exc, flush=True)
-    # the photo finish puts the conversion LoRA on twice, at two strengths, so it
-    # keeps the model and clip from before it
-    base_model, base_clip = model, clip
-    if not (rc["photo"] and rc["engine"] != "alternative"):
-        model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
-                            strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
+    if hit is None:
+        # the photo finish puts the conversion LoRA on twice, at two strengths, so it
+        # keeps the model and clip from before it
+        base_model, base_clip = model, clip
+        if conv_now:
+            model, clip = _call("LoraLoader", model=model, clip=clip, lora_name=rc["lora"],
+                                strength_model=rc["strength"], strength_clip=rc["strength"])[:2]
+        _PREP_CACHE.append((prep_key, (model, clip, base_model, base_clip)))
+        del _PREP_CACHE[:-_PREP_KEEP]
 
     if rc["engine"] == "alternative":
         print("[RedNode Realism] alternative engine: %s on %s, boost %.2f, %d steps"
@@ -526,8 +557,9 @@ def _render(rc, source, cfg, seed, node_id=None):
                      reference_latents_method="index_timestep_zero")[0]
     negative = _call("FluxKontextMultiReferenceLatentMethod", conditioning=negative,
                      reference_latents_method="index_timestep_zero")[0]
-    model = _call("Krea2OstrisEditModelPatch", model=model,
-                  kv_cache=bool(rc["kv_cache"]))[0]
+    # the workflow's own route takes the patch without the AuraFlow shift; the
+    # same cache as the Ostris routes, so a tile never patches twice
+    model = _ostris_model(dict(rc, shift=0.0), model)
 
     print("[RedNode Realism] %s on %s: %d steps, cfg %s, %s / %s, vl %d, round %s"
           % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["cfg"],
@@ -541,10 +573,19 @@ def _render(rc, source, cfg, seed, node_id=None):
 
 
 def _ostris_model(rc, model):
-    """AuraFlow shift, then the Ostris patch: the model side of both Ostris routes."""
+    """AuraFlow shift, then the Ostris patch: the model side of both Ostris routes.
+    Reused for the same model, for the same reason the LoRA prep is."""
+    key = (id(model), float(rc["shift"]), bool(rc["kv_cache"]))
+    hit = next((m for k, m in _OSTRIS_CACHE if k == key), None)
+    if hit is not None:
+        return hit
+    out = model
     if float(rc["shift"]) > 0:
-        model = _call("ModelSamplingAuraFlow", model=model, shift=float(rc["shift"]))[0]
-    return _call("Krea2OstrisEditModelPatch", model=model, kv_cache=bool(rc["kv_cache"]))[0]
+        out = _call("ModelSamplingAuraFlow", model=out, shift=float(rc["shift"]))[0]
+    out = _call("Krea2OstrisEditModelPatch", model=out, kv_cache=bool(rc["kv_cache"]))[0]
+    _OSTRIS_CACHE.append((key, out))
+    del _OSTRIS_CACHE[:-_PREP_KEEP]
+    return out
 
 
 def _ostris_encode(rc, img, clip, vae):
