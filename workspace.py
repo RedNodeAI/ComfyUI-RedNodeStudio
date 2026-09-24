@@ -1403,6 +1403,8 @@ def parse_config(config_json):
             continue
         lora_sets.append({
             "name": nm,
+            # its own switch, like Main's: off, whoever picks this set renders raw
+            "on": bool(st.get("on", True)),
             "slots": st.get("slots") if isinstance(st.get("slots"), list) else [],
             "ui": st.get("ui") if isinstance(st.get("ui"), dict) else {},
             "seed": max(0, sseed),
@@ -2400,7 +2402,8 @@ def lora_set_cfg(cfg, set_name="", who="Workspace"):
         return main
     for st in cfg.get("lora_sets") or []:
         if st.get("name") == want:
-            return {"on": True, "slots": st.get("slots") or [], "ui": st.get("ui") or {},
+            return {"on": bool(st.get("on", True)), "slots": st.get("slots") or [],
+                    "ui": st.get("ui") or {},
                     "seed": int(st.get("seed", 0) or 0), "name": want}
     print("[RedNode %s] LoRA set %r is not on the LoRAs tab any more; using Main"
           % (who, want), flush=True)

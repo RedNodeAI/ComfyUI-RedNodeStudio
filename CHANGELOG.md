@@ -34,6 +34,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - The rail lists the open tab's pages under it, with the light each page carries, and the
   Krea 2 Identity tab goes one level further. Advanced has Pages on the rail, on by
   default, and Generate on the rail, off by default now that every page header carries one
+- Every LoRA set has a switch of its own, not only Main. Off, whoever picks that set renders raw
+  and the set keeps its rows for when it is switched back on. The LoRAs page's title sits in the
+  middle under the set tabs
 - The rail follows a run. The tab whose stage is running pulses red, the tabs whose stages have
   finished wear a green ring, and the open tab's own page rows do the same, so where the run is
   can be read from any tab rather than only from the Run page's pipeline

@@ -237,6 +237,8 @@ css.textContent = `
 .rn-ws-sub.dressed .rn-ws-subt.cur .rn-ws-subic{color:#e8607a}
 /* the page's name sits under the bar with its line beside it, not below it */
 .rn-ws-pbartrow{display:flex;align-items:baseline;gap:10px;min-width:0;padding:0 2px}
+.rn-ws-pbartrow.center{justify-content:center;text-align:center}
+.rn-ws-pbartrow.center .rn-ws-pbarnote{flex:0 1 auto}
 .rn-ws-pbart{flex:none;font-weight:700;font-size:15px;letter-spacing:.02em;color:#a9c6ff}
 /* the same name, standing in for the tabs on a page that has none */
 .rn-ws-pbart.inbar{flex:0 1 auto;min-width:0;font-size:calc(18px / var(--rnws-scale,1));
@@ -1940,7 +1942,8 @@ export function readCfg(node) {
     const seen = new Set();
     d.lora_sets = d.lora_sets.filter((st) => st && typeof st === "object").map((st) => {
       const name = String(st.name || "").trim().slice(0, 48);
-      return { name, slots: Array.isArray(st.slots) ? st.slots : [],
+      return { name, on: st.on !== false,
+               slots: Array.isArray(st.slots) ? st.slots : [],
                ui: st.ui && typeof st.ui === "object" ? st.ui : {},
                seed: typeof st.seed === "number" ? Math.max(0, st.seed) : 0 };
     }).filter((st) => {
@@ -6612,19 +6615,26 @@ function lorasBody(node, body) {
 
   const row = document.createElement("div");
   row.className = "rn-ws-row";
-  if (!curSet) {
+  // ONE SWITCH PER SET, Main's included: off, whoever picks this set renders
+  // raw, and the set keeps its rows for when it is switched back on (you,
+  // 2026-09-25). Only Main had one before.
+  {
+    if (curSet && curSet.on === undefined) curSet.on = true;
     const on = document.createElement("button");
     on.className = "rn-ws-sw" + (L.on ? " on" : "");
+    on.dataset.choice = "lora_set_on";
     on.title = L.on
-      ? "The stack is applied to the model input and handed back on the model output."
-      : "Off: the model passes through untouched.";
+      ? (curSet ? "This set is applied wherever it is picked. Click to switch every LoRA in it off at once."
+                : "The stack is applied to the model input and handed back on the model output.")
+      : (curSet ? "Off: whoever picks this set renders raw. The rows are kept."
+                : "Off: the model passes through untouched.");
     on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
     row.appendChild(on);
   }
   const hint = document.createElement("span");
   hint.className = "hint";
   hint.textContent = curSet
-    ? "The set \"" + curSet.name + "\". A rig picks it on the Models tab (LoRA set), a "
+    ? (L.on ? "" : "OFF: ") + "The set \"" + curSet.name + "\". A rig picks it on the Models tab (LoRA set), a "
       + "Detailer pass on its card, the paint pass on its Paint LoRAs tab."
     : "Wire the model in and take it from the model output. Trigger words "
       + "come out on lora_keywords. Rigs render with Main unless they pick a set.";
@@ -14174,7 +14184,7 @@ const PAGE_BAR = {
              note: "Your prompts: the active one renders on whichever rig is active." },
   camera: { title: "Camera",
             note: "Place the subject and the camera; the prompt and the camera LoRAs follow." },
-  loras: { title: "LoRAs", note: "The stack this workflow renders with. A set switches the "
+  loras: { center: true, title: "LoRAs", note: "The stack this workflow renders with. A set switches the "
                                  + "whole stack at once." },
   i2i: { title: "Img2Img", note: "Render from a picture instead of a blank canvas, in as "
                                  + "many passes as you like." },
@@ -14331,7 +14341,7 @@ function railSubRows(node, cfg, tab) {
 }
 
 function pageHeader(node, body, { strip = null, title = "", note = "", first = false,
-                                 gen = true } = {}) {
+                                 gen = true, center = false } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "rn-ws-pbarwrap";
   const head = document.createElement("div");
@@ -14349,7 +14359,7 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
     // ONE ROW, not two: the page's name and the line explaining it sit side by side,
     // so the header costs as little height as it can (you, 2026-09-23)
     const row = document.createElement("div");
-    row.className = "rn-ws-pbartrow";
+    row.className = "rn-ws-pbartrow" + (center ? " center" : "");
     if (title) {
       const t = document.createElement("div");
       t.className = "rn-ws-pbart";
@@ -20384,7 +20394,7 @@ function renderPage(node) {
   const barSpec = PAGE_BAR[cur];
   const pageBar = barSpec
     ? pageHeader(node, body, { title: barSpec.title, note: barSpec.note,
-                               gen: barSpec.gen !== false })
+                               gen: barSpec.gen !== false, center: !!barSpec.center })
     : null;
   if (cur === "identity") identityTabs(node, body);
   else if (cur === "models") modelsBody(node, body);
