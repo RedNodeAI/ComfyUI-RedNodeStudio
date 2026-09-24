@@ -1498,6 +1498,16 @@ class RedNodeStudioDetailer:
         rc["denoise"] = float(s["denoise"])
         rc["loras"] = bool(s["loras"])
         rc["lora_set"] = s["lora_set"]
+        # THE FRAME'S OWN SIZE, not the workflow's. The recipe resizes to a longest
+        # side and snaps every dimension to a multiple of 512 with a crop, which is
+        # the workflow as written and reframes the picture; on the Editor page that
+        # was the whole job, in a chain it reads as the pass resizing the picture
+        # (you, 2026-09-24). Here it converts at the size it was handed, never
+        # bigger than the page allows, snapped to 16 so nothing is cropped away.
+        h, w = int(img.shape[1]), int(img.shape[2])
+        rc["longest"] = max(256, min(int(rc["longest"]), max(h, w)))
+        rc["round_to"] = "16"
+        rc["fit"] = "letterbox"
         bits = ["%s engine" % rc["engine"],
                 "photo finish" if rc["photo"] else "one pass",
                 "denoise %.2f" % rc["denoise"]]

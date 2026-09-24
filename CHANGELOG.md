@@ -47,7 +47,8 @@ format matters: **version** then a date, notes below until the next bold line.
   It also has a Denoise bar, which that page does not: 1.00 converts as the page does, and below
   that the picture is the starting point and only part of it is rewritten, so the original's own
   texture survives. Blend mixes the conversion back over the picture it came from for no extra
-  render. No scale on this one: the frame comes back the size it arrived
+  render. No scale on this one: it converts at the frame's own size, snapped to 16 rather than
+  the workflow's 512, so nothing is cropped away, and the frame comes back the size it arrived
 - The Editor's Realism page picks which LoRA set runs under the conversion, rather than only
   whether one does. The switch had no picker beside it, so every conversion ran whatever the
   rig pointed at, which is Main unless a rig names another: the first set on the tab, for
