@@ -203,6 +203,8 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The Models Setup card's Qwen Image 2.1 family finds the REDQW21 fine-tune by its own
+  name, so the one-click rig takes it like the base model
 - The Detailer page's pass count follows a card switched on or off in the panel; it used
   to hold the number from when the page opened
 - The Advanced page and two Detailer notices point at the Workspace Manager by its name,
