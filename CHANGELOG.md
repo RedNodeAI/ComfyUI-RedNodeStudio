@@ -57,6 +57,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- A rig whose VAE does not belong to its model is named at load: the model's latent channels
+  against the VAE's, with the file, in the console and the Run log. A Krea 2 rig with the Qwen
+  2.1 VAE picked used to fall over at the first latent with a tensor size message
 - Every page with a switch carries a power button in the same corner of its header, the way
   Generate sits in the other corner: green on, red off, and the bar wears a thin line of the
   same colour. It flips the same setting the page's own switch and the rail's right-click do.

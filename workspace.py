@@ -2262,6 +2262,30 @@ def _load_unet(name, choice="", int8_type=""):
     return getattr(cls(), cls.FUNCTION)(**kw)[0]
 
 
+def _say_vae_mismatch(rig, model, vae):
+    """A VAE that does not belong to the model, said at load. A Krea 2 rig with the
+    Qwen 2.1 VAE picked sampled up to the first latent and fell over on "the size
+    of tensor a (64) must match tensor b (16)", which names neither (you,
+    2026-09-25). The latent channel counts tell the two apart before any of that."""
+    try:
+        mc = int(getattr(getattr(getattr(model, "model", None), "latent_format", None),
+                         "latent_channels", 0) or 0) if model is not None else 0
+        vc = int(getattr(vae, "latent_channels", 0) or 0) if vae is not None else 0
+        if mc and vc and mc != vc:
+            msg = ("rig %r: the model wants %d-channel latents and the VAE %r makes %d, "
+                   "so this is the wrong VAE for this model. Pick the VAE that belongs "
+                   "to it on the Models tab, or the render stops at the first latent."
+                   % (rig.get("name") or "?", mc, rig.get("vae") or "(checkpoint)", vc))
+            print("[RedNode Workspace] " + msg, flush=True)
+            try:
+                from . import run_events as _re
+                _re.note(msg, "warn")
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def load_active_rig(cfg, name="", prompt=None):
     """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
 
@@ -2373,6 +2397,7 @@ def load_active_rig(cfg, name="", prompt=None):
     kinds = [k for k, v in (("model", model), ("clip", clip), ("vae", vae)) if v is not None]
     _rev.name_rig(rig["name"], model, clip, vae)
     _rev.end("rig:" + rig["name"], "Load %s" % rig["name"], parts=kinds)
+    _say_vae_mismatch(rig, model, vae)
     _rev.note("%s loaded from disk into RAM in %.1f s (%s)"
               % (rig["name"], _time.time() - _t0, ", ".join(kinds)), "load")
     print("[RedNode Workspace] Models tab loaded %s (%s)"
