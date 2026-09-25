@@ -11503,6 +11503,8 @@ function paintBody(node, body) {
     if (node._rnHotHost) forgetHotkeys(node._rnHotHost);
     if (node._rnHotHost) forgetPaste(node._rnHotHost);
     node._rnHotHost = host;
+    // the page switch key rides every host the panel moves to (full screen too)
+    if (typeof node._rnSpaceToggle === "function") panelHotkey(host, " ", node._rnSpaceToggle);
     panelHotkey(host, "ctrl+Enter", () => {
       if (node._rnTab !== "paint") return false;
       if (typeof node._rnPaintGenerate !== "function") return false;
@@ -21292,6 +21294,23 @@ function mountShell(node) {
   w.options.getMinHeight = () => MIN_PANEL_H;
   w.options.minNodeSize = [NODE_MIN_W, MIN_PANEL_H + 60];
   node._rnRootEl = wrap;
+  // SPACE FLIPS THE OPEN PAGE'S SWITCH while the pointer is over this panel and no
+  // text box has the keyboard (rednode_keys skips a plain key while typing). Held
+  // down it flips once. A focused button is blurred first, or its own Space
+  // activation would flip it straight back. Pages with no switch pass the key on.
+  const spaceToggle = (e) => {
+    if (e && e.repeat) return;
+    const sw = powerSwitchFor(node);
+    if (!sw) return false;
+    const ae = document.activeElement;
+    if (ae && String(ae.tagName || "").toLowerCase() === "button") ae.blur?.();
+    switchClick(!sw.on);
+    sw.set(!sw.on);
+    writeCfg(node);
+    render(node);
+  };
+  node._rnSpaceToggle = spaceToggle;
+  panelHotkey(wrap, " ", spaceToggle);
   node._rnShell = { wrap, w, card, status, again };
   return node._rnShell;
 }
