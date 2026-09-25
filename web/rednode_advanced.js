@@ -2168,10 +2168,12 @@ function buildPanel(node, hostEl = null) {
                              realism_engine: "", realism_lora: "", realism_photo: "",
                              realism_prompt: "", loras: true, lora_set: "" }));
     // the same kind with Tiles on, at the denoise a re-detail wants
-    mk("＋ Realism tiles", () => ({ on: true, type: "realism", denoise: 0.4, blend: 1.0,
+    // the portrait recipe (you, 2026-09-25): a quarter denoise keeps the face its
+    // own, the blend keeps the colour, 1.5x is the size that pays for itself
+    mk("＋ Realism tiles", () => ({ on: true, type: "realism", denoise: 0.25, blend: 0.75,
                                    realism_engine: "", realism_lora: "", realism_photo: "",
                                    realism_prompt: "", loras: true, lora_set: "",
-                                   realism_tiles: true, realism_scale: 2, realism_tile: 1024,
+                                   realism_tiles: true, realism_scale: 1.5, realism_tile: 1024,
                                    realism_overlap: 128 }));
     // kinds a personal-only extension registered, after the pack's own
     for (const k of window.rnLocalPassKinds || []) mk("＋ " + k.label, k.make);

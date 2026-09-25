@@ -72,7 +72,8 @@ format matters: **version** then a date, notes below until the next bold line.
   render. Its Tiles switch makes it an upscale that keeps faith with every tile: Scale resizes
   first, then each tile is converted with itself as the reference and laid back under a
   cross-fade, so a patch of sky stays sky instead of growing the prompt's subject; the add row
-  offers it ready-made as Realism tiles. Without Tiles there is no scale: it converts at the
+  offers it ready-made as Realism tiles, at the portrait recipe: denoise 0.25, blend 0.75, 1.5x,
+  1024 tiles with a 128 overlap. Without Tiles there is no scale: it converts at the
   frame's own size, snapped to 16 rather than
   the workflow's 512, so nothing is cropped away, and the frame comes back the size it arrived
 - Realism keeps its prepared model between calls. Every conversion built a fresh LoRA-patched
