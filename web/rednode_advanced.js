@@ -99,7 +99,19 @@ css.textContent = `
 .rn-adv .cap{font-size:11px;font-weight:700;letter-spacing:.08em;color:#7f8792;
   text-align:center;border:1px dashed #33373d;border-radius:5px;padding:3px}
 .rn-adv .card{display:flex;flex-direction:column;gap:5px;background:#1a1d22;
-  border:1px solid #2a2e34;border-radius:6px;padding:6px}
+  border:1px solid #2f343c;border-left:4px solid var(--kc,#2a2e34);border-radius:6px;
+  padding:0 6px 6px;margin-top:3px}
+.rn-adv .card .line.top{background:var(--kb,#1f2329);margin:0 -6px 0 -6px;padding:5px 6px;
+  border-bottom:1px solid #2a2e34;border-radius:0 5px 0 0}
+.rn-adv .card.k-render{--kc:#4a8fe0;--kb:#172130}
+.rn-adv .card.k-upscale{--kc:#2dd4bf;--kb:#12272b}
+.rn-adv .card.k-read{--kc:#a855f7;--kb:#201733}
+.rn-adv .card.k-rerender{--kc:#b8283c;--kb:#2b151b}
+.rn-adv .card.k-local{--kc:#e0a84a;--kb:#2a2214}
+.rn-adv .card.k-group{--kc:#8a919b;--kb:#1d2026}
+.rn-adv .num{flex:none;min-width:20px;height:20px;padding:0 5px;border-radius:10px;
+  background:var(--kc,#33373d);color:#0f1114;font-weight:700;font-size:11px;
+  display:inline-flex;align-items:center;justify-content:center}
 .rn-adv .card.off{opacity:.45}
 .rn-adv .line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rn-adv .chip{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;
@@ -1247,6 +1259,15 @@ function buildPanel(node, hostEl = null) {
       return `${base} ${n}`;
     };
     const typedNames = () => new Set(d.stages.filter((x) => x.type !== "title" && x.name).map((x) => x.name));
+    // WHAT A PASS DOES, the add row's groups, so a card wears the colour of the
+    // button that made it: render again, upscale, read, re-render, a personal
+    // extension's kind, the group title. The list read as one grey wall (you,
+    // 2026-09-25).
+    const kindGroup = (x) => x.type === "title" ? "group"
+      : (x.type === "sampler" || x.type === "detailer") ? "render"
+      : ["upscale", "vosr2", "usdu"].includes(x.type) ? "upscale"
+      : x.type === "reader" ? "read" : x.type === "realism" ? "rerender" : "local";
+    let passNo = 0;                      // the run order, counted on the cards
     const shown = [];
     {
       const taken = typedNames();
@@ -1340,7 +1361,7 @@ function buildPanel(node, hostEl = null) {
       }
       if (inGroup && groupFolded) return;
       const card = document.createElement("div");
-      card.className = "card" + (s.on === false ? " off" : "")
+      card.className = "card k-" + kindGroup(s) + (s.on === false ? " off" : "")
                      + (node._rnAdvActive === i ? " run" : "")
                      + (inGroup ? " grp" : "");
       if (s.color) card.style.background = s.color;
@@ -1349,7 +1370,15 @@ function buildPanel(node, hostEl = null) {
         openCardMenu(node, d, i, e, writeAndRender));
 
       const top = document.createElement("div");
-      top.className = "line";
+      top.className = "line top";
+      if (s.type !== "title") {
+        // its number in the run order, first on the line
+        const num = document.createElement("span");
+        num.className = "num";
+        num.textContent = String(++passNo);
+        num.title = "Pass " + passNo + " in the run order.";
+        top.appendChild(num);
+      }
       const caret = document.createElement("button");
       caret.className = "eye";
       caret.textContent = isFolded ? "\u25b8" : "\u25be";

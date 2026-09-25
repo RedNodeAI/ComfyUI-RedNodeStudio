@@ -54,6 +54,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card's Free VRAM, copy and X stay together at the end of its header. The Image to
   Text card's row was wide enough to drop the copy and the X onto a second line; its words are
   shorter too
+- A Detailer card wears the colour of the button that made it, on its title line and its left
+  edge, with its number in the run order at the front and more room between cards, so the list
+  reads as passes rather than one grey wall
 - The Face detailer is the Mask detailer, which is what it is: SAM3 masks a target and the pass
   redraws it. Its card has an Invert switch that works everything BUT the target, the mask turned
   inside out and the whole frame rendered at the pass's scale with the target kept as it was, for
