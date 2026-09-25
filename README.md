@@ -59,12 +59,12 @@ plain word on anything that needs fixing. Click a box to jump to it.</td>
 boxes, a camera that writes its own sentence, wildcards and saved presets.</td>
 </tr>
 <tr>
-<td><img src="images/editor-realism.webp" alt="The Editor's Realism page"></td>
+<td><img src="images/editor-realism.webp" alt="The Re-render tab"></td>
 <td><img src="images/paint.webp" alt="The Paint tab"></td>
 </tr>
 <tr>
 <td><b>Edit any picture.</b> Turn an illustration into a photograph, re-shoot it from a new angle,
-swap a face in, upscale it, all from the Editor tab, on a gallery picture or on the render you just
+swap a face in, upscale it, all from the Tools tab and Re-render, on a gallery picture or on the render you just
 made.</td>
 <td><b>Paint what you want changed.</b> Mask a region, type what should be there, press Generate.
 Only the painted part changes, and the result becomes the next thing you paint on.</td>

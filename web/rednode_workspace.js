@@ -2485,7 +2485,7 @@ async function uploadFiles(node, tabName, files) {
 // ---- gallery right-click ---------------------------------------------------
 const SEND_TARGETS = [
   ["i2i", "Img2Img"],
-  ["moodboard", "Moodboard"],
+  ["moodboard", "Krea 2 Moodboard"],
   ["subject", "Subject (main)"],
   ["subject_person", "Subject (add a person)"],
   ["scene", "Scene"],
@@ -12074,7 +12074,7 @@ const RIG_EXTRA_SCHEDULERS = ["beta57", "bong_tangent", "hyperbolic"];
 // THE PARTS A SEED CAN BE LINKED TO, mirroring seeds.AREAS, with what "Own" means
 const SEED_AREAS = [
   ["reangle", "Re-angle", "its own seed on the Re-angle page"],
-  ["realism", "Realism", "its own seed on the Realism page"],
+  ["realism", "Re-render", "its own seed on the Re-render tab"],
   ["swap", "Swap", "its own seed on the Swap page"],
   ["upscale", "Upscale", "the Upscale page's own seed"],
   ["detailer", "Detailer", "a fresh roll every run"],
@@ -14241,10 +14241,12 @@ const PAGE_BAR = {
                                  + "whole stack at once." },
   i2i: { title: "Img2Img", note: "Render from a picture instead of a blank canvas, in as "
                                  + "many passes as you like." },
-  editor: { title: "Editor", note: "Edit a picture: realism, a new angle, a face swap or an "
-                                   + "upscale." },
-  moodboard: { title: "Moodboard", note: "Pictures that set the style, and the words taken "
-                                         + "from them." },
+  rerender: { title: "Re-render", note: "Render the picture again from itself: the engine, the "
+                                        + "conversion LoRA and what to ask for." },
+  editor: { title: "Tools", note: "Edit a picture: a new angle, a face swap, an upscale or "
+                                  + "a rewritten prompt." },
+  moodboard: { title: "Krea 2 Moodboard", note: "Pictures that set the style, and the words taken "
+                                                + "from them." },
   identity: { title: "Krea 2 Identity", note: "The people to keep across a render, and the "
                                               + "place to put them in." },
   detailer: { title: "Detailer", note: "Passes that re-render parts of the picture at higher "
@@ -15362,6 +15364,7 @@ function viewKeyOf(node, cur) {
       : "i2i/auto/i2i";
   }
   if (cur === "editor") return "editor/" + (node._rnEdSub || p.rn_editor_sub || "reangle");
+  if (cur === "rerender") return "rerender";
   if (cur === "latent") return "latent/" + (node._rnLatSub || p.rn_latent_sub || "canvas");
   if (cur === "moodboard") return "moodboard/" + (node._rnMbSub || p.rn_moodboard_sub || "gallery");
   if (cur === "run") return "run/" + (node._rnRunSub || p.rn_run_sub || "run");
@@ -15386,7 +15389,9 @@ const I2I_PAGE_IDS = I2I_SUBS.map(([id]) => id);
 // Open the page a stage lives on, Img2Img's or the Editor's, from any chip or link
 export function openStagePage(node, id) {
   const props = (node.properties ||= {});
-  if (EDITOR_SUB_IDS.includes(id)) {
+  if (id === "realism") {
+    node._rnTab = "rerender"; props.rn_tab = "rerender";
+  } else if (EDITOR_SUB_IDS.includes(id)) {
     node._rnTab = "editor"; props.rn_tab = "editor";
     node._rnEdSub = id; props.rn_editor_sub = id;
   } else {
@@ -15396,8 +15401,9 @@ export function openStagePage(node, id) {
   render(node);
 }
 
-const stagePageName = (id) => String(I2I_SUBS.find(([x]) => x === id)?.[1]
-  || EDITOR_SUBS.find((x) => x.id === id)?.label || id).toLowerCase();
+const stagePageName = (id) => (id === "realism" ? "re-render"
+  : String(I2I_SUBS.find(([x]) => x === id)?.[1]
+    || EDITOR_SUBS.find((x) => x.id === id)?.label || id).toLowerCase());
 
 // The chips and the issues box on a stage bar. A chip is one page with something to
 // say, in that page's colour; a click opens the page, and one that will not run goes
@@ -15465,7 +15471,7 @@ export function i2iSkipped(t, E) {
 export function skippedBy(t, E) {
   if (!t || !E?.images?.length) return "";
   let who = "";
-  for (const [k, name] of [["reangle", "Re-angle"], ["realism", "Realism"], ["swap", "Swap"]]) {
+  for (const [k, name] of [["reangle", "Re-angle"], ["realism", "Re-render"], ["swap", "Swap"]]) {
     const X = t[k] || {};
     if (X.on && (X.target || "source") === "source") who = name;
   }
@@ -15594,7 +15600,7 @@ export function i2iIssues(cfg, node) {
   }
   // THE EDITOR'S SOURCE STAGES: they need its picture, and where the edit goes
   const E = cfg.tabs.editor_src || {};
-  const onSrc = [["reangle", "Re-angle"], ["realism", "Realism"], ["swap", "Swap"]]
+  const onSrc = [["reangle", "Re-angle"], ["realism", "Re-render"], ["swap", "Swap"]]
     .filter(([k]) => t[k]?.on && (t[k].target || "source") === "source");
   if (onSrc.length && !E.images?.length) {
     out.push({ sub: "esource", text: `The Editor has no source picture, so `
@@ -15903,7 +15909,7 @@ function editorTabs(node, body) {
   bar.className = "rn-ws-status";
   const nm = document.createElement("span");
   nm.className = "nm";
-  nm.textContent = "Editor";
+  nm.textContent = "Tools";
   bar.appendChild(nm);
   const issues = i2iIssues(cfg, node).filter((x) => EDITOR_SUB_IDS.includes(x.sub)
                                                     || EDITOR_SUB_IDS.includes(x.about || x.sub));
@@ -15919,11 +15925,6 @@ function editorTabs(node, body) {
     chips.push({ sub: "reangle", warn: !live,
                  text: !live ? "Re-angle skipped" : t.reangle.target === "render" ? "Re-angle on the render"
                    : "Re-angle on the source" });
-  }
-  if (t.realism?.on) {
-    const live = i2iSubLit(cfg, "realism") && !issueOn("realism");
-    chips.push({ sub: "realism", warn: !live,
-                 text: !live ? "Realism skipped" : "Realism on the source" });
   }
   if (t.swap?.on) {
     const live = i2iSubLit(cfg, "swap") && !issueOn("swap");
@@ -15944,12 +15945,11 @@ function editorTabs(node, body) {
   const onSource = ["reangle", "realism", "swap"].includes(sub)
     && (t[sub]?.target || "source") === "source";
   if (onSource && t[sub]?.on && !E.images?.length) {
-    body.appendChild(linkNote(node, "The Editor has no source picture, so this does nothing "
+    body.appendChild(linkNote(node, "Tools has no source picture, so this does nothing "
       + "yet. Add one on the Source page. ", "Open Source", "esource"));
   }
   if (sub === "esource") editorSourcePage(node, body);
   else if (sub === "reangle") reangleSection(node, body, "i2i", { flat: true });
-  else if (sub === "realism") realismSection(node, body, "i2i", { flat: true });
   else if (sub === "swap") swapSection(node, body, "i2i", { flat: true });
   else if (sub === "converter") {
     finalPromptSection(node, body);
@@ -15960,6 +15960,67 @@ function editorTabs(node, body) {
     }
     converterSection(node, body, "i2i", { flat: true, title: "IMG2IMG AUTO PROMPT CONVERTER" });
   } else if (sub === "upscale") upscaleBody(node, body);
+}
+
+// THE RE-RENDER TAB: the picture rendered again from itself as the reference. It
+// was the Editor's Realism page; it earned a rail entry of its own (you,
+// 2026-09-25). Its settings are still cfg.tabs.i2i.realism, its picture is still
+// the Tools source, and the Tools Source page's Edit choice still sets its target
+// with Re-angle's and Swap's; the choice here moves this stage alone.
+function rerenderTabs(node, body) {
+  const cfg = node._rnCfg;
+  const t = cfg.tabs.i2i;
+  const R = t.realism || {};
+  const E = cfg.tabs.editor_src;
+  const bar = document.createElement("div");
+  bar.className = "rn-ws-status";
+  const nm = document.createElement("span");
+  nm.className = "nm";
+  nm.textContent = "Re-render";
+  bar.appendChild(nm);
+  const issues = i2iIssues(cfg, node).filter((x) => (x.about || x.sub) === "realism");
+  const chips = [];
+  if (R.on) {
+    const live = i2iSubLit(cfg, "realism") && !issues.length;
+    chips.push({ sub: "realism", warn: !live,
+                 text: !live ? "Re-render skipped"
+                   : R.target === "render" ? "Re-render on the render" : "Re-render on the source" });
+  }
+  stageChips(node, bar, chips, issues);
+  body.appendChild(bar);
+  // what it re-renders: the Tools source picture, or the new render
+  const fc = document.createElement("div");
+  fc.className = "rn-ws-card rn-ws-edfrom";
+  const fr = document.createElement("div");
+  fr.className = "rn-ws-row";
+  fr.style.flexWrap = "wrap";
+  const fl = document.createElement("span");
+  fl.className = "rn-ws-swlabel rn-ws-choicelab";
+  fl.textContent = "Picture";
+  const fseg = segSwitch([
+    ["source", "Tools source", "Re-render the picture picked on the Tools tab's Source page; "
+                                + "the result is the image output."],
+    ["render", "New render", "The Workspace renders first, then re-renders that picture."],
+  ], R.target === "render" ? "render" : "source", (v) => {
+    if (t.realism) t.realism.target = v === "render" ? "render" : "source";
+    writeCfg(node); render(node);
+  });
+  fseg.dataset.choice = "rerender_from";
+  const fn = document.createElement("span");
+  fn.className = "rn-ws-note";
+  fn.style.flex = "1 1 240px";
+  fn.textContent = R.target === "render"
+    ? "The render is made first, then re-rendered from itself."
+    : (E.images?.length ? "The Tools source picture is re-rendered and is the image output."
+                        : "Tools has no source picture yet.");
+  fr.append(fl, fseg, fn);
+  fc.appendChild(fr);
+  body.appendChild(fc);
+  if (R.on && R.target !== "render" && !E.images?.length) {
+    body.appendChild(linkNote(node, "Tools has no source picture, so this does nothing "
+      + "yet. Add one on its Source page. ", "Open Source", "esource"));
+  }
+  realismSection(node, body, "i2i", { flat: true });
 }
 
 // A note that names what is missing and links to the page that fixes it
@@ -15984,7 +16045,7 @@ const edFlow = () => ", and that picture is the image output.";
 function editorSourcePage(node, body) {
   const cfg = node._rnCfg;
   const E = cfg.tabs.editor_src;
-  // WHAT THE EDITOR EDITS, for Re-angle, Realism and Swap at once
+  // WHAT TOOLS EDITS, for Re-angle, Re-render and Swap at once
   const fc = document.createElement("div");
   fc.className = "rn-ws-card rn-ws-edfrom";
   const fr = document.createElement("div");
@@ -16001,8 +16062,8 @@ function editorSourcePage(node, body) {
     writeCfg(node); render(node);
   };
   const fseg = segSwitch([
-    ["gallery", "Gallery picture", "Re-angle, Realism and Swap edit the picture picked below."],
-    ["render", "New render", "The Workspace renders first, then Re-angle, Realism and Swap "
+    ["gallery", "Gallery picture", "Re-angle, Re-render and Swap edit the picture picked below."],
+    ["render", "New render", "The Workspace renders first, then Re-angle, Re-render and Swap "
                            + "edit that render. Img2Img does not need to be on."],
   ], E.from === "render" ? "render" : "gallery", setFrom);
   fseg.dataset.choice = "editor_from";
@@ -16010,7 +16071,7 @@ function editorSourcePage(node, body) {
   fn.className = "rn-ws-note";
   fn.style.flex = "1 1 240px";
   fn.textContent = E.from === "render"
-    ? "The render is made first, then edited: Re-angle, then Realism, then Swap."
+    ? "The render is made first, then edited: Re-angle, then Re-render, then Swap."
     : "The picture picked below is edited and is the image output.";
   fr.append(fl, fseg, fn);
   fc.appendChild(fr);
@@ -16096,6 +16157,8 @@ function identityTabs(node, body) {
     strip.appendChild(b);
   }
   body.appendChild(strip);
+  // the Krea 2 Moodboard draws its own bar and inner tabs
+  if (sub === "moodboard") { moodboardTabs(node, body); return; }
 
   const bar = document.createElement("div");
   bar.className = "rn-ws-status";
@@ -17599,7 +17662,7 @@ function moodboardTabs(node, body) {
   on.onclick = () => { t.on = !t.on; writeCfg(node); render(node); };
   const nm = document.createElement("span");
   nm.className = "nm";
-  nm.textContent = "Moodboard";
+  nm.textContent = "Krea 2 Moodboard";
   bar.append(on, nm);
   const dv = (k) => cfg.dials[k] ?? DIALS.find((d) => d.key === k)?.def;
   const n = t.sel.length;
@@ -17632,7 +17695,7 @@ function moodboardTabs(node, body) {
     strip.appendChild(b);
   }
   body.appendChild(strip);
-  if (!t.on && sub !== "gallery") body.appendChild(tabOffNote("Moodboard"));
+  if (!t.on && sub !== "gallery") body.appendChild(tabOffNote("Krea 2 Moodboard"));
   if (sub === "gallery") galleryBody(node, body, "moodboard", IMAGE_TABS.moodboard, { multi: true, layout: "tabs" });
   else if (sub === "boosts") dialSection(node, body, "moodboard", { flat: true });
   else autoSection(node, body, "moodboard", { flat: true });
@@ -19964,8 +20027,9 @@ function railSwitches(node, cfg, id) {
     name, on: obj[k] === undefined ? dflt : !!obj[k], set: (v) => { obj[k] = !!v; } }];
   if (id === "latent") return flag("Latent", cfg.latent, "on");
   if (id === "i2i") return boxSwitches(node, cfg, "source");
+  if (id === "rerender") return flag("Re-render", I.realism, "on");
   if (id === "editor") {
-    return [...flag("Re-angle", I.reangle, "on"), ...flag("Realism", I.realism, "on"),
+    return [...flag("Re-angle", I.reangle, "on"),
             ...flag("Swap", I.swap, "on"), ...flag("Upscale", cfg.upscale, "on")];
   }
   if (["camera", "loras", "moodboard", "identity", "paint", "detailer", "post"].includes(id)) {
@@ -20095,6 +20159,7 @@ export const tabLit = (cfg, id) =>
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)
   : id === "paint" ? cfg.paint?.on
   : id === "upscale" ? cfg.upscale?.on
+  : id === "rerender" ? i2iSubLit(cfg, "realism") === true
   : id === "editor" ? EDITOR_SUB_IDS.some((s) => i2iSubLit(cfg, s) === true)
   : id === "post" ? cfg.post_on !== false && POST_FX.some((fx) => cfg.post?.[fx.id]?.on)
   : id === "latent" ? cfg.latent.on
@@ -20235,6 +20300,16 @@ function renderPage(node) {
       node._rnEdSub = p0.rn_i2i_sub; p0.rn_editor_sub = p0.rn_i2i_sub;
       p0.rn_i2i_sub = "source";
     }
+  }
+  // the Realism page is the Re-render tab, the Moodboard tab is a Krea 2 Identity
+  // page (2026-09-25): a workflow left on either opens where it lives now
+  if (node._rnTab === "editor" && (node._rnEdSub || node.properties?.rn_editor_sub) === "realism") {
+    node._rnTab = "rerender"; node._rnEdSub = "esource";
+    Object.assign((node.properties ||= {}), { rn_tab: "rerender", rn_editor_sub: "esource" });
+  }
+  if (node._rnTab === "moodboard") {
+    node._rnTab = "identity"; node._rnIdSub = "moodboard";
+    Object.assign((node.properties ||= {}), { rn_tab: "identity", rn_identity_sub: "moodboard" });
   }
   if (node._rnTab === "upscale") {                // Upscale is an Editor page now
     node._rnTab = "editor";
@@ -20518,6 +20593,7 @@ function renderPage(node) {
   }
   else if (cur === "paint") paintBody(node, body);
   else if (cur === "editor") editorTabs(node, body);    // the editing stages and Upscale
+  else if (cur === "rerender") rerenderTabs(node, body);
   else if (cur === "loras") lorasBody(node, body);
   else if (cur === "advanced") advancedTools(node, body);
   else if (cur === "overview") overviewBody(node, body);
@@ -21615,8 +21691,8 @@ export function editorBatchOpts(node) {
   return {
     runLabel: "Run All Batch",
     loadImages: live(),
-    precheck: () => (live() ? "" : "No Editor stage is on for the source picture, so "
-      + "nothing would be edited. Switch Re-angle, Realism or Swap on, then run the "
+    precheck: () => (live() ? "" : "No Tools stage is on for the source picture, so "
+      + "nothing would be edited. Switch Re-angle, Re-render or Swap on, then run the "
       + "batch again."),
     onRun: async (file) => {
       const { output } = await app.graphToPrompt();

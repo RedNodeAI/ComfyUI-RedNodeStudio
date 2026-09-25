@@ -35,7 +35,7 @@ is the short tour; this is the manual.
   - [Live preview and depth](#live-preview-and-depth)
   - [Anima](#anima)
   - [Qwen Image 2.1](#qwen-image-21)
-  - [Realism](#realism)
+  - [Re-render](#re-render)
   - [Re-angle and swap](#re-angle-and-swap)
 - [Performance](#performance)
 - [Settings and stored data](#settings-and-stored-data)
@@ -79,14 +79,14 @@ open the main template.
 | [Krea2-BBOX-Prompter](https://github.com/ukr8b3g-cmyk/Krea2-BBOX-Prompter) | The Light & Color and Scene nodes the RedNode Studio template runs on |
 | [ComfyUI-Krea-Moodboards](https://github.com/Andro-Meta/ComfyUI-Krea-Moodboards) | The Style browser in the RedNode Studio template |
 | [rgthree-comfy](https://github.com/rgthree/rgthree-comfy) | The seed node the Multi-Angle example uses |
-| [ComfyUI-VOSR2](https://github.com/ylchen333/ComfyUI-VOSR2) | A Detailer pass, the Editor's Upscale and the Hero Creator set to VOSR 2.0 |
+| [ComfyUI-VOSR2](https://github.com/ylchen333/ComfyUI-VOSR2) | A Detailer pass, the Tools tab's Upscale and the Hero Creator set to VOSR 2.0 |
 | [ComfyUI-EulerDiscreteScheduler](https://github.com/erosDiffusion/ComfyUI-EulerDiscreteScheduler) | The FlowMatch scheduler on the RedNode Studio template's ZTurbo chain |
 | [Derfuu_ComfyUI_ModdedNodes](https://github.com/Derfuu/Derfuu_ComfyUI_ModdedNodes) | The text node feeding the RedNode Studio template's prompt |
-| [ComfyUI-Krea2-Ostris-Edit](https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit) | The Editor's Realism, its Exact engine and the Ostris encoder |
-| [ComfyUI-Apt_Preset](https://github.com/cardenluo/ComfyUI-Apt_Preset) | The Editor's Realism, Exact engine |
-| [ComfyUI_LayerStyle](https://github.com/chflame163/ComfyUI_LayerStyle) | The Editor's Realism, Exact engine |
-| [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | The Editor's Realism, Exact engine |
-| [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) | Realism's beta57 schedule, and the ClownsharKSampler a rig can sample through |
+| [ComfyUI-Krea2-Ostris-Edit](https://github.com/ostris/ComfyUI-Krea2-Ostris-Edit) | Re-render's Exact engine and the Ostris encoder |
+| [ComfyUI-Apt_Preset](https://github.com/cardenluo/ComfyUI-Apt_Preset) | Re-render's Exact engine |
+| [ComfyUI_LayerStyle](https://github.com/chflame163/ComfyUI_LayerStyle) | Re-render's Exact engine |
+| [ComfyUI-post-processing-nodes](https://github.com/EllangoK/ComfyUI-post-processing-nodes) | Re-render's Exact engine |
+| [RES4LYF](https://github.com/ClownsharkBatwing/RES4LYF) | Re-render's beta57 schedule, and the ClownsharKSampler a rig can sample through |
 
 ComfyUI-Easy-Sam3 installs without a checkpoint. Put one in `models/sam3` as well, from
 [yolain/sam3-safetensors](https://huggingface.co/yolain/sam3-safetensors) or Meta's own
@@ -157,7 +157,7 @@ a workflow. **Cancel** stops waiting; an Ollama call already running may finish.
 
 ## The Workspace
 
-Fifteen tabs on a rail down the side of the panel, in groups: Run, View, Model, Canvas, Mood,
+Sixteen tabs on a rail down the side of the panel, in groups: Run, View, Model, Canvas,
 Identity, Refine and Settings, each with its icon, a light that says whether it is in use, and a
 colour bar. The rail folds to icons only, drags wider or narrower by its edge, and moves to either
 side of the pages. Right-click a tab to switch what it runs on or off, or to hide it. The preset
@@ -215,7 +215,7 @@ type** sets the type from the text encoder file. **Sampling** is in cards: the m
 sampler node, image to image, the Detailer's steps and the dials. A rig can sample through another
 pack's sampler node instead of the built-in one, starting with RES4LYF's ClownsharKSampler, and
 falls back to the built-in one where that node cannot take the run. **Seed** holds the main seed,
-named seeds of your own, and a link for each part of a run: Re-angle, Realism, Swap, Upscale, the
+named seeds of your own, and a link for each part of a run: Re-angle, Re-render, Swap, Upscale, the
 Detailer, the LoRA ranges, Post's random ranges and the auto prompt each follow the main seed, a
 named one or their own, and Same seed every pass stops the passes stepping it.
 
@@ -266,7 +266,7 @@ Wildcards and `@keyword` macros resolve on the run's seed.
 
 **Camera.** The stage from the camera section below, on its own tab, with a master switch. It has
 two studios: the one behind the prompt, whose camera writes the paragraph and drives the camera
-LoRAs, and a separate one for the Editor's Re-angle.
+LoRAs, and a separate one for the Tools tab's Re-angle.
 
 ![The Camera tab: the stage from above, the camera's height, lens and aim, and the camera LoRAs](images/camera.webp)
 
@@ -305,29 +305,31 @@ run as a batch. Its Auto prompt page also holds IMAGE TO TEXT: Style,
 Subject and Scene galleries whose pictures are only described in words, never sent to the model,
 so a look, a person or a place can steer any rig's prompt.
 
-![The Editor's Source page: the Edit choice, gallery picture or new render, and its own gallery](images/editor.webp)
+![The Tools tab's Source page: the Edit choice, gallery picture or new render, and its own gallery](images/editor.webp)
 
-![The Editor's Realism page: the engine, the conversion LoRA found by name, and the photo finish](images/editor-realism.webp)
+![The Re-render tab: the engine, the conversion LoRA found by name, and the photo finish](images/editor-realism.webp)
 
-**Editor.** The edits, on a picture of their own, in six pages. **Source** holds the Editor's own
-gallery and one choice for Re-angle, Realism and Swap together: edit the gallery picture, or render
+**Tools.** The edits, on a picture of their own, in five pages. **Source** holds the Tools tab's own
+gallery and one choice for Re-angle and Swap together: edit the gallery picture, or render
 first and edit the new render. The edited picture is the image output. **Upscale** runs one upscale
 on one picture or a folder, SeedVR2, VOSR 2.0 or the tiled one, with a fit step first and a before
-and after in the result, and it can take its picture from the Source gallery. **Realism** turns an
+and after in the result, and it can take its picture from the Source gallery. **Re-angle** re-shoots the picture from another viewpoint with the
+multi-angle edit model, from three bands or from the Camera tab's studio. **Swap** puts a face, head
+or whole person onto the picture: the Subject's, another picked person's, or a picture from Swap's
+own gallery, with a Fast switch for the Lightning LoRA. They run in the order Re-angle, Re-render and
+Swap, so the medium is converted after the viewpoint is settled and before a face lands on it. On
+the new render, a polish pass by the rig follows the edit. The edit models run on PyTorch
+attention, so SageAttention does not break them, and each shows its steps on the Run tab.
+**Converter** reworks the final prompt, with an optional rewrite by a local Ollama model.
+
+**Re-render.** Turns an
 illustration into a photograph. Its Exact engine is the Anything2Real workflow node for node, with
 an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
 Alternative engine is the pack's own and needs no other pack. It finds the conversion LoRA among
 your files by name and hash. A LoRAs-tab set can run underneath the conversion, and the **Set**
 row says which one: left on (rig's set) it follows the Models tab, which is Main unless a rig
 names another. The line under it says what will actually run, so the answer is on the page
-rather than in the console after a queue. **Re-angle** re-shoots the picture from another viewpoint with the
-multi-angle edit model, from three bands or from the Camera tab's studio. **Swap** puts a face, head
-or whole person onto the picture: the Subject's, another picked person's, or a picture from Swap's
-own gallery, with a Fast switch for the Lightning LoRA. They run in the order Re-angle, Realism,
-Swap, so the medium is converted after the viewpoint is settled and before a face lands on it. On
-the new render, a polish pass by the rig follows the edit. The edit models run on PyTorch
-attention, so SageAttention does not break them, and each shows its steps on the Run tab.
-**Converter** reworks the final prompt, with an optional rewrite by a local Ollama model.
+rather than in the console after a queue.
 
 ![The Paint tab: the mask on the picture, the result under it, and the paint settings](images/paint.webp)
 
@@ -364,7 +366,7 @@ the picture without sending it as a reference; Boosts off keeps a fidelity set b
 and is sized against the main subject's picture. To change part of a picture in place, use
 the Paint tab.
 
-**Moodboard.** Batches several pictures into one style signal. Gallery, Boosts and Auto prompt
+**Krea 2 Moodboard**, the page under Krea 2 Identity. Batches several pictures into one style signal. Gallery, Boosts and Auto prompt
 tabs sit under a status bar, and Boosts has one-click presets from A hint to Outfit transfer. Its
 Auto prompt reads every picture as Style, Subject or Situation and injects the words into that
 slot of the prompt frame. Right-click a picture in any
@@ -453,12 +455,12 @@ The kinds of pass:
 - **Tiled upscale**: Ultimate SD Upscale as a pass, the rig's model and the pass's prompt over
   tiles, an upscale model first or a plain resize, opened on 6 steps of deis at 0.25 denoise,
   1024 tiles padded 128 and no seam fix. Needs ComfyUI_UltimateSDUpscale.
-- **Realism**: the Editor's conversion as a pass, so an illustration can become a photograph in
-  the middle of a chain and the passes after it work on the photograph. The recipe is the Editor's
-  Realism page, so there is one place to tune the sizes, the encoder and the sampler; the card
+- **Re-render**: the Re-render tab's conversion as a pass, so an illustration can become a photograph in
+  the middle of a chain and the passes after it work on the photograph. The recipe is the Re-render
+  tab, so there is one place to tune the sizes, the encoder and the sampler; the card
   carries what is worth changing per pass: the engine, the photo finish, the conversion LoRA and
   its strength, which LoRA set runs under it, and the words it is asked for. It has a **Denoise**
-  bar, which the page does not: at 1.00 it converts as the page does, and below that the picture
+  bar, which the tab does not: at 1.00 it converts as the tab does, and below that the picture
   is the starting point and only part of it is rewritten, so the original's own texture survives.
   **Blend** mixes the converted picture back over the one it came from, which takes a conversion
   part of the way for no extra render. No scale: the frame comes back the size it arrived.
@@ -467,7 +469,7 @@ The kinds of pass:
   tile its own reference, laid back under a cross-fade over the Overlap. A sampler's tiled
   upscale hands every tile the whole prompt and stack and invents a subject in a patch of sky;
   this draws each tile from itself, so a low denoise sharpens what is there. Tiles of 1024 are
-  the edit encoder's own megapixel. The add row offers it ready-made as Realism tiles, at a
+  the edit encoder's own megapixel. The add row offers it ready-made as Re-render tiles, at a
   denoise of 0.40 and x2.
 - **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
   but takes the tone from the picture as it arrived, the drift fix for a long chain.
@@ -558,8 +560,8 @@ canvas of Get and Set nodes with named channels. The wires that are not there ar
 
 **The Shelf as the picture.** A RedNode Shelf beside the Workspace has an **Override** switch.
 With it on, the picture picked on the shelf is what the ticked tabs render from, in place of
-whatever their galleries hold. It starts pointed at **Img2Img** and the **Editor**'s source, the
-two pictures a run works on (which of them renders is the Editor's own choice), and the chips add
+whatever their galleries hold. It starts pointed at **Img2Img** and the **Tools** tab's source, the
+two pictures a run works on (which of them renders is the Tools tab's own choice), and the chips add
 Subject, Scene or Moodboard when you mean those. A ticked tab is switched on for the run, the
 same as sending a picture to it by right-click. Nothing is written into the Workspace, so switching Override off hands every tab its
 own picture back, exactly as it was. Drop a new picture on the shelf and the next run uses that
@@ -923,18 +925,18 @@ Qwen Image 2.1 is under Alibaba's Qwen research licence: personal and research u
 work without their agreement. Its VAE decodes a transparency channel; the pack keeps the colour and
 drops the transparency, so every stage after the render works as it does on any other model.
 
-### Realism
+### Re-render
 
 | File | Goes in | Where from |
 |---|---|---|
 | Anything2Real Characters V3, the conversion LoRA | `models/loras` | [search Civitai](https://civitai.com/search/models?query=Anything2Real) |
 
-The Exact engine also wants the packs marked Realism in the optional packs table, and says which
+The Exact engine also wants the packs marked Re-render in the optional packs table, and says which
 one is missing before it loads anything. The Alternative engine needs only the LoRA and your rig.
 
 ### Re-angle and swap
 
-The Editor's RE-ANGLE and the multi-angle workflow run on Qwen-Image-Edit-2511; the SWAP
+The Tools tab's RE-ANGLE and the multi-angle workflow run on Qwen-Image-Edit-2511; the SWAP
 stage and the Detailer's swap presets run on the BFS files.
 
 | File | Goes in | Where from |

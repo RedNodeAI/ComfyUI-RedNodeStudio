@@ -338,7 +338,7 @@ function realismCard(s, card, group, lab, A, L, changed) {
   const eng = pick("Engine", String(s.realism_engine || ""),
        [["", "(the page's)"], ["exact", "Faithful"], ["alternative", "Loose"]],
        "Which engine converts on this pass. (the page's) follows the Editor's "
-       + "Realism page, so changing it there moves this pass with it.",
+       + "Re-render tab, so changing it there moves this pass with it.",
        (v) => { s.realism_engine = v; });
   eng.dataset.realism = "engine";
   const ph = pick("Photo finish", String(s.realism_photo || ""),
@@ -440,7 +440,7 @@ function realismCard(s, card, group, lab, A, L, changed) {
   note.className = "hint";
   note.style.cssText = "margin:2px 0 0 2px";
   note.dataset.realism = "note";
-  note.textContent = "Everything else comes from the Editor's Realism page: the sizes, "
+  note.textContent = "Everything else comes from the Re-render tab: the sizes, "
                    + "the encoder, the sampler and the instruction.";
   A(note);
   card.appendChild(note);
@@ -1208,12 +1208,12 @@ function buildPanel(node, hostEl = null) {
         const t = String(x.target || "face").trim() || "face";
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
-      if (x.type === "realism" && x.realism_tiles) return "Realism tiles";
+      if (x.type === "realism" && x.realism_tiles) return "Re-render tiles";
       const lk = (window.rnLocalPassKinds || []).find((k) => k.type === x.type);
       if (lk) return lk.label;
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
                 vosr2: "VOSR2 upscale", reader: "Image to Text",
-                realism: "Realism" })[x.type] || "Pass";
+                realism: "Re-render" })[x.type] || "Pass";
     };
     const uniqueName = (base, taken) => {
       if (!taken.has(base)) return base;
@@ -2164,13 +2164,13 @@ function buildPanel(node, hostEl = null) {
     mk("＋ Image to Text", () => ({ on: true, type: "reader", prompt: "",
                                reader_mode: "", reader_first: false }));
     // REALISM: the Editor's conversion as a pass, on the page's recipe
-    mk("＋ Realism", () => ({ on: true, type: "realism", denoise: 1.0, blend: 1.0,
+    mk("＋ Re-render", () => ({ on: true, type: "realism", denoise: 1.0, blend: 1.0,
                              realism_engine: "", realism_lora: "", realism_photo: "",
                              realism_prompt: "", loras: true, lora_set: "" }));
     // the same kind with Tiles on, at the denoise a re-detail wants
     // the portrait recipe (you, 2026-09-25): a quarter denoise keeps the face its
     // own, the blend keeps the colour, 1.5x is the size that pays for itself
-    mk("＋ Realism tiles", () => ({ on: true, type: "realism", denoise: 0.25, blend: 0.75,
+    mk("＋ Re-render tiles", () => ({ on: true, type: "realism", denoise: 0.25, blend: 0.75,
                                    realism_engine: "", realism_lora: "", realism_photo: "",
                                    realism_prompt: "", loras: true, lora_set: "",
                                    realism_tiles: true, realism_scale: 1.5, realism_tile: 1024,

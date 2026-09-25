@@ -922,7 +922,7 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
         kind = s.get("type")
         label = {"sampler": "Sampler pass", "detailer": "Detailer pass",
                  "upscale": "SeedVR2 pass", "usdu": "Tiled upscale",
-                 "vosr2": "VOSR2 pass", "realism": "Realism pass"}[kind]
+                 "vosr2": "VOSR2 pass", "realism": "Re-render pass"}[kind]
         parts = []
         other = str(s.get("rig") or "").strip()
         active_name = str((cfg["models"].get("rigs") or [{}])[min(cfg["models"].get("active", 0),
@@ -3472,7 +3472,7 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] editor: no source picture on the Editor tab, "
                       "so its source stages are skipped", flush=True)
             else:
-                _tap("editor", "Editor source", ed_img)
+                _tap("editor", "Tools source", ed_img)
         if (_rg.get("on") and ed_img is not None
                 and _rg.get("target", "source") == "source"):
             try:
@@ -3503,15 +3503,15 @@ class RedNodeStudioWorkspace:
             try:
                 from . import realism as _rl_mod
                 _rseed2 = int(run_seed if _rl["seed_random"] else _rl["seed"])
-                _run.begin("realism", "Realism", steps=int(_rl["steps"] or rig_steps))
+                _run.begin("realism", "Re-render", steps=int(_rl["steps"] or rig_steps))
                 ed_img = _rl_mod.render(_rl, ed_img, cfg, _rseed2, node_id=unique_id)
-                _run.end("realism", "Realism")
-                _tap("realism", "Realism result", ed_img)
+                _run.end("realism", "Re-render")
+                _tap("realism", "Re-render result", ed_img)
                 _ed_ran.append("realism")
                 print("[RedNode Workspace] realism: the picture is now a photograph "
                       "(%d x %d)" % (ed_img.shape[2], ed_img.shape[1]), flush=True)
             except Exception as exc:
-                _run.end("realism", "Realism", "error", error=str(exc)[:200])
+                _run.end("realism", "Re-render", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] realism failed: %s; the source is used as it is"
                       % exc, flush=True)
         # SWAP: the Subject onto the person in the
@@ -5131,7 +5131,7 @@ class RedNodeStudioWorkspace:
             try:
                 from . import realism as _rl_mod
                 _rseed3 = int(run_seed if _rl_cfg["seed_random"] else _rl_cfg["seed"])
-                _run.begin("realism", "Realism", steps=int(_rl_cfg["steps"] or rig_steps),
+                _run.begin("realism", "Re-render", steps=int(_rl_cfg["steps"] or rig_steps),
                            batch=int(rig_image.shape[0]))
                 _conv = [_rl_mod.render(_rl_cfg, rig_image[i:i + 1], cfg, _rseed3,
                                         node_id=unique_id)[:, :, :, :3]
@@ -5139,12 +5139,12 @@ class RedNodeStudioWorkspace:
                 _ch = min(int(v.shape[1]) for v in _conv)
                 _cw = min(int(v.shape[2]) for v in _conv)
                 rig_image = torch.cat([v[:, :_ch, :_cw, :] for v in _conv], dim=0)
-                _run.end("realism", "Realism")
-                _tap("realism", "Realism result", rig_image)
+                _run.end("realism", "Re-render")
+                _tap("realism", "Re-render result", rig_image)
                 print("[RedNode Workspace] realism: the render is now a photograph "
                       "(%d x %d)" % (rig_image.shape[2], rig_image.shape[1]), flush=True)
             except Exception as exc:
-                _run.end("realism", "Realism", "error", error=str(exc)[:200])
+                _run.end("realism", "Re-render", "error", error=str(exc)[:200])
                 print("[RedNode Workspace] realism failed: %s; the render is kept as it is"
                       % exc, flush=True)
 

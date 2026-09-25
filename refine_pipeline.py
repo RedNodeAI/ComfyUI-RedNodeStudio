@@ -925,7 +925,7 @@ from . import run_events as _run_events
 
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
               "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
-              "reader": "Image to Text", "realism": "Realism"}
+              "reader": "Image to Text", "realism": "Re-render"}
 # PASS KINDS A PERSONAL-ONLY EXTENSION REGISTERS: kind -> {"name", "run"}, where
 # run(detailer, image, stage, ws_cfg, seed, tag, node_id) hands back (image, lines).
 # The shipped pack registers none; the panel learns the kind from the same

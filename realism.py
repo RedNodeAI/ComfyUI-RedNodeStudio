@@ -459,7 +459,7 @@ def render(rc, source, cfg, seed, node_id=None):
                  "FluxKontextMultiReferenceLatentMethod": "reference method",
                  "ConditioningZeroOut": "zero negative", "EmptySD3LatentImage": "blank canvas",
                  "ModelSamplingAuraFlow": "shift", "KSampler": "sampler", "KSamplerAdvanced": "sampler"}
-        print("[RedNode Realism] %.1f s: %s, sampling and the rest %.1f s"
+        print("[RedNode Re-render] %.1f s: %s, sampling and the rest %.1f s"
               % (total, ", ".join("%s %.1f s" % (short.get(n, n), t) for n, t in parts), rest),
               flush=True)
     return out
@@ -471,7 +471,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     if not str(rc["lora"] or "").strip() or rc["lora"] not in _installed():
         name, digest, how = find_lora(rc)
         if name:
-            print("[RedNode Realism] conversion LoRA found by %s: %s" % (how, name),
+            print("[RedNode Re-render] conversion LoRA found by %s: %s" % (how, name),
                   flush=True)
             rc = dict(rc, lora=name, lora_sha256=digest or rc.get("lora_sha256", ""))
     # what can be refused without loading anything comes first
@@ -489,7 +489,7 @@ def _render(rc, source, cfg, seed, node_id=None):
                      sort_keys=True)
     for k, img in _RESULT_CACHE:
         if k == key:
-            print("[RedNode Realism] from the cache", flush=True)
+            print("[RedNode Re-render] from the cache", flush=True)
             return img.clone()
 
     rig_name, model, clip, vae = _engine(rc, cfg, _ws)
@@ -523,7 +523,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     hit = next((p for k, p in _PREP_CACHE if k == prep_key), None)
     if hit is not None:
         model, clip, base_model, base_clip = hit
-        print("[RedNode Realism] the prepared model, reused", flush=True)
+        print("[RedNode Re-render] the prepared model, reused", flush=True)
     if hit is None and rc["loras"]:
         try:
             from . import lora_stack as _lora
@@ -538,10 +538,10 @@ def _render(rc, source, cfg, seed, node_id=None):
                 # NAME THE SET. The page picks one now, so "the stack" is no longer
                 # one thing, and which set ran is the first thing worth knowing when
                 # a conversion comes out carrying LoRAs nobody wanted.
-                print("[RedNode Realism] the %r set applied: %s"
+                print("[RedNode Re-render] the %r set applied: %s"
                       % (lc.get("name", ""), applied), flush=True)
         except Exception as exc:
-            print("[RedNode Realism] the rig's LoRA stack could not be applied (%s); "
+            print("[RedNode Re-render] the rig's LoRA stack could not be applied (%s); "
                   "the conversion LoRA runs alone" % exc, flush=True)
     if hit is None:
         # the photo finish puts the conversion LoRA on twice, at two strengths, so it
@@ -554,7 +554,7 @@ def _render(rc, source, cfg, seed, node_id=None):
         del _PREP_CACHE[:-_PREP_KEEP]
 
     if rc["engine"] == "alternative":
-        print("[RedNode Realism] alternative engine: %s on %s, boost %.2f, %d steps"
+        print("[RedNode Re-render] alternative engine: %s on %s, boost %.2f, %d steps"
               % (rc["lora"], rig_name or "the active rig", rc["boost"], rc["steps"]),
               flush=True)
         out = _render_alternative(rc, source, model, clip, vae, seed, node_id)
@@ -591,7 +591,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     # same cache as the Ostris routes, so a tile never patches twice
     model = _ostris_model(dict(rc, shift=0.0), model)
 
-    print("[RedNode Realism] %s on %s: %d steps, cfg %s, %s / %s, vl %d, round %s"
+    print("[RedNode Re-render] %s on %s: %d steps, cfg %s, %s / %s, vl %d, round %s"
           % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["cfg"],
              rc["sampler"], rc["scheduler"], rc["vl_size"], rc["round_to"]), flush=True)
     # core's KSampler node returns a one-tuple; the latent is its first item
@@ -640,7 +640,7 @@ def _render_ostris(rc, img, model, clip, vae, seed, node_id, rig_name):
     """The exact engine on the Ostris encoder: one pass, the recipe's sampler."""
     model = _ostris_model(rc, model)
     positive, negative, latent = _ostris_encode(rc, img, clip, vae)
-    print("[RedNode Realism] %s on %s, Ostris encoder: %d steps, %s / %s, shift %s"
+    print("[RedNode Re-render] %s on %s, Ostris encoder: %d steps, %s / %s, shift %s"
           % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["sampler"],
              rc["scheduler"], rc["shift"]), flush=True)
     out = sampler_for(node_id, "realism")(
@@ -668,7 +668,7 @@ def _render_photo(rc, img, model, clip, vae, seed, node_id, rig_name):
     start = int(round(steps * (1.0 - _dn))) if _dn < 1.0 else 0
     start = max(0, min(start, steps - 2))
     split = max(start + 1, min(int(rc["photo_split"]), steps - 1))
-    print("[RedNode Realism] %s on %s, photo finish: steps 0-%d at %.2f (%s), %d-%d at "
+    print("[RedNode Re-render] %s on %s, photo finish: steps 0-%d at %.2f (%s), %d-%d at "
           "%.2f (%s), %s, shift %s"
           % (rc["lora"], rig_name or "the active rig", split, rc["photo_strength1"],
              rc["photo_sampler1"], split, steps, rc["photo_strength2"],

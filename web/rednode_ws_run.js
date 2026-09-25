@@ -624,9 +624,9 @@ function stageHost(node) {
 const TAP_POINTS = [
   ["refs", "References", "The Subject and Scene pictures as the model gets them."],
   ["source", "Img2Img source", "The source picture before Re-angle and Swap."],
-  ["editor", "Editor", "The Editor page's source picture as its stages get it."],
+  ["editor", "Tools", "The Tools source picture as its stages get it."],
   ["reangle", "Re-angle", "The re-shot picture."],
-  ["realism", "Realism", "The Realism result, on the Editor page or on the render."],
+  ["realism", "Re-render", "The Re-render result, on the Tools source or on the render."],
   ["swap", "Swap", "The picture after the face or person swap."],
   ["render", "Render", "The model's first picture, before the Editor's stages on it, the Detailer and Post FX."],
   ["passes", "Each pass", "Every pass's result, drawn by the small preview decoder."],
@@ -774,7 +774,7 @@ export function plannedStages(node, cfg) {
   const onSrc = (X) => !!(X?.on && (X.target || "source") === "source");
   const edRuns = edPic && [RA, I.realism, I.swap].some(onSrc);
   if (edPic && onSrc(RA)) out.push(["reangle", "Re-angle"]);
-  if (edPic && onSrc(I.realism)) out.push(["realism", "Realism"]);
+  if (edPic && onSrc(I.realism)) out.push(["realism", "Re-render"]);
   if (edPic && onSrc(I.swap)) out.push(["swap", "Swap"]);
   if (internal && edRuns) {
     // nothing: the edited picture is the render
@@ -794,7 +794,7 @@ export function plannedStages(node, cfg) {
     out.push(["reangle", "Re-angle"]);
     if (RA.polish !== false && internal) out.push(["reangle_polish", "Re-angle polish"]);
   }
-  if (I.realism?.on && I.realism.target === "render") out.push(["realism", "Realism"]);
+  if (I.realism?.on && I.realism.target === "render") out.push(["realism", "Re-render"]);
   const SW = tabs.i2i?.swap || {};
   if (SW.on && SW.target === "render") {
     out.push(["swap", "Swap"]);
@@ -819,6 +819,9 @@ export function goTo(node, t) {
   // their old home still lands on the right page
   if (t.tab === "i2i" && EDITOR_SUB_IDS.includes(t.sub)) t = { ...t, tab: "editor" };
   if (t.tab === "upscale") t = { tab: "editor", sub: "upscale" };
+  // Realism is the Re-render tab, the Moodboard is a Krea 2 Identity page (2026-09-25)
+  if ((t.tab === "i2i" || t.tab === "editor") && t.sub === "realism") t = { tab: "rerender" };
+  if (t.tab === "moodboard") t = { tab: "identity", sub: "moodboard", mb: t.sub };
   const p = (node.properties ||= {});
   node._rnTab = t.tab;
   p.rn_tab = t.tab;
@@ -833,6 +836,7 @@ export function goTo(node, t) {
   } else if (t.tab === "identity") {
     node._rnIdSub = t.sub || "subject"; p.rn_identity_sub = node._rnIdSub;
     if (t.inner) { (node._rnIdInner ||= {})[node._rnIdSub] = t.inner; p["rn_identity_" + node._rnIdSub] = t.inner; }
+    if (t.sub === "moodboard") { node._rnMbSub = t.mb || "gallery"; p.rn_moodboard_sub = node._rnMbSub; }
   } else if (t.tab === "moodboard") {
     node._rnMbSub = t.sub || "gallery"; p.rn_moodboard_sub = node._rnMbSub;
   } else if (t.tab === "run") {
@@ -843,7 +847,7 @@ export function goTo(node, t) {
 
 export const autoPageOf = (tabName) => (
   tabName === "subject" || tabName === "scene" ? { tab: "identity", sub: tabName, inner: "auto" }
-  : tabName === "moodboard" ? { tab: "moodboard", sub: "auto" }
+  : tabName === "moodboard" ? { tab: "identity", sub: "moodboard", mb: "auto" }
   : tabName === "i2i" ? { tab: "i2i", sub: "auto", auto: "i2i" }
   : tabName.startsWith("text_") ? { tab: "i2i", sub: "auto", auto: "text", side: tabName }
   : null);
@@ -863,8 +867,8 @@ export function railRunState(cfg) {
     if (key === "upscale") return { tab: "editor", sub: "upscale" };
     const t = jumpForStage(key, cfg || {});
     if (!t) return null;
-    // the Editor's pages were once the Img2Img tab's; the rail lists them under Editor
-    if (t.tab === "i2i" && ["reangle", "realism", "swap", "upscale", "converter"].includes(t.sub)) {
+    // the Tools pages were once the Img2Img tab's; the rail lists them under Tools
+    if (t.tab === "i2i" && ["reangle", "swap", "upscale", "converter"].includes(t.sub)) {
       return { tab: "editor", sub: t.sub };
     }
     return t;
@@ -889,7 +893,7 @@ export function jumpForStage(key, cfg) {
   if (/^pass\d+$/.test(key)) return passesPage(cfg);
   if (key === "decode" || key === "external" || key.startsWith("rig:")) return { tab: "models" };
   if (key === "swap" || key === "swap_polish") return { tab: "i2i", sub: "swap" };
-  if (key === "realism") return { tab: "editor", sub: "realism" };
+  if (key === "realism") return { tab: "rerender" };
   if (key === "reangle" || key === "reangle_polish") return { tab: "i2i", sub: "reangle" };
   if (key === "paint") return { tab: "paint" };
   if (key === "detailer") return { tab: "detailer" };
@@ -898,7 +902,7 @@ export function jumpForStage(key, cfg) {
   return null;
 }
 
-export const CAPTION_TABS = [["Subject", "subject"], ["Scene", "scene"], ["Moodboard", "moodboard"],
+export const CAPTION_TABS = [["Subject", "subject"], ["Scene", "scene"], ["Krea 2 Moodboard", "moodboard"],
                       ["Img2Img", "i2i"], ["Image to text Style", "text_style"],
                       ["Image to text Subject", "text_subject"], ["Image to text Scene", "text_scene"]];
 

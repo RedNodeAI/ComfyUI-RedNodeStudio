@@ -37,6 +37,15 @@ format matters: **version** then a date, notes below until the next bold line.
 - Every LoRA set has a switch of its own, not only Main. Off, whoever picks that set renders raw
   and the set keeps its rows for when it is switched back on. The LoRAs page's title sits in the
   middle under the set tabs, and so does every other page's title and its line
+- Re-render is a tab of its own, and that is its name now. Realism was a page inside the
+  Editor; it is the pack's strongest image to image path, so it has a rail entry, a Picture
+  choice of its own (the Tools source or the new render) and the same recipe underneath. The
+  Detailer passes are Re-render and Re-render tiles. Nothing in a saved workflow changes: the
+  settings keep their keys, and a workflow left on the old page opens on the new tab
+- The Editor is Tools: Source, Upscale, Re-angle, Swap and the Converter
+- The Moodboard lives under Krea 2 Identity as Krea 2 Moodboard, beside the Subject and Scene
+  it works with, since it is a Krea 2 authority; a workflow left on the old tab opens there.
+  The rail is sixteen tabs in seven groups, and the shipped UI presets follow
 - The Run tab is three pages: Live, Review and Save. The Stages page sits under Review now, so
   one page holds the run's finished pictures and what the taps photographed on the way; a
   workflow saved on the old Stages page opens on Review. The first page is Live rather than a

@@ -38,7 +38,7 @@ const i2iRuns = (I) => !!(I.on && !I.prompt_only
 
 const PAGE_NAME = {
   models: "Models", prompts: "Prompts", camera: "Camera", loras: "LoRAs",
-  latent: "Latent", i2i: "Img2Img", paint: "Paint", moodboard: "Moodboard",
+  latent: "Latent", i2i: "Img2Img", paint: "Paint", moodboard: "Krea 2 Moodboard", rerender: "Re-render",
   identity: "Krea 2 Identity", detailer: "Detailer", post: "Post", run: "Run",
 };
 const SUB_NAME = {
@@ -114,7 +114,7 @@ export function overviewBoxes(node, cfg) {
   });
   const mb = tabs.moodboard || {};
   feeds.push({
-    key: "moodboard", label: "Moodboard",
+    key: "moodboard", label: "Krea 2 Moodboard",
     state: mb.on && mb.sel?.length ? "on" : mb.on ? "skip" : "off",
     note: mb.on && mb.sel?.length ? plural(mb.sel.length, "picture") + " picked" : mb.on ? "On, nothing picked" : "Off",
     why: mb.on && !mb.sel?.length ? "The Moodboard sends only what is picked in its gallery, and nothing is." : "",
@@ -215,7 +215,7 @@ export function overviewBoxes(node, cfg) {
   const swNote = capFirst(S.mode || "face") + " from " + refName(S.reference || "subject");
   const swBlocked = ownEmpty ? "Own picture is picked and the Swap gallery is empty." : "";
   if (!R.on || raTarget !== "render") run.push(editBox("reangle", "Re-angle", R, false, "", raNote));
-  if (I.realism?.on) run.push(editBox("realism", "Realism", I.realism, false, "",
+  if (I.realism?.on) run.push(editBox("realism", "Re-render", I.realism, false, "",
                                           I.realism.photo ? "Photo finish" : "Anime to photo"));
   if (!S.on || swapTarget !== "render") run.push(editBox("swap", "Swap", S, false, swBlocked, swNote));
   if (internal) {
@@ -320,7 +320,7 @@ export function boxSwitches(node, cfg, key) {
   const base = String(key).replace(/_render$/, "");
   if (base === "camera") return flag("Camera", cfg.camera, "on", true);
   if (base === "loras") return flag("LoRAs", cfg.loras, "on");
-  if (base === "moodboard") return flag("Moodboard", tabs.moodboard, "on");
+  if (base === "moodboard") return flag("Krea 2 Moodboard", tabs.moodboard, "on");
   if (base === "identity") {
     return [...flag("Subject", tabs.subject, "on"), ...flag("Scene", tabs.scene, "on"),
             ...flag("Masks", tabs.boost_mask, "on")];

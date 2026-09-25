@@ -90,11 +90,15 @@ export const TAB_ORDER = [
   { id: "loras", label: "LoRAs", group: "model" },
   { id: "latent", label: "Latent", group: "canvas" },
   { id: "i2i", label: "Img2Img", group: "canvas" },
+  // RE-RENDER: the picture rendered again from itself as the reference, its own
+  // tab since 2026-09-25 (it was the Editor's Realism page); the settings still
+  // live under cfg.tabs.i2i.realism, only the page moved
+  { id: "rerender", label: "Re-render", group: "canvas" },
   // the stages that edit a picture, and the one-picture Upscale (EDITOR_SUBS)
-  { id: "editor", label: "Editor", group: "canvas" },
+  { id: "editor", label: "Tools", group: "canvas" },
   { id: "paint", label: "Paint", group: "canvas" },
-  { id: "moodboard", label: "Moodboard", group: "mood" },
-  // Subject, People, Scene and Masks are sub-tabs of this one (IDENTITY_SUBS)
+  // Subject, Scene, the Krea 2 Moodboard and the Hero creator are sub-tabs of
+  // this one (IDENTITY_SUBS); the Moodboard was a rail tab until 2026-09-25
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
   // captioning on its own page: a gallery, one picture to words, and a batch
   { id: "ai", label: "AI", group: "edit" },
@@ -113,8 +117,7 @@ export const RAIL_GROUPS = [
   { id: "run", label: "Run", color: "#3b82f6", tabs: ["run"] },
   { id: "view", label: "View", color: "#2dd4bf", tabs: ["overview"] },
   { id: "model", label: "Model", color: "#a855f7", tabs: ["models", "prompts", "camera", "loras"] },
-  { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "editor", "paint"] },
-  { id: "mood", label: "Mood", color: "#e08a3c", tabs: ["moodboard"] },
+  { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "rerender", "editor", "paint"] },
   { id: "identity", label: "Identity", color: "#eab308", tabs: ["identity"] },
   { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["ai", "detailer", "post"] },
   { id: "settings", label: "Settings", color: "#8a919b", tabs: ["advanced"] },
@@ -126,13 +129,13 @@ export const RAIL_GROUPS = [
 export const RAIL_PRESETS = [
   { name: "All", tabs: TAB_ORDER.map((t) => t.id) },
   { name: "Basic", tabs: ["overview", "models", "prompts", "loras", "latent", "run"] },
-  { name: "New image", tabs: ["overview", "prompts", "camera", "loras", "latent", "moodboard",
+  { name: "New image", tabs: ["overview", "prompts", "camera", "loras", "latent",
                               "identity", "detailer", "post", "run"] },
-  { name: "Image to image", tabs: ["overview", "prompts", "loras", "i2i", "moodboard", "identity",
+  { name: "Image to image", tabs: ["overview", "prompts", "loras", "i2i", "rerender", "identity",
                                    "detailer", "post", "run"] },
-  { name: "Edit", tabs: ["overview", "loras", "editor", "post", "run"] },
+  { name: "Edit", tabs: ["overview", "loras", "rerender", "editor", "post", "run"] },
   { name: "Paint", tabs: ["loras", "paint", "identity", "post", "run"] },
-  { name: "Finishing", tabs: ["overview", "editor", "detailer", "post", "run"] },
+  { name: "Finishing", tabs: ["overview", "rerender", "editor", "detailer", "post", "run"] },
 ];
 
 // The Krea 2 Identity tab's sub-tabs: the tabs that feed the identity system. Their
@@ -142,15 +145,18 @@ export const IDENTITY_SUBS = [
   { id: "subject", label: "SUBJECT", tip: "The people to preserve, picked in order in one gallery: the first is the main subject." },
   { id: "hero", label: "HERO CREATOR", tip: "Make a clean headshot out of a gallery picture, then redesign it." },
   { id: "scene", label: "SCENE", tip: "The place: the setting the people are put into." },
+  // the Moodboard is Krea 2's style authority, so it lives with the other Krea 2
+  // references (you, 2026-09-25); its gallery id stays "moodboard"
+  { id: "moodboard", label: "KREA 2 MOODBOARD", tip: "Pictures that set the look, and the words taken from them." },
 ];
 
-// The Editor tab's sub-tabs. Re-angle, Realism, Swap and the Converter were Img2Img
-// pages and still keep their settings under cfg.tabs.i2i: only the pages moved, so
-// Img2Img is the pass system alone. Upscale was a tab of its own.
+// The Tools tab's sub-tabs (the tab id is still "editor"). Re-angle, Swap and the
+// Converter were Img2Img pages and still keep their settings under cfg.tabs.i2i:
+// only the pages moved, so Img2Img is the pass system alone. Upscale was a tab of
+// its own. Realism was a page here until 2026-09-25; it is the Re-render tab now.
 export const EDITOR_SUBS = [
-  { id: "esource", label: "SOURCE", tip: "The picture Re-angle, Realism and Swap edit, and where the edit goes." },
+  { id: "esource", label: "SOURCE", tip: "The picture Re-angle, Re-render and Swap edit, and where the edit goes." },
   { id: "upscale", label: "UPSCALE", tip: "One upscale on one picture, straight to the result pane." },
-  { id: "realism", label: "REALISM", tip: "Turn the source into a photograph with a conversion LoRA." },
   { id: "reangle", label: "RE-ANGLE", tip: "Re-shoot the source or the render from a new camera angle." },
   { id: "swap", label: "SWAP", tip: "Swap a character into the source or the render." },
   { id: "converter", label: "CONVERTER", tip: "Rework the final prompt and the Img2Img auto prompt." },
@@ -164,13 +170,13 @@ export const EDITOR_SUB_IDS = EDITOR_SUBS.map((s) => s.id);
 // behind it was one shared number so the slider on one tab resized the others. Every
 // gallery draws its own now, so there is no flag to set and none to forget.
 export const IMAGE_TABS = {
-  editor_src: { label: "Editor source", hint: "The picture the Editor's Re-angle, Realism "
-       + "and Swap edit, one after another." },
+  editor_src: { label: "Tools source", hint: "The picture Re-angle, Re-render and Swap "
+       + "edit, one after another." },
   i2i: { label: "Img2Img", hint: "The source image for an image-to-image pass. Its auto "
        + "prompt describes everything and runs through the built-in converter." },
   subject: { label: "Subject", hint: "The person to preserve. The face you want kept." },
   scene: { label: "Scene", hint: "The place. A real image rebuilt as in-context latents." },
-  moodboard: { label: "Moodboard", hint: "The look. Select several and they batch into one style signal." },
+  moodboard: { label: "Krea 2 Moodboard", hint: "The look. Select several and they batch into one style signal." },
   ai: { label: "AI gallery", hint: "Pictures to turn into words. Nothing here reaches a "
        + "render: it is a work surface for captioning, one picture or a batch." },
 };
