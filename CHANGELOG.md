@@ -51,6 +51,9 @@ format matters: **version** then a date, notes below until the next bold line.
   and never places it, and the node showed a black body. The body now says the panel is built
   but not placed and that a refresh fixes it, and a toast says the same the moment the frontend
   reports the missed file
+- A Detailer card's Free VRAM, copy and X stay together at the end of its header. The Image to
+  Text card's row was wide enough to drop the copy and the X onto a second line; its words are
+  shorter too
 - The Prompts strip's two actions are Add and Import, green and blue, apart from the prompt chips
 - The Prompts tab's Text size slider reaches the plain box too, and a plain box dragged taller
   stays that tall across tabs. The Frame boxes did both; the plain box set its size and its

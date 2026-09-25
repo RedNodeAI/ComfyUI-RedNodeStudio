@@ -121,6 +121,7 @@ css.textContent = `
   align-items:center;justify-content:center;line-height:1;font-size:13px}
 .rn-adv .ico{width:28px}
 .rn-adv .grow{flex:1}
+.rn-adv .acts{display:flex;align-items:center;gap:6px;flex:none;margin-left:auto}
 .rn-adv .add{display:flex;flex-wrap:wrap;gap:8px 10px}
 .rn-adv .addg{display:flex;gap:6px;flex:1 1 30%;min-width:220px;padding:4px;border-radius:6px;
   border:1px solid #262a31;background:#111317}
@@ -1476,18 +1477,18 @@ function buildPanel(node, hostEl = null) {
                        + "Workspace's AI tab.",
                        (v) => { s.reader_source = v; writeCfg(node, d); },
                        undefined,
-                       { chain: "The picture here", ai_tab: "The AI tab's picture" }));
-        top.append(lab("Reads for"),
+                       { chain: "This picture", ai_tab: "AI tab's picture" }));
+        top.append(lab("For"),
                    sel(["i2i", "subject", "scene_view", "style"], s.reader_mode || "",
                        "What to read for: the whole picture, the subject, the place or "
                        + "the look. (AI tab's) follows the AI tab's own choice, which is "
                        + "also where the engines are picked.",
-                       (v) => { s.reader_mode = v; writeCfg(node, d); }, "(the AI tab's)",
+                       (v) => { s.reader_mode = v; writeCfg(node, d); }, "(AI tab's)",
                        { i2i: "Everything in it", subject: "The subject",
                          scene_view: "The place", style: "The look" }));
         const lead = document.createElement("button");
         lead.className = "tog" + (s.reader_first ? " on" : "");
-        lead.textContent = s.reader_first ? "Reading leads" : "Your words lead";
+        lead.textContent = s.reader_first ? "Reading leads" : "Words lead";
         lead.title = "Which comes first when the box below has words in it: what the "
                    + "reader saw, or what you typed. What is being asked for usually "
                    + "reads best at the front.";
@@ -1618,7 +1619,13 @@ function buildPanel(node, hostEl = null) {
         more.onclick = () => setMode("advanced");
         top.append(more);
       }
-      top.append(freeT, dup, del);
+      // THE ACTIONS STAY AT THE END, as one unit that never splits: with the row
+      // wrapping, a wide card (Image to Text) dropped the copy and the X onto a
+      // second line while Free VRAM stayed up (you, 2026-09-25)
+      const acts = document.createElement("span");
+      acts.className = "acts";
+      acts.append(freeT, dup, del);
+      top.append(acts);
       card.appendChild(top);
 
       if (!isFolded && s.type === "upscale") {
