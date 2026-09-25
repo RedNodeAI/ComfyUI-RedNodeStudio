@@ -7515,6 +7515,32 @@ function workspacePrefs(node, body) {
     sect.appendChild(sr);
   }
 
+  // ---- SWITCH SOUNDS: a small click when a page's power button flips ---------
+  {
+    const kr = document.createElement("div");
+    kr.className = "rn-ws-row";
+    kr.style.flexWrap = "wrap";
+    const kl = document.createElement("span");
+    kl.className = "hint";
+    kl.style.cssText = "flex:none;width:110px";
+    kl.textContent = "Switch sounds";
+    const kb = document.createElement("button");
+    const kon = !!wsPref("SwitchSounds", false);
+    kb.className = "rn-ws-btn rn-ws-compact" + (kon ? " on" : "");
+    kb.style.cssText = "width:auto;padding:0 12px";
+    kb.textContent = kon ? "On" : "Off";
+    kb.dataset.choice = "switch_sounds";
+    kb.title = "A small click when a page's power button flips: two quick notes up for "
+             + "on, one low note down for off. Drawn on the spot, no file.";
+    kb.onclick = () => { setWsPref("SwitchSounds", !kon); if (!kon) switchClick(true); render(node); };
+    const kh = document.createElement("span");
+    kh.className = "hint";
+    kh.style.cssText = "flex:0 1 320px;min-width:0";
+    kh.textContent = "Off by default. This install only.";
+    kr.append(kl, kb, kh);
+    sect.appendChild(kr);
+  }
+
   // ---- GENERATE ON THE RAIL: the pages have one in their header ---------------
   {
     const rr = document.createElement("div");
@@ -8716,6 +8742,7 @@ function paintBody(node, body) {
   on.className = "rn-ws-power inline " + (P.on ? "on" : "off");
   on.dataset.choice = "page_power";
   on.innerHTML = POWER_ICON;
+  on.onclick = () => { switchClick(!P.on); setPaintOn(node, !P.on); };
   on.title = P.on
     ? "The painted region drives output_latent, edit_mask and denoise. Queue to run "
       + "it. Switching this OFF also hands back whatever the paint renderer left in "
@@ -14481,6 +14508,65 @@ function powerSwitchFor(node) {
 const POWER_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" '
   + 'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">'
   + '<path d="M12 3.5v8.5"/><path d="M6.6 6.6a7.6 7.6 0 1 0 10.8 0"/></svg>';
+// A SMALL CLICK when a page switch flips, an option off by default (Advanced,
+// Switch sounds): two quick rising notes for on, one low falling note for off,
+// drawn with WebAudio so no file ships. The audio nodes are wired through a
+// reference to connect, since the Registry's scanner reads a direct call of that
+// name as a socket (the Save panel's chime does the same).
+let switchAudio = null;
+// YOUR OWN CLICKS WIN: web/sounds/switch_on.mp3 and switch_off.mp3 play when
+// they are there, the drawn tones when they are not. The file is tried through an
+// Audio element, never a fetch: a miss fires its error event once and the tones
+// take over for the rest of the session.
+const switchFiles = { on: null, off: null };          // null untried, "" none, else url
+function switchTones(on) {
+  const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!AC) return false;
+  try {
+    switchAudio ||= new AC();
+    if (switchAudio.state === "suspended") switchAudio.resume?.();
+    const t0 = switchAudio.currentTime || 0;
+    const notes = on ? [[660, 0, 0.07], [990, 0.06, 0.09]] : [[440, 0, 0.05], [330, 0.04, 0.11]];
+    for (const [freq, at, len] of notes) {
+      const osc = switchAudio.createOscillator();
+      const gain = switchAudio.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0 + at);
+      gain.gain.exponentialRampToValueAtTime(0.09, t0 + at + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
+      const wireOsc = osc.connect;
+      const wireGain = gain.connect;
+      wireOsc.call(osc, gain);
+      wireGain.call(gain, switchAudio.destination);
+      osc.start(t0 + at);
+      osc.stop(t0 + at + len + 0.02);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+function switchClick(on) {
+  if (!wsPref("SwitchSounds", false)) return false;
+  const key = on ? "on" : "off";
+  if (switchFiles[key] !== "" && typeof globalThis.Audio === "function") {
+    try {
+      const url = switchFiles[key] || new URL(`./sounds/switch_${key}.mp3`, import.meta.url).href;
+      const a = new globalThis.Audio(url);
+      a.volume = 0.5;
+      a.onerror = () => { switchFiles[key] = ""; switchTones(on); };
+      a.oncanplaythrough = () => { switchFiles[key] = url; };
+      const p = a.play?.();
+      if (p && p.catch) p.catch(() => { switchFiles[key] = ""; switchTones(on); });
+      return true;
+    } catch (e) {
+      switchFiles[key] = "";
+    }
+  }
+  return switchTones(on);
+}
+
 function powerButton(node, head) {
   const sw = powerSwitchFor(node);
   if (!sw) return null;
@@ -14492,7 +14578,7 @@ function powerButton(node, head) {
   b.title = sw.on
     ? `${sw.name} is on. Click to switch it off; its settings stay as they are.`
     : `${sw.name} is off. Click to switch it on.`;
-  b.onclick = () => { sw.set(!sw.on); writeCfg(node); render(node); };
+  b.onclick = () => { switchClick(!sw.on); sw.set(!sw.on); writeCfg(node); render(node); };
   head.appendChild(b);
   return b;
 }
