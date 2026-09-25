@@ -57,6 +57,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- Every page with a switch carries a power button in the same corner of its header, the way
+  Generate sits in the other corner: green on, red off, and the bar wears a thin line of the
+  same colour. It flips the same setting the page's own switch and the rail's right-click do.
+  Pages with nothing to switch, or with several (Tools), carry none; the Identity pages answer
+  for the page showing
 - A shelf holds five stacks. Five small squares at the top switch between them, so pictures
   can be grouped without clearing the shelf. Only the stack showing is drawn; the other four
   wait as file names, no cells and no thumbnails, so a full stack out of sight costs nothing.

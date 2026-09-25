@@ -261,6 +261,21 @@ css.textContent = `
   text-overflow:ellipsis;white-space:nowrap}
 /* GENERATE, the one button that is always in the same place: taller than a row, and
    a fade rather than a flat fill so it reads as the primary action */
+.rn-ws-power{position:absolute;left:calc(12px / var(--rnws-scale,1));top:50%;
+  transform:translateY(-50%);width:calc(38px / var(--rnws-scale,1));
+  height:calc(38px / var(--rnws-scale,1));border-radius:50%;padding:0;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;border:1px solid #33373d;
+  background:#15171b;color:#8a919b;z-index:2}
+.rn-ws-power svg{width:calc(18px / var(--rnws-scale,1));height:calc(18px / var(--rnws-scale,1))}
+.rn-ws-power.on{color:#3fd08a;border-color:#2f8f5a;background:#12261b}
+.rn-ws-power.off{color:#f0606f;border-color:#8f2f3c;background:#2a1419}
+.rn-ws-power:hover{filter:brightness(1.25)}
+.rn-ws-pbar.pw-on{box-shadow:inset 0 0 0 1px #2f8f5a}
+.rn-ws-pbar.pw-off{box-shadow:inset 0 0 0 1px #8f2f3c}
+.rn-ws-power.inline{position:static;transform:none;flex:none;width:32px;height:32px}
+.rn-ws-power.inline svg{width:16px;height:16px}
+.rn-ws-paintbar.pw-on{box-shadow:inset 0 -1px 0 #2f8f5a}
+.rn-ws-paintbar.pw-off{box-shadow:inset 0 -1px 0 #8f2f3c}
 .rn-ws-pbargen{position:absolute;right:calc(12px / var(--rnws-scale,1));top:50%;
   transform:translateY(-50%);min-height:calc(46px / var(--rnws-scale,1));
   padding:0 calc(26px / var(--rnws-scale,1));font-size:calc(15px / var(--rnws-scale,1));
@@ -8694,9 +8709,13 @@ function paintBody(node, body) {
   if (seedSamplerDials(cfg)) writeCfg(node);
 
   const row = document.createElement("div");
-  row.className = "rn-ws-row";
+  row.className = "rn-ws-row rn-ws-paintbar " + (P.on ? "pw-on" : "pw-off");
+  // the same power button every other page carries in its corner, in the Paint
+  // bar's own corner, since this page keeps its own bar (2026-09-25)
   const on = document.createElement("button");
-  on.className = "rn-ws-sw" + (P.on ? " on" : "");
+  on.className = "rn-ws-power inline " + (P.on ? "on" : "off");
+  on.dataset.choice = "page_power";
+  on.innerHTML = POWER_ICON;
   on.title = P.on
     ? "The painted region drives output_latent, edit_mask and denoise. Queue to run "
       + "it. Switching this OFF also hands back whatever the paint renderer left in "
@@ -14438,6 +14457,46 @@ function railSubRows(node, cfg, tab) {
   return rows;
 }
 
+// THE SWITCH BEHIND THE OPEN PAGE, when it has exactly one: the same config key
+// the rail's right-click flips and the page's own switch flips. A page with
+// several (Tools: Re-angle, Swap, Upscale) or none (Models, Prompts) gets nothing.
+// The Identity pages answer for the page showing: Subject, Scene or the Moodboard.
+function powerSwitchFor(node) {
+  const cfg = node._rnCfg;
+  const cur = node._rnTab;
+  if (!cfg || !cur) return null;
+  let list;
+  try { list = railSwitches(node, cfg, cur) || []; } catch (e) { return null; }
+  if (cur === "identity") {
+    const sub = node._rnIdSub || node.properties?.rn_identity_sub || "subject";
+    if (sub === "moodboard") list = boxSwitches(node, cfg, "moodboard") || [];
+    else list = list.filter((f) => f.name === (sub === "scene" ? "Scene" : sub === "subject" ? "Subject" : "-"));
+  }
+  return list.length === 1 ? list[0] : null;
+}
+
+// THE POWER BUTTON, the same corner on every page that has a switch, the way
+// Generate is the same corner on every page: green on, red off, and the bar
+// wears a thin line of the same colour (you, 2026-09-25)
+const POWER_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" '
+  + 'stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">'
+  + '<path d="M12 3.5v8.5"/><path d="M6.6 6.6a7.6 7.6 0 1 0 10.8 0"/></svg>';
+function powerButton(node, head) {
+  const sw = powerSwitchFor(node);
+  if (!sw) return null;
+  head.classList.add(sw.on ? "pw-on" : "pw-off");
+  const b = document.createElement("button");
+  b.className = "rn-ws-power " + (sw.on ? "on" : "off");
+  b.dataset.choice = "page_power";
+  b.innerHTML = POWER_ICON;
+  b.title = sw.on
+    ? `${sw.name} is on. Click to switch it off; its settings stay as they are.`
+    : `${sw.name} is off. Click to switch it on.`;
+  b.onclick = () => { sw.set(!sw.on); writeCfg(node); render(node); };
+  head.appendChild(b);
+  return b;
+}
+
 function pageHeader(node, body, { strip = null, title = "", note = "", first = false,
                                  gen = true, center = false } = {}) {
   const wrap = document.createElement("div");
@@ -14445,6 +14504,7 @@ function pageHeader(node, body, { strip = null, title = "", note = "", first = f
   const head = document.createElement("div");
   head.className = "rn-ws-pbar";
   head._rnWrap = wrap;                      // the shim has no parentElement
+  powerButton(node, head);
   if (strip) {
     dressSubTabs(strip);
     head.appendChild(strip);
