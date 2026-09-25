@@ -121,9 +121,19 @@ css.textContent = `
   align-items:center;justify-content:center;line-height:1;font-size:13px}
 .rn-adv .ico{width:28px}
 .rn-adv .grow{flex:1}
-.rn-adv .add{display:flex;gap:6px}
-.rn-adv .add button{flex:1;font-weight:600}
+.rn-adv .add{display:flex;flex-wrap:wrap;gap:8px 10px}
+.rn-adv .addg{display:flex;gap:6px;flex:1 1 30%;min-width:220px;padding:4px;border-radius:6px;
+  border:1px solid #262a31;background:#111317}
+.rn-adv .addg button{flex:1 1 110px;font-weight:600;border-left:3px solid var(--ag,#33373d)}
+.rn-adv .addg button:hover{border-left-color:var(--ag,#b8283c)}
+.rn-adv .addg.g-render{--ag:#4a8fe0}
+.rn-adv .addg.g-upscale{--ag:#2dd4bf}
+.rn-adv .addg.g-read{--ag:#a855f7}
+.rn-adv .addg.g-rerender{--ag:#b8283c}
+.rn-adv .addg.g-local{--ag:#e0a84a}
+.rn-adv .addg.g-group{--ag:#8a919b}
 .rn-adv .hint{font-size:11px;color:#7f8792}
+.rn-adv .hint.warn{color:#f0a0a8}
 .rn-adv .miss{font-size:12px;color:#f0c98a;background:#2e2413;border:1px solid #6b5220;
   border-left:3px solid #d99a2b;border-radius:4px;padding:6px 8px;margin-top:4px;
   line-height:1.45}
@@ -781,7 +791,16 @@ function openCardMenu(node, d, i, ev, writeAndRender) {
 function readCfg(node) {
   const w = node.widgets?.find((x) => x.name === "config");
   let d = {};
-  try { d = JSON.parse(w?.value || "{}"); } catch (e) { d = {}; }
+  // A READ THAT FAILED IS SAID, NOT HIDDEN. The Workspace's page hands this panel
+  // its settings through a JSON copy; a copy that fails (something on a pass that
+  // cannot be serialised) used to come back as an empty list, so the page said
+  // "3 passes on" while the panel said "no passes yet", and one click on the panel
+  // would have written that empty list over the real one (you, 2026-09-25).
+  try { d = JSON.parse(w?.value || "{}"); }
+  catch (e) {
+    console.error("[RedNode Detailer] the panel could not read its settings:", e);
+    d = { _rnUnreadable: String(e?.message || e) };
+  }
   if (!Array.isArray(d.stages)) d.stages = [];
   if (typeof d.seed !== "number") d.seed = 0;
   if (typeof d.seed_random !== "boolean") d.seed_random = true;
@@ -793,6 +812,11 @@ function readCfg(node) {
 }
 
 function writeCfg(node, d) {
+  if (d?._rnUnreadable) {
+    console.error("[RedNode Detailer] not written: the settings could not be read, so "
+                  + "a write would wipe them (" + d._rnUnreadable + ")");
+    return;
+  }
   const w = node.widgets?.find((x) => x.name === "config");
   if (w) w.value = JSON.stringify(d);
   node.graph?.setDirtyCanvas(true, false);
@@ -2121,20 +2145,32 @@ function buildPanel(node, hostEl = null) {
       wrap.appendChild(card);
     });
     cap("END \u00b7 " + px(endPx) + "onward to the post process", PX_WHY);
+    // THE ADD ROW, in groups with a colour each, wrapping onto a second line: one
+    // row of ten same-looking buttons had stopped reading (you, 2026-09-25). The
+    // groups are what the pass does: render again, upscale, read, re-render, a
+    // personal extension's kinds, and the group title.
     const add = document.createElement("div");
     add.className = "add";
-    const mk = (label, stage) => {
+    const addGroups = {};
+    const mk = (label, stage, group = "local") => {
+      const g = addGroups[group] ||= (() => {
+        const el = document.createElement("div");
+        el.className = "addg g-" + group;
+        add.appendChild(el);
+        return el;
+      })();
       const b = document.createElement("button");
       b.textContent = label;
+      b.className = "g-" + group;
       b.onclick = () => { d.stages.push(stage()); writeCfg(node, d); render(); };
-      add.appendChild(b);
+      g.appendChild(b);
     };
     mk("＋ Sampler pass", () => ({ on: true, type: "sampler", rig: "",
-                                  denoise: 0.3, steps: 0, prompt: "" }));
+                                  denoise: 0.3, steps: 0, prompt: "" }), "render");
     mk("＋ Face detailer", () => ({ on: true, type: "detailer", rig: "",
                                    target: "face", denoise: 0.15, steps: 0,
                                    threshold: 0.5, feather: 8, padding: 0.35,
-                                   sam_model: "", prompt: "" }));
+                                   sam_model: "", prompt: "" }), "render");
     // the workflow's SeedVR2 group as one card, opened on its own settings:
     // 7B-sized swap, cpu offload, tiled VAE at 1024/128, lab colour fix, 1080p
     mk("＋ SeedVR2 upscale", () => ({ on: true, type: "upscale", size: "1080p",
@@ -2142,7 +2178,7 @@ function buildPanel(node, hostEl = null) {
                                      blocks_to_swap: 36, offload: "cpu",
                                      cache_model: false, tiled: true, tile: 1024,
                                      tile_overlap: 128, color_fix: "lab", max_edge: 0,
-                                     input_noise: 0, latent_noise: 0 }));
+                                     input_noise: 0, latent_noise: 0 }), "upscale");
     // VOSR 2.0 as a pass, opened on the author's own recommendation, which is
     // also what measured best here: x2, DiT tile 512, VAE tile 1024, wavelet.
     // Good as an alt to the SeedVR2 pass and as the step before a tiled upscale.
@@ -2150,7 +2186,7 @@ function buildPanel(node, hostEl = null) {
                                        vosr2_dtype: "", vosr2_scale: 2,
                                        vosr2_color: "wavelet", vosr2_tile: 512,
                                        vosr2_tile_overlap: 32, vosr2_vae_tile: 1024,
-                                       vosr2_vae_overlap: 32 }));
+                                       vosr2_vae_overlap: 32 }), "upscale");
     // Ultimate SD Upscale as a pass, opened on settings that hold detail: 6 steps of
     // deis/simple at 0.25, x2, 1024 tiles padded 128, no seam fix
     mk("＋ Tiled upscale", () => ({ on: true, type: "usdu", rig: "", steps: 6,
@@ -2158,15 +2194,15 @@ function buildPanel(node, hostEl = null) {
                                    upscale_by: 2, usdu_model: "", usdu_tile: 1024,
                                    usdu_padding: 128, usdu_blur: 8, usdu_mode: "Linear",
                                    seam_mode: "None", seam_denoise: 0.35,
-                                   tiled_decode: false, prompt: "" }));
+                                   tiled_decode: false, prompt: "" }), "upscale");
     // THE IMAGE TO TEXT: reads the picture mid-chain and speaks for the passes after
     // it. No render, no dials, so its card is the shortest in the list.
     mk("＋ Image to Text", () => ({ on: true, type: "reader", prompt: "",
-                               reader_mode: "", reader_first: false }));
+                               reader_mode: "", reader_first: false }), "read");
     // REALISM: the Editor's conversion as a pass, on the page's recipe
     mk("＋ Re-render", () => ({ on: true, type: "realism", denoise: 1.0, blend: 1.0,
                              realism_engine: "", realism_lora: "", realism_photo: "",
-                             realism_prompt: "", loras: true, lora_set: "" }));
+                             realism_prompt: "", loras: true, lora_set: "" }), "rerender");
     // the same kind with Tiles on, at the denoise a re-detail wants
     // the portrait recipe (you, 2026-09-25): a quarter denoise keeps the face its
     // own, the blend keeps the colour, 1.5x is the size that pays for itself
@@ -2174,14 +2210,19 @@ function buildPanel(node, hostEl = null) {
                                    realism_engine: "", realism_lora: "", realism_photo: "",
                                    realism_prompt: "", loras: true, lora_set: "",
                                    realism_tiles: true, realism_scale: 1.5, realism_tile: 1024,
-                                   realism_overlap: 128 }));
+                                   realism_overlap: 128 }), "rerender");
     // kinds a personal-only extension registered, after the pack's own
-    for (const k of window.rnLocalPassKinds || []) mk("＋ " + k.label, k.make);
-    mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
+    for (const k of window.rnLocalPassKinds || []) mk("＋ " + k.label, k.make, "local");
+    mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }), "group");
     wrap.appendChild(add);
     const hint = document.createElement("div");
     hint.className = "hint";
-    hint.textContent = d.stages.length && isSimple()
+    if (d._rnUnreadable) hint.classList.add("warn");
+    hint.textContent = d._rnUnreadable
+      ? "The passes could not be read (" + d._rnUnreadable + "). Nothing here is "
+        + "changed and nothing is written until it can be. Reload the page; if it "
+        + "stays, the console line starting [RedNode Detailer] says what is wrong."
+      : d.stages.length && isSimple()
       ? "Top to bottom is the run order. Simple shows the dials most passes need; the "
         + "sampling, tiling, model and prompt settings are under Advanced, and a card "
         + "says when one of them is in use. ⧉ copies a pass; right-click a card for "

@@ -51,6 +51,14 @@ format matters: **version** then a date, notes below until the next bold line.
   and never places it, and the node showed a black body. The body now says the panel is built
   but not placed and that a refresh fixes it, and a toast says the same the moment the frontend
   reports the missed file
+- The Camera tab's two studios, Prompt and Re-angle, are page tabs in the header like every other
+  page's, with an icon and a light, rather than two small buttons
+- The Detailer's add row is grouped by what a pass does, each group with its own colour, and it
+  wraps onto a second line instead of squeezing ten buttons into one
+- The Detailer panel says when it could not read its passes, and writes nothing until it can.
+  The page hands the panel a copy of the settings; a copy that failed came back as an empty
+  list, so the page said three passes on while the panel said none, and one click there would
+  have written the empty list over the real one
 - The Run tab is three pages: Live, Review and Save. The Stages page sits under Review now, so
   one page holds the run's finished pictures and what the taps photographed on the way; a
   workflow saved on the old Stages page opens on Review. The first page is Live rather than a

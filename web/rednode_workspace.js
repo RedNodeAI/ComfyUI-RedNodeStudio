@@ -3741,15 +3741,30 @@ function cameraBody(node, body) {
   // the chips wrap when there are many prompts, and the note takes a line of its own
   // under them: squeezed beside a long chip strip it stood a word wide
   bar.style.flexWrap = "wrap";
+  // THE TWO STUDIOS AS PAGE TABS, the same strip every other page carries in its
+  // header (icon, name, light): they were two small segment buttons and read as a
+  // setting rather than as the page's pages (you, 2026-09-25)
   const seg = document.createElement("div");
-  seg.className = "rn-ws-seg";
+  seg.className = "rn-ws-sub";
   seg.dataset.rnbar = "1";
   seg.classList.add("rn-barstrip");
-  for (const [v, l, tip] of [["prompt", "Prompt", "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs."],
-                             ["i2i", "Re-angle", "A separate studio whose camera drives the Editor's Re-angle (re-shooting the picture from another viewpoint)."]]) {
+  const RA = cfg.tabs?.i2i?.reangle || {};
+  for (const [v, id, l, tip, lit] of [
+      ["prompt", "prompts", "PROMPT",
+       "The studio behind a prompt: its camera writes the paragraph and drives the camera LoRAs.",
+       !!cfg.camera.on],
+      ["i2i", "reangle", "RE-ANGLE",
+       "A separate studio whose camera drives Re-angle on the Tools tab (re-shooting the picture from another viewpoint).",
+       !!(cfg.camera.on && RA.on && RA.camera === "studio")]]) {
     const b = document.createElement("button");
-    b.className = "rn-ws-segb" + (sub === v ? " on" : "");
-    b.textContent = l; b.title = tip;
+    b.className = "rn-ws-subt" + (sub === v ? " cur" : "");
+    b.dataset.sub = id;
+    b.title = tip;
+    const lt = document.createElement("span");
+    lt.className = "lt" + (lit ? " on" : "");
+    const tx = document.createElement("span");
+    tx.textContent = l;
+    b.append(lt, tx);
     b.onclick = () => { node._rnCameraSub = v; render(node); };
     seg.appendChild(b);
   }
