@@ -14556,7 +14556,7 @@ function switchClick(on) {
     try {
       const url = switchFiles[key] || new URL(`./sounds/switch_${key}.mp3`, import.meta.url).href;
       const a = new globalThis.Audio(url);
-      a.volume = 0.5;
+      a.volume = 1.0;                 // a file is the level you made it at
       a.onerror = () => { switchFiles[key] = ""; switchTones(on); };
       a.oncanplaythrough = () => { switchFiles[key] = url; };
       const p = a.play?.();
