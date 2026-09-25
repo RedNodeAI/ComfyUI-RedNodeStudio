@@ -518,6 +518,10 @@ css.textContent = `
 .rn-ws-filebox{flex:1 1 200px;min-width:0;background:#101216;border:1px solid #2f333a;
   border-radius:7px;color:#e8ecf1;font-size:12.5px;padding:7px 10px}
 .rn-ws-pbar-btn{width:auto;padding:0 16px;align-self:stretch;min-height:34px}
+.rn-ws-padd{border-color:#2f6f4a;color:#9fd8b3;background:#12201a;margin-left:6px}
+.rn-ws-padd:hover:not(:disabled){border-color:#3f9e63;color:#d6f5e0}
+.rn-ws-pimp{border-color:#2f4f7a;color:#a9c6ff;background:#111a26}
+.rn-ws-pimp:hover:not(:disabled){border-color:#4a8fe0;color:#e0ebff}
 .rn-ws-body.rn-ws-dropping{outline:2px dashed #b8283c;outline-offset:-4px;background:#1d1518}
 .rn-ws-phead{align-items:flex-end !important;flex-wrap:wrap}
 .rn-ws-pdel{margin-left:auto;align-self:flex-end;width:28px;height:28px;padding:0;flex:none;
@@ -13728,8 +13732,11 @@ function promptsBody(node, body) {
         bar.appendChild(chip);
       });
       const addP = document.createElement("button");
-      addP.className = "rn-ws-btn rn-ws-pbar-btn";
-      addP.textContent = "\uFF0B Add prompt";
+      // the two actions read as actions, not as more prompts: short, each in its
+      // own tint, apart from the prompt chips (you, 2026-09-25)
+      addP.className = "rn-ws-btn rn-ws-pbar-btn rn-ws-padd";
+      addP.textContent = "\uFF0B Add";
+      addP.title = "Add a prompt.";
       addP.onclick = () => {
         R.push({ name: "", rig: "", rigs: [], kind: "krea2", text: "", negative: "" });
         node._rnPromptSel = R.length - 1; cfg.prompts.active = node._rnPromptSel;
@@ -13739,8 +13746,8 @@ function promptsBody(node, body) {
       // IMPORT: the prompt, and the settings where the picture carries them,
       // out of a PNG's metadata, read here in the browser
       const impP = document.createElement("button");
-      impP.className = "rn-ws-btn rn-ws-pbar-btn";
-      impP.textContent = "\u2913 Import prompt";
+      impP.className = "rn-ws-btn rn-ws-pbar-btn rn-ws-pimp";
+      impP.textContent = "\u2913 Import";
       impP.title = "Read the prompt out of a PNG's metadata: a picture this pack saved brings its "
                  + "prompt row or its whole setup; any picture with an A1111 parameters chunk "
                  + "brings its words and settings.";

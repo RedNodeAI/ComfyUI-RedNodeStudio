@@ -51,6 +51,7 @@ format matters: **version** then a date, notes below until the next bold line.
   and never places it, and the node showed a black body. The body now says the panel is built
   but not placed and that a refresh fixes it, and a toast says the same the moment the frontend
   reports the missed file
+- The Prompts strip's two actions are Add and Import, green and blue, apart from the prompt chips
 - The Prompts tab's Text size slider reaches the plain box too, and a plain box dragged taller
   stays that tall across tabs. The Frame boxes did both; the plain box set its size and its
   remembered height and then wiped its own style a line later
