@@ -57,6 +57,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- An engine rig of a handled kind is handed the Img2Img page's Denoise on the call itself. The
+  page's value was only written inside the encode, which a rig with no VAE never enters, so the
+  handler always saw 1.0 and every NovelAI image-to-image was a fresh render
 - A rig of a handled engine kind takes the Img2Img page's Denoise for an image-to-image run, the
   dial beside the picture, rather than the rig's own strength dial, which sat at 1.0 and made
   every such run a fresh render. The external rig keeps its own dial, since the page's cannot

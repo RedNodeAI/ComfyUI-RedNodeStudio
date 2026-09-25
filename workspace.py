@@ -4666,6 +4666,13 @@ class RedNodeStudioWorkspace:
             # conditioning; the engine cannot take a LoRA, so the words are the
             # whole of the camera. The pictures batch on the output. Without
             # this the NovelAI rig rendered shot 1 and the path read as broken.
+            # THE PAGE'S DENOISE REACHES THE ENGINE with no VAE in the way. The
+            # Img2Img block only wrote denoise_out inside the encode, which a handled
+            # rig never enters (nothing to encode with), so the handler was handed
+            # the 1.0 default and every NovelAI image-to-image ran as a fresh render
+            # with the picture thrown away (proved in the harness, 2026-09-25).
+            _h_dn = (float(it["denoise"]) if (it["on"] and not it["prompt_only"]
+                                            and i2i_img is not None) else float(denoise_out))
             _h_shots = []
             if len(_shot_states) > 1 and _cam_state_row is not None:
                 print("[RedNode Workspace] camera path: %d shots, one render each "
@@ -4688,7 +4695,7 @@ class RedNodeStudioWorkspace:
                     _himg = RIG_KIND_HANDLERS[_hk](
                         "render", rig=_ar, cfg=cfg, prompt_text=_t,
                         negative_text=negative_text_out, seed=int(run_seed),
-                        source_image=i2i_img, denoise=denoise_out)
+                        source_image=i2i_img, denoise=_h_dn)
                     if _himg is not None:
                         _h_imgs.append(_himg)
                 except Exception as exc:
