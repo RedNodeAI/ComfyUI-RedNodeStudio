@@ -165,6 +165,7 @@ css.textContent = `
 .rn-ws-shelfin{flex:1 1 auto;min-height:0;height:auto}
 .rn-ws-shell.right{flex-direction:row-reverse}
 .rn-ws-shell.right .rn-ws-railgrip{margin:0 -6px 0 -8px}
+.rn-ws-railgrip.shelf,.rn-ws-shell.right .rn-ws-railgrip.shelf{margin:0 -3px}
 .rn-ws-shell.right .rn-ws-rail{border-right:0;border-left:1px solid #262a31;padding:4px 2px 4px 6px}
 .rn-ws-shell.right .rn-ws-railhead{justify-content:flex-start}
 /* THE COLOUR BARS FACE THE PAGES: on the left the rail mirrors, bars on its right
@@ -20064,43 +20065,53 @@ function railSwitches(node, cfg, id) {
 
 const RAIL_MIN_W = 130;
 const RAIL_MAX_W = 380;
+const SHELF_MIN_W = 150;
+const SHELF_MAX_W = 460;
 
-// The rail's draggable edge. The width follows the pointer while dragging, in the
-// rail's own pixels (the panel's UI scale and the canvas zoom both sit between), and
-// is kept on the node when let go. A double-click forgets it.
-function railGrip(node, rail, onRight) {
+// A COLUMN'S DRAGGABLE EDGE, the rail's and the shelf's. The width follows the
+// pointer while dragging, in the column's own pixels (the panel's UI scale and the
+// canvas zoom both sit between), and is kept on the node under `key` when let go.
+// A double-click forgets it. `flip` says the column sits on the right of its edge,
+// so dragging left makes it wider.
+function edgeGrip(node, el, { key, min, max, def, flip, title, cls }) {
   const g = document.createElement("div");
-  g.className = "rn-ws-railgrip";
-  g.title = "Drag to make the tabs wider or narrower. Double-click for the default width.";
+  g.className = "rn-ws-railgrip" + (cls ? " " + cls : "");
+  g.title = title;
   g.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const box = rail.getBoundingClientRect?.();
-    const cssW = rail.offsetWidth || Number(node.properties?.rn_rail_w) || 184;
-    const k = box?.width && cssW ? box.width / cssW : 1;          // screen px per rail px
+    const box = el.getBoundingClientRect?.();
+    const cssW = el.offsetWidth || Number(node.properties?.[key]) || def;
+    const k = box?.width && cssW ? box.width / cssW : 1;          // screen px per column px
     const x0 = e.clientX || 0;
     let w = cssW;
     g.classList.add("drag");
     const move = (ev) => {
       const dx = ((ev.clientX || 0) - x0) / (k || 1);
-      w = Math.round(Math.max(RAIL_MIN_W, Math.min(RAIL_MAX_W, cssW + (onRight ? -dx : dx))));
-      rail.style.width = w + "px";
+      w = Math.round(Math.max(min, Math.min(max, cssW + (flip ? -dx : dx))));
+      el.style.width = w + "px";
     };
     const up = () => {
       document.removeEventListener("pointermove", move, true);
       document.removeEventListener("pointerup", up, true);
       g.classList.remove("drag");
-      (node.properties ||= {}).rn_rail_w = w;
+      (node.properties ||= {})[key] = w;
     };
     document.addEventListener("pointermove", move, true);
     document.addEventListener("pointerup", up, true);
   });
   g.addEventListener("dblclick", (e) => {
     e.stopPropagation();
-    delete (node.properties ||= {}).rn_rail_w;
+    delete (node.properties ||= {})[key];
     render(node);
   });
   return g;
+}
+
+function railGrip(node, rail, onRight) {
+  return edgeGrip(node, rail, {
+    key: "rn_rail_w", min: RAIL_MIN_W, max: RAIL_MAX_W, def: 184, flip: onRight,
+    title: "Drag to make the tabs wider or narrower. Double-click for the default width." });
 }
 
 function openRailMenu(node, t, ev) {
@@ -20554,7 +20565,13 @@ function renderPage(node) {
     const el = document.createElement("div");
     el.className = "rn-shelf-wrap rn-ws-shelfin";
     col.append(ch, el);
-    shell.appendChild(col);
+    // its edge drags the width and keeps it, the same as the rail's; the shelf sits
+    // on the far side from the rail, so its edge faces the other way (you, 2026-09-25)
+    const shelfW = Number(node.properties?.rn_shelf_w) || 0;
+    if (shelfW) col.style.width = Math.max(SHELF_MIN_W, Math.min(SHELF_MAX_W, shelfW)) + "px";
+    shell.append(edgeGrip(node, col, {
+      key: "rn_shelf_w", min: SHELF_MIN_W, max: SHELF_MAX_W, def: 196, flip: !onRight, cls: "shelf",
+      title: "Drag to make the shelf wider or narrower. Double-click for the default width." }), col);
     mountEmbeddedShelf(node, el,
       () => JSON.stringify(node._rnCfg?.shelf || {}),
       (v) => {
