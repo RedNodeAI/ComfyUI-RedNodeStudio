@@ -42,8 +42,9 @@ format matters: **version** then a date, notes below until the next bold line.
   workflow saved on the old Stages page opens on Review. The first page is Live rather than a
   second Run
 - The taps photograph the whole run. Editor and Realism were tapped but never listed, so they
-  never fired; both are points now, the Editor's result is tapped as well as its source, Render
-  is the picture before the Detailer, Post FX is a point of its own and Final picture is the
+  never fired; both are points now. Render is the model's first picture, taken before the
+  Editor's stages on the render as well as the Detailer, so an engine's render shows up before
+  Realism or a pass repaints it. Post FX is a point of its own and Final picture is the
   finished one. The built-in Detailer's taps switch sits on the Taps card beside the
   Workspace's, and the strip keeps 48 pictures of a run rather than 24
 - No more "memory leak with model" lines after a run. A pass renders on a clone of the rig

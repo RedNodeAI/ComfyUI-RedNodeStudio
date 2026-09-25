@@ -624,11 +624,11 @@ function stageHost(node) {
 const TAP_POINTS = [
   ["refs", "References", "The Subject and Scene pictures as the model gets them."],
   ["source", "Img2Img source", "The source picture before Re-angle and Swap."],
-  ["editor", "Editor", "The Editor's source picture and what the edit made of it."],
+  ["editor", "Editor", "The Editor page's source picture as its stages get it."],
   ["reangle", "Re-angle", "The re-shot picture."],
   ["realism", "Realism", "The Realism result, on the Editor page or on the render."],
   ["swap", "Swap", "The picture after the face or person swap."],
-  ["render", "Render", "The rendered picture before the Detailer and Post FX."],
+  ["render", "Render", "The model's first picture, before the Editor's stages on it, the Detailer and Post FX."],
   ["passes", "Each pass", "Every pass's result, drawn by the small preview decoder."],
   ["post", "Post FX", "The picture after Post FX."],
   ["final", "Final picture", "The finished picture, after the Detailer and Post FX."],

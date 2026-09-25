@@ -3119,7 +3119,7 @@ class RedNodeStudioWorkspace:
             else:
                 _run.note("Not holding: the run fits under the limit, so it keeps its speed")
         _taps = cfg["taps"]
-        _render_tapped = None     # the picture the Render tap photographed, if any
+        _tapped = {"render": None, "last": None}   # what the taps photographed
 
         def _tap(point, label, img=None, latent=None, model_for=None):
             """One picture for the Stage View, when that tap point is switched on."""
@@ -3157,6 +3157,7 @@ class RedNodeStudioWorkspace:
                 if img is not None:
                     _stg.record(img, label, prompt=prompt, source="workspace",
                                 px=_taps["px"])
+                    _tapped["last"] = img
             except Exception as _te:
                 print("[RedNode Workspace] the %s tap was skipped: %s" % (label, _te),
                       flush=True)
@@ -5059,7 +5060,7 @@ class RedNodeStudioWorkspace:
                         rig_scheduler, positive, negative, _plat,
                         denoise=dn, dials=_ar.get("dials") or {})
                 rig_image = vae_images(_pv.decode(_pout["samples"]))[:, :, :, :3]
-                _tap("editor", "Editor result", rig_image)
+                _tap(key.split("_")[0], "%s result" % label, rig_image)
                 result_latent_out = _pout
                 _run.end(key, label)
                 print("[RedNode Workspace] %s: %d steps at denoise %.2f"
@@ -5078,6 +5079,12 @@ class RedNodeStudioWorkspace:
         # than one road (the sampler, a re-shot source kept as the output), and
         # not every road has set it yet by here.
         _raw_img = rig_image
+        # THE RENDER TAP IS THIS ONE TOO. It sat after the Editor's stages on the
+        # render, so an engine's first picture (the NovelAI render that then went
+        # to Realism or the Detailer) never reached the strip (you, 2026-09-25).
+        if rig_image is not None:
+            _tap("render", "Render", rig_image)
+            _tapped["render"] = rig_image
 
         # RE-ANGLE ON THE RENDER: the finished picture (a Latent tab render as much
         # as an Img2Img one) is re-shot from the camera on the page, then the rig
@@ -5176,9 +5183,11 @@ class RedNodeStudioWorkspace:
                 if _swapped is not None and _sw["polish"]:
                     _polish("swap_polish", "Swap polish", _swapped, float(_sw["polish_denoise"]))
 
-        if rig_image is not None:
+        if rig_image is not None and _tapped["render"] is None:
+            # a road that had no picture at the tap above (a re-shot source kept
+            # as the output) still gets its Render
             _tap("render", "Render", rig_image)
-            _render_tapped = rig_image
+            _tapped["render"] = rig_image
 
         # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
         # queued THIS node with a run token stamped into the config copy. The pass
@@ -5386,9 +5395,10 @@ class RedNodeStudioWorkspace:
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in Post FX failed: %s; the "
                           "picture goes on ungraded" % exc, flush=True)
-            # THE FINISHED PICTURE, after the Detailer and Post FX. Skipped when nothing
-            # touched the render, or the strip would show the same picture twice.
-            if rig_image is not None and rig_image is not _render_tapped:
+            # THE FINISHED PICTURE, after the Detailer and Post FX. Skipped when no
+            # stage changed the last picture tapped, or the strip would show the
+            # same picture twice.
+            if rig_image is not None and rig_image is not _tapped["last"]:
                 _tap("final", "Final picture", rig_image)
             if cfg["save_on"]:
                 try:
