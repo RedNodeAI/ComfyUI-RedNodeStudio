@@ -57,6 +57,10 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- A shelf holds five stacks. Five small squares at the top switch between them, so pictures
+  can be grouped without clearing the shelf. Only the stack showing is drawn; the other four
+  wait as file names, no cells and no thumbnails, so a full stack out of sight costs nothing.
+  The override and the keys work on the stack showing. An older shelf is stack 1
 - The Workspace preset list on the Workspace Manager shows the saved names on the first visit.
   The names arrive from the server after the page draws, and the dropdown only learned them on
   the next visit; it learns them the moment they arrive and refills every time it is opened

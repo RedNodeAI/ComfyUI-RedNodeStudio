@@ -160,6 +160,21 @@ function readCfg(node) {
   d.items = Array.isArray(d.items) ? d.items.filter((x) => String(x).trim()) : [];
   d.sel = typeof d.sel === "number" ? d.sel : 0;
   if (d.sel < 0 || d.sel >= d.items.length) d.sel = 0;
+  // FIVE STACKS, one shown at a time. The active stack IS items/sel, so shelf.py,
+  // the override and every helper read what they always did; the other four wait
+  // in `stacks` as file names alone: no cells drawn, no thumbnails fetched, nothing
+  // decoded, so a full shelf on another stack costs no memory (you, 2026-09-25).
+  d.stack = Number.isInteger(d.stack) && d.stack >= 0 && d.stack < STACKS ? d.stack : 0;
+  const raw = Array.isArray(d.stacks) ? d.stacks.slice(0, STACKS) : [];
+  d.stacks = [];
+  for (let i = 0; i < STACKS; i++) {
+    const s = raw[i];
+    const items = Array.isArray(s?.items) ? s.items.filter((x) => String(x).trim()) : [];
+    let sel = Number.isInteger(s?.sel) ? s.sel : 0;
+    if (sel < 0 || sel >= items.length) sel = 0;
+    d.stacks.push({ items, sel });
+  }
+  d.stacks[d.stack] = { items: [...d.items], sel: d.sel };
   // the override, mirrored in shelf.py's parse(): the switch, where the picture
   // goes, and when it was switched on, which is how two shelves are told apart
   d.override = !!d.override;
@@ -170,7 +185,31 @@ function readCfg(node) {
   return d;
 }
 
+const STACKS = 5;
+
+/** The active stack's pictures back into its slot, so the config carries all five. */
+function syncStack(cfg) {
+  if (!Array.isArray(cfg.stacks)) return;
+  cfg.stacks[cfg.stack] = { items: [...cfg.items], sel: cfg.sel };
+}
+
+/** Show stack `n`: the one on screen is put away by name, the chosen one comes out. */
+function setStack(node, n) {
+  const cfg = node._rnShelf;
+  n = Math.max(0, Math.min(STACKS - 1, Number(n) || 0));
+  if (n === cfg.stack) return;
+  syncStack(cfg);
+  cfg.stack = n;
+  const s = cfg.stacks[n] || { items: [], sel: 0 };
+  cfg.items = [...s.items];
+  cfg.sel = s.items.length ? Math.max(0, Math.min(s.items.length - 1, s.sel)) : 0;
+  node._rnShelfOver = null;
+  writeCfg(node);
+  render(node);
+}
+
 function writeCfg(node) {
+  syncStack(node._rnShelf);
   const w = (node.widgets || []).find((x) => x.name === "config");
   if (w) w.value = JSON.stringify(node._rnShelf);
   node.graph?.change?.();
@@ -365,6 +404,21 @@ function render(node) {
   const title = document.createElement("span");
   title.className = "rn-shelf-title";
   title.textContent = "Shelf";
+  // the stacks, five small squares: the one showing is lit, one with pictures in
+  // it reads brighter than an empty one
+  const stks = document.createElement("div");
+  stks.className = "rn-shelf-stks";
+  for (let i = 0; i < STACKS; i++) {
+    const b = document.createElement("button");
+    const n = i === cfg.stack ? cfg.items.length : (cfg.stacks?.[i]?.items?.length || 0);
+    b.className = "rn-shelf-stk" + (i === cfg.stack ? " cur" : "") + (n ? " full" : "");
+    b.textContent = String(i + 1);
+    b.dataset.shelfStack = String(i);
+    b.title = `Stack ${i + 1}: ${n ? `${n} picture${n === 1 ? "" : "s"}` : "empty"}. `
+            + "Five stacks per shelf; only the one showing is drawn.";
+    b.onclick = () => setStack(node, i);
+    stks.appendChild(b);
+  }
   const count = document.createElement("span");
   count.className = "rn-shelf-note";
   count.textContent = cfg.items.length
@@ -376,7 +430,7 @@ function render(node) {
   clear.disabled = !cfg.items.length;
   clear.title = "Take every picture off the shelf. The files themselves are untouched.";
   clear.onclick = () => { cfg.items = []; cfg.sel = 0; writeCfg(node); render(node); };
-  head.append(title, count, clear);
+  head.append(title, stks, count, clear);
   root.appendChild(head);
 
   // THE OVERRIDE: the picked picture stands in for whatever the ticked tabs hold,
@@ -616,6 +670,11 @@ style.textContent = `
 .rn-shelf-head{display:flex;align-items:center;gap:8px;flex:none}
 .rn-shelf-title{font-weight:700;font-size:13px;color:#a9c6ff}
 .rn-shelf-note{flex:1;color:#8a919b}
+.rn-shelf-stks{display:flex;gap:3px;flex:none}
+.rn-shelf-stk{width:18px;height:18px;padding:0;border:1px solid #33373d;border-radius:4px;
+  background:#15171b;color:#6b7280;font-size:10.5px;font-weight:700;cursor:pointer;line-height:1}
+.rn-shelf-stk.full{color:#d6d9de;border-color:#4a4f58}
+.rn-shelf-stk.cur{background:#b8283c;border-color:#b8283c;color:#fff}
 .rn-shelf-btn{background:#15171b;border:1px solid #33373d;border-radius:6px;color:#d6d9de;
   cursor:pointer;font-size:11.5px;padding:4px 10px}
 .rn-shelf-btn:disabled{opacity:.5;cursor:default}
@@ -688,4 +747,5 @@ app.registerExtension({
 
 export { readCfg, entryOf, parseEntry, sendTo, render, addEntry, entryFromUrl, SEND_TO,
          setOverride, shelves, OVERRIDE_DEFAULT, clipboardImage, keyEntry, copyPicture,
+         setStack, STACKS, writeCfg,
          build, keyIndex, takeOff, mountEmbeddedShelf };

@@ -71,6 +71,8 @@ class RedNodeShelf:
             return [], 0
         if not isinstance(cfg, dict):
             return [], 0
+        # items/sel are the stack on show; the panel keeps four more under
+        # "stacks" by name, and only the one on show is what a run reads
         items = [str(x) for x in (cfg.get("items") or []) if str(x).strip()]
         try:
             sel = int(cfg.get("sel", 0))
