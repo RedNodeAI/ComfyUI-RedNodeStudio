@@ -21074,6 +21074,57 @@ function hideConfigWidget(cfgW) {
   if (cfgW.inputEl) cfgW.inputEl.style.display = "none";
 }
 
+// THE PANEL THE FRONTEND NEVER PLACED. A DOM widget is laid over the canvas by
+// ComfyUI's own draw loop. When a page load misses some of the frontend's chunks
+// (its console says vite:preloadError, usually a page opened while the server was
+// still coming up), that loop never runs for it: the panel is built, the loading
+// card and all, and nothing is on screen but the node's black body (you,
+// 2026-09-25). Nothing here can place it, so the body says what happened and what
+// fixes it, instead of looking like the pack broke. The frontend also hides DOM
+// widgets when the canvas is zoomed out, which is not this: hence the scale guard.
+const PANEL_GRACE_MS = 4000;
+const PANEL_HIDE_SCALE = 0.6;      // the frontend's own low-quality threshold
+function panelPlaced(node) {
+  const el = node._rnRootEl;
+  if (!el) return true;                       // not built yet: the shell comes first
+  if (el.isConnected === false) return false;
+  const r = el.getBoundingClientRect?.();
+  return !r || (r.width > 0 && r.height > 0);
+}
+function panelMissingNote(node, ctx) {
+  if (!ctx || !node?._rnRootEl || node.flags?.collapsed) return;
+  if ((app.canvas?.ds?.scale ?? 1) < PANEL_HIDE_SCALE) return;
+  if (panelPlaced(node)) { node._rnUnplacedSince = 0; return; }
+  const now = Date.now();
+  if (!node._rnUnplacedSince) { node._rnUnplacedSince = now; return; }
+  if (now - node._rnUnplacedSince < PANEL_GRACE_MS) return;
+  ctx.save();
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#e8ecf1";
+  ctx.font = "600 15px sans-serif";
+  ctx.fillText("The panel is built, but ComfyUI has not placed it on the screen.", 24, 60);
+  ctx.fillStyle = "#b9c0c9";
+  ctx.font = "13px sans-serif";
+  ctx.fillText("A page load missed some of the frontend's own files. Refresh the page (F5).", 24, 84);
+  ctx.restore();
+}
+// the frontend says so itself when a chunk fails to load; one toast, since a
+// refresh is the only cure and the panels are what go dark
+let preloadToldOnce = false;
+window.addEventListener?.("vite:preloadError", () => {
+  if (preloadToldOnce) return;
+  preloadToldOnce = true;
+  setTimeout(() => {
+    try {
+      app.extensionManager?.toast?.add?.({
+        severity: "warn", summary: "ComfyUI did not finish loading",
+        detail: "Some of the frontend's own files failed to load, so panels can stay "
+              + "black. Refresh the page (F5).",
+        life: 15000 });
+    } catch (e) { /* older frontends have no toast */ }
+  }, 1500);
+});
+
 // the wait before the next try: quick at first, then every two seconds for as
 // long as a slow first load can reasonably take, then the screen says so and
 // waits for a click. Never a silent give-up: the loading screen is on the node
@@ -21414,6 +21465,12 @@ app.registerExtension({
       // its saved size when configure runs after this
       this.setSize([Math.max(this.size?.[0] || 0, 1400), Math.max(this.size?.[1] || 0, 900)]);
       build(this);
+    };
+    // the body says so when the frontend never placed the panel (panelMissingNote)
+    const onDrawFg = nodeType.prototype.onDrawForeground;
+    nodeType.prototype.onDrawForeground = function (ctx) {
+      onDrawFg?.apply(this, arguments);
+      try { panelMissingNote(this, ctx); } catch (e) { /* a note must never break a draw */ }
     };
 
     // THE PICTURE GOES OUT UNDER core's "images" KEY so ComfyUI's assets, queue and

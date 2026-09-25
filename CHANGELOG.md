@@ -46,6 +46,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - The Moodboard lives under Krea 2 Identity as Krea 2 Moodboard, beside the Subject and Scene
   it works with, since it is a Krea 2 authority; a workflow left on the old tab opens there.
   The rail is sixteen tabs in seven groups, and the shipped UI presets follow
+- A black Workspace after a page load says why. When ComfyUI's frontend misses some of its own
+  files on the way in (a page opened while the server was still starting), it builds the panel
+  and never places it, and the node showed a black body. The body now says the panel is built
+  but not placed and that a refresh fixes it, and a toast says the same the moment the frontend
+  reports the missed file
 - The Run tab is three pages: Live, Review and Save. The Stages page sits under Review now, so
   one page holds the run's finished pictures and what the taps photographed on the way; a
   workflow saved on the old Stages page opens on Review. The first page is Live rather than a
