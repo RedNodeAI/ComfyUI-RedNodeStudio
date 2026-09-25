@@ -18,3 +18,8 @@ web/rednode_local*.js
 # a NovelAI token is a credential: never in the repo, wherever it lands
 nai_token.txt
 **/nai_token.txt
+
+# your own switch clicks stay yours (Advanced, Switch sounds)
+web/sounds/*.mp3
+web/sounds/*.ogg
+web/sounds/*.wav
