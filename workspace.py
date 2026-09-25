@@ -5231,8 +5231,11 @@ class RedNodeStudioWorkspace:
                 print("[RedNode Workspace] built-in paint pass rendered with rig %r"
                       % (rig_name or "(none)"), flush=True)
             except Exception as exc:
-                print("[RedNode Workspace] built-in paint pass failed: %s" % exc,
-                      flush=True)
+                import traceback as _tb
+                # the stack too: a shape error inside the sampler says which
+                # tensor met which, and one line never did (you, 2026-09-25)
+                print("[RedNode Workspace] built-in paint pass failed: %s\n%s"
+                      % (exc, _tb.format_exc()), flush=True)
 
 
         # THE UPSCALE TAB'S OWN DOOR, the same shape as the paint one above: the
