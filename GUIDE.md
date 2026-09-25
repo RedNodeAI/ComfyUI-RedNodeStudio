@@ -432,7 +432,7 @@ between the passes. It has two views of the same passes. Simple shows what most 
 rig, the target, the size, the strength bars and the references. Advanced shows every setting.
 Switching views changes no value, and in Simple a card carries a chip naming any hidden setting
 that is in use. Every pass has a name in front of its kind: left alone it names itself (Tiled
-upscale, Face detailer 2), and a name you type is kept and used in the run log. Each pass is a
+upscale, Mask detailer 2), and a name you type is kept and used in the run log. Each pass is a
 card: what it is, which rig runs it, what it aims at, and three
 boxes under that. Sampling holds steps, CFG, sampler, scheduler and a start and end step window,
 where anything left empty inherits the rig's own numbers. Strength holds Scale and Denoise as bars

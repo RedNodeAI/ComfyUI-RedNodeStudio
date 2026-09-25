@@ -167,6 +167,11 @@ def parse_pipeline(config_json):
             "lora": str(s.get("lora") or ""),
             "lora_strength": _num("lora_strength", 0.0, 2.0, 1.0),
             "threshold": _num("threshold", 0.05, 0.95, 0.5),
+            # INVERT: work everything but the target. The mask is turned inside
+            # out and the box is the whole frame, so the pass renders the frame
+            # at its scale and the paste keeps the target as it was (you,
+            # 2026-09-25): a background around a face, clothes around a head.
+            "invert": bool(s.get("invert")),
             "feather": _num("feather", 0, 64, 8, int),
             # BLEND: how much of the rendered crop goes back. 1 is the render
             # under the mask as before; 0.5 halves it against the crop as it
@@ -937,13 +942,13 @@ WARN_WORDS = ("failed", "missing", "passed through", "not installed",
 
 def pass_name(s):
     """A pass as its card names it: the name typed there, else Sampler pass,
-    Face detailer, ..."""
+    Mask detailer (face), ..."""
     typed = str(s.get("name") or "").strip()
     if typed:
         return typed
     if s.get("type") == "detailer":
         t = str(s.get("target") or "face").strip() or "face"
-        return "%s detailer" % (t[:1].upper() + t[1:])
+        return "Mask detailer (%s%s)" % ("all but " if s.get("invert") else "", t)
     if s.get("type") in PASS_HANDLERS:
         return str(PASS_HANDLERS[s["type"]].get("name") or s["type"])
     return PASS_NAMES.get(s.get("type"), str(s.get("type") or "pass").capitalize())
@@ -1838,6 +1843,12 @@ class RedNodeStudioDetailer:
         if mask.shape[1] != h or mask.shape[2] != w:
             mask = F.interpolate(mask.unsqueeze(1), size=(h, w),
                                  mode="bilinear", align_corners=False)[:, 0]
+        if s.get("invert"):
+            # everything but the target: the frame is the box, the target is
+            # what the paste keeps
+            mask = (1.0 - mask.clamp(0, 1))
+            _say("found the %s; working everything but it" % s["target"])
+            return mask, (0, h, 0, w), None
         box = _bbox(mask, pad=s["padding"])
         if box is None:
             return None, None, "nothing matched %r; passed through" % s["target"]

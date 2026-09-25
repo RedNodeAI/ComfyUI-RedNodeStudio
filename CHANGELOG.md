@@ -54,6 +54,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card's Free VRAM, copy and X stay together at the end of its header. The Image to
   Text card's row was wide enough to drop the copy and the X onto a second line; its words are
   shorter too
+- The Face detailer is the Mask detailer, which is what it is: SAM3 masks a target and the pass
+  redraws it. Its card has an Invert switch that works everything BUT the target, the mask turned
+  inside out and the whole frame rendered at the pass's scale with the target kept as it was, for
+  a background around a face or clothes around a head. The card names itself Mask detailer
+  (face), or (all but face) when inverted
 - The shelf column drags wider or narrower by its edge and keeps the width, the same as the rail;
   a double-click on the edge puts it back
 - The Prompts strip's two actions are Add and Import, green and blue, apart from the prompt chips

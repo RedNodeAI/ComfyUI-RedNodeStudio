@@ -1231,7 +1231,7 @@ function buildPanel(node, hostEl = null) {
     const baseName = (x) => {
       if (x.type === "detailer") {
         const t = String(x.target || "face").trim() || "face";
-        return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
+        return "Mask detailer (" + (x.invert ? "all but " : "") + t + ")";
       }
       if (x.type === "realism" && x.realism_tiles) return "Re-render tiles";
       const lk = (window.rnLocalPassKinds || []).find((k) => k.type === x.type);
@@ -1534,6 +1534,11 @@ function buildPanel(node, hostEl = null) {
                            writeCfg(node, d);
                            node._rnAdvRender?.();
                          }));
+          // INVERT: everything but the target, the target kept as it was
+          top.append(tog("Invert", "invert", false,
+            "Work everything BUT the target: the mask is turned inside out, the "
+            + "whole frame is rendered at this pass's scale, and the target is "
+            + "kept as it was. A background around a face, clothes around a head."));
           top.append(...A(lab("SAM"),
                      sel(L.samModels, s.sam_model,
                          L.samModels.length
@@ -2174,7 +2179,7 @@ function buildPanel(node, hostEl = null) {
     };
     mk("＋ Sampler pass", () => ({ on: true, type: "sampler", rig: "",
                                   denoise: 0.3, steps: 0, prompt: "" }), "render");
-    mk("＋ Face detailer", () => ({ on: true, type: "detailer", rig: "",
+    mk("＋ Mask detailer", () => ({ on: true, type: "detailer", rig: "",
                                    target: "face", denoise: 0.15, steps: 0,
                                    threshold: 0.5, feather: 8, padding: 0.35,
                                    sam_model: "", prompt: "" }), "render");
@@ -2240,7 +2245,7 @@ function buildPanel(node, hostEl = null) {
         + "steps there, not the main ones. \u29c9 copies a pass; right-click "
         + "a card for colours and groups."
       : "No passes yet: the image goes straight through. Add a sampler refine or a "
-        + "face detailer, as many as you want, in any order.";
+        + "mask detailer, as many as you want, in any order.";
     wrap.appendChild(hint);
   };
   render();
