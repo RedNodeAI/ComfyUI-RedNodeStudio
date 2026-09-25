@@ -21,7 +21,7 @@ import time
 
 import torch
 
-MAX_STAGES = 24
+MAX_STAGES = 48
 THUMB_PX = 320                     # the strip's thumbnail, always
 # The size the view gets. The Stage Tap offers these on the node and the Detailer's
 # taps carry one in their config; 0 keeps the frame as it is. The thumbnail in the

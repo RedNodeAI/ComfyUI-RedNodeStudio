@@ -41,6 +41,11 @@ format matters: **version** then a date, notes below until the next bold line.
   one page holds the run's finished pictures and what the taps photographed on the way; a
   workflow saved on the old Stages page opens on Review. The first page is Live rather than a
   second Run
+- The taps photograph the whole run. Editor and Realism were tapped but never listed, so they
+  never fired; both are points now, the Editor's result is tapped as well as its source, Render
+  is the picture before the Detailer, Post FX is a point of its own and Final picture is the
+  finished one. The built-in Detailer's taps switch sits on the Taps card beside the
+  Workspace's, and the strip keeps 48 pictures of a run rather than 24
 - The rail follows a run. The tab whose stage is running pulses red, the tabs whose stages have
   finished wear a green ring, and the open tab's own page rows do the same, so where the run is
   can be read from any tab rather than only from the Run page's pipeline

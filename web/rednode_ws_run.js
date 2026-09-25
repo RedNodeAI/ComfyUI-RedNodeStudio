@@ -624,11 +624,18 @@ function stageHost(node) {
 const TAP_POINTS = [
   ["refs", "References", "The Subject and Scene pictures as the model gets them."],
   ["source", "Img2Img source", "The source picture before Re-angle and Swap."],
+  ["editor", "Editor", "The Editor's source picture and what the edit made of it."],
   ["reangle", "Re-angle", "The re-shot picture."],
+  ["realism", "Realism", "The Realism result, on the Editor page or on the render."],
   ["swap", "Swap", "The picture after the face or person swap."],
+  ["render", "Render", "The rendered picture before the Detailer and Post FX."],
   ["passes", "Each pass", "Every pass's result, drawn by the small preview decoder."],
-  ["final", "Final picture", "The Workspace's finished picture."],
+  ["post", "Post FX", "The picture after Post FX."],
+  ["final", "Final picture", "The finished picture, after the Detailer and Post FX."],
 ];
+// the list a workflow saved before Editor, Realism, Render and Post existed carries:
+// it meant everything, so it still does (workspace.py's _normalise_taps agrees)
+const OLD_TAP_ALL = ["refs", "source", "reangle", "swap", "passes", "final"];
 const TAP_SIZES = [[320, "320 px"], [512, "512 px"], [768, "768 px"], [1024, "1024 px"],
                    [1536, "1536 px"], [0, "Full size"]];
 
@@ -638,6 +645,9 @@ function tapsCard(node) {
   if (typeof T.on !== "boolean") T.on = false;
   if (!TAP_SIZES.some(([v]) => v === T.px)) T.px = 768;
   if (!Array.isArray(T.points)) T.points = TAP_POINTS.map(([v]) => v);
+  if (JSON.stringify([...new Set(T.points)].sort()) === JSON.stringify([...OLD_TAP_ALL].sort())) {
+    T.points = TAP_POINTS.map(([v]) => v);
+  }
   const card = el("div", "rn-ws-card rn-run-taps");
   card.appendChild(el("div", "ch", "TAPS"));
   // the Workspace's own
@@ -674,6 +684,25 @@ function tapsCard(node) {
   }
   row.appendChild(chips);
   card.appendChild(row);
+  // THE BUILT-IN DETAILER'S OWN SWITCH, the same one as the Taps button on its page:
+  // its input, a frame after every pass and its output. It lived only on the
+  // Detailer page, so a strip with the Workspace taps on still showed no passes
+  // (you, 2026-09-25).
+  const D = (cfg.detailer && typeof cfg.detailer === "object") ? cfg.detailer : (cfg.detailer = {});
+  const brow = el("div", "rn-ws-row");
+  const bsw = el("button", "rn-ws-sw" + (D.taps ? " on" : ""));
+  bsw.dataset.choice = "det_taps";
+  bsw.title = "The built-in Detailer's taps: its input, a frame after every pass and its "
+            + "output. The same switch as the Taps button on the Detailer page.";
+  bsw.onclick = () => {
+    D.taps = !D.taps;
+    if (D.taps && D.tap_px === undefined) D.tap_px = T.px;
+    writeCfg(node);
+    render(node);
+  };
+  brow.append(bsw, el("span", "rn-ws-swlabel rn-run-tapname", "Detailer"),
+              el("span", "rn-ws-note", "Its input, every pass and its output"));
+  card.appendChild(brow);
   // each Detailer's own switch, written into that node's settings
   const dets = allNodes(app.graph).filter((n) => DETAILER_TYPES.has(n.type));
   for (const d of dets) {

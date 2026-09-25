@@ -458,7 +458,12 @@ def delete_vision_prompt(name):
 
 # THE WORKSPACE'S OWN STAGE TAPS: the moments it can photograph for the Stage View,
 # in the order they happen. Off unless switched on (the STAGES sub-tab).
-TAP_POINTS = ("refs", "source", "reangle", "swap", "passes", "final")
+# the moments a run can photograph for the Stages strip, in the order they happen
+TAP_POINTS = ("refs", "source", "editor", "reangle", "realism", "swap", "render",
+              "passes", "post", "final")
+# the list a workflow saved before the Editor, Realism, Render and Post points existed
+# carries: it meant "everything", so it still does
+_OLD_TAP_ALL = ("refs", "source", "reangle", "swap", "passes", "final")
 TAP_PX = (320, 512, 768, 1024, 1536, 0)
 
 # the tab names the Run tab's log uses
@@ -1017,6 +1022,8 @@ def _normalise_taps(raw):
         px = int(t.get("px", 768))
     except (TypeError, ValueError):
         px = 768
+    if isinstance(pts, list) and sorted(set(pts)) == sorted(_OLD_TAP_ALL):
+        pts = list(TAP_POINTS)
     return {"on": bool(t.get("on")),
             "px": px if px in TAP_PX else 768,
             "points": ([p for p in TAP_POINTS if p in pts] if isinstance(pts, list)
@@ -3106,6 +3113,7 @@ class RedNodeStudioWorkspace:
             else:
                 _run.note("Not holding: the run fits under the limit, so it keeps its speed")
         _taps = cfg["taps"]
+        _render_tapped = None     # the picture the Render tap photographed, if any
 
         def _tap(point, label, img=None, latent=None, model_for=None):
             """One picture for the Stage View, when that tap point is switched on."""
@@ -5045,6 +5053,7 @@ class RedNodeStudioWorkspace:
                         rig_scheduler, positive, negative, _plat,
                         denoise=dn, dials=_ar.get("dials") or {})
                 rig_image = vae_images(_pv.decode(_pout["samples"]))[:, :, :, :3]
+                _tap("editor", "Editor result", rig_image)
                 result_latent_out = _pout
                 _run.end(key, label)
                 print("[RedNode Workspace] %s: %d steps at denoise %.2f"
@@ -5162,7 +5171,8 @@ class RedNodeStudioWorkspace:
                     _polish("swap_polish", "Swap polish", _swapped, float(_sw["polish_denoise"]))
 
         if rig_image is not None:
-            _tap("final", "Workspace result", rig_image)
+            _tap("render", "Render", rig_image)
+            _render_tapped = rig_image
 
         # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
         # queued THIS node with a run token stamped into the config copy. The pass
@@ -5366,9 +5376,14 @@ class RedNodeStudioWorkspace:
                     with postprocess.use_seed(_linked["post"]):
                         rig_image = postprocess.RedNodePostProcess().run(rig_image, prompt=prompt)[0]
                     _chain.mark("post")
+                    _tap("post", "Post FX result", rig_image)
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in Post FX failed: %s; the "
                           "picture goes on ungraded" % exc, flush=True)
+            # THE FINISHED PICTURE, after the Detailer and Post FX. Skipped when nothing
+            # touched the render, or the strip would show the same picture twice.
+            if rig_image is not None and rig_image is not _render_tapped:
+                _tap("final", "Final picture", rig_image)
             if cfg["save_on"]:
                 try:
                     from .save_node import RedNodeSave
