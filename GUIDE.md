@@ -55,7 +55,7 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs. 
 ### Optional packs
 
 None of these are required. The Workspace renders without every one of them and says on the Run
-tab when a pass wanted one that is not installed. The Overview tab's **Check installs** button
+tab when a pass wanted one that is not installed. The Workspace Manager's **Check installs** button
 says which of them your own settings call for, and links to each.
 
 To install them in one pass, open `example_workflows/RedNode_Start_Here_Install.json` from the
@@ -157,8 +157,8 @@ a workflow. **Cancel** stops waiting; an Ollama call already running may finish.
 
 ## The Workspace
 
-Sixteen tabs on a rail down the side of the panel, in groups: Run, View, Model, Canvas,
-Identity, Refine and Settings, each with its icon, a light that says whether it is in use, and a
+Sixteen tabs on a rail down the side of the panel, in groups: Run, Model, Canvas, Identity,
+Refine and Settings, each with its icon, a light that says whether it is in use, and a
 colour bar. The rail folds to icons only, drags wider or narrower by its edge, and moves to either
 side of the pages. Right-click a tab to switch what it runs on or off, or to hide it. The preset
 button at the top of the rail picks the tabs for the job at hand: All, Basic, New image, Image to
@@ -169,9 +169,9 @@ along the node's bottom edge, so a node with forty sockets is no taller than its
 
 ![The rail on the right-hand side, on the Run page after an Anima render](images/run-rail-right.webp)
 
-![The Overview: the Workspace preset card, what feeds the render, the run in order, and what the run needs](images/overview.webp)
+![The Workspace Manager: the Workspace preset card, what feeds the render, the run in order, and what the run needs](images/overview.webp)
 
-**Overview.** Workspace presets sit at the top: save the whole panel under a name and load it
+**Workspace Manager**, under Settings on the rail. Workspace presets sit at the top: save the whole panel under a name and load it
 back, with Current standing for the panel as it is now. Under that, the run as it is set up, one box per stage in the order it happens: what feeds the
 render (the rig, the prompts, the camera, LoRAs, the Moodboard, the identity galleries, Paint, the
 auto prompt), then the run itself (the canvas or source, Re-angle, Swap, the encode, every pass,

@@ -51,6 +51,8 @@ format matters: **version** then a date, notes below until the next bold line.
   and never places it, and the node showed a black body. The body now says the panel is built
   but not placed and that a refresh fixes it, and a toast says the same the moment the frontend
   reports the missed file
+- Paint sits above Tools on the rail, and the Overview is the Workspace Manager, under Settings
+  above Advanced, since presets and the run's plan are settings rather than a view
 - The Camera tab's two studios, Prompt and Re-angle, are page tabs in the header like every other
   page's, with an icon and a light, rather than two small buttons
 - The Detailer's add row is grouped by what a pass does, each group with its own colour, and it

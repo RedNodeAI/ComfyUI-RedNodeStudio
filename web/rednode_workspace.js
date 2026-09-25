@@ -14246,7 +14246,7 @@ function railLabel(text) {
 // marks the strip it wants carried up into the bar with data-rnbar (and data-rnbar2
 // for a second row, which is the Identity tab's pages-within-pages).
 const PAGE_BAR = {
-  overview: { title: "Overview",
+  overview: { title: "Workspace Manager",
               note: "The run as it is set up right now, in the order it happens." },
   prompts: { title: "Prompts",
              note: "Your prompts: the active one renders on whichever rig is active." },

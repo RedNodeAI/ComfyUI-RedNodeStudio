@@ -83,7 +83,9 @@ export const packLink = (p) => p.url
 
 export const TAB_ORDER = [
   // the run as it is set up, one box per stage (rednode_ws_overview.js)
-  { id: "overview", label: "Overview", group: "view" },
+  // the Workspace Manager (the Overview until 2026-09-25): presets, the run in order,
+  // what it needs; it lives with the settings, above Advanced
+  { id: "overview", label: "Workspace Manager", group: "cfg" },
   { id: "models", label: "Models", group: "model" },
   { id: "prompts", label: "Prompts", group: "model" },
   { id: "camera", label: "Camera", group: "model" },
@@ -94,9 +96,9 @@ export const TAB_ORDER = [
   // tab since 2026-09-25 (it was the Editor's Realism page); the settings still
   // live under cfg.tabs.i2i.realism, only the page moved
   { id: "rerender", label: "Re-render", group: "canvas" },
+  { id: "paint", label: "Paint", group: "canvas" },
   // the stages that edit a picture, and the one-picture Upscale (EDITOR_SUBS)
   { id: "editor", label: "Tools", group: "canvas" },
-  { id: "paint", label: "Paint", group: "canvas" },
   // Subject, Scene, the Krea 2 Moodboard and the Hero creator are sub-tabs of
   // this one (IDENTITY_SUBS); the Moodboard was a rail tab until 2026-09-25
   { id: "identity", label: "Krea 2 Identity", group: "edit" },
@@ -115,12 +117,11 @@ export const TAB_ORDER = [
 export const RAIL_GROUPS = [
   // Run first: it is the tab opened most, so it heads the rail (the user, 2026-09-21)
   { id: "run", label: "Run", color: "#3b82f6", tabs: ["run"] },
-  { id: "view", label: "View", color: "#2dd4bf", tabs: ["overview"] },
   { id: "model", label: "Model", color: "#a855f7", tabs: ["models", "prompts", "camera", "loras"] },
-  { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "rerender", "editor", "paint"] },
+  { id: "canvas", label: "Canvas", color: "#4a8fe0", tabs: ["latent", "i2i", "rerender", "paint", "editor"] },
   { id: "identity", label: "Identity", color: "#eab308", tabs: ["identity"] },
   { id: "refine", label: "Refine", color: "#38bdf8", tabs: ["ai", "detailer", "post"] },
-  { id: "settings", label: "Settings", color: "#8a919b", tabs: ["advanced"] },
+  { id: "settings", label: "Settings", color: "#8a919b", tabs: ["overview", "advanced"] },
 ];
 
 // THE RAIL'S UI PRESETS, shipped: which tabs a kind of work needs, the rest hidden.

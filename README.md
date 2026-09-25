@@ -49,7 +49,7 @@ hand. Keep as many rigs as you like and switch between them in a click.
 
 <table>
 <tr>
-<td width="50%"><img src="images/overview.webp" alt="The Overview: the whole run in order, and what needs attention"></td>
+<td width="50%"><img src="images/overview.webp" alt="The Workspace Manager: the whole run in order, and what needs attention"></td>
 <td width="50%"><img src="images/prompts.webp" alt="The Prompts tab with a Frame box"></td>
 </tr>
 <tr>
