@@ -99,7 +99,7 @@ Ollama is a program of its own rather than a node pack. Install it from
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
-`example_workflows/RedNodeStudio_V1.5.json` directly. It is the whole rig wired up, and it reads
+`example_workflows/RedNodeStudio_V1.6.json` directly. It is the whole rig wired up, and it reads
 left to right. It uses two of the packs above, Krea2-BBOX-Prompter for its Light & Color and
 Scene nodes and ComfyUI-Krea-Moodboards for its Style browser, so open the Start here workflow
 before it and let Manager install them.
@@ -804,7 +804,7 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_V1.5.json` is the full rig and the one to start with. One Workspace panel
+- `RedNodeStudio_V1.6.json` is the full rig and the one to start with. One Workspace panel
   drives the models, the prompts and the sampler, and runs the Detailer passes, the grading
   chain and the save itself, so none of that needs wiring any more. Six rigs sit on its
   Models tab: two Krea 2 models, Qwen Image 2.1 and an SDXL checkpoint that load their files
