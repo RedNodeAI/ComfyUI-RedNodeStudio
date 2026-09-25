@@ -1,3 +1,4 @@
+import { overrideEntryFor } from "./rednode_shelf.js";
 import { render, tabLit, setupProblems, i2iIssues, identityIssues, i2iSkipped, skippedBy,
          convActive, socketWired, packInstalled, modelListsNow, fetchModelListsOnce,
          autoStatusNow, AUTO_TAB_IDS, TEXT_TAB_IDS,
@@ -199,7 +200,8 @@ export function overviewBoxes(node, cfg) {
   const ownEmpty = S.reference === "own" && !(tabs.swap_ref?.images?.length);
   // ONE SHAPE FOR BOTH EDIT STAGES: on the source before its pass, or on the render
   const editBox = (key, label, X, onRender, blockedExtra, note) => {
-    const blocked = blockedExtra || ((!onRender && !E.images?.length) ? offWhy : "");
+    const blocked = blockedExtra || ((!onRender && !E.images?.length
+                                       && !overrideEntryFor(cfg, "editor_src")) ? offWhy : "");
     return {
       key: onRender ? key + "_render" : key,
       label: onRender ? label + " on the render" : label,

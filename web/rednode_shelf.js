@@ -246,6 +246,36 @@ function workspaces() {
   return out;
 }
 
+/** THE OVERRIDE THAT SPEAKS FOR `tab` RIGHT NOW, as the run will see it: the picked
+ *  picture of the shelf switched on last, node shelves and Workspace columns alike,
+ *  or "" when none covers the tab. The panel asks this wherever it would otherwise
+ *  read a gallery, so a page says what the run will do rather than "no picture"
+ *  while the override stands in (you, 2026-09-25). Mirrors shelf_override(). */
+export function overrideEntryFor(cfg, tab) {
+  const recs = [];
+  const take = (d) => {
+    if (!d || typeof d !== "object" || !d.override) return;
+    const items = Array.isArray(d.items) ? d.items.filter((x) => String(x).trim()) : [];
+    if (!items.length) return;
+    const tabs = Array.isArray(d.override_tabs) ? d.override_tabs : OVERRIDE_DEFAULT;
+    if (!tabs.includes(tab)) return;
+    const sel = Math.max(0, Math.min(items.length - 1, Number(d.sel) || 0));
+    recs.push({ entry: items[sel], at: Number(d.override_at) || 0 });
+  };
+  try {
+    for (const n of shelves()) {
+      let d = null;
+      try { d = JSON.parse((n.widgets || []).find((w) => w.name === "config")?.value || "{}"); } catch (e) { d = null; }
+      take(d);
+    }
+    for (const w of workspaces()) if (w._rnCfg?.shelf !== cfg?.shelf) take(w._rnCfg?.shelf);
+  } catch (e) { /* no graph to walk: the config alone */ }
+  take(cfg?.shelf);
+  if (!recs.length) return "";
+  recs.sort((a, b) => b.at - a.at);
+  return recs[0].entry;
+}
+
 /** Every shelf on the canvas, this one included. */
 function shelves() {
   const out = [];

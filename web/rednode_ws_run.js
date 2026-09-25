@@ -10,6 +10,7 @@ import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
 import { mountStagePanel } from "./rednode_stages.js";
 import { mountSavePanel } from "./rednode_save.js";
 import { allNodes } from "./rednode_graph.js";
+import { overrideEntryFor } from "./rednode_shelf.js";
 
 // the Detailer, under its name and the one older workflows still carry
 const DETAILER_TYPES = new Set(["RedNodeStudioDetailer", "RedNodeStudioAdvanced"]);
@@ -770,8 +771,11 @@ export function plannedStages(node, cfg) {
   // own picture. They need that picture, not Img2Img; their result IS the output, so
   // with the built-in sampler no encode, pass or decode follows them.
   const RA = I.reangle || {};
-  const edPic = (tabs.editor_src?.images?.length || 0) > 0;
-  const onSrc = (X) => !!(X?.on && (X.target || "source") === "source");
+  // a shelf override on the Tools source is the picture, and turns the on stages
+  // onto it for the run (apply_shelf_override), so the plan says the same
+  const ovr = !!overrideEntryFor(cfg, "editor_src");
+  const edPic = ovr || (tabs.editor_src?.images?.length || 0) > 0;
+  const onSrc = (X) => !!(X?.on && (ovr || (X.target || "source") === "source"));
   const edRuns = edPic && [RA, I.realism, I.swap].some(onSrc);
   if (edPic && onSrc(RA)) out.push(["reangle", "Re-angle"]);
   if (edPic && onSrc(I.realism)) out.push(["realism", "Re-render"]);
@@ -790,13 +794,13 @@ export function plannedStages(node, cfg) {
   }
   // a swap on the render runs whatever the pass mode (workspace.py swaps the
   // finished render), so Prompt only does not stand it down
-  if (RA.on && RA.target === "render") {
+  if (RA.on && RA.target === "render" && !ovr) {
     out.push(["reangle", "Re-angle"]);
     if (RA.polish !== false && internal) out.push(["reangle_polish", "Re-angle polish"]);
   }
-  if (I.realism?.on && I.realism.target === "render") out.push(["realism", "Re-render"]);
+  if (I.realism?.on && I.realism.target === "render" && !ovr) out.push(["realism", "Re-render"]);
   const SW = tabs.i2i?.swap || {};
-  if (SW.on && SW.target === "render") {
+  if (SW.on && SW.target === "render" && !ovr) {
     out.push(["swap", "Swap"]);
     if (SW.polish !== false && internal) out.push(["swap_polish", "Swap polish"]);
   }

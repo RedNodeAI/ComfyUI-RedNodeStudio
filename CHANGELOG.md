@@ -59,7 +59,9 @@ format matters: **version** then a date, notes below until the next bold line.
   reads as passes rather than one grey wall
 - A shelf override on the Tools source is the picture whichever way the Picture choice points:
   a Re-render, Re-angle or Swap set to New render works the shelf picture for that run, with no
-  render first. It only filled the gallery before, and a stage on New render kept waiting
+  render first. It only filled the gallery before, and a stage on New render kept waiting. The
+  pages, the lights and the Run page's plan say the same while the override stands, instead of
+  "no source picture"
 - Switch sounds, an option on the Advanced tab, off by default: a small click when a page's
   power button flips, two quick notes up for on and one low note down for off, drawn on the
   spot with no file

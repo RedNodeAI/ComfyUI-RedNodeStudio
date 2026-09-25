@@ -18,7 +18,7 @@ import { upscaleBody } from "./rednode_ws_upscale.js";
 import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
-import { mountEmbeddedShelf } from "./rednode_shelf.js";
+import { mountEmbeddedShelf, overrideEntryFor } from "./rednode_shelf.js";
 import { openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { TAB_ICONS, RAIL_ICONS, SUB_ICON } from "./rednode_ws_icons.js";
 import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITOR_SUB_IDS, IMAGE_TABS, DIALS, LATENT_PRESETS, POST_FX,
@@ -15679,10 +15679,19 @@ function tabOffNote(name) {
   return n;
 }
 
+// THE TOOLS SOURCE AS THE RUN WILL SEE IT: a shelf override's picture stands in for
+// the gallery, and while it does the Picture choice points at it too (the run turns
+// the on stages onto the source: apply_shelf_override)
+function editorPics(cfg) {
+  const e = overrideEntryFor(cfg, "editor_src");
+  return e ? [e] : (cfg.tabs?.editor_src?.images || []);
+}
+const editorOverridden = (cfg) => !!overrideEntryFor(cfg, "editor_src");
+
 function i2iSubLit(cfg, id) {
   const t = cfg.tabs.i2i;
   const E = cfg.tabs.editor_src;
-  const edPic = !!E?.images?.length;
+  const edPic = !!editorPics(cfg).length;
   if ((id === "source" || id === "passes") && t.on && !t.prompt_only && i2iSkipped(t, E)) return "skip";
   if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
   if (id === "passes") return !!(t.on && !t.prompt_only);
@@ -15791,7 +15800,7 @@ export function i2iIssues(cfg, node) {
   const E = cfg.tabs.editor_src || {};
   const onSrc = [["reangle", "Re-angle"], ["realism", "Re-render"], ["swap", "Swap"]]
     .filter(([k]) => t[k]?.on && (t[k].target || "source") === "source");
-  if (onSrc.length && !E.images?.length) {
+  if (onSrc.length && !editorPics(cfg).length) {
     out.push({ sub: "esource", text: `The Editor has no source picture, so `
       + `${onSrc.map(([, n]) => n).join(" and ")} ${onSrc.length > 1 ? "are" : "is"} skipped` });
   }
@@ -16106,8 +16115,9 @@ function editorTabs(node, body) {
   const E = cfg.tabs.editor_src;
   const chips = [];
   if (["reangle", "realism", "swap"].some((k) => t[k]?.on && (t[k].target || "source") === "source")) {
-    chips.push({ sub: "esource", warn: !E.images?.length,
-                 text: !E.images?.length ? "No source picture" : "Edit is the output" });
+    chips.push({ sub: "esource", warn: !editorPics(cfg).length,
+                 text: !editorPics(cfg).length ? "No source picture"
+                   : editorOverridden(cfg) ? "The shelf is the source" : "Edit is the output" });
   }
   if (t.reangle?.on) {
     const live = i2iSubLit(cfg, "reangle");
@@ -16133,7 +16143,7 @@ function editorTabs(node, body) {
   // a stage on the source with no Editor picture does nothing; say so with the way there
   const onSource = ["reangle", "realism", "swap"].includes(sub)
     && (t[sub]?.target || "source") === "source";
-  if (onSource && t[sub]?.on && !E.images?.length) {
+  if (onSource && t[sub]?.on && !editorPics(cfg).length) {
     body.appendChild(linkNote(node, "Tools has no source picture, so this does nothing "
       + "yet. Add one on the Source page. ", "Open Source", "esource"));
   }
@@ -16198,14 +16208,16 @@ function rerenderTabs(node, body) {
   const fn = document.createElement("span");
   fn.className = "rn-ws-note";
   fn.style.flex = "1 1 240px";
-  fn.textContent = R.target === "render"
+  fn.textContent = editorOverridden(cfg)
+    ? "A shelf override is on: its picked picture is re-rendered this run, whichever is chosen here, and is the image output."
+    : R.target === "render"
     ? "The render is made first, then re-rendered from itself."
     : (E.images?.length ? "The Tools source picture is re-rendered and is the image output."
                         : "Tools has no source picture yet.");
   fr.append(fl, fseg, fn);
   fc.appendChild(fr);
   body.appendChild(fc);
-  if (R.on && R.target !== "render" && !E.images?.length) {
+  if (R.on && R.target !== "render" && !editorPics(cfg).length) {
     body.appendChild(linkNote(node, "Tools has no source picture, so this does nothing "
       + "yet. Add one on its Source page. ", "Open Source", "esource"));
   }
