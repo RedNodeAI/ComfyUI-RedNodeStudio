@@ -305,8 +305,19 @@ def skip(key, label, why=""):
     stage_event(key, label, "skip", why=why)
 
 
+def _settle():
+    """vram.settle_models() at every stage start and node end: the moment a
+    dropped clone would otherwise start core's leak warning (vram.py says why)."""
+    try:
+        from . import vram as _vram
+        _vram.settle_models()
+    except Exception:
+        pass
+
+
 def begin(key, label, **info):
     stage_event(key, label, "start", **info)
+    _settle()
 
 
 def progress(key, label, **info):
@@ -339,6 +350,8 @@ def tracked(key, label):
             except Exception as exc:
                 end(key, label, "error", error=str(exc)[:200])
                 raise
+            finally:
+                _settle()
             with _lock:
                 was_skipped = key in _state["skipped"]
                 _state["skipped"].discard(key)

@@ -3049,8 +3049,14 @@ class RedNodeStudioWorkspace:
         """The run, with ComfyUI's own step preview kept off this node
         (live_preview.no_core_preview says why)."""
         from . import live_preview as _lpq
+        from . import vram as _vram
         with _lpq.no_core_preview():
-            return self._build(*a, **kw)
+            try:
+                return self._build(*a, **kw)
+            finally:
+                # the run's clones are dropped here; settle the loaded list before
+                # core's next load finds a dead entry (vram.settle_models says why)
+                _vram.settle_models()
 
     def _build(self, config="{}", preset=CUSTOM_SENTINEL, prompt=None, extra_pnginfo=None,
               boost_mask_in=None, edit_mask_in=None,

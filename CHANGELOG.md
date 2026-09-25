@@ -46,6 +46,12 @@ format matters: **version** then a date, notes below until the next bold line.
   is the picture before the Detailer, Post FX is a point of its own and Final picture is the
   finished one. The built-in Detailer's taps switch sits on the Taps card beside the
   Workspace's, and the strip keeps 48 pictures of a run rather than 24
+- No more "memory leak with model" lines after a run. A pass renders on a clone of the rig
+  and the chain of clones a LoRA stack makes was dropped at the end of the run, which left
+  ComfyUI's loaded list with an entry pointing at nothing; core logged a leak and ran a full
+  garbage collect at every model load for the rest of the session. The pack now settles that
+  list at every stage start and run end: dead entries come off, live clones are kept until
+  the next run replaces them
 - The rail follows a run. The tab whose stage is running pulses red, the tabs whose stages have
   finished wear a green ring, and the open tab's own page rows do the same, so where the run is
   can be read from any tab rather than only from the Run page's pipeline

@@ -159,6 +159,62 @@ def free_models(keep=None, empty=True):
     return len(held), freed
 
 
+_PINS = []      # the live clones on core's list at the last settle, kept alive on purpose
+
+
+def settle_models():
+    """Tidy ComfyUI's loaded-model list at a stage start and at a run's end.
+
+    A pass renders on a clone (a LoRA stack is a chain of them: every LoRA clones
+    the last), and the rig cache keeps only the base. When the run drops the chain,
+    core moves the clone's list entry to its parent, but the parent is dying in the
+    same sweep, so the entry ends up pointing at nothing while the base model lives
+    on in the cache: "dead" in core's words. Core never removes a dead entry; it
+    logs a memory leak and runs a full garbage collect at EVERY later model load,
+    for the rest of the session.
+
+    Two things, then. Dead entries come off the list (the weights they counted are
+    the base's, which the cache still holds and core re-counts on its next load).
+    And every live clone still on the list is pinned here until the next settle,
+    the way a graph's LoraLoader output cache would hold it: when the next run
+    loads a new clone of the same base, core swaps the old entry out while it is
+    still alive, and nothing on the list dies. Never raises.
+    Returns (dead entries removed, clones pinned).
+    """
+    try:
+        import comfy.model_management as mm
+        lst = mm.current_loaded_models
+    except Exception:
+        return 0, 0
+    gone = 0
+    try:
+        for i in range(len(lst) - 1, -1, -1):
+            lm = lst[i]
+            try:
+                dead = bool(lm.is_dead())
+            except Exception:
+                dead = False
+            if dead:
+                lst.pop(i)
+                gone += 1
+        live = []
+        for lm in list(lst):
+            try:
+                p = lm.model
+            except Exception:
+                p = None
+            if p is not None and getattr(p, "parent", None) is not None:
+                live.append(p)
+        _PINS[:] = live
+    except Exception as exc:
+        print("[RedNode] could not settle the loaded models: %s" % exc, flush=True)
+        return gone, len(_PINS)
+    if gone:
+        print("[RedNode] %d dead model entr%s cleared from ComfyUI's loaded list"
+              % (gone, "y" if gone == 1 else "ies"), flush=True)
+    return gone, len(live)
+
+
 def _empty_cache():
     """Hand the freed blocks back to the driver. Unloading alone only drops references.
 
