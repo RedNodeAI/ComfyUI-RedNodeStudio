@@ -3736,16 +3736,21 @@ class RedNodeStudioWorkspace:
                   "it has no usable image, so there is nothing to encode. output_latent "
                   "falls back to the Latent tab and denoise stays 1.0.", flush=True)
 
-        # An ENGINE rig (external, or a handled kind like the personal NAI rig) is
-        # the cockpit for a renderer that is not a loaded checkpoint: the denoise
-        # socket and the handler both read ITS strength dial.
+        # An EXTERNAL rig is the cockpit for a renderer wired outside this node: the
+        # denoise socket reads ITS strength dial, since the Img2Img page's dial has
+        # no way to reach a sampler that is not here.
         #
         # A "node" rig is NOT one of those, however much it looks like one here. It
         # samples through your own wired nodes, off this very socket, and the Models
         # tab shows it no strength dial at all — so this was handing it a 1.0 nobody
-        # set and throwing the Img2Img denoise away (you, 2026-09-23). Every other
-        # test in this file reads "external or a handled kind"; this one had drifted.
-        if _ar.get("kind") == "external" or _ar.get("kind") in RIG_KIND_HANDLERS:
+        # set and throwing the Img2Img denoise away (you, 2026-09-23).
+        #
+        # A HANDLED kind (the personal NovelAI rig) renders from THIS node, with the
+        # picture the Img2Img page holds, so the dial beside that picture is the one
+        # that counts. Reading the rig's own dial instead left it at its 1.0 default
+        # and every NAI image-to-image ran at 0.99 strength, which is a fresh render
+        # with the picture thrown away (you, 2026-09-25).
+        if _ar.get("kind") == "external":
             denoise_out = _ar.get("denoise", 1.0)
 
         # the Latent tab: the canvas for a prompt-only pass, or for a plain
