@@ -7069,18 +7069,19 @@ function workspaceCard(node, body) {
   line("Studio preset", [psel],
        "Hands the studio node a preset through the bundle. Node's own leaves its widget in "
        + "charge; custom (use settings) hands control to the dials.");
-  // the workspace presets moved to the Overview, where the whole setup shows;
-  // a pointer stays for anyone who looks here first
+  // the workspace presets moved to the Workspace Manager, where the whole setup
+  // shows; a pointer stays for anyone who looks here first
   const toOv = document.createElement("button");
   toOv.className = "rn-ws-btn rn-ws-bigbtn";
-  toOv.textContent = "Open the Overview";
+  toOv.textContent = "Open the Workspace Manager";
   toOv.onclick = () => {
     node._rnTab = "overview";
     (node.properties ||= {}).rn_tab = "overview";
     render(node);
   };
   line("Workspace presets", [toOv],
-       "Saving and loading the whole panel is at the top of the Overview tab now.");
+       "Saving and loading the whole panel is at the top of the Workspace Manager, "
+       + "under Settings.");
   body.appendChild(card);
 }
 
@@ -17821,14 +17822,21 @@ function detailerTab(node, body) {
   nm.className = "nm";
   nm.textContent = "Detailer";
   bar.append(on, nm);
+  const passText = () => {
+    const n = ((node._rnCfg.detailer || {}).stages || [])
+      .filter((s) => s.on && s.type !== "title").length;
+    return !cfg.detailer_on ? "Off" : `${n} Pass${n === 1 ? "" : "es"} on`;
+  };
+  let passChip = null;
   for (const text of [
-    !cfg.detailer_on ? "Off" : `${passes} Pass${passes === 1 ? "" : "es"} on`,
+    passText(),
     cfg.draft ? "Draft skips it" : "Runs after the render, before Post FX",
   ]) {
     const c = document.createElement("span");
     c.className = "rn-ws-chip";
     c.textContent = text;
     bar.appendChild(c);
+    passChip ||= c;
   }
   body.appendChild(bar);
   if (!cfg.detailer_on) {
@@ -17840,6 +17848,8 @@ function detailerTab(node, body) {
     body.appendChild(note);
   }
   const host = configHost(node, "detailer", "RedNodeStudioDetailer");
+  // the pill follows every write from the panel (a card's eye, a delete, an add)
+  host.afterWrite = () => { if (passChip) passChip.textContent = passText(); };
   const el = document.createElement("div");
   el.className = "rn-ws-card rn-ws-dethost";
   body.appendChild(el);

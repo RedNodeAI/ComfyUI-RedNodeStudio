@@ -1032,6 +1032,9 @@ export function configHost(node, key, type) {
     set value(v) {
       try { node._rnCfg[key] = JSON.parse(v || "{}"); } catch (e) { return; }
       writeCfg(node);
+      // the page that hosts the panel may keep a summary of it (the Detailer's
+      // pass count) that reads from the settings just written
+      if (typeof h.afterWrite === "function") h.afterWrite();
     },
   }];
   return h;

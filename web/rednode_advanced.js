@@ -1745,7 +1745,7 @@ function buildPanel(node, hostEl = null) {
           const warn = document.createElement("div");
           warn.className = "miss";
           warn.innerHTML = "<b>ComfyUI-SeedVR2_VideoUpscaler is not installed.</b> This pass "
-                         + "will say so and pass the picture through. The Overview tab, under "
+                         + "will say so and pass the picture through. The Workspace Manager, under "
                          + "What this run needs, has the link.";
           card.appendChild(warn);
         }
@@ -1804,7 +1804,7 @@ function buildPanel(node, hostEl = null) {
           warn.className = "miss";
           warn.innerHTML = "<b>ComfyUI-VOSR2 is not installed.</b> This pass will say so and "
                          + "pass the picture through. Install it in Manager, where it is "
-                         + "listed as VOSR 2.0. The Overview tab, under What this run needs, "
+                         + "listed as VOSR 2.0. The Workspace Manager, under What this run needs, "
                          + "has the link and says whether it is here.";
           card.appendChild(warn);
         }

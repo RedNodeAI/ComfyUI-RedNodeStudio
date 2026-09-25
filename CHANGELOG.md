@@ -203,6 +203,11 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The Detailer page's pass count follows a card switched on or off in the panel; it used
+  to hold the number from when the page opened
+- The Advanced page and two Detailer notices point at the Workspace Manager by its name,
+  not the old Overview
+- The doc pictures are shot again from the 1.6 layout
 - The finished picture reaches ComfyUI's media assets, queue and history again. Silencing
   core's previewer had left the run with no standard images key
 - Paint and Upscale runs no longer fire the Editor's Realism, Re-angle and Swap stages
