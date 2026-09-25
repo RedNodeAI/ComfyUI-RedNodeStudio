@@ -166,6 +166,11 @@ image, Edit, Paint and Finishing ship with the pack, and your own save on the Ad
 tabs keep working. Beside it, the full screen button puts the same panel over the whole window, and
 the red **Generate** under them queues the workflow. The socket tuck parks unwired sockets as dots
 along the node's bottom edge, so a node with forty sockets is no taller than its panel.
+Every page that can be switched carries a power button in the same corner of its header, green
+when the page is on and red when it is off, with a thin line of the same colour along the
+header; pages with nothing to switch, the Prompts or the Models, have no button. **Space**
+flips the switch of the open page while the pointer is over the panel, once per press however
+long it is held, and does nothing while a text box has the keyboard.
 
 ![The rail on the right-hand side, on the Run page after an Anima render](images/run-rail-right.webp)
 
@@ -323,7 +328,8 @@ attention, so SageAttention does not break them, and each shows its steps on the
 **Converter** reworks the final prompt, with an optional rewrite by a local Ollama model.
 
 **Re-render.** Turns an
-illustration into a photograph. Its Exact engine is the Anything2Real workflow node for node, with
+illustration into a photograph, from the Tools tab's source picture or from the new render,
+a **Picture** choice at the top of the page. Switched off, the page keeps its recipe on show. Its Exact engine is the Anything2Real workflow node for node, with
 an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
 Alternative engine is the pack's own and needs no other pack. It finds the conversion LoRA among
 your files by name and hash. A LoRAs-tab set can run underneath the conversion, and the **Set**
@@ -334,7 +340,8 @@ rather than in the console after a queue.
 ![The Paint tab: the mask on the picture, the result under it, and the paint settings](images/paint.webp)
 
 **Paint.** Mask a region, set the denoise, queue. It composites back by itself, and it runs on
-whichever renderer you point it at: a rig from the Models tab, the pack's own Paint Render, or an
+whichever renderer you point it at: a rig from the Models tab, the pack's own Paint Render, the
+Re-render tab's engine (its recipe, LoRA and finish, over the masked region), or an
 outside chain through Paint Out and Paint In. Auto-mask the subject or the background rather than
 painting by hand, paint in colour to steer the fill, and run the low-denoise chain as passes in
 one Generate. While it samples, the picture forms over the result pane, step by step, at a frame
@@ -444,10 +451,12 @@ The kinds of pass:
 
 - **Sampler**: the whole frame refined at a denoise, an image to image over what arrived. Its
   scale sticks, so 0.5 then 2.0 across two passes is the shrink-and-regrow chain.
-- **Detailer**: SAM3 segments a target, face, hair, hands, eyes, clothes or background, the crop
+- **Mask detailer**: SAM3 segments a target, face, hair, hands, eyes, clothes or background, the crop
   renders at a working resolution, and goes back under a feathered mask at a blend, so a stronger
-  denoise can be softened at the paste instead of at the sampler. The SAM file and its precision
-  are picked once on the node.
+  denoise can be softened at the paste instead of at the sampler. **Invert** works everything but
+  the target, so a face can be kept while the rest of the frame is redrawn. **Render with** picks
+  the engine: the pass's rig, or the Re-render tab's conversion inside the mask. The SAM file and
+  its precision are picked once on the node.
 - **Upscale**: SeedVR2 at a size, 720p, 1080p, 2K, 1440p or 4K as a pixel budget, with the short
   edge worked out from the frame's own aspect. The loader dials sit on the card. A region, face
   or hair, upscales that crop only and the frame keeps its size; an out-of-memory halves the
@@ -470,10 +479,13 @@ The kinds of pass:
   upscale hands every tile the whole prompt and stack and invents a subject in a patch of sky;
   this draws each tile from itself, so a low denoise sharpens what is there. Tiles of 1024 are
   the edit encoder's own megapixel. The add row offers it ready-made as Re-render tiles, at a
-  denoise of 0.40 and x2.
+  denoise of 0.25, a blend of 0.75 and x1.5, the portrait recipe.
 - **On every card**: Free VRAM before the pass, and Tone lock, which keeps the pass's new detail
   but takes the tone from the picture as it arrived, the drift fix for a long chain.
 
+The add row groups the kinds by colour, render passes, upscales, readers and re-renders, and
+every card wears its group's colour with its number in the run order, so a long chain reads at
+a glance. If the panel cannot read the passes it says so and writes nothing over them.
 Duplicate a pass with the button beside its delete and nudge one number, which is how a chain
 gets built. Group titles fold and switch a set of passes at once. Premade layouts ship, the face
 identity chain among them, and your own save by name. Taps record the input, every pass and the
@@ -557,6 +569,11 @@ inside subgraphs. Palette and Router route the graph by colour. Sender and Grabb
 canvas of Get and Set nodes with named channels. The wires that are not there are the point.
 
 **Copy and paste on the Shelf.** Point at a picture on the shelf and **Ctrl+C** puts it on the system clipboard, full size, ready for any other app. **Ctrl+V** with the pointer over the shelf takes whatever picture is on the clipboard, a screenshot included, and puts it on top. **Delete** takes the one you are pointing at off the shelf, and the file itself is left alone: the shelf holds names, not copies. The shelf your pointer is over is the one the keys drive, a prompt box you are typing in keeps its own copy and paste, and an empty shelf passes Delete on to ComfyUI so the node can still be removed.
+
+**Five stacks.** The buttons 1 to 5 on the shelf are five separate stacks of pictures on the one
+node, each with its own picked picture; only the stack on show is drawn, so the other four cost
+nothing while they wait. The shelf column beside the Workspace drags wider or narrower by its
+edge, the same as the rail.
 
 **The Shelf as the picture.** A RedNode Shelf beside the Workspace has an **Override** switch.
 With it on, the picture picked on the shelf is what the ticked tabs render from, in place of
@@ -977,7 +994,12 @@ Global preferences live in ComfyUI's own settings dialog, under **RedNode**: whe
 captions are remembered between runs and how many, whether saved effects keep a picture, how
 many pictures each Image Review keeps (on its strip and in the temp folder) and the size its big
 picture loads at on the node, how many saved images the index remembers, and a button
-to clear the regenerable caches. Anything that belongs to a single workflow, the grading
+to clear the regenerable caches. The Workspace's Advanced tab keeps a few preferences of
+this install's own, never the workflow's: the paint layout, the mask overlay, which tabs show,
+whether pages list on the rail, whether the Shelf column shows, and **Switch sounds**, off by
+default, a click when a page is switched on or off. Two files of your own, `switch_on.mp3` and
+`switch_off.mp3` in the pack's `web/sounds/` folder, replace the built-in tones; they stay out
+of the repository. Anything that belongs to a single workflow, the grading
 chain, the paint strokes, which images are on a tab, stays on its node instead.
 
 What the pack keeps on disk, measured rather than estimated:
