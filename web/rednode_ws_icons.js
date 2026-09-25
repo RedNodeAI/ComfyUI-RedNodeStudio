@@ -15,15 +15,12 @@ const png = (id) => {
   return '<span class="rn-ws-icimg" style="-webkit-mask-image:url(' + url + ');mask-image:url('
     + url + ')" aria-hidden="true"></span>';
 };
-const TAB_IDS = ["overview", "models", "prompts", "camera", "loras", "latent", "i2i", "editor",
-                 "paint", "moodboard", "identity", "detailer", "post", "run", "advanced"];
+const TAB_IDS = ["overview", "models", "prompts", "camera", "loras", "latent", "i2i", "rerender",
+                 "editor", "paint", "moodboard", "identity", "detailer", "post", "run", "advanced"];
 export const TAB_ICONS = Object.fromEntries(TAB_IDS.map((id) => [id, png(id)]));
 // the AI tab has no drawn icon in icons/, so it carries a line-art one: a spark,
 // the same mark the auto prompt sections use
 TAB_ICONS.ai = svg('<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>');
-// Re-render (2026-09-25) has no PNG on the sheet either: a picture rendered again
-// from itself, drawn as a frame with a turning arrow
-TAB_ICONS.rerender = svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M15.5 12a3.5 3.5 0 1 1-1-2.5"/><path d="M15.5 8v2.5H13"/>');
 
 // THE SUB-TABS' ICONS, for the strip in a page header: the same weight as the rail's,
 // drawn as line art so they read at 14px on the dark strip. An id with no icon here
