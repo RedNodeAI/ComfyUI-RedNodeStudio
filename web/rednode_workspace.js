@@ -14000,14 +14000,16 @@ function promptsBody(node, body) {
       }
     } else {
       const text = document.createElement("textarea");
-      text.style.fontSize = "var(--rn-pf-font, 13px)";
       text.rows = 8;                       // room to write, not a slot to peer through
       text.value = row.text;
       text.placeholder = "Prompt...";
-      keepSize(node, `p${i}:plain`, text);
+      // the Text size slider's variable, in the same style that sets the rest:
+      // it was set first and the block below wiped it, so the plain box alone
+      // ignored the slider (you, 2026-09-25)
       text.style.cssText = "width:100%;box-sizing:border-box;background:#101216;"
                          + "border:1px solid #2a2e34;border-radius:5px;color:#e2e5ea;"
-                         + "font-size:13px;padding:6px 8px;resize:vertical";
+                         + "font-size:var(--rn-pf-font, 13px);padding:6px 8px;resize:vertical";
+      keepSize(node, `p${i}:plain`, text);
       text.addEventListener("change", () => { row.text = text.value; writeCfg(node); });
       box.appendChild(expandable(text, (row.name || "Prompt") + " \u00b7 prompt",
                                  (v) => { row.text = v; writeCfg(node); }));
