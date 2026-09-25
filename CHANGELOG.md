@@ -57,6 +57,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- The Workspace preset list on the Workspace Manager shows the saved names on the first visit.
+  The names arrive from the server after the page draws, and the dropdown only learned them on
+  the next visit; it learns them the moment they arrive and refills every time it is opened
 - The live picture and the run log say Re-render while the engine samples, and its messages
   name the Re-render tab; they still said Realism
 - The Re-render tab shows its recipe whether or not its switch is on, since the Detailer's

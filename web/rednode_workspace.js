@@ -7083,13 +7083,24 @@ export function workspacePresetCard(node) {
   const picked = node._rnWsPreset || CUSTOM_SENTINEL;
   const wsel = document.createElement("select");
   wsel.className = "rn-ws-res rn-ws-wspreset";
-  for (const v of [CUSTOM_SENTINEL, ...(node._rnWsPresets || [])]) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = v === CUSTOM_SENTINEL ? "Current" : v;
-    o.selected = picked === v;
-    wsel.appendChild(o);
-  }
+  // FILLED WHEN OPENED, not only when drawn: the names arrive from the server after
+  // the first draw, and a list built once showed only Current until the next visit
+  // (you, 2026-09-25). A save from another node shows the same way.
+  const fill = () => {
+    const cur = node._rnWsPreset || CUSTOM_SENTINEL;
+    wsel.replaceChildren();
+    for (const v of [CUSTOM_SENTINEL, ...(node._rnWsPresets || [])]) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v === CUSTOM_SENTINEL ? "Current" : v;
+      o.selected = cur === v;
+      wsel.appendChild(o);
+    }
+  };
+  fill();
+  wsel.addEventListener("pointerdown", fill);
+  wsel.addEventListener("focus", fill);
+  node._rnWsPresetFill = fill;
   wsel.title = "Load a saved workspace: galleries, selections, masks and dials. Loading "
              + "replaces the whole panel. Current is whatever is in the panel now, "
              + "which is what an edit after a load leaves you with.";
@@ -20804,6 +20815,8 @@ function pushStudioPreset(node) {
 function refreshPresetList(node, names) {
   node._rnWsPresets = [...names];
   if (!node._rnWsPresets.includes(node._rnWsPreset)) node._rnWsPreset = CUSTOM_SENTINEL;
+  // the dropdown on screen learns the names now, not at the next draw
+  try { node._rnWsPresetFill?.(); } catch (e) { /* the list simply stays as it is */ }
 }
 
 // LOADING ONE replaces the whole workspace. Every control captured the config it
