@@ -766,91 +766,118 @@ class RedNodePaintRender:
             except Exception as exc:
                 _say("no Models-tab rig to fill from: %s" % exc)
 
-        model, clip = self._apply_loras(model, clip, pc, prompt)
-        pos, neg = self._conditioning(clip, positive, negative, pc,
-                                      positive_override, negative_override,
-                                      prompt=prompt, vae=vae, seed=seed)
-        rgb = work[:, :, :, :3]
-        latent = {"samples": vae.encode(rgb)}
-        _refs = [k[4:].capitalize() for k in ("use_subject", "use_scene", "use_moodboard")
-                 if pc.get(k)]
-        _say(paint_summary(pc, whole, (crop_w, crop_h), (rgb.shape[2], rgb.shape[1]), _refs))
-        # The Paint tab owns these when it has them, the same way it already owns
-        # denoise, so the dials you are looking at while painting are the ones that run.
-        # Absent means a workflow saved before the tab had them: the widgets on this
-        # node are what that user set, so they keep winning.
-        steps = int(pc.get("steps", steps))
-        cfg = float(pc.get("cfg", cfg))
-        denoise = max(0.01, float(pc["denoise"]))
-        passes = max(1, min(_ws.PAINT_PASS_MAX, int(pc.get("passes", passes))))
-        live_px = int(pc.get("live_px", 0) or 0)     # the Paint tab's live frame size
+        # the choice lives on the raw paint block (parse_config keeps the dials, not
+        # the renderer id), the same place _paint_rig reads it
+        _rr_pick = str(((_workspace_cfg(prompt).get("paint") or {}).get("renderer") or ""))
+        if _rr_pick == "rerender":
+            # THE RE-RENDER ENGINE ON THE PAINT: the Re-render tab's recipe on the
+            # painted region (or the whole frame) at the tab's denoise, its passes
+            # as rounds over the result, then back under the mask exactly as a
+            # sampled crop goes (you, 2026-09-25). No rig, no paint LoRA stack and
+            # no conditioning of its own: the recipe carries all of that.
+            from .refine_pipeline import rerender_frame
+            _rr_passes = max(1, min(_ws.PAINT_PASS_MAX, int(pc.get("passes", passes))))
+            _rr_dn = max(0.01, float(pc["denoise"]))
+            _run.progress("paint", "Paint", what="Re-render, denoise %.2f" % _rr_dn)
+            _say("Re-render is the engine: the Re-render tab's recipe at denoise "
+                 "%.2f, %d round(s)" % (_rr_dn, _rr_passes))
+            rgb = work[:, :, :, :3]
+            painted, _rr_lines = rerender_frame(rgb, _workspace_cfg(prompt), _rr_dn,
+                                                int(seed), "Paint", unique_id,
+                                                passes=_rr_passes)
+            for _ln in _rr_lines:
+                _say(_ln)
+            painted = painted[:, :, :, :3]
+            if painted.shape[1:3] != rgb.shape[1:3]:
+                painted = F.interpolate(painted.permute(0, 3, 1, 2), size=rgb.shape[1:3],
+                                        mode="bilinear", align_corners=False
+                                        ).permute(0, 2, 3, 1)
+        else:
+            model, clip = self._apply_loras(model, clip, pc, prompt)
+            pos, neg = self._conditioning(clip, positive, negative, pc,
+                                          positive_override, negative_override,
+                                          prompt=prompt, vae=vae, seed=seed)
+            rgb = work[:, :, :, :3]
+            latent = {"samples": vae.encode(rgb)}
+            _refs = [k[4:].capitalize() for k in ("use_subject", "use_scene", "use_moodboard")
+                     if pc.get(k)]
+            _say(paint_summary(pc, whole, (crop_w, crop_h), (rgb.shape[2], rgb.shape[1]), _refs))
+            # The Paint tab owns these when it has them, the same way it already owns
+            # denoise, so the dials you are looking at while painting are the ones that run.
+            # Absent means a workflow saved before the tab had them: the widgets on this
+            # node are what that user set, so they keep winning.
+            steps = int(pc.get("steps", steps))
+            cfg = float(pc.get("cfg", cfg))
+            denoise = max(0.01, float(pc["denoise"]))
+            passes = max(1, min(_ws.PAINT_PASS_MAX, int(pc.get("passes", passes))))
+            live_px = int(pc.get("live_px", 0) or 0)     # the Paint tab's live frame size
 
-        # THE LOW-DENOISE CHAIN, DONE HERE INSTEAD OF BY HAND. Settling a shape means
-        # running the same small denoise over the last result three or four times, and
-        # the manual version of that is drag the result onto the canvas, Generate, drag,
-        # Generate, watching four pictures go by to keep the fourth. This is the same
-        # loop with the same mask and the same crop, so only the finished picture comes
-        # back and the model is staged once for all of it.
-        #
-        # Each pass gets its OWN seed. Re-running identical noise over a picture at a
-        # low denoise re-imprints the same pattern instead of settling anything, and
-        # pressing Generate by hand rolls a seed every time, which is the behaviour
-        # being mechanised. Derived from the run's seed rather than rolled, so the whole
-        # chain still repeats from one number.
-        #
-        # BETWEEN passes the picture goes back through the mask: the paint carries
-        # forward, everything else is the original crop again. That is what dragging the
-        # result back does, and it matters more than the VAE round trip it costs. Left
-        # in latent space, four passes of whole-crop denoise drift the context the model
-        # is reading, and the feathered edge then blends into pixels that no longer
-        # match the picture around them. With no mask there is nothing to protect, so
-        # the latent feeds straight forward and no round trip is paid at all.
-        work_mask = None
-        if passes > 1 and mask is not None:
-            m = mask[:, y0:y1, x0:x1].unsqueeze(1)
-            work_mask = F.interpolate(m, size=(rgb.shape[1], rgb.shape[2]),
-                                      mode="bilinear", align_corners=False)
-            work_mask = work_mask.squeeze(1).unsqueeze(-1).to(rgb.dtype)
-        for i in range(passes):
-            if passes > 1:
-                _run.progress("paint", "Paint", current=i + 1, of=passes,
-                              what="denoise %.2f" % denoise)
-                _say(f"pass {i + 1} of {passes}, denoise {denoise:.2f}")
-            # every step streams a small frame to the Paint tab's result pane and
-            # to any Live Preview node, tagged with this node (the workspace's id
-            # on the built-in paint door) and the run (live_preview.py)
-            # through the sampler dials' entry: with nothing on it is core's
-            # common_ksampler; an extra scheduler name on the rig builds its schedule
-            from . import rig_chain as _rigc
-            with _rigc.using(_paint_chain(prompt), prompt, clip=clip, vae=vae):
-                out = _live.sampled(unique_id, _dials.sample_with_dials,
-                                    label=("pass %d of %d" % (i + 1, passes))
-                                          if passes > 1 else "",
-                                    size=live_px or None)(
-                    model, (seed + i) % (2 ** 64), steps, cfg,
-                    sampler_name, scheduler, pos, neg, latent,
-                    denoise=denoise)
-            if i + 1 >= passes:
-                break
-            if work_mask is None:
-                latent = out
-                continue
-            mid = vae.decode(out["samples"])
-            while mid.ndim > 4:
-                mid = mid[0]
-            mid = mid[:, :, :, :3]
-            if mid.shape[1:3] != rgb.shape[1:3]:
-                # a VAE that rounds its own way must not shift the mask off the paint
-                mid = F.interpolate(mid.permute(0, 3, 1, 2),
-                                    size=(rgb.shape[1], rgb.shape[2]),
-                                    mode="bilinear", align_corners=False
-                                    ).permute(0, 2, 3, 1)
-            latent = {"samples": vae.encode(rgb * (1 - work_mask)
-                                            + mid * work_mask)}
-        painted = vae.decode(out["samples"])
-        while painted.ndim > 4:                               # video VAEs hand back 5D
-            painted = painted[0]
-        painted = painted[:, :, :, :3]                        # an RGBA VAE (Qwen Image 2.1)
+            # THE LOW-DENOISE CHAIN, DONE HERE INSTEAD OF BY HAND. Settling a shape means
+            # running the same small denoise over the last result three or four times, and
+            # the manual version of that is drag the result onto the canvas, Generate, drag,
+            # Generate, watching four pictures go by to keep the fourth. This is the same
+            # loop with the same mask and the same crop, so only the finished picture comes
+            # back and the model is staged once for all of it.
+            #
+            # Each pass gets its OWN seed. Re-running identical noise over a picture at a
+            # low denoise re-imprints the same pattern instead of settling anything, and
+            # pressing Generate by hand rolls a seed every time, which is the behaviour
+            # being mechanised. Derived from the run's seed rather than rolled, so the whole
+            # chain still repeats from one number.
+            #
+            # BETWEEN passes the picture goes back through the mask: the paint carries
+            # forward, everything else is the original crop again. That is what dragging the
+            # result back does, and it matters more than the VAE round trip it costs. Left
+            # in latent space, four passes of whole-crop denoise drift the context the model
+            # is reading, and the feathered edge then blends into pixels that no longer
+            # match the picture around them. With no mask there is nothing to protect, so
+            # the latent feeds straight forward and no round trip is paid at all.
+            work_mask = None
+            if passes > 1 and mask is not None:
+                m = mask[:, y0:y1, x0:x1].unsqueeze(1)
+                work_mask = F.interpolate(m, size=(rgb.shape[1], rgb.shape[2]),
+                                          mode="bilinear", align_corners=False)
+                work_mask = work_mask.squeeze(1).unsqueeze(-1).to(rgb.dtype)
+            for i in range(passes):
+                if passes > 1:
+                    _run.progress("paint", "Paint", current=i + 1, of=passes,
+                                  what="denoise %.2f" % denoise)
+                    _say(f"pass {i + 1} of {passes}, denoise {denoise:.2f}")
+                # every step streams a small frame to the Paint tab's result pane and
+                # to any Live Preview node, tagged with this node (the workspace's id
+                # on the built-in paint door) and the run (live_preview.py)
+                # through the sampler dials' entry: with nothing on it is core's
+                # common_ksampler; an extra scheduler name on the rig builds its schedule
+                from . import rig_chain as _rigc
+                with _rigc.using(_paint_chain(prompt), prompt, clip=clip, vae=vae):
+                    out = _live.sampled(unique_id, _dials.sample_with_dials,
+                                        label=("pass %d of %d" % (i + 1, passes))
+                                              if passes > 1 else "",
+                                        size=live_px or None)(
+                        model, (seed + i) % (2 ** 64), steps, cfg,
+                        sampler_name, scheduler, pos, neg, latent,
+                        denoise=denoise)
+                if i + 1 >= passes:
+                    break
+                if work_mask is None:
+                    latent = out
+                    continue
+                mid = vae.decode(out["samples"])
+                while mid.ndim > 4:
+                    mid = mid[0]
+                mid = mid[:, :, :, :3]
+                if mid.shape[1:3] != rgb.shape[1:3]:
+                    # a VAE that rounds its own way must not shift the mask off the paint
+                    mid = F.interpolate(mid.permute(0, 3, 1, 2),
+                                        size=(rgb.shape[1], rgb.shape[2]),
+                                        mode="bilinear", align_corners=False
+                                        ).permute(0, 2, 3, 1)
+                latent = {"samples": vae.encode(rgb * (1 - work_mask)
+                                                + mid * work_mask)}
+            painted = vae.decode(out["samples"])
+            while painted.ndim > 4:                               # video VAEs hand back 5D
+                painted = painted[0]
+            painted = painted[:, :, :, :3]                        # an RGBA VAE (Qwen Image 2.1)
 
         # A WHOLE-FRAME PASS THAT RESIZED KEEPS THE RENDER'S SIZE, up or down. Scaling
         # the render back to the source would spend the whole sample on pixels that are

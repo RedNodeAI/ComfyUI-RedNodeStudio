@@ -914,6 +914,11 @@ def _detailer_stage(cfg, base_gb, render_px, rig_cost=None):
               and s.get("on", True)
               and s.get("type") in ("sampler", "detailer", "upscale", "usdu", "vosr2",
                                     "realism")]
+    # a mask detailer on Re-render loads the conversion's files, not a rig: it
+    # costs what a Re-render pass costs
+    stages = [dict(s, type="realism") if (s.get("type") == "detailer"
+                                          and s.get("engine") == "rerender") else s
+              for s in stages]
     if not stages:
         return None
     from .refine_pipeline import UPSCALE_SIZES

@@ -57,6 +57,17 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- The Re-render tab shows its recipe whether or not its switch is on, since the Detailer's
+  Re-render passes run on that recipe with the switch off; its section is named Re-render
+- Re-render is a Model choice on the Paint tab. Picked there, Generate runs the Re-render
+  tab's recipe on the painted region or the whole frame at the Paint tab's denoise, its passes
+  as rounds over the result, and puts it back under the mask the way a sampled paint goes; no
+  rig, paint LoRA stack or prompt of its own, the recipe carries all of that
+- A Mask detailer can render with Re-render. Its Render with choice hands the crop to the
+  Re-render tab's recipe (engine, LoRA set, photo finish, Asked for) at the pass's Denoise, and
+  pastes it back under the same feathered mask at the pass's Blend; the rig and sampling boxes
+  then do nothing and no rig loads for it. Res still raises the crop first. The card wears
+  Re-render's colour
 - The Face detailer is the Mask detailer, which is what it is: SAM3 masks a target and the pass
   redraws it. Its card has an Invert switch that works everything BUT the target, the mask turned
   inside out and the whole frame rendered at the pass's scale with the target kept as it was, for

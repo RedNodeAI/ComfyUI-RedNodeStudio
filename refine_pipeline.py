@@ -172,6 +172,11 @@ def parse_pipeline(config_json):
             # at its scale and the paste keeps the target as it was (you,
             # 2026-09-25): a background around a face, clothes around a head.
             "invert": bool(s.get("invert")),
+            # ENGINE: what redraws the crop. "rig" is the pass rig's sampler;
+            # "rerender" hands the crop to the Re-render tab's recipe at this
+            # pass's denoise and pastes it back under the same mask (you,
+            # 2026-09-25), so a face gets the conversion and the frame keeps.
+            "engine": "rerender" if s.get("engine") == "rerender" else "rig",
             "feather": _num("feather", 0, 64, 8, int),
             # BLEND: how much of the rendered crop goes back. 1 is the render
             # under the mask as before; 0.5 halves it against the crop as it
@@ -940,6 +945,25 @@ WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 
 
+def rerender_frame(img, ws_cfg, denoise, seed, tag, node_id=None, passes=1):
+    """The Re-render tab's recipe on a picture, for the Paint tab: the same
+    conversion the Re-render pass runs, at `denoise`, `passes` rounds over its
+    own result with a fresh seed each round. (IMAGE, [line]); the picture as it
+    came when the engine made nothing."""
+    s = {"denoise": float(denoise), "blend": 1.0, "realism_engine": "",
+         "realism_lora": "", "realism_strength": 0.0, "realism_photo": "",
+         "realism_prompt": "", "loras": True, "lora_set": "", "realism_tiles": False}
+    det = RedNodeStudioDetailer()
+    out, lines = img, []
+    for i in range(max(1, int(passes))):
+        nxt, ln = det._realism_pass(out, s, ws_cfg, int(seed) + i, tag, node_id)
+        lines.extend(ln)
+        if nxt is None or nxt is out:
+            break
+        out = nxt
+    return out, lines
+
+
 def pass_name(s):
     """A pass as its card names it: the name typed there, else Sampler pass,
     Mask detailer (face), ..."""
@@ -1262,6 +1286,28 @@ class RedNodeStudioDetailer:
                     _say(line)
                     report.append(line)
                 out = self._tone(out, pass_in, s, tag, report)
+                continue
+            if s["type"] == "detailer" and s.get("engine") == "rerender":
+                # THE MASK DETAILER ON RE-RENDER: SAM3 finds the target, the crop
+                # is converted by the Re-render tab's recipe at this pass's
+                # denoise, and the paste puts it back under the feathered mask at
+                # this pass's blend. No rig loads for it; the conversion loads
+                # its own files, the way the Re-render pass does.
+                rr_lines = []
+                def _one_rr(frame, _s=s, _seed=seed + i, _lines=rr_lines):
+                    return self._detail_rerender(frame, _s, ws_cfg, _seed, tag,
+                                                 unique_id, _lines)
+                out, why = self._each_frame(out, _one_rr)
+                for line in rr_lines:
+                    _say(line)
+                    report.append(line)
+                if why:
+                    line = "%s: %s" % (tag, why)
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap and not why:
+                    tap(out, "%d %s (Re-render)" % (i, s["target"]))
                 continue
             rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"],
                                                              prompt=prompt)
@@ -1872,6 +1918,41 @@ class RedNodeStudioDetailer:
         merged = image.clone()
         merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
         return merged
+
+    def _detail_rerender(self, image, s, ws_cfg, seed, tag, node_id, lines):
+        """The mask detailer with Re-render as its engine: the target's crop,
+        raised to the pass's Res when it asks, converted by the Re-render tab's
+        recipe at the pass's denoise, and pasted back under the mask at the
+        pass's blend. (image, None) or (image, why)."""
+        if float(s.get("blend", 1.0)) <= 0.0:
+            return image, ("blend is 0, so nothing this pass rendered could be "
+                           "applied; raise it above 0 for the pass to do anything")
+        mask, box, why = self._locate(image, s)
+        if why is not None:
+            return image, why
+        y0, y1, x0, x1 = box
+        crop = image[:, y0:y1, x0:x1, :3]
+        work = crop
+        if s.get("crop_res"):
+            # a floor, never a cap, the same rule the rig path keeps
+            f = float(s["crop_res"]) / max(crop.shape[1], crop.shape[2])
+            if f > 1.0:
+                work = F.interpolate(crop.permute(0, 3, 1, 2), scale_factor=f,
+                                     mode="bilinear", align_corners=False
+                                     ).permute(0, 2, 3, 1)
+        # the paste blends, so the conversion itself does not; a tiled
+        # conversion is the Re-render tiles pass's job, not a crop's
+        s2 = dict(s, blend=1.0, realism_tiles=False)
+        rendered, rl = self._realism_pass(work, s2, ws_cfg, seed, tag, node_id)
+        lines.extend(rl)
+        if rendered is None or rendered is work:
+            return image, "Re-render made no picture; passed through"
+        rendered = rendered.to(image.device, image.dtype)
+        if rendered.shape[1:3] != crop.shape[1:3]:
+            rendered = F.interpolate(rendered[:, :, :, :3].permute(0, 3, 1, 2),
+                                     size=crop.shape[1:3], mode="bilinear",
+                                     align_corners=False).permute(0, 2, 3, 1)
+        return self._paste(image, crop, rendered, mask, box, s["feather"], s["blend"]), None
 
     def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
                 scheduler, start, end, encode_for=None):

@@ -1264,6 +1264,7 @@ function buildPanel(node, hostEl = null) {
     // extension's kind, the group title. The list read as one grey wall (you,
     // 2026-09-25).
     const kindGroup = (x) => x.type === "title" ? "group"
+      : (x.type === "detailer" && x.engine === "rerender") ? "rerender"
       : (x.type === "sampler" || x.type === "detailer") ? "render"
       : ["upscale", "vosr2", "usdu"].includes(x.type) ? "upscale"
       : x.type === "reader" ? "read" : x.type === "realism" ? "rerender" : "local";
@@ -1568,6 +1569,17 @@ function buildPanel(node, hostEl = null) {
             "Work everything BUT the target: the mask is turned inside out, the "
             + "whole frame is rendered at this pass's scale, and the target is "
             + "kept as it was. A background around a face, clothes around a head."));
+          // THE ENGINE: the rig's sampler, or the Re-render tab's recipe on the
+          // crop at this pass's denoise, back under the same mask
+          top.append(lab("Render with"),
+                     sel(["rig", "rerender"], s.engine === "rerender" ? "rerender" : "rig",
+                         "What redraws the crop. The rig: this pass's rig and sampling "
+                         + "boxes. Re-render: the Re-render tab's recipe (engine, LoRA "
+                         + "set, photo finish, Asked for) at this pass's Denoise, pasted "
+                         + "back under the mask at its Blend; the rig and sampling boxes "
+                         + "then do nothing.",
+                         (v) => { s.engine = v; writeCfg(node, d); render(); },
+                         undefined, { rig: "The rig", rerender: "Re-render" }));
           top.append(...A(lab("SAM"),
                      sel(L.samModels, s.sam_model,
                          L.samModels.length

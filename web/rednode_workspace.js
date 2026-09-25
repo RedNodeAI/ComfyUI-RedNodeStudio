@@ -8148,7 +8148,10 @@ export function rigTargets(cfg) {
     return { kind: "rig", rigName: name, node: { id: "rig:" + name, widgets: [] } };
   });
 }
-export const allPaintChoices = (cfg) => [...paintTargets(), ...rigTargets(cfg)];
+// RE-RENDER AS THE ENGINE: the Re-render tab's recipe on the paint, through the
+// built-in door like a rig choice, with no rig behind it (you, 2026-09-25)
+export const rerenderTarget = () => ({ kind: "rerender", node: { id: "rerender", widgets: [] } });
+export const allPaintChoices = (cfg) => [...paintTargets(), ...rigTargets(cfg), rerenderTarget()];
 
 // Nodes that only carry a picture from one place to another. A paint chain named after
 // one of these comes out as "VAE Decode", which answers nothing: this row is asked
@@ -8254,6 +8257,7 @@ function rendererLabel(t) {
 // kind, which is the usual graph, so it is only spent on telling two identical labels
 // apart: two Paint Ins on the same engine, or two chains nobody has wired yet.
 export function rendererName(t) {
+  if (t?.kind === "rerender") return "Re-render (the Re-render tab's recipe)";
   if (t?.kind === "rig") return "Built-in: " + t.rigName;
   let label = "";
   try {
@@ -8272,23 +8276,26 @@ export function rendererName(t) {
 
 function chosenTarget(cfg) {
   const found = allPaintChoices(cfg);
-  if (!found.length) return null;
   const P = cfg?.paint || {};
   const byId = found.find((t) => String(t.node.id) === String(P.renderer ?? ""));
   if (byId) return byId;
+  // RE-RENDER IS A CHOICE YOU MAKE, never a fallback: with no renderer node and no
+  // rig, the answer is still "nothing to paint with", not a quiet conversion
+  const real = found.filter((t) => t.kind !== "rerender");
+  if (!real.length) return null;
   // The id it pointed at is gone. Deleting a node and putting a fresh one back is an
   // ordinary thing to do and ComfyUI hands out a new id every time, so an id on its own
   // is not a durable way to record a choice. The NAME is: you renamed that node after
   // what is inside it precisely so you would recognise it again.
   const name = String(P.renderer_name ?? "");
-  const byName = name && found.find((t) => rendererName(t) === name);
+  const byName = name && real.find((t) => rendererName(t) === name);
   if (byName) return byName;
   // A node you never renamed is called "Paint In (own chain) #8408", id and all, so its
   // name cannot outlive the id either. Its KIND can: if the choice was a bridge, land
   // on a bridge rather than silently switching to a Paint Render, which is a different
   // renderer producing different pictures.
   const kind = String(P.renderer_kind ?? "");
-  return (kind && found.find((t) => t.kind === kind)) || found[0];
+  return (kind && real.find((t) => t.kind === kind)) || real[0];
 }
 
 /**
@@ -8405,7 +8412,7 @@ async function paintGenerate(node) {
         + "finds.");
     return;
   }
-  if (picked.kind === "rig") {
+  if (picked.kind === "rig" || picked.kind === "rerender") {
     // THE BUILT-IN DOOR: queue the workspace itself. The run token lives only in
     // the QUEUED copy of the config, never the saved one, so an ordinary queue can
     // never repaint by accident.
@@ -18402,8 +18409,11 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
   const L = MODEL_LISTS || {};
   const open = (node._rnRealismOpen ||= { recipe: false, engine: false, photo: false });
-  const card = sectionCard("REALISM", "#8ad2f0",
-    !R.on ? "off" : (R.engine === "alternative" ? "Loose \u00b7 "
+  // THE RECIPE SHOWS WHETHER OR NOT THE SWITCH IS ON: the Detailer's Re-render
+  // passes read this page's recipe with the switch off, so hiding it behind the
+  // switch hid the settings those passes run on (you, 2026-09-25)
+  const card = sectionCard("RE-RENDER", "#8ad2f0",
+    (R.on ? "" : "Off \u00b7 ") + (R.engine === "alternative" ? "Loose \u00b7 "
                      : R.photo ? "Photo finish \u00b7 " : "Faithful \u00b7 ")
             + (R.lora ? R.lora.replace(/\.safetensors$/i, "") : "no LoRA chosen")
             // the summary names the SET, since which one runs is the thing you
@@ -18417,18 +18427,19 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
   row0.className = "rn-ws-row";
   const sw = document.createElement("div");
   sw.className = "rn-ws-sw" + (R.on ? " on" : "");
-  sw.title = "On: the Editor's source picture is converted into a photograph. "
-           + "Off: nothing converted.";
+  sw.title = "On: the picture is rendered again from itself with this recipe. "
+           + "Off: nothing re-rendered here; the recipe below still serves the "
+           + "Detailer's Re-render passes.";
   sw.onclick = () => { R.on = !R.on; writeCfg(node); render(node); };
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   lab.textContent = !R.on
-    ? "Anything to real: convert the Editor's source picture into a photograph."
-    : "The source is converted" + edFlow(node._rnCfg);
+    ? "Off here. The recipe below is still what the Detailer's Re-render passes run on."
+    : "The picture is re-rendered" + edFlow(node._rnCfg);
   row0.append(sw, lab);
   card.appendChild(row0);
 
-  if (R.on) {
+  {
     const grid = () => {
       const g = document.createElement("div");
       g.style.cssText = "display:grid;grid-template-columns:auto 1fr;gap:6px 10px;"
