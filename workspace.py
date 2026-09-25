@@ -1116,6 +1116,9 @@ def parse_config(config_json):
             "mask": str(t.get("mask") or ""),
             "random": bool(t.get("random")),
             "auto": _normalise_auto(t.get("auto"), default_mode),
+            # a slot for a personal-only extension's settings on this tab, kept as
+            # written; the shipped pack reads nothing in it (2026-09-25)
+            "local": t.get("local") if isinstance(t.get("local"), dict) else {},
         }
         if name == "subject":
             # THE OTHER PEOPLE, picked in order in the same gallery: person 2, 3 and on.
@@ -1874,6 +1877,11 @@ _RIG_CACHE = {"slots": []}     # newest first: {key, model, clip, vae}
 # or None. On a public install this dict is empty and such kinds simply do
 # not exist: the toggle never offers them and the parse folds them to files.
 RIG_KIND_HANDLERS = {}
+# STEPS ON THE IMG2IMG SOURCE, registered by a personal-only extension: each is
+# called with (cfg, image) once the source picture is picked and before it is
+# encoded, and hands back the picture to go on with. The shipped pack registers
+# none. A step that raises is a line, never a failed render.
+SOURCE_STEPS = []
 # why the active rig last failed to load ("" when it loaded, or nothing was asked)
 RIG_LOAD_ERROR = {"text": ""}
 
@@ -3270,6 +3278,16 @@ class RedNodeStudioWorkspace:
                   "sent as a reference", flush=True)
             scene = None
         i2i_img = tab_image("i2i")
+        if i2i_img is not None:
+            for _step in SOURCE_STEPS:
+                try:
+                    _sx = _step(cfg, i2i_img)
+                    if _sx is not None:
+                        i2i_img = _sx
+                except Exception as _se:
+                    print("[RedNode Workspace] a source step failed: %s; the source goes on "
+                          "as it was" % _se, flush=True)
+                    _run.note("A source step failed: %s" % str(_se)[:160], "warn")
 
         mood = None
         mt = tabs["moodboard"]

@@ -1209,6 +1209,8 @@ function buildPanel(node, hostEl = null) {
         return t.charAt(0).toUpperCase() + t.slice(1) + " detailer";
       }
       if (x.type === "realism" && x.realism_tiles) return "Realism tiles";
+      const lk = (window.rnLocalPassKinds || []).find((k) => k.type === x.type);
+      if (lk) return lk.label;
       return ({ sampler: "Sampler pass", upscale: "SeedVR2 upscale", usdu: "Tiled upscale",
                 vosr2: "VOSR2 upscale", reader: "Image to Text",
                 realism: "Realism" })[x.type] || "Pass";
@@ -1377,7 +1379,10 @@ function buildPanel(node, hostEl = null) {
         const sum = document.createElement("span");
         sum.className = "k";
         sum.style.fontSize = "12px";
-        sum.textContent = s.type === "realism"
+        const lkind = (window.rnLocalPassKinds || []).find((k) => k.type === s.type);
+        sum.textContent = lkind
+          ? (lkind.summary ? lkind.summary(s) : lkind.label)
+          : s.type === "realism"
           ? (s.realism_tiles ? "converts the picture in tiles \u00b7 x" + (s.realism_scale ?? 1)
                              : "converts the picture")
             + " · " + (s.realism_engine === "alternative" ? "Loose"
@@ -1731,6 +1736,10 @@ function buildPanel(node, hostEl = null) {
         // it reads the picture. What belongs here is which engines do the reading
         // (you, 2026-09-23), and the words you want combined with what they say.
         readerCard(s, card, group, lab, A, () => { writeCfg(node, d); render(); });
+      } else if (!isFolded && (window.rnLocalPassKinds || []).some((k) => k.type === s.type)) {
+        // A PERSONAL-ONLY KIND: its web file draws the card, its python runs it
+        (window.rnLocalPassKinds || []).find((k) => k.type === s.type)
+          .card(s, card, group, lab, () => { writeCfg(node, d); render(); });
       } else if (!isFolded && s.type === "realism") {
         // REALISM AS A PASS. The Editor page holds the recipe; the card holds what
         // is worth saying per pass, plus the two dials that make a conversion
@@ -2164,6 +2173,8 @@ function buildPanel(node, hostEl = null) {
                                    realism_prompt: "", loras: true, lora_set: "",
                                    realism_tiles: true, realism_scale: 2, realism_tile: 1024,
                                    realism_overlap: 128 }));
+    // kinds a personal-only extension registered, after the pack's own
+    for (const k of window.rnLocalPassKinds || []) mk("＋ " + k.label, k.make);
     mk("＋ Group title", () => ({ type: "title", name: "GROUP", on: true }));
     wrap.appendChild(add);
     const hint = document.createElement("div");

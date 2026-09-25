@@ -76,6 +76,10 @@ format matters: **version** then a date, notes below until the next bold line.
 - Delete takes a picture off the Shelf, the one you are pointing at, leaving the file on
   disk exactly where it was. An empty shelf passes Delete on to ComfyUI, which is how the
   node itself is still removed with the pointer over its panel
+- Room for a private extension: a tab and a Detailer pass can carry settings the pack does not
+  read, a step can run on the Img2Img source before it is encoded, and a pass kind can be
+  registered from outside with its own card. Nothing in the pack uses these; they are empty
+  unless a local file fills them
 - The Workspace can carry a shelf of its own: Shelf column on the Advanced tab puts one on the
   side opposite the rail, the same shelf as the node (drop, drag out, right-click send, Ctrl+C,
   Ctrl+V, Delete), with its pictures kept in that Workspace's config. Off by default; the

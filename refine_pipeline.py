@@ -69,7 +69,7 @@ def parse_pipeline(config_json):
                            "color": str(s.get("color") or "")})
             continue
         if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2",
-                                 "reader", "realism"):
+                                 "reader", "realism") and s.get("type") not in PASS_HANDLERS:
             continue
 
         def _num(key, lo, hi, dv, cast=float):
@@ -128,6 +128,9 @@ def parse_pipeline(config_json):
             "realism_photo": (s["realism_photo"] if s.get("realism_photo") in ("on", "off")
                               else ""),
             "realism_prompt": str(s.get("realism_prompt") or "")[:500],
+            # a registered kind's own settings, kept as the panel wrote them; the
+            # handler reads them, this parse does not
+            "local": s.get("local") if isinstance(s.get("local"), dict) else {},
             # TILES: the conversion a tile at a time, each tile its own reference,
             # so an upscale gets the engine's faithfulness instead of a sampler's
             # habit of drawing the whole prompt into a patch of sky (you,
@@ -923,6 +926,11 @@ from . import run_events as _run_events
 PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
               "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
               "reader": "Image to Text", "realism": "Realism"}
+# PASS KINDS A PERSONAL-ONLY EXTENSION REGISTERS: kind -> {"name", "run"}, where
+# run(detailer, image, stage, ws_cfg, seed, tag, node_id) hands back (image, lines).
+# The shipped pack registers none; the panel learns the kind from the same
+# extension's web file. A registered kind renders nothing here itself.
+PASS_HANDLERS = {}
 WARN_WORDS = ("failed", "missing", "passed through", "not installed",
               "out of memory", "could not", "skipped")
 
@@ -936,6 +944,8 @@ def pass_name(s):
     if s.get("type") == "detailer":
         t = str(s.get("target") or "face").strip() or "face"
         return "%s detailer" % (t[:1].upper() + t[1:])
+    if s.get("type") in PASS_HANDLERS:
+        return str(PASS_HANDLERS[s["type"]].get("name") or s["type"])
     return PASS_NAMES.get(s.get("type"), str(s.get("type") or "pass").capitalize())
 
 
@@ -1165,6 +1175,23 @@ class RedNodeStudioDetailer:
                     line = "%s: free VRAM failed: %s" % (tag, exc)
                 _say(line)
                 report.append(line)
+            if s["type"] in PASS_HANDLERS:
+                # A REGISTERED KIND: the extension's own run, on the picture as it
+                # stands; nothing here loads a rig for it
+                try:
+                    out2, lines = PASS_HANDLERS[s["type"]]["run"](
+                        self, out, s, ws_cfg, seed + i, tag, unique_id)
+                    if out2 is not None:
+                        out = out2
+                except Exception as exc:
+                    lines = ["%s failed: %s; the picture is passed through" % (tag, exc)]
+                for line in lines or []:
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d %s" % (i, s["type"]))
+                continue
             if s["type"] == "realism":
                 # RENDERS ON ITS OWN ENGINE, not the pass rig: the conversion loads
                 # the files the Editor's page names (or the active rig's), the way

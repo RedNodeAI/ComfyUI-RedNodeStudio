@@ -1665,6 +1665,8 @@ function normExtra(list, main, imagesLen) {
   return out;
 }
 function mirrorActive(t, name) {
+  // a personal-only extension's own settings on this tab, kept as they are
+  if (!t.local || typeof t.local !== "object") t.local = {};
   const g = activeGroup(t, name);
   t.images = g.images;
   t.sel = normSel(name, g.sel, g.images.length);
@@ -15800,6 +15802,8 @@ function i2iTabs(node, body) {
       batchStrip(node, "i2i", body, i2iBatchOpts(node));
     }
     i2iQuickDials(node, body, t);
+    // a personal-only extension may add its own card under the source
+    window.rnLocalSourceUI?.(node, body, t, { write: () => writeCfg(node), redraw: () => render(node) });
   }
   else if (sub === "passes") passesTab(node, body);
   else i2iAutoPage(node, body);
