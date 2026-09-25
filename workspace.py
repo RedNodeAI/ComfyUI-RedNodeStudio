@@ -1982,12 +1982,20 @@ def apply_shelf_override(cfg, rec):
         # send switches its tab on; an override onto a switched-off tab would do
         # nothing at all and look like the switch was broken
         t["on"] = True
-        if name == "editor_src":
+        if name == "i2i":
+            # the shelf picture IS the source: a tab left on Prompt only or on a
+            # wired canvas would ignore the gallery it was just handed
+            t["prompt_only"] = False
+            t["canvas"] = "gallery"
+        if name == "editor_src" and "i2i" not in rec["tabs"]:
             # THE SHELF PICTURE IS THE PICTURE, whichever way the Picture choice
             # points: a Tools or Re-render stage set to New render kept waiting
             # for a render while the override only filled the gallery (you,
             # 2026-09-25). For this run those stages work the shelf picture as
             # their source, and nothing is rendered first. Not written back.
+            # WITH IMG2IMG TICKED TOO the new render IS the shelf picture, through
+            # the Img2Img pass (the NovelAI rig included), so a stage on New render
+            # keeps working that render; turning it would skip the pass.
             t["from"] = "gallery"
             i2i = cfg["tabs"].get("i2i") or {}
             turned = []

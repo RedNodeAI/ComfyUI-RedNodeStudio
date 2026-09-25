@@ -766,7 +766,8 @@ export function plannedStages(node, cfg) {
   if (captions) out.push(["captions", "Captions"]);
   const internal = cfg.models?.sampler_mode === "internal";
   const I = tabs.i2i || {};
-  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
+  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery"
+                                            || !!overrideEntryFor(cfg, "i2i"));
   // THE EDITOR'S SOURCE STAGES, in the order workspace.py runs them, on the Editor's
   // own picture. They need that picture, not Img2Img; their result IS the output, so
   // with the built-in sampler no encode, pass or decode follows them.
@@ -774,8 +775,9 @@ export function plannedStages(node, cfg) {
   // a shelf override on the Tools source is the picture, and turns the on stages
   // onto it for the run (apply_shelf_override), so the plan says the same
   const ovr = !!overrideEntryFor(cfg, "editor_src");
+  const ovrTurn = ovr && !overrideEntryFor(cfg, "i2i");   // Img2Img ticked too: the render is the shelf picture
   const edPic = ovr || (tabs.editor_src?.images?.length || 0) > 0;
-  const onSrc = (X) => !!(X?.on && (ovr || (X.target || "source") === "source"));
+  const onSrc = (X) => !!(X?.on && (ovrTurn || (X.target || "source") === "source"));
   const edRuns = edPic && [RA, I.realism, I.swap].some(onSrc);
   if (edPic && onSrc(RA)) out.push(["reangle", "Re-angle"]);
   if (edPic && onSrc(I.realism)) out.push(["realism", "Re-render"]);
@@ -794,13 +796,13 @@ export function plannedStages(node, cfg) {
   }
   // a swap on the render runs whatever the pass mode (workspace.py swaps the
   // finished render), so Prompt only does not stand it down
-  if (RA.on && RA.target === "render" && !ovr) {
+  if (RA.on && RA.target === "render" && !ovrTurn) {
     out.push(["reangle", "Re-angle"]);
     if (RA.polish !== false && internal) out.push(["reangle_polish", "Re-angle polish"]);
   }
-  if (I.realism?.on && I.realism.target === "render" && !ovr) out.push(["realism", "Re-render"]);
+  if (I.realism?.on && I.realism.target === "render" && !ovrTurn) out.push(["realism", "Re-render"]);
   const SW = tabs.i2i?.swap || {};
-  if (SW.on && SW.target === "render" && !ovr) {
+  if (SW.on && SW.target === "render" && !ovrTurn) {
     out.push(["swap", "Swap"]);
     if (SW.polish !== false && internal) out.push(["swap_polish", "Swap polish"]);
   }
@@ -858,7 +860,8 @@ export const autoPageOf = (tabName) => (
 
 function passesPage(cfg) {
   const I = cfg.tabs?.i2i || {};
-  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery");
+  const i2iRun = I.on && !I.prompt_only && ((I.images?.length || 0) > 0 || I.canvas !== "gallery"
+                                            || !!overrideEntryFor(cfg, "i2i"));
   return i2iRun ? { tab: "i2i", sub: "passes" } : { tab: "latent", sub: "passes" };
 }
 

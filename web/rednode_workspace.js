@@ -15687,13 +15687,18 @@ function editorPics(cfg) {
   return e ? [e] : (cfg.tabs?.editor_src?.images || []);
 }
 const editorOverridden = (cfg) => !!overrideEntryFor(cfg, "editor_src");
+// ...and turned onto it: only when Img2Img is not covered too, since then the new
+// render is the shelf picture through the Img2Img pass and a stage on New render
+// keeps working that render
+const editorTurned = (cfg) => editorOverridden(cfg) && !overrideEntryFor(cfg, "i2i");
 
 function i2iSubLit(cfg, id) {
   const t = cfg.tabs.i2i;
   const E = cfg.tabs.editor_src;
   const edPic = !!editorPics(cfg).length;
   if ((id === "source" || id === "passes") && t.on && !t.prompt_only && i2iSkipped(t, E)) return "skip";
-  if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"));
+  if (id === "source") return !!(t.on && (t.images.length || t.canvas !== "gallery"
+                                          || overrideEntryFor(cfg, "i2i")));
   if (id === "passes") return !!(t.on && !t.prompt_only);
   if (id === "auto") return !!(t.on && t.auto?.on) || TEXT_TAB_IDS.some((x) => textTabLit(cfg, x));
   // the Editor's stages: on the render they need nothing more, on the source a picture
@@ -16208,8 +16213,10 @@ function rerenderTabs(node, body) {
   const fn = document.createElement("span");
   fn.className = "rn-ws-note";
   fn.style.flex = "1 1 240px";
-  fn.textContent = editorOverridden(cfg)
+  fn.textContent = editorTurned(cfg)
     ? "A shelf override is on: its picked picture is re-rendered this run, whichever is chosen here, and is the image output."
+    : editorOverridden(cfg)
+    ? "A shelf override is on for Img2Img and the Tools source: New render re-renders the render made from its picture, Tools source re-renders the picture itself."
     : R.target === "render"
     ? "The render is made first, then re-rendered from itself."
     : (E.images?.length ? "The Tools source picture is re-rendered and is the image output."
