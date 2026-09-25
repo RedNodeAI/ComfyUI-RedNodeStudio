@@ -57,6 +57,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- The live picture and the run log say Re-render while the engine samples, and its messages
+  name the Re-render tab; they still said Realism
 - The Re-render tab shows its recipe whether or not its switch is on, since the Detailer's
   Re-render passes run on that recipe with the switch off; its section is named Re-render
 - Re-render is a Model choice on the Paint tab. Picked there, Generate runs the Re-render

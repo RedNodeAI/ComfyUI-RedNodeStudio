@@ -423,7 +423,7 @@ def _render_alternative(rc, source, model, clip, vae, seed, node_id):
         ref_boost_a=rc["boost"], target_latent=latent, fit_mode="fit",
         ref_t0_modulation=True, system_prompt=rc["system"])[0]
     negative = _call("CLIPTextEncode", clip=clip, text="")[0]
-    return alt_sampler_for(node_id, "realism")(
+    return alt_sampler_for(node_id, "re-render")(
         model, int(seed), int(rc["steps"]), float(rc["cfg"]), rc["sampler"],
         rc["scheduler"], positive, negative, latent, denoise=float(rc["denoise"]))
 
@@ -476,11 +476,11 @@ def _render(rc, source, cfg, seed, node_id=None):
             rc = dict(rc, lora=name, lora_sha256=digest or rc.get("lora_sha256", ""))
     # what can be refused without loading anything comes first
     if not str(rc["lora"] or "").strip():
-        raise ValueError("no conversion LoRA is chosen on the Realism page, and none "
+        raise ValueError("no conversion LoRA is chosen on the Re-render tab, and none "
                          "was found by hash either: pick one first.")
     need = missing(rc)
     if need:
-        raise ValueError("Realism needs %s, which this ComfyUI does "
+        raise ValueError("Re-render needs %s, which this ComfyUI does "
                          "not have" % ", ".join(need))
 
     from . import workspace as _ws
@@ -510,7 +510,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     if rc["loras"]:
         try:
             lc = _ws.lora_set_cfg(cfg, rc["lora_set"] or _ws.rig_lora_set(cfg),
-                                  "Realism") or {}
+                                  "Re-render") or {}
         except Exception:
             lc = {}
     conv_now = not (rc["photo"] and rc["engine"] != "alternative")
@@ -533,7 +533,7 @@ def _render(rc, source, cfg, seed, node_id=None):
                     model, clip, _lora.CUSTOM_SENTINEL,
                     json.dumps({"ui": lc.get("ui") or {}, "slots": slots}),
                     int(lc.get("seed", 0) or 0), None,
-                    tag="Realism LoRAs (%s)" % lc.get("name", ""))
+                    tag="Re-render LoRAs (%s)" % lc.get("name", ""))
                 clip = _c2 if _c2 is not None else clip
                 # NAME THE SET. The page picks one now, so "the stack" is no longer
                 # one thing, and which set ran is the first thing worth knowing when
@@ -595,7 +595,7 @@ def _render(rc, source, cfg, seed, node_id=None):
           % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["cfg"],
              rc["sampler"], rc["scheduler"], rc["vl_size"], rc["round_to"]), flush=True)
     # core's KSampler node returns a one-tuple; the latent is its first item
-    out = sampler_for(node_id, "realism")(
+    out = sampler_for(node_id, "re-render")(
         model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
         negative=negative, latent_image=latent, denoise=float(rc["denoise"]))[0]
@@ -643,7 +643,7 @@ def _render_ostris(rc, img, model, clip, vae, seed, node_id, rig_name):
     print("[RedNode Re-render] %s on %s, Ostris encoder: %d steps, %s / %s, shift %s"
           % (rc["lora"], rig_name or "the active rig", rc["steps"], rc["sampler"],
              rc["scheduler"], rc["shift"]), flush=True)
-    out = sampler_for(node_id, "realism")(
+    out = sampler_for(node_id, "re-render")(
         model=model, seed=int(seed), steps=int(rc["steps"]), cfg=float(rc["cfg"]),
         sampler_name=rc["sampler"], scheduler=rc["scheduler"], positive=positive,
         negative=negative, latent_image=latent, denoise=float(rc["denoise"]))[0]
@@ -673,7 +673,7 @@ def _render_photo(rc, img, model, clip, vae, seed, node_id, rig_name):
           % (rc["lora"], rig_name or "the active rig", split, rc["photo_strength1"],
              rc["photo_sampler1"], split, steps, rc["photo_strength2"],
              rc["photo_sampler2"], rc["photo_scheduler"], rc["shift"]), flush=True)
-    run = sampler_for(node_id, "realism", node="KSamplerAdvanced")
+    run = sampler_for(node_id, "re-render", node="KSamplerAdvanced")
     common = dict(add_noise="enable", noise_seed=int(seed), steps=steps,
                   cfg=float(rc["cfg"]), scheduler=rc["photo_scheduler"],
                   positive=positive, negative=negative,
