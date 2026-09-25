@@ -57,6 +57,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A Detailer card wears the colour of the button that made it, on its title line and its left
   edge, with its number in the run order at the front and more room between cards, so the list
   reads as passes rather than one grey wall
+- A shelf override on the Tools source is the picture whichever way the Picture choice points:
+  a Re-render, Re-angle or Swap set to New render works the shelf picture for that run, with no
+  render first. It only filled the gallery before, and a stage on New render kept waiting
 - Switch sounds, an option on the Advanced tab, off by default: a small click when a page's
   power button flips, two quick notes up for on and one low note down for off, drawn on the
   spot with no file

@@ -1982,6 +1982,25 @@ def apply_shelf_override(cfg, rec):
         # send switches its tab on; an override onto a switched-off tab would do
         # nothing at all and look like the switch was broken
         t["on"] = True
+        if name == "editor_src":
+            # THE SHELF PICTURE IS THE PICTURE, whichever way the Picture choice
+            # points: a Tools or Re-render stage set to New render kept waiting
+            # for a render while the override only filled the gallery (you,
+            # 2026-09-25). For this run those stages work the shelf picture as
+            # their source, and nothing is rendered first. Not written back.
+            t["from"] = "gallery"
+            i2i = cfg["tabs"].get("i2i") or {}
+            turned = []
+            for k in ("reangle", "realism", "swap"):
+                st = i2i.get(k)
+                if isinstance(st, dict) and st.get("on") and st.get("target") == "render":
+                    st["target"] = "source"
+                    turned.append({"reangle": "Re-angle", "realism": "Re-render",
+                                   "swap": "Swap"}[k])
+            if turned:
+                print("[RedNode Workspace] the shelf overrides the Tools source, so %s "
+                      "work(s) the shelf picture this run instead of a new render"
+                      % ", ".join(turned), flush=True)
         done.append(name)
     if done:
         print("[RedNode Workspace] the shelf on node %s overrides %s with %r"
