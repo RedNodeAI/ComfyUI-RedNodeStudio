@@ -6604,6 +6604,30 @@ function loraPresetRow(node, body, stack = null) {
   }
 }
 
+// WHICH SET THE RENDER USES. Mirrors workspace.py exactly: prompt_row_for picks the
+// chosen Prompts row when it has words, else the first row with words; that row's
+// LoRA set wins when it names one, else the active rig's, else Main. A set name that
+// no longer exists falls back to Main (lora_set_cfg). The page showed the set being
+// EDITED, so a LoRA added on one tab while another rendered looked like a routing bug.
+function renderLoraSet(cfg) {
+  const rows = cfg.prompts?.rows || [];
+  const words = (r) => String(r?.text || "").trim().length > 0;
+  const pick = Number.isInteger(cfg.prompts?.active) ? rows[cfg.prompts.active] : null;
+  const row = (pick && words(pick)) ? pick : (rows.find(words) || null);
+  const rigs = cfg.models?.rigs || [];
+  const rig = rigs.length ? rigs[Math.max(0, Math.min(cfg.models?.active || 0, rigs.length - 1))] : null;
+  const known = (n) => !n || n === MAIN_SET || (cfg.lora_sets || []).some((st) => st.name === n);
+  let name = "", why;
+  const rowSet = String(row?.lora_set || "").trim();
+  const rigSet = String(rig?.lora_set || "").trim();
+  if (rowSet) { name = rowSet; why = "the prompt \u201c" + (row.name || "") + "\u201d picks it"; }
+  else if (rigSet) { name = rigSet; why = "the rig \u201c" + (rig.name || "") + "\u201d picks it"; }
+  else why = "neither the prompt nor the rig picks a set";
+  if (!known(name)) { why = "the set \u201c" + name + "\u201d is gone, so Main"; name = ""; }
+  if (name === MAIN_SET) name = "";
+  return { name, why };
+}
+
 function lorasBody(node, body) {
   const cfg = node._rnCfg;
   // THE SET TABS: Main first, then every named set, then +. Which one is open
@@ -6615,6 +6639,7 @@ function lorasBody(node, body) {
   if (curName && !cfg.lora_sets.some((st) => st.name === curName)) curName = "";
   const curSet = curName ? cfg.lora_sets.find((st) => st.name === curName) : null;
   const L = curSet || cfg.loras;
+  const rendering = renderLoraSet(cfg);
   {
     const tabs = document.createElement("div");
     tabs.className = "rn-ws-tabs";
@@ -6624,6 +6649,15 @@ function lorasBody(node, body) {
       const t = document.createElement("div");
       t.className = "rn-ws-tab g-model" + (name === curName ? " cur" : "");
       t.textContent = label;
+      if (name === rendering.name) {
+        // a green dot on the set this render reads, the tab rail's own light
+        const dot = document.createElement("span");
+        dot.className = "rn-ws-renderdot";
+        dot.style.cssText = "display:inline-block;width:7px;height:7px;border-radius:50%;"
+          + "background:#22c55e;margin-left:8px;vertical-align:middle";
+        dot.title = "The render uses this set.";
+        t.appendChild(dot);
+      }
       t.title = name ? "The set \"" + name + "\": its own stack. Double-click to rename."
                      : "Main: the first set. Rigs run with it unless they pick another.";
       t.onclick = () => {
@@ -6670,6 +6704,17 @@ function lorasBody(node, body) {
     };
     tabs.appendChild(add);
     body.appendChild(tabs);
+    const rs = rendering.name ? cfg.lora_sets.find((st) => st.name === rendering.name) : cfg.loras;
+    const off = rs && rs.on === false;
+    const n = ((rs?.slots) || []).filter((x) => x.type !== "title" && x.enabled !== false
+      && x.name && x.name !== "None").length;
+    const line = document.createElement("div");
+    line.className = "rn-ws-note rn-ws-renderset" + (rendering.name !== curName ? " warn" : "");
+    line.textContent = "The render uses " + (rendering.name || MAIN_SET)
+      + (off ? ", which is off, so no LoRAs" : ": " + n + " LoRA" + (n === 1 ? "" : "s") + " on")
+      + " (" + rendering.why + ")."
+      + (rendering.name !== curName ? " You are editing another set." : "");
+    body.appendChild(line);
   }
 
   const row = document.createElement("div");
