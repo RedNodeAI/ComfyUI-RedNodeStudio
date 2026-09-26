@@ -203,6 +203,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- Plain text encode, a switch on a Krea 2 rig beside Official Krea 2 model. On, the rig encodes
+  with core's CLIP Text Encode instead of the Studio encoder, so a render follows the same
+  route as a plain CLIP, LoRA, KSampler workflow and matches it. Off by default
 - After a run the Workspace no longer shrinks to a strip over a black area. The frontend added
   its own image preview to the node and never took it away until the workflow was reloaded
 - Re-render runs on the rig marked Official Krea 2 model, whichever rig is active, so a Qwen 2.1

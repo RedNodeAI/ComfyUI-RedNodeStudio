@@ -1364,7 +1364,7 @@ class RedNodeStudioDetailer:
             # politely ignored, the same rule the Paint tab follows.
             refs_wanted = (s["use_subject"] or s["use_scene"]
                            or s["use_moodboard"] or s["use_picture"])
-            rig_is_krea2 = rig.get("clip_type") == "krea2"
+            rig_is_krea2 = rig.get("clip_type") == "krea2" and not rig.get("plain_encode")
             if refs_wanted and not rig_is_krea2:
                 _say("references are Krea 2 conditioning and "
                      "rig %r is not a Krea 2 rig; encoding plain text"

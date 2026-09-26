@@ -1498,6 +1498,10 @@ def parse_config(config_json):
             # system was trained on; None until set, then the file name decides
             "official": (bool(r.get("official")) if isinstance(r.get("official"), bool)
                          else None),
+            # PLAIN TEXT ENCODE: a Krea 2 rig encodes with core's CLIP Text Encode
+            # instead of the Studio encoder, so a render matches a plain
+            # CLIP > LoRA > KSampler workflow. Off by default; no identity refs then.
+            "plain_encode": bool(r.get("plain_encode")),
             "rescue": bool(r.get("rescue")),
             "rescue_base": str(r.get("rescue_base") or ""),
             "rescue_lora": str(r.get("rescue_lora") or ""),
@@ -3055,7 +3059,7 @@ class RedNodeStudioWorkspace:
                      style_strength, workspace):
         """A pass rig's own conditioning, for a rig with another text encoder: the same
         encode the run uses, by that rig's model family."""
-        if rec.get("clip_type") == "krea2":
+        if rec.get("clip_type") == "krea2" and not rec.get("plain_encode"):
             from .rednode import Krea2RedNode
             return Krea2RedNode().encode(
                 clip, text, studio_preset or CUSTOM_SENTINEL,
@@ -4599,8 +4603,13 @@ class RedNodeStudioWorkspace:
         # Krea 2 encoder is a hard error about a model nobody chose.
         _rigs_now = cfg["models"]["rigs"]
         _rig_is_krea2 = (not _rigs_now
-                         or _rigs_now[cfg["models"]["active"]].get("clip_type")
-                         == "krea2")
+                         or (_rigs_now[cfg["models"]["active"]].get("clip_type")
+                             == "krea2"
+                             and not _rigs_now[cfg["models"]["active"]].get("plain_encode")))
+        if _rigs_now and _rigs_now[cfg["models"]["active"]].get("plain_encode"):
+            print("[RedNode Workspace] rig %r: plain text encode, core's CLIP Text Encode; "
+                  "the Studio encoder, its preset and the Subject and Scene references sit out"
+                  % _rigs_now[cfg["models"]["active"]].get("name"), flush=True)
         if (_rigs_now and _rig_is_krea2 and (subject is not None or scene is not None)
                 and not rig_is_official(_rigs_now[cfg["models"]["active"]])):
             print("[RedNode Workspace] identity: the rig '%s' is not marked as the "

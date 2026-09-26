@@ -11965,6 +11965,7 @@ export function applyFamily(node, fam, picks, asNew) {
     scheduler: R.scheduler,
   });
   if (typeof R.official === "boolean") rig.official = R.official;
+  // Setup rewrites the files and numbers only; a plain encode chosen stays
   writeCfg(node);
 }
 
@@ -16321,6 +16322,30 @@ function officialRow(node, body, rig) {
     + (typeof rig.official === "boolean" ? "" : " Guessed from the file name.");
   r.append(sw, l, n);
   body.appendChild(r);
+  // PLAIN TEXT ENCODE: core's CLIP Text Encode instead of the Studio encoder, so
+  // the rig renders the way a plain CLIP > LoRA > KSampler workflow does
+  const pon = !!rig.plain_encode;
+  const p = document.createElement("div");
+  p.className = "rn-ws-row rn-ws-officialrow";
+  p.style.flexWrap = "wrap";
+  const psw = document.createElement("button");
+  psw.className = "rn-ws-sw" + (pon ? " on" : "");
+  psw.dataset.choice = "plain_encode";
+  psw.title = "Encode the prompt with core's CLIP Text Encode instead of the Studio encoder.";
+  psw.onclick = () => { rig.plain_encode = !pon; writeCfg(node); render(node); };
+  const pl = document.createElement("span");
+  pl.className = "rn-ws-swlabel";
+  pl.style.fontWeight = "600";
+  pl.textContent = "Plain text encode";
+  const pn = document.createElement("span");
+  pn.className = "rn-ws-note";
+  pn.style.flex = "1 1 220px";
+  pn.textContent = pon
+    ? "CLIP Text Encode, the LoRAs, the sampler, the picture: the same route as a plain "
+      + "workflow. The Studio preset and the Subject and Scene references sit out."
+    : "Off: the Studio encoder, with the Studio preset and the identity references.";
+  p.append(psw, pl, pn);
+  body.appendChild(p);
 }
 
 // The warning on Krea 2 Identity when the render's rig is not the official model
