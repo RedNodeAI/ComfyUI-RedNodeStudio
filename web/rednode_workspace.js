@@ -6628,6 +6628,22 @@ function renderLoraSet(cfg) {
   return { name, why };
 }
 
+// THE TAB YOU SEE IS THE SET THAT RENDERS (you, 2026-09-26). Picking a tab writes
+// the choice where the run reads it: the rendering prompt's Linked LoRAs when that
+// names a set, else the active rig's LoRA set. False when there is nowhere to write.
+function setRenderLoraSet(cfg, name) {
+  const rows = cfg.prompts?.rows || [];
+  const words = (r) => String(r?.text || "").trim().length > 0;
+  const pick = Number.isInteger(cfg.prompts?.active) ? rows[cfg.prompts.active] : null;
+  const row = (pick && words(pick)) ? pick : (rows.find(words) || null);
+  const rigs = cfg.models?.rigs || [];
+  const rig = rigs.length ? rigs[Math.max(0, Math.min(cfg.models?.active || 0, rigs.length - 1))] : null;
+  if (row && String(row.lora_set || "").trim()) { row.lora_set = name || MAIN_SET; return true; }
+  if (rig) { rig.lora_set = name || ""; return true; }
+  if (row) { row.lora_set = name || MAIN_SET; return true; }
+  return false;
+}
+
 function lorasBody(node, body) {
   const cfg = node._rnCfg;
   // THE SET TABS: Main first, then every named set, then +. Which one is open
@@ -6635,6 +6651,11 @@ function lorasBody(node, body) {
   // set is what the seed row, the preset row and the panel below edit.
   if (!Array.isArray(cfg.lora_sets)) cfg.lora_sets = [];
   if (node._rnLoraSet === undefined) node._rnLoraSet = String(node.properties?.rn_lora_set || "");
+  // the page opens on the set the render uses, whenever a rig or a prompt decides it
+  if ((cfg.models?.rigs || []).length || (cfg.prompts?.rows || []).length) {
+    node._rnLoraSet = renderLoraSet(cfg).name;
+    (node.properties ||= {}).rn_lora_set = node._rnLoraSet;
+  }
   let curName = node._rnLoraSet;
   if (curName && !cfg.lora_sets.some((st) => st.name === curName)) curName = "";
   const curSet = curName ? cfg.lora_sets.find((st) => st.name === curName) : null;
@@ -6658,9 +6679,11 @@ function lorasBody(node, body) {
         dot.title = "The render uses this set.";
         t.appendChild(dot);
       }
-      t.title = name ? "The set \"" + name + "\": its own stack. Double-click to rename."
-                     : "Main: the first set. Rigs run with it unless they pick another.";
+      t.title = (name ? "The set \"" + name + "\": its own stack. Double-click to rename. "
+                      : "Main: the first set. ")
+        + "Picking a tab makes the render use it.";
       t.onclick = () => {
+        if (setRenderLoraSet(cfg, name)) writeCfg(node);
         node._rnLoraSet = name; (node.properties ||= {}).rn_lora_set = name; render(node);
       };
       if (name) {
@@ -6674,6 +6697,7 @@ function lorasBody(node, body) {
           if (st) st.name = nn;
           // every place that named the old set follows the rename
           for (const r of cfg.models?.rigs || []) if (r.lora_set === name) r.lora_set = nn;
+          for (const r of cfg.prompts?.rows || []) if (r.lora_set === name) r.lora_set = nn;
           if (cfg.paint?.lora_set === name) cfg.paint.lora_set = nn;
           node._rnLoraSet = nn; (node.properties ||= {}).rn_lora_set = nn;
           writeCfg(node); render(node);
@@ -6699,6 +6723,7 @@ function lorasBody(node, body) {
         alert("There is already a set called \"" + typed + "\"."); return;
       }
       cfg.lora_sets.push({ name: typed, slots: [], ui: {}, seed: 0 });
+      setRenderLoraSet(cfg, typed);
       node._rnLoraSet = typed; (node.properties ||= {}).rn_lora_set = typed;
       writeCfg(node); render(node);
     };
@@ -6709,11 +6734,10 @@ function lorasBody(node, body) {
     const n = ((rs?.slots) || []).filter((x) => x.type !== "title" && x.enabled !== false
       && x.name && x.name !== "None").length;
     const line = document.createElement("div");
-    line.className = "rn-ws-note rn-ws-renderset" + (rendering.name !== curName ? " warn" : "");
+    line.className = "rn-ws-note rn-ws-renderset" + (off ? " warn" : "");
     line.textContent = "The render uses " + (rendering.name || MAIN_SET)
       + (off ? ", which is off, so no LoRAs" : ": " + n + " LoRA" + (n === 1 ? "" : "s") + " on")
-      + " (" + rendering.why + ")."
-      + (rendering.name !== curName ? " You are editing another set." : "");
+      + " (" + rendering.why + "). Pick another tab to render with it.";
     body.appendChild(line);
   }
 
@@ -6753,6 +6777,7 @@ function lorasBody(node, body) {
       if (!confirm("Delete the set \"" + curSet.name + "\" and its stack?")) return;
       cfg.lora_sets = cfg.lora_sets.filter((st) => st !== curSet);
       for (const r of cfg.models?.rigs || []) if (r.lora_set === curSet.name) r.lora_set = "";
+      for (const r of cfg.prompts?.rows || []) if (r.lora_set === curSet.name) r.lora_set = "";
       if (cfg.paint?.lora_set === curSet.name) cfg.paint.lora_set = "";
       node._rnLoraSet = ""; (node.properties ||= {}).rn_lora_set = "";
       writeCfg(node); render(node);

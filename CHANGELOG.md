@@ -203,9 +203,11 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
-- The LoRAs page says which set the render uses and why (the prompt's pick, the rig's, or
-  Main), with a green dot on that set's tab and a note when another set is open for editing.
-  The page used to show only the set being edited, so a LoRA added there could look ignored
+- The LoRAs tab you see is the set the render uses. The page opens on it, a green dot marks
+  it, and picking another tab switches the render to that set (written to the prompt's
+  Linked LoRAs when it names one, else to the active rig). A line under the tabs says how
+  many LoRAs are on and why that set. The page used to open on whichever set was last
+  edited, so a LoRA added there could look ignored
 - The seed box on the Models tab takes a typed or pasted seed again. It was locked while
   Random each run was on, which is the default; a seed typed or pasted now pins itself,
   and a paste like "Seed 166462544994824" keeps the digits. The named seeds do the same
