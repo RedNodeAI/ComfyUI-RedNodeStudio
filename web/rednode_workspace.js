@@ -21638,6 +21638,30 @@ function labelStudioPrompt(node) {
   }
 }
 
+// the classic canvas's image preview widget, which must never sit on this node
+const PREVIEW_WIDGET = "$$canvas-image-preview";
+function dropPreviewWidget(node) {
+  const list = node?.widgets;
+  if (!Array.isArray(list)) return false;
+  const i = list.findIndex((w) => w?.name === PREVIEW_WIDGET);
+  if (i < 0) return false;
+  try { list[i].onRemove?.(); } catch (e) { /* the widget is going either way */ }
+  list.splice(i, 1);
+  // give the panel its height back
+  try { node.setSize?.([node.size[0], node.size[1]]); } catch (e) { /* size stays */ }
+  node.graph?.setDirtyCanvas?.(true, true);
+  return true;
+}
+function refusePreviewWidget(node) {
+  if (!node || node._rnNoPreviewWidget || typeof node.addCustomWidget !== "function") return;
+  node._rnNoPreviewWidget = true;
+  const add = node.addCustomWidget;
+  node.addCustomWidget = function (w) {
+    if (w?.name === PREVIEW_WIDGET) return w;
+    return add.apply(this, arguments);
+  };
+}
+
 app.registerExtension({
   name: "RedNode.Workspace",
   // THE LAST NET, after a workflow has finished loading: any Workspace still without
@@ -21722,6 +21746,12 @@ app.registerExtension({
       // panels do. An older frontend that does not know the flag is handled in
       // onExecuted below.
       this.hideOutputImages = true;
+      // THE CANVAS PREVIEW WIDGET: on the classic canvas the frontend (1.52) adds a
+      // "$$canvas-image-preview" widget the first time the node holds a picture and
+      // never takes it away when the picture is cleared. It reserves the lower part
+      // of the node, squeezing the panel to a strip over a black area, until the
+      // workflow is reloaded (switching workflow tabs cleared it). Refused here.
+      refusePreviewWidget(this);
       // a NEW node opens wide, for the rail beside the pages; a loaded one takes
       // its saved size when configure runs after this
       this.setSize([Math.max(this.size?.[0] || 0, 1400), Math.max(this.size?.[1] || 0, 900)]);
@@ -21745,6 +21775,7 @@ app.registerExtension({
       const drop = () => {
         this.imgs = undefined;
         this.images = undefined;
+        dropPreviewWidget(this);
         try {
           const store = app.nodeOutputs;
           if (store && store[this.id]) delete store[this.id];
@@ -21769,6 +21800,8 @@ app.registerExtension({
     const onConfigure = nodeType.prototype.onConfigure;
     nodeType.prototype.onConfigure = function () {
       onConfigure?.apply(this, arguments);
+      refusePreviewWidget(this);
+      dropPreviewWidget(this);
       if (!this._rnWidget) build(this);
       requestAnimationFrame(() => {
         // A configure swaps the config wholesale: the persisted paint canvases may

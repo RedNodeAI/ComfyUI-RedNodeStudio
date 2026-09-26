@@ -203,6 +203,8 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- After a run the Workspace no longer shrinks to a strip over a black area. The frontend added
+  its own image preview to the node and never took it away until the workflow was reloaded
 - Re-render runs on the rig marked Official Krea 2 model, whichever rig is active, so a Qwen 2.1
   or SDXL render re-renders without switching rigs. With no rig marked and a non-Krea 2 rig
   active it stops with a plain message instead of a stack trace. With its own three files
