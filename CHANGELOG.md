@@ -272,9 +272,6 @@ format matters: **version** then a date, notes below until the next bold line.
   folder any more" when the run reached it. A name that climbs out of a folder is still
   refused, and the message now names the folder it actually looked in
 
-- The two Pro Grade looks are now Camera Ready Krea 2 and Camera Ready Z-Image. Same
-  dials, same pictures, new names. A saved copy you made under the old name is your own
-  and is left alone
 - Camera Ready Krea 2, the shipped look, was smoothing more than it needed to. Noise cleanup
   drops from 0.75 to 0.65, the skin pass eases back about a seventh, and the local contrast
   pass comes off. Pores and fabric survive it now. The colour trim is unchanged, and the
