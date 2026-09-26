@@ -614,7 +614,9 @@ class RedNodePaintRender:
         # NO ON SWITCH: a Generate on the Paint tab is a paint run, and nothing else
         # reads the tab (you, 2026-09-26). An old workflow saved with it off still
         # paints; the run token above is what says this is a paint run.
-        if image is None and not pc.get("source"):
+        # no Workspace config reached this node at all: nothing to paint with, so the
+        # wired picture goes back out untouched (the old switch check caught this too)
+        if not pc or (image is None and not pc.get("source")):
             _run.skip("paint", "Paint", "the Paint tab has no picture")
             _say("nothing to render: put a picture on the Paint tab and paint "
                   "something")
