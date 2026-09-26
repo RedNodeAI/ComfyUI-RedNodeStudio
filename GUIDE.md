@@ -331,10 +331,15 @@ attention, so SageAttention does not break them, and each shows its steps on the
 illustration into a photograph, from the Tools tab's source picture or from the new render,
 a **Picture** choice at the top of the page. Switched off, the page keeps its recipe on show. Its Exact engine is the Anything2Real workflow node for node, with
 an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
-Alternative engine is the pack's own and needs no other pack. It finds the conversion LoRA among
-your files by name and hash. A LoRAs-tab set can run underneath the conversion, and the **Set**
-row says which one: left on (rig's set) it follows the Models tab, which is Main unless a rig
-names another. The line under it says what will actually run, so the answer is on the page
+Alternative engine is the pack's own and needs no other pack. It runs on the rig marked
+**Official Krea 2 model** on the Models tab, whichever rig is active, so a Qwen 2.1 or SDXL render
+can be re-rendered without switching rigs; with no rig marked it takes the active one, and says
+so plainly if that is not a Krea 2 rig. **Engine** at the foot of the page can name its own three
+files instead, and then no rig loads at all. When the Tools tab's own picture is the one being
+re-rendered, the active rig is not loaded either, since nothing is rendered from it. It finds
+the conversion LoRA among your files by name and hash. A LoRAs-tab set can run underneath the
+conversion, and the **Set** row says which one: left on (rig's set) it follows the engine's rig,
+which is Main unless that rig names another. The line under it says what will actually run, so the answer is on the page
 rather than in the console after a queue.
 
 ![The Paint tab: the mask on the picture, the result under it, and the paint settings](images/paint.webp)

@@ -3221,7 +3221,20 @@ class RedNodeStudioWorkspace:
         # THE MODELS TAB FILLS WHAT IS NOT WIRED, and it must happen FIRST: the auto
         # prompt's CLIP gen and everything after read `clip`, so a fill that arrived
         # just before the LoRA block left them seeing None. A wired input always wins.
-        if _urt:
+        # A SOURCE EDIT RUN LOADS NO RIG HERE EITHER: the Tools tab's own picture
+        # goes through Re-angle, Re-render or Swap and IS the output, so the active
+        # rig came into RAM for nothing (Qwen 2.1 loaded from disk for a Krea 2
+        # re-render, you, 2026-09-26). Deferred to after the edit, and loaded then
+        # only if no edit landed: no picture on the tab, or the stage failed.
+        _i2i0 = cfg["tabs"]["i2i"]
+        _ed_first = (not _urt and cfg["models"]["sampler_mode"] == "internal"
+                     and not str(cfg["paint"].get("run_token") or "")
+                     and cfg["tabs"]["editor_src"].get("from") == "gallery"
+                     and any((_i2i0.get(_k) or {}).get("on")
+                             and (_i2i0.get(_k) or {}).get("target", "source") == "source"
+                             for _k in ("reangle", "realism", "swap")))
+        _rig_deferred = bool(_ed_first)
+        if _urt or _ed_first:
             # AN UPSCALE RUN LOADS NOTHING HERE. Only a tiled pass wants a rig at
             # all, and the Detailer loads its own per pass
             # (refine_pipeline.py, load_active_rig inside the pass loop), so a
@@ -3627,6 +3640,25 @@ class RedNodeStudioWorkspace:
             else:
                 print("[RedNode Workspace] editor: the external sampler runs as wired, "
                       "with the edited picture on i2i_image", flush=True)
+
+        if _rig_deferred and not _stage_only:
+            # the edit did not land, so this is an ordinary render after all
+            print("[RedNode Workspace] no source edit landed, so the rig loads now",
+                  flush=True)
+            rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg, prompt=prompt)
+            if model is None and rig_model is not None:
+                model = rig_model
+            if clip is None and rig_clip is not None:
+                clip = rig_clip
+            if vae is None and rig_vae is not None:
+                vae = rig_vae
+            if model is not None and _shift0 > 0:
+                model = _dials.apply_shift(model, _shift0)
+                print("[RedNode Workspace] rig %r shift %.2f"
+                      % (_rig0.get("name") or "", _shift0), flush=True)
+        elif _rig_deferred:
+            print("[RedNode Workspace] source edit run: the rig %r stays unloaded"
+                  % rig_name, flush=True)
 
         def _edit_off():
             # the Qwen edit model is done for this run: off the card, kept in RAM

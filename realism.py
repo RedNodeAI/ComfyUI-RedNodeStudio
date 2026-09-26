@@ -428,9 +428,59 @@ def _render_alternative(rc, source, model, clip, vae, seed, node_id):
         rc["scheduler"], positive, negative, latent, denoise=float(rc["denoise"]))
 
 
+def _official_rig(cfg):
+    """The Models-tab rig marked Official Krea 2 model, or None. A bool on the rig
+    decides; unset, the model file's name does (workspace.rig_is_official's rule).
+    Engine rigs (your own nodes, external, a handled kind) load no files, so they
+    never qualify."""
+    for r in (cfg.get("models") or {}).get("rigs") or []:
+        if r.get("kind") in ("node", "external") or r.get("kind") in _handled_kinds():
+            continue
+        off = r.get("official")
+        if off is True or (not isinstance(off, bool)
+                           and "official" in str(r.get("unet") or "").lower()):
+            return r
+    return None
+
+
+def _handled_kinds():
+    try:
+        from . import workspace as _ws
+        return _ws.RIG_KIND_HANDLERS
+    except Exception:
+        return {}
+
+
 def _engine(rc, cfg, ws):
-    """(model, clip, vae) - the rig's, or the files this block names instead."""
-    rig_name, model, clip, vae = ws.load_active_rig(cfg)
+    """(rig name, model, clip, vae): the files this block names, else the rig marked
+    Official Krea 2 model, else the Models tab's active rig.
+
+    THE OFFICIAL RIG RUNS THE CONVERSION WHATEVER RIG RENDERS: the conversion LoRA
+    and the edit patch are Krea 2's, so a Qwen 2.1 or SDXL render followed by a
+    re-render must not hand the engine the renderer's model (you, 2026-09-26).
+    With all three files named here no rig loads at all: the log showed Qwen 2.1
+    pulled into RAM and then replaced file by file.
+    """
+    rig_name, model, clip, vae = "", None, None, None
+    if rc["unet"] and rc["clip"] and rc["vae"]:
+        print("[RedNode Re-render] the engine's own files; no rig loads", flush=True)
+    else:
+        m = cfg.get("models") or {}
+        rigs = m.get("rigs") or []
+        act = rigs[max(0, min(int(m.get("active", 0)), len(rigs) - 1))] if rigs else {}
+        off = _official_rig(cfg)
+        if off is not None and off is not act and off.get("name"):
+            print("[RedNode Re-render] on the official Krea 2 rig %r, not the active rig %r"
+                  % (off["name"], act.get("name") or ""), flush=True)
+            rig_name, model, clip, vae = ws.load_active_rig(cfg, name=off["name"])
+        else:
+            if off is None and act.get("clip_type") not in (None, "", "krea2"):
+                raise ValueError(
+                    "the Re-render engine wants a Krea 2 model: the active rig %r is a %s "
+                    "rig and no rig is marked Official Krea 2 model. Mark the Krea 2 rig "
+                    "official on the Models tab, or name its files under Engine on the "
+                    "Re-render page." % (act.get("name") or "", act.get("clip_type")))
+            rig_name, model, clip, vae = ws.load_active_rig(cfg)
     if rc["unet"]:
         model = _call("UNETLoader", unet_name=rc["unet"], weight_dtype="default")[0]
     if rc["clip"]:
@@ -509,7 +559,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     lc = {}
     if rc["loras"]:
         try:
-            lc = _ws.lora_set_cfg(cfg, rc["lora_set"] or _ws.rig_lora_set(cfg),
+            lc = _ws.lora_set_cfg(cfg, rc["lora_set"] or _ws.rig_lora_set(cfg, rig_name),
                                   "Re-render") or {}
         except Exception:
             lc = {}

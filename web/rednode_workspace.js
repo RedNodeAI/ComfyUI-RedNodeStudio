@@ -18975,18 +18975,20 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
       }
     }
 
-    // THE ENGINE: the rig's, unless the workflow's own files differ from it
-    if (fold("Engine: " + (R.unet || R.clip || R.vae ? "its own files" : "the Models tab's rig"),
+    // THE ENGINE: the rig marked Official Krea 2 model (the active rig when none is),
+    // unless the workflow's own files differ from it. Mirrors realism._engine.
+    if (fold("Engine: " + (R.unet || R.clip || R.vae ? "its own files" : "the official Krea 2 rig"),
              "engine")) {
       const g = grid();
       const files = (key, list, tip) => select(g, key === "unet" ? "Model" : key === "clip"
         ? "Text encoder" : "VAE", key,
         [["", "The rig's"], ...[...new Set([...(list || []), ...(R[key] ? [R[key]] : [])])]
           .map((n) => [n, n])], tip);
-      files("unet", L.unets, "Empty follows the rig.");
-      files("clip", L.clips, "Empty follows the rig. The conversion LoRA was trained on "
+      files("unet", L.unets, "Empty follows the rig marked Official Krea 2 model on the "
+            + "Models tab, whichever rig renders; the active rig when none is marked.");
+      files("clip", L.clips, "Empty follows the official Krea 2 rig. The conversion LoRA was trained on "
             + "qwen3vl_4b_fp8_scaled; another encoder reads the picture differently.");
-      files("vae", L.vaes, "Empty follows the rig. qwen_image_vae is the usual one.");
+      files("vae", L.vaes, "Empty follows the official Krea 2 rig. qwen_image_vae is the usual one.");
       card.appendChild(g);
     }
 

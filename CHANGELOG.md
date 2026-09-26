@@ -203,6 +203,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- Re-render runs on the rig marked Official Krea 2 model, whichever rig is active, so a Qwen 2.1
+  or SDXL render re-renders without switching rigs. With no rig marked and a non-Krea 2 rig
+  active it stops with a plain message instead of a stack trace. With its own three files
+  set under Engine, no rig loads at all
+- Re-rendering the Tools tab's own picture no longer loads the active rig first: the edited
+  picture is the output, so the rig only loads if the edit did not land
 - The Models Setup card's Qwen Image 2.1 family finds the REDQW21 fine-tune by its own
   name, so the one-click rig takes it like the base model
 - The Detailer page's pass count follows a card switched on or off in the panel; it used
