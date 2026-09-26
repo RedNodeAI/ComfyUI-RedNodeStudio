@@ -4,10 +4,28 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
-**1.5.1** - 2026-09-23
+**1.6.0** - 2026-09-26
 
 ### New
 
+- Paint has no on/off switch any more. Its own Generate is its run and nothing else reads the
+  tab, so the power button, the rail light and the right-click switch are gone, and the
+  Workspace Manager no longer lists Paint as feeding the render. A workflow saved with Paint
+  off simply paints
+- The LoRAs tab you see is the set the render uses. The page opens on it, a green dot marks
+  it, and picking another tab switches the render to that set (written to the prompt's
+  Linked LoRAs when it names one, else to the active rig). A line under the tabs says how
+  many LoRAs are on and why that set. The page used to open on whichever set was last
+  edited, so a LoRA added there could look ignored
+- Plain text encode, a switch on a Krea 2 rig beside Official Krea 2 model. On, the rig encodes
+  with core's CLIP Text Encode instead of the Studio encoder, so a render follows the same
+  route as a plain CLIP, LoRA, KSampler workflow and matches it. Off by default
+- Re-render runs on the rig marked Official Krea 2 model, whichever rig is active, so a Qwen 2.1
+  or SDXL render re-renders without switching rigs. With no rig marked and a non-Krea 2 rig
+  active it stops with a plain message instead of a stack trace. With its own three files
+  set under Engine, no rig loads at all
+- The Models Setup card's Qwen Image 2.1 family finds the REDQW21 fine-tune by its own
+  name, so the one-click rig takes it like the base model
 - RedNode Shelf: a place to put pictures while you move them around. Drop them on, drag
   them off onto any gallery, the Paint pane, another shelf or a folder on your desktop,
   and right-click one to send it straight to a Workspace tab. Dragging out copies, so
@@ -205,31 +223,13 @@ format matters: **version** then a date, notes below until the next bold line.
 
 - The Linked seeds card on the Models tab no longer hides its pickers behind long part names:
   the names wrap and every picker keeps its width, at any panel size
-- Paint has no on/off switch any more. Its own Generate is its run and nothing else reads the
-  tab, so the power button, the rail light and the right-click switch are gone, and the
-  Workspace Manager no longer lists Paint as feeding the render. A workflow saved with Paint
-  off simply paints
-- The LoRAs tab you see is the set the render uses. The page opens on it, a green dot marks
-  it, and picking another tab switches the render to that set (written to the prompt's
-  Linked LoRAs when it names one, else to the active rig). A line under the tabs says how
-  many LoRAs are on and why that set. The page used to open on whichever set was last
-  edited, so a LoRA added there could look ignored
 - The seed box on the Models tab takes a typed or pasted seed again. It was locked while
   Random each run was on, which is the default; a seed typed or pasted now pins itself,
   and a paste like "Seed 166462544994824" keeps the digits. The named seeds do the same
-- Plain text encode, a switch on a Krea 2 rig beside Official Krea 2 model. On, the rig encodes
-  with core's CLIP Text Encode instead of the Studio encoder, so a render follows the same
-  route as a plain CLIP, LoRA, KSampler workflow and matches it. Off by default
 - After a run the Workspace no longer shrinks to a strip over a black area. The frontend added
   its own image preview to the node and never took it away until the workflow was reloaded
-- Re-render runs on the rig marked Official Krea 2 model, whichever rig is active, so a Qwen 2.1
-  or SDXL render re-renders without switching rigs. With no rig marked and a non-Krea 2 rig
-  active it stops with a plain message instead of a stack trace. With its own three files
-  set under Engine, no rig loads at all
 - Re-rendering the Tools tab's own picture no longer loads the active rig first: the edited
   picture is the output, so the rig only loads if the edit did not land
-- The Models Setup card's Qwen Image 2.1 family finds the REDQW21 fine-tune by its own
-  name, so the one-click rig takes it like the base model
 - The Detailer page's pass count follows a card switched on or off in the panel; it used
   to hold the number from when the page opened
 - The Advanced page and two Detailer notices point at the Workspace Manager by its name,
