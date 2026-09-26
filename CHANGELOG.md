@@ -203,6 +203,8 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The Linked seeds card on the Models tab no longer hides its pickers behind long part names:
+  the names wrap and every picker keeps its width, at any panel size
 - Paint has no on/off switch any more. Its own Generate is its run and nothing else reads the
   tab, so the power button, the rail light and the right-click switch are gone, and the
   Workspace Manager no longer lists Paint as feeding the render. A workflow saved with Paint

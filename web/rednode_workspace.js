@@ -558,6 +558,11 @@ css.textContent = `
   border:none;outline:none;color:#e8ecf1;font-size:13px;font-weight:600;
   text-align:right;padding:0}
 .rn-ws-pill select{appearance:auto;cursor:pointer;color-scheme:dark}
+/* LINKED SEEDS: long part names (Post random ranges and grain) squeezed the picker to
+   nothing. The name wraps and takes what is left; the picker keeps a fixed width */
+.rn-ws-seedlinks .rn-ws-pillgrid{grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))}
+.rn-ws-seedlinks .rn-ws-pill>.k{flex:1 1 auto;min-width:0;white-space:normal;line-height:1.3;font-size:13px}
+.rn-ws-seedlinks .rn-ws-pill select{flex:0 1 140px;width:140px;min-width:112px;text-align:left}
 /* the OPEN list of a select is painted by the browser from the option
    colours: pin them dark, or a light host theme paints white on white */
 .rn-ws-pill select option,.rn-ws-res option,.rn-ws-wrap select option{
@@ -13713,6 +13718,7 @@ function seedLinksCard(node, host) {
   }
   const all = document.createElement("div");
   all.className = "rn-ws-row";
+  all.style.flexWrap = "wrap";              // two buttons on a narrow panel
   const linkAll = document.createElement("button");
   linkAll.className = "rn-ws-btn";
   linkAll.dataset.choice = "seed_link_all";
