@@ -611,9 +611,12 @@ class RedNodePaintRender:
         _run.info(paint=True)
         # a wired image is never thrown away: if the tab has nothing to say, the
         # picture still comes back out rather than being replaced by a black frame
-        if not pc.get("on") or (image is None and not pc.get("source")):
-            _run.skip("paint", "Paint", "the Paint tab is off or has no picture")
-            _say("nothing to render: switch the Paint tab on and paint "
+        # NO ON SWITCH: a Generate on the Paint tab is a paint run, and nothing else
+        # reads the tab (you, 2026-09-26). An old workflow saved with it off still
+        # paints; the run token above is what says this is a paint run.
+        if image is None and not pc.get("source"):
+            _run.skip("paint", "Paint", "the Paint tab has no picture")
+            _say("nothing to render: put a picture on the Paint tab and paint "
                   "something")
             return _out(image if image is not None else _ws.blank_frame())
 

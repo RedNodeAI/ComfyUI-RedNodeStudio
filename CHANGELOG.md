@@ -203,6 +203,10 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- Paint has no on/off switch any more. Its own Generate is its run and nothing else reads the
+  tab, so the power button, the rail light and the right-click switch are gone, and the
+  Workspace Manager no longer lists Paint as feeding the render. A workflow saved with Paint
+  off simply paints
 - The LoRAs tab you see is the set the render uses. The page opens on it, a green dot marks
   it, and picking another tab switches the render to that set (written to the prompt's
   Linked LoRAs when it names one, else to the active rig). A line under the tabs says how

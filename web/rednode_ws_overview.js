@@ -134,12 +134,6 @@ export function overviewBoxes(node, cfg) {
     why: idProbs.map((p) => p.text + ".").join("\n"),
     to: { tab: "identity", sub: "subject" },
   });
-  feeds.push({
-    key: "paint", label: "Paint",
-    state: cfg.paint?.on ? "on" : "off",
-    note: cfg.paint?.on ? "Paint pass" : "Off",
-    to: { tab: "paint" },
-  });
   const capOn = AUTO_TAB_IDS.map((id) => [id, tabs[id]]).filter(([id, t]) => captionInUse(id, t));
   const capPics = capOn.filter(([, t]) => (t.images?.length || 0) > 0);
   const capEmpty = capOn.filter(([, t]) => !(t.images?.length));
@@ -327,9 +321,6 @@ export function boxSwitches(node, cfg, key) {
     return [...flag("Subject", tabs.subject, "on"), ...flag("Scene", tabs.scene, "on"),
             ...flag("Masks", tabs.boost_mask, "on")];
   }
-  if (base === "paint") {
-    return [{ name: "Paint", on: !!cfg.paint?.on, set: (v) => setPaintOn(node, v), self: true }];
-  }
   if (base === "captions") {
     // only the galleries whose auto prompt is on: this menu switches things off and
     // back, it does not pick which gallery to describe
@@ -433,7 +424,6 @@ export function runNeeds(node, cfg) {
       }
     }
   }
-  if (cfg.paint?.on) wantPack("sam3", "the Paint tab's auto mask", { tab: "paint" });
   // THE POST CARDS, on the same terms the cards themselves use: an effect that
   // reads depth, and a Limit row that needs the subject picked out. The server's
   // own report answers whether each is here, since it knows every estimator and

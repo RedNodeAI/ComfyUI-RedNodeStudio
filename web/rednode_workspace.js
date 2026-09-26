@@ -320,6 +320,7 @@ css.textContent = `
   padding:0 8px 0 30px;font:500 12px system-ui,sans-serif;min-height:28px;color:#9aa0a8}
 .rn-ws-railsub .dot{width:7px;height:7px;border-radius:50%;background:#3a3f47;flex:none}
 .rn-ws-railsub .dot.on{background:#22c55e;box-shadow:0 0 5px #22c55e}
+.rn-ws-tab.rail .dot.none{visibility:hidden}
 .rn-ws-railsub .dot.skip{background:#e0a84a;box-shadow:0 0 5px #e0a84a}
 .rn-ws-railsub.d2{padding-left:46px;font-size:11.5px;color:#868d96}
 .rn-ws-railsub:hover{background:#20242a;color:#e8ecf1}
@@ -2109,7 +2110,9 @@ export function readCfg(node) {
     if (typeof x.lora_set !== "string") x.lora_set = "";     // "" = the rig's set
   }
   d.paint = d.paint && typeof d.paint === "object" ? d.paint : {};
-  d.paint.on = !!d.paint.on;
+  // NO PAINT SWITCH (2026-09-26): a Generate on the tab is a paint run and nothing
+  // else reads it. Kept true in the config for older readers of the field.
+  d.paint.on = true;
   if (typeof d.paint.source !== "string") d.paint.source = "";
   // Use last result pulls the picture after Post FX, or the one before it
   if (d.paint.last_from !== "before") d.paint.last_from = "after";
@@ -8518,15 +8521,6 @@ export function rollSeed() {
 }
 
 async function paintGenerate(node) {
-  if (!node._rnCfg?.paint?.on) {
-    // a blank white result with no word of why is the worst answer a button
-    // can give; say what is off and where the switch is
-    alert("Paint is switched off on this tab, so Generate would render a blank "
-        + "canvas. Switch Paint on with the switch at the top of the Paint tab, "
-        + "then press Generate. The main Queue button renders the workspace as "
-        + "usual.");
-    return;
-  }
   const picked = chosenTarget(node._rnCfg);
   if (!picked) {
     alert("Nothing to paint with. Either add a RedNode Paint Render node and wire "
@@ -8806,21 +8800,9 @@ function paintBody(node, body) {
   if (seedSamplerDials(cfg)) writeCfg(node);
 
   const row = document.createElement("div");
-  row.className = "rn-ws-row rn-ws-paintbar " + (P.on ? "pw-on" : "pw-off");
-  // the same power button every other page carries in its corner, in the Paint
-  // bar's own corner, since this page keeps its own bar (2026-09-25)
-  const on = document.createElement("button");
-  on.className = "rn-ws-power inline " + (P.on ? "on" : "off");
-  on.dataset.choice = "page_power";
-  on.innerHTML = POWER_ICON;
-  on.onclick = () => { switchClick(!P.on); setPaintOn(node, !P.on); };
-  on.title = P.on
-    ? "The painted region drives output_latent, edit_mask and denoise. Queue to run "
-      + "it. Switching this OFF also hands back whatever the paint renderer left in "
-      + "VRAM, since you are done with it."
-    : "Off: this tab changes nothing and the other tabs keep their claim on "
-      + "output_latent.";
-  on.onclick = () => setPaintOn(node, !P.on);
+  // NO POWER BUTTON: Paint has no switch. Its own Generate is its run, and the
+  // main queue never reads this tab (2026-09-26).
+  row.className = "rn-ws-row rn-ws-paintbar";
   const hint = document.createElement("span");
   hint.className = "hint";
   hint.textContent = "Paint what you want changed, set the denoise, queue. It runs on "
@@ -8876,7 +8858,7 @@ function paintBody(node, body) {
                 + "little per step; full size is the decoder's own output.";
   liveSel.onchange = () => { P.live_px = parseInt(liveSel.value, 10) || 0; writeCfg(node); };
   tsWrap.append(liveSel, sizesB);
-  row.append(on, hint, tsWrap, fsBtn);
+  row.append(hint, tsWrap, fsBtn);
   body.appendChild(row);
 
   // THE TOP BAR: the two dials moved constantly, the mode, and Generate, in one row
@@ -20396,7 +20378,7 @@ function railSwitches(node, cfg, id) {
     return [...flag("Re-angle", I.reangle, "on"),
             ...flag("Swap", I.swap, "on"), ...flag("Upscale", cfg.upscale, "on")];
   }
-  if (["camera", "loras", "moodboard", "identity", "paint", "detailer", "post"].includes(id)) {
+  if (["camera", "loras", "moodboard", "identity", "detailer", "post"].includes(id)) {
     return boxSwitches(node, cfg, id);
   }
   return [];
@@ -20531,7 +20513,7 @@ export const tabLit = (cfg, id) =>
   // the moodboard only outputs what is IN the batch, so an empty batch must not light up
   : id === "moodboard" ? cfg.tabs.moodboard.on && cfg.tabs.moodboard.sel.length
   : id === "loras" ? !!(cfg.loras?.on && cfg.loras?.slots?.length)
-  : id === "paint" ? cfg.paint?.on
+  : id === "paint" ? false                     // no switch, so no light
   : id === "upscale" ? cfg.upscale?.on
   : id === "rerender" ? i2iSubLit(cfg, "realism") === true
   : id === "editor" ? EDITOR_SUB_IDS.some((s) => i2iSubLit(cfg, s) === true)
@@ -20810,7 +20792,7 @@ function renderPage(node) {
     ic.className = "ic";
     ic.innerHTML = TAB_ICONS[t.id] || "";
     const dot = document.createElement("span");
-    dot.className = "dot" + (tabLit(cfg, t.id) ? " on" : "");
+    dot.className = "dot" + (t.id === "paint" ? " none" : tabLit(cfg, t.id) ? " on" : "");
     if (t.id === "models" || t.id === "prompts") {
       const probs = setupProblems(node, cfg).filter((p) => (t.id === "prompts") === p.startsWith("No prompt"));
       if (probs.length) {
@@ -21995,7 +21977,6 @@ app.registerExtension({
       const node = byRun || allNodes().find((n) => n?.type === NODE_NAME
         && String(n.id) === String(d.node) && n._rnPaintProgress?.active);
       if (!node || !node._rnPaintProgress?.active) return;
-      if (!node._rnCfg?.paint?.on) return;      // the tab is off: nothing to draw for
       showPaintLiveFrame(node, d);
     });
     api.addEventListener?.("progress", (e) => {
