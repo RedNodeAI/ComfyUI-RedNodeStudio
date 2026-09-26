@@ -4,6 +4,14 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.6.1** - unreleased
+
+### Fixes
+
+- RedNode Start Here Install offers Install for every pack on the Comfy Registry. Its markers
+  named packs by GitHub repository only, and the newer frontend lists those as Search. The
+  note says how to install Light and Scene, which is not on the Registry, by its Git URL
+
 **1.6.0** - 2026-09-26
 
 ### New
