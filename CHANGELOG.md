@@ -203,6 +203,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The seed box on the Models tab takes a typed or pasted seed again. It was locked while
+  Random each run was on, which is the default; a seed typed or pasted now pins itself,
+  and a paste like "Seed 166462544994824" keeps the digits. The named seeds do the same
 - Plain text encode, a switch on a Krea 2 rig beside Official Krea 2 model. On, the rig encodes
   with core's CLIP Text Encode instead of the Studio encoder, so a render follows the same
   route as a plain CLIP, LoRA, KSampler workflow and matches it. Off by default

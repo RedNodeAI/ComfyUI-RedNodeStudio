@@ -13385,20 +13385,46 @@ function modelsBody(node, page) {
     const seedBox = document.createElement("div");
     seedBox.style.cssText = "display:flex;align-items:center;gap:10px;background:#101216;"
       + "border:1px solid #2f333a;border-radius:8px;padding:0 14px;min-height:46px";
+    // ALWAYS EDITABLE: typing or pasting a seed pins it. It used to be disabled
+    // while Random each run was on (the default), so nothing could be typed or
+    // pasted at all. A text box, not a number box: a number box refuses a paste
+    // with anything around the digits ("Seed 1664...", a trailing space).
     const seed = document.createElement("input");
-    seed.type = "number";
-    seed.min = 0;
-    seed.value = M.seed;
-    seed.disabled = M.seed_random;
+    seed.type = "text";
+    seed.inputMode = "numeric";
+    seed.spellcheck = false;
+    seed.value = String(M.seed ?? 0);
     seed.style.cssText = "flex:1;min-width:0;background:transparent;border:none;"
-      + "outline:none;color:#e8ecf1;font-size:16px;font-weight:600;padding:0";
+      + "outline:none;color:" + (M.seed_random ? "#8a9099" : "#e8ecf1")
+      + ";font-size:16px;font-weight:600;padding:0";
     seed.title = M.seed_random
-      ? "Random every run: pin one with New fixed random or Use last queued to edit."
-      : "The pinned seed. Type one, or use the buttons below.";
-    seed.addEventListener("change", () => {
-      M.seed = Math.max(0, parseInt(seed.value, 10) || 0);
+      ? "Random every run. Type or paste a seed here to pin it."
+      : "The pinned seed. Type or paste one, or use the buttons below.";
+    const seedOf = (text) => {
+      const digits = String(text || "").replace(/[^0-9]/g, "");
+      if (!digits) return null;
+      return Math.min(Number.MAX_SAFE_INTEGER, parseInt(digits, 10));
+    };
+    const pinSeed = (v) => {
+      if (v == null) { seed.value = String(M.seed ?? 0); return; }
+      M.seed = v;
+      M.seed_random = false;
+      node._rnSeedMode = "typed";
       writeCfg(node);
+      render(node);
+    };
+    seed.addEventListener("paste", (e) => {
+      const v = seedOf(e.clipboardData?.getData("text"));
+      if (v == null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pinSeed(v);
     });
+    seed.addEventListener("keydown", (e) => {
+      e.stopPropagation();                 // ComfyUI's canvas keys stay out of the box
+      if (e.key === "Enter") seed.blur();
+    });
+    seed.addEventListener("change", () => pinSeed(seedOf(seed.value)));
     const state = document.createElement("span");
     state.className = "rn-ws-note";
     state.style.cssText = "flex:none;font-size:12px";
@@ -13536,18 +13562,35 @@ function seedLinksCard(node, host) {
       x.name = v;
       w();
     };
+    // editable on Random too, as the main seed box: a typed or pasted number pins it
     const val = document.createElement("input");
-    val.type = "number";
+    val.type = "text";
+    val.inputMode = "numeric";
+    val.spellcheck = false;
     val.value = String(x.seed);
-    val.disabled = x.random;
     val.dataset.choice = "seed_value";
     val.className = "rn-ws-filebox";
     val.style.flex = "1 1 160px";
-    val.onchange = () => {
-      const v = Math.max(0, Math.round(Number(val.value) || 0));
-      x.seed = v;
-      writeCfg(node);
+    if (x.random) val.style.color = "#8a9099";
+    const pinNamed = (text) => {
+      const digits = String(text || "").replace(/[^0-9]/g, "");
+      if (!digits) { val.value = String(x.seed); return; }
+      x.seed = Math.min(Number.MAX_SAFE_INTEGER, parseInt(digits, 10));
+      x.random = false;
+      w();
     };
+    val.addEventListener("paste", (e) => {
+      const t = e.clipboardData?.getData("text");
+      if (!String(t || "").replace(/[^0-9]/g, "")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pinNamed(t);
+    });
+    val.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") val.blur();
+    });
+    val.onchange = () => pinNamed(val.value);
     const rnd = document.createElement("button");
     rnd.className = "rn-ws-sw" + (x.random ? " on" : "");
     rnd.dataset.choice = "seed_random";
