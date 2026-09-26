@@ -208,7 +208,10 @@ through the standard loader, or INT8 W8A8 outright through ComfyUI-INT8-Fast whe
 installed; the file picker lists those packs' files beside the standard ones. A rig can also be
 your own nodes: name it on RedNode Rig Model, Rig Inputs and Rig Result, and every pass on that rig
 samples through your graph, with no wire to the Workspace. A Krea 2 rig carries an Official Krea 2
-model switch, and the identity edit warns until it is set.
+model switch, and the identity edit warns until it is set. Beside it, **Plain text encode** swaps the Studio encoder for core's CLIP Text Encode:
+the prompt, the LoRAs, the sampler and the picture, the same route as a plain workflow, so a
+render made elsewhere can be matched seed for seed. The Studio preset and the Subject and
+Scene references sit out while it is on.
 
 The rigs sit in a column of cards on the left, each with its model family and a tick per file, and
 the pages beside them are Model, CLIP, VAE, then Sampling, Seed and Setup. **Setup** makes a rig in
