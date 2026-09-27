@@ -6,6 +6,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.6.2** - unreleased
 
+### Fixes
+
+- The Camera tab's Auto latent sizes the Workspace's canvas. The switch only reached the
+  standalone Camera Studio node; now the Latent tab takes the camera's size while it is on and
+  says so, keeping its own batch, scale and passes
+
 ### New
 
 - An extras installer for the portable ComfyUI, extras/install_rednode_extras.bat on GitHub.

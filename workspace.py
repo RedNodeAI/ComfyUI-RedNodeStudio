@@ -2440,6 +2440,28 @@ def load_active_rig(cfg, name="", prompt=None):
 MAIN_SET = "Main"
 
 
+def camera_auto_latent(cfg):
+    """(w, h, why) when the rendering prompt's camera has Auto latent on and the Camera
+    tab is on, else None. The Workspace hosts the Camera Studio's panel, and its Auto
+    latent switch used to reach only the standalone node. Mirrored by autoLatentFor in
+    web/rednode_workspace.js."""
+    if not camera_on(cfg):
+        return None
+    row = prompt_row_for(cfg.get("models") or {}, cfg.get("prompts") or {})
+    fr = (row or {}).get("frame") or {}
+    raw = fr.get("camera")
+    if isinstance(raw, dict):
+        raw = json.dumps(raw)
+    if fr.get("camera_off") or not (isinstance(raw, str) and raw.strip()):
+        return None
+    from .camera_studio import parse_state as _cs_parse
+    from . import camera_translate as _ct
+    st = _cs_parse(raw)
+    if not st.get("auto_latent"):
+        return None
+    return _ct.auto_latent_size(st["camera"], st["subjects"], st["latent_mp"])
+
+
 def camera_on(cfg):
     """Is the Camera tab switched on? Missing block = on (the old behaviour)."""
     c = cfg.get("camera")
@@ -3809,7 +3831,14 @@ class RedNodeStudioWorkspace:
         if latent is None and cfg["latent"]["on"]:
             lc = cfg["latent"]
             lw, lh = lc["w"], lc["h"]
-            if lc["random"]:
+            # THE CAMERA'S AUTO LATENT wins over the tab's size and its dice: the
+            # camera's framing decides the shape. Batch, scale and passes stay the tab's.
+            _auto_lat = camera_auto_latent(cfg)
+            if _auto_lat:
+                lw, lh = int(_auto_lat[0]), int(_auto_lat[1])
+                print("[RedNode Workspace] the Camera's Auto latent sets the canvas: %d x %d (%s)"
+                      % (lw, lh, _auto_lat[2]), flush=True)
+            elif lc["random"]:
                 lw, lh = LATENT_PRESETS[_random.randrange(len(LATENT_PRESETS))]
             # the scale slider multiplies the base canvas; 2.0 is four times the pixels
             lw = int(lw * lc["scale"]) // 8 * 8
@@ -3824,7 +3853,7 @@ class RedNodeStudioWorkspace:
                     lh = max(256, int(lh * _p1)) // 8 * 8
                     print(f"[RedNode Workspace] latent pass 1 at {_p1:.2f}x: "
                           f"the canvas is built {lw} x {lh}", flush=True)
-            if lc["random"]:
+            if lc["random"] and not _auto_lat:
                 picks["latent"] = f"{lw} x {lh}"
                 print(f"[RedNode Workspace] rolled latent size: {lw} x {lh}", flush=True)
             latent = {"samples": torch.zeros((lc["batch"], 4, lh // 8, lw // 8)),

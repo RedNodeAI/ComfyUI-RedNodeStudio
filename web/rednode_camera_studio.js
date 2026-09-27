@@ -287,7 +287,7 @@ function camLoraEntry(st, key) {
   return e;
 }
 
-function normalise(d) {
+export function normalise(d) {
   const o = DEFAULT();
   if (d && typeof d === "object") {
     if (d.camera && typeof d.camera === "object") {
@@ -493,7 +493,7 @@ async function fetchLoras() {
   } catch (e) { LORA_LIST = []; }
   return LORA_LIST;
 }
-function autoLatentSize(st) {
+export function autoLatentSize(st) {
   const [wr, hr, why] = suggestAspect(st);
   const total = Math.max(0.05, st.latent_mp || 1) * 1e6;
   const w = Math.sqrt(total * wr / hr), h = w * hr / wr;

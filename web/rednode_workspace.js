@@ -10,7 +10,8 @@ const ComfyApp = _appmod.ComfyApp || {};
 import { api } from "../../scripts/api.js";
 import { postBody, looksSection, openPostCog, refreshPostPresets,
          fxStep, cardOrder, normalisePostChain, mirrorChain } from "./rednode_ws_post.js";
-import { buildStudio } from "./rednode_camera_studio.js";
+import { buildStudio, autoLatentSize as csAutoLatentSize, normalise as csNormalise }
+  from "./rednode_camera_studio.js";
 import { runTabBody, RUN_CSS, runLit, railRunState, listenRun, configHost, queueWorkflow,
          RUN_SUBS } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
@@ -3834,7 +3835,12 @@ function cameraBody(node, body) {
       return raw && typeof raw === "object" ? raw : {};
     };
     setState = (st) => { row.frame.camera = st ? JSON.stringify(st) : ""; };
-    afterChange = () => { writeCfg(node); };
+    afterChange = () => {
+      // the Latent tab follows the camera while Auto latent drives it
+      const al = autoLatentFor(cfg);
+      if (al) { cfg.latent.w = al.w; cfg.latent.h = al.h; }
+      writeCfg(node);
+    };
   } else {
     const t = cfg.tabs.i2i;
     if (!t.reangle || typeof t.reangle !== "object") t.reangle = {};
@@ -14855,6 +14861,26 @@ async function runAiBatch(node) {
   render(node);
 }
 
+// THE CAMERA'S AUTO LATENT, mirroring workspace.camera_auto_latent: the rendering
+// prompt's camera sizes the canvas while the Camera tab and its Auto latent are on.
+export function autoLatentFor(cfg) {
+  if (cfg.camera && cfg.camera.on === false) return null;
+  const rows = cfg.prompts?.rows || [];
+  const words = (r) => String(r?.text || "").trim().length > 0;
+  const pick = Number.isInteger(cfg.prompts?.active) ? rows[cfg.prompts.active] : null;
+  const row = (pick && words(pick)) ? pick : (rows.find(words) || null);
+  const fr = row?.frame || {};
+  if (fr.camera_off) return null;
+  let st = fr.camera;
+  if (typeof st === "string") {
+    if (!st.trim()) return null;
+    try { st = JSON.parse(st); } catch (e) { return null; }
+  }
+  if (!st || typeof st !== "object" || st.auto_latent !== true) return null;
+  const [w, h, why] = csAutoLatentSize(csNormalise(st));
+  return { w, h, why };
+}
+
 function latentBody(node, body) {
   const cfg = node._rnCfg;
   const L = cfg.latent;
@@ -14937,6 +14963,18 @@ function latentBody(node, body) {
   };
   bar.appendChild(reset);
   body.appendChild(bar);
+  {
+    const al = autoLatentFor(cfg);
+    if (al) {
+      L.w = al.w; L.h = al.h;
+      const n = document.createElement("div");
+      n.className = "rn-ws-card rn-ws-note rn-ws-autolatnote";
+      n.textContent = "The Camera's Auto latent sets this size: " + al.w + " x " + al.h
+        + " (" + al.why + "). Batch, scale and passes stay yours. Turn Auto latent off "
+        + "on the Camera tab to set the size here.";
+      body.appendChild(n);
+    }
+  }
   if (sub === "passes") {
     passesTab(node, body, "latent");
     return;
