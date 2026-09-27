@@ -4245,7 +4245,7 @@ class RedNodeStudioWorkspace:
                         lighting=str(_fr.get("lighting") or "None"),
                         brightness=int(_fr.get("brightness") or 0),
                         style=str(_fr.get("style") or "None"),
-                        style_extra=str(_fr.get("style_extra") or ""),
+                        style_extra=_lead("style", str(_fr.get("style_extra") or "")),
                         framing_push=str(_fr.get("framing_push") or "Off"),
                         # the camera: the Camera Studio state when set, else the
                         # simple height stop. Missing here meant the studio's
