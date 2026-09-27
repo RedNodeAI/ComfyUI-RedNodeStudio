@@ -11,6 +11,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - An extras installer for the portable ComfyUI, extras/install_rednode_extras.bat on GitHub.
   It installs the optional packs through ComfyUI Manager's command line, one at a time,
   skips what is already there, names anything that fails, and says when SAM3 needs Triton
+- A model downloader beside it, extras/download_rednode_models.bat: the workflow's models,
+  encoders and VAEs from their publishers into the right folders, with Civitai files through
+  your own key or your browser
 
 **1.6.1** - 2026-09-26
 

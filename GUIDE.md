@@ -62,6 +62,13 @@ at a time, installs Manager first if your ComfyUI does not have it, skips the on
 already have and names any that fail. The desktop app and venv installs use
 Manager instead.
 
+**The models, the same way.** [download_rednode_models.bat](extras/download_rednode_models.bat)
+downloads the models, text encoders and VAEs the RedNode Studio workflow uses, each from its
+publisher (Hugging Face, or Civitai where a model only lives there) into the right folder,
+under the name the workflow expects. Pick what you want; Krea 2 Turbo and the Re-render LoRA
+are all you need to start. Civitai files ask for your own free Civitai API key, or open the
+page in your browser and move the file into place when it lands.
+
 None of these are required. The Workspace renders without every one of them and says on the Run
 tab when a pass wanted one that is not installed. The Workspace Manager's **Check installs** button
 says which of them your own settings call for, and links to each.
