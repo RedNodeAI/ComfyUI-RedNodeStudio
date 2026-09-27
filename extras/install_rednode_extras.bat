@@ -85,6 +85,7 @@ set PACKS=^
  "comfyui-wd14-tagger|WD14 tagger (captions)"^
  "ComfyUI-JoyCaption|JoyCaption (captions)"^
  "ComfyUI-QwenVL|QwenVL (captions)"^
+ "comfyui-ollama-describer|Ollama describer (Ollama captions; needs the Ollama app)"^
  "comfyui-krea2-ostris-edit|Krea2 Ostris edit (Re-render)"^
  "ComfyUI-Apt_Preset|Apt Preset (Re-render)"^
  "comfyui_layerstyle|LayerStyle (Re-render)"^
