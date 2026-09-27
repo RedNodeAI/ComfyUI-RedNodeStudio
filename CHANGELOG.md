@@ -8,6 +8,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- An auto prompt whose Inject into names a prompt that no longer exists joins the prompt the
+  rig runs and says so. Unnamed prompts are numbered by position, so deleting one renamed the
+  rest and the caption silently joined nothing, while the picker showed the first choice
 - An auto prompt caption set to Before my words in the Style slot reaches a Frame prompt.
   It was dropped; the other slots and After were unaffected
 - The Camera tab's Auto latent sizes the Workspace's canvas. The switch only reached the

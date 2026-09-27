@@ -4160,6 +4160,14 @@ class RedNodeStudioWorkspace:
             first row, because guessing would put words in a stranger's prompt.
             """
             _r = str(_a.get("inject_row") or "")
+            # A ROW THAT IS GONE follows the rig and says so. Unnamed rows are
+            # "Prompt N" by position, so deleting one renames the rest, and a caption
+            # pointed at "Prompt 7" silently joined nothing once there were six.
+            if _r and _r != AUTO_ROW and not any(
+                    _x.get("name") == _r for _x in cfg["prompts"]["rows"]):
+                print("[RedNode Workspace] auto prompt: the prompt %r is gone, so the "
+                      "caption joins the prompt the rig runs" % _r, flush=True)
+                _r = AUTO_ROW
             if _r != AUTO_ROW:
                 return _r
             _t = prompt_row_for(cfg["models"], cfg["prompts"])

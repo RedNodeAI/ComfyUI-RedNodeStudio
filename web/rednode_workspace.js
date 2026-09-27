@@ -4984,17 +4984,24 @@ function injectRowUI(node, sect, tabName) {
   rowSel.className = "rn-ws-res";
   const names = (cfg.prompts?.rows || []).map((r, i) => r.name || `Prompt ${i + 1}`);
   const running = rowLabel(cfg, rowThatRuns(cfg));
-  for (const n of [AUTO_ROW, "", ...names]) {
+  // A PROMPT THAT IS GONE shows as gone. A select cannot show a value it has no
+  // option for, so it displayed its first choice while the stored name joined
+  // nothing. The run falls back to the prompt the rig runs, and says so here too.
+  const gone = a.inject_row && a.inject_row !== AUTO_ROW && !names.includes(a.inject_row)
+    ? a.inject_row : null;
+  for (const n of [AUTO_ROW, "", ...names, ...(gone ? [gone] : [])]) {
     const o = document.createElement("option");
     o.value = n;
     o.textContent = n === AUTO_ROW
       // named, so it is obvious which words this is about to join, and it
       // re-reads on every render as the rig or the chosen row changes
       ? "The prompt the rig runs" + (running ? ` (${running})` : " (none yet)")
+      : n === gone ? `${n} is gone: joins the prompt the rig runs`
       : n || "nothing (just the output)";
     o.selected = n === a.inject_row;
     rowSel.appendChild(o);
   }
+  if (gone) rowSel.classList.add("rn-ws-injgone");
   rowSel.title = "This tab's caption lands in the named prompt automatically when "
                + "the queue runs, joined after whatever is typed there. The default "
                + "follows the rig: whichever row that rig renders is the one it "
