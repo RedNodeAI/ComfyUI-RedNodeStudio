@@ -43,7 +43,8 @@ format matters: **version** then a date, notes below until the next bold line.
   workflow's models with their encoders and VAEs, its LoRAs, and the tools (Re-angle, Swap's
   BFS LoRA, the built-in SAM3.1, the Ollama caption model). Each file comes from its publisher
   into the right folder, Civitai files through your own key or your browser, and files already
-  there are skipped. Both .bat files are attached to every release
+  there are skipped. It works on the portable, the desktop app and manual installs. Both .bat
+  files are attached to every release
 
 **1.6.1** - 2026-09-26
 

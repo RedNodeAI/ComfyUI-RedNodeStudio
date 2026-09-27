@@ -70,6 +70,9 @@ are all you need to start. Civitai files ask for your own free Civitai API key, 
 page in your browser and move the file into place when it lands. Its Tools section fetches the
 Qwen Edit engine behind Re-angle and Swap, with Re-angle's angle and speed LoRAs and Swap's BFS
 LoRA, and pulls the Ollama model that auto prompt describes pictures with.
+It works on the desktop app and manual installs as well: put it in the folder that holds your
+`models` folder (the desktop app's base folder, the one with `custom_nodes` beside it), or run it
+from anywhere and it offers the desktop app's own folder, asking before it saves anything there.
 
 None of these are required. The Workspace renders without every one of them and says on the Run
 tab when a pass wanted one that is not installed. The Workspace Manager's **Check installs** button

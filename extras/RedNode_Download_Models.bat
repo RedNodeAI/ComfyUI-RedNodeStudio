@@ -1,12 +1,14 @@
 @echo off
-REM RedNode Studio model downloader, for the portable ComfyUI on Windows.
+REM RedNode Studio model downloader, for ComfyUI on Windows: the portable, the desktop app
+REM or a manual install.
 REM
 REM Downloads the models, text encoders and VAEs the RedNode Studio 1.6 workflow uses, each
 REM from its own publisher (Hugging Face, or Civitai where a model only lives there), into the
 REM right ComfyUI model folder. Nothing is re-hosted: every file comes from its source, under
 REM its own license. Files already there are skipped; an interrupted download resumes.
 REM
-REM Put this file in your ComfyUI_windows_portable folder and double-click it.
+REM Put this file in your ComfyUI_windows_portable folder, or in the folder that holds your
+REM models folder (the desktop app's base folder), and double-click it.
 REM Source: github.com/RedNodeAI/ComfyUI-RedNodeStudio
 
 setlocal EnableDelayedExpansion
@@ -23,6 +25,7 @@ set "X=%ESC%[0m"
 set "ROOT=%~dp0"
 if defined RN_COMFY_ROOT set "ROOT=%RN_COMFY_ROOT%\"
 set "MODELS=%ROOT%ComfyUI\models"
+if not exist "%MODELS%" if exist "%ROOT%models" set "MODELS=%ROOT%models"
 set "DL=%USERPROFILE%\Downloads"
 
 cls
@@ -42,7 +45,22 @@ echo      %RED%*%X%  Pick only what you want; 1, 6 and 7 are all you need to sta
 echo    %GREY%--------------------------------------------------------------------%X%
 echo.
 
-if not exist "%MODELS%" goto :no_portable
+if exist "%MODELS%" goto :models_found
+set "DESK="
+if exist "%APPDATA%\ComfyUI\config.json" for /f "usebackq delims=" %%p in (`powershell -NoProfile -Command "try { (Get-Content -Raw -LiteralPath (Join-Path $env:APPDATA 'ComfyUI\config.json') | ConvertFrom-Json).basePath } catch {}"`) do set "DESK=%%p"
+if not defined DESK goto :no_portable
+if not exist "%DESK%\models" goto :no_portable
+echo    %WHITE%Found the ComfyUI desktop app's models folder:%X%
+echo      %GREY%%DESK%\models%X%
+if /i "%~1"=="/y" goto :use_desk
+choice /c YN /n /m "   Download into this folder [Y/N] "
+if errorlevel 2 goto :no_portable
+:use_desk
+set "MODELS=%DESK%\models"
+echo.
+:models_found
+echo    %GREEN%OK%X%  %WHITE%Saving into%X% %GREY%%MODELS%%X%
+echo.
 if not exist "%SystemRoot%\System32\curl.exe" goto :no_curl
 
 REM ---- the menu -------------------------------------------------------------------
@@ -98,13 +116,13 @@ if %COUNT% equ 0 (
   echo      %GREEN%OK%X%  Everything you picked is already here.
   goto :finish
 )
-for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%ROOT:~0,1%').Free/1MB)"') do set "FREEMB=%%f"
+for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%MODELS:~0,1%').Free/1MB)"') do set "FREEMB=%%f"
 set /a NEEDGB=(NEEDMB+999)/1000, FREEGB=FREEMB/1000
 echo.
-echo    %WHITE%%COUNT% to download, about %NEEDGB% GB into this folder.%X% %GREY%Free on %ROOT:~0,2% %FREEGB% GB. Ollama keeps its own models.%X%
+echo    %WHITE%%COUNT% to download, about %NEEDGB% GB into this folder.%X% %GREY%Free on %MODELS:~0,2% %FREEGB% GB. Ollama keeps its own models.%X%
 if %FREEMB% lss %NEEDMB% (
   echo.
-  echo      %RED%Not enough space.%X% Free up some room on %ROOT:~0,2% or pick fewer, then run this again.
+  echo      %RED%Not enough space.%X% Free up some room on %MODELS:~0,2% or pick fewer, then run this again.
   goto :finish
 )
 echo    %GREY%By downloading you accept each model's own license, linked above.%X%
@@ -150,7 +168,7 @@ if %BAD% equ 0 (
 echo    %GREY%--------------------------------------------------------------------%X%
 echo.
 echo    %WHITE%Next%X%
-echo      %RED%1%X%  If ComfyUI is open, press %WHITE%R%X% in it, or start it with %WHITE%run_nvidia_gpu.bat%X%
+echo      %RED%1%X%  If ComfyUI is open, press %WHITE%R%X% in it, or start it the way you always do
 echo      %RED%2%X%  Open %WHITE%RedNodeStudio_V1.6%X% from Templates, then press %WHITE%Generate%X%
 goto :finish
 
@@ -256,9 +274,11 @@ exit /b
 
 REM ---- the ways it can stop -----------------------------------------------------------
 :no_portable
-echo      %RED%Stopped.%X%  This file has to sit in your ComfyUI_windows_portable folder, next
-echo               to run_nvidia_gpu.bat. It could not find ComfyUI\models here:
-echo               %GREY%%ROOT%%X%
+echo      %RED%Stopped.%X%  No ComfyUI models folder was found for this file. Put it in:
+echo               %WHITE%the portable%X%     your ComfyUI_windows_portable folder, next to run_nvidia_gpu.bat
+echo               %WHITE%the desktop app%X%  its base folder, the one that holds models and custom_nodes
+echo               %WHITE%a manual install%X% your ComfyUI folder, the one that holds models
+echo               %GREY%It looked in: %ROOT%%X%
 goto :finish
 
 :no_curl
