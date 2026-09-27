@@ -112,7 +112,7 @@ Detailer pass.
 
 **Or no pack at all.** ComfyUI 0.37 and newer has SAM3 built in. Put
 `sam3.1_multiplex_fp16.safetensors` from [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1)
-in `models/checkpoints` (the model downloader's item 10 does it) and pick it as the SAM file; it
+in `models/checkpoints` (the model downloader's item 11 does it) and pick it as the SAM file; it
 shows as "(ComfyUI built-in)". It needs no Triton, which Easy-Sam3 does and which a fresh Windows
 portable often cannot get yet. Both can be installed side by side; the SAM file decides which runs.
 
