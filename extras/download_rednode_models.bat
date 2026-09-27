@@ -74,14 +74,17 @@ echo    %GREY%press Enter for 1, 5 and 6: the Krea 2 model and its LoRAs, the re
 set "ANS="
 set /p "ANS=   Your choice: "
 if defined ANS set "SEL=%ANS%"
-if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6 7 8"
+if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6 7 8 9"
 :chosen
 set "SEL= %SEL% "
 
 REM ---- what that adds up to -------------------------------------------------------
 set /a NEEDMB=0, COUNT=0, NEEDKEY=0
+REM a file two picks share (7 and 9) counts once
+set "SEEN=|"
 for /f "tokens=2-8 delims=~" %%a in ('findstr /b "::M~" "%~f0"') do (
-  if not "!SEL: %%a =!"=="!SEL!" (
+  if not "!SEL: %%a =!"=="!SEL!" if "!SEEN:|%%c|=!"=="!SEEN!" (
+    set "SEEN=!SEEN!%%c|"
     if "%%d"=="ollama" (
       set /a COUNT+=1
     ) else if not exist "%MODELS%\%%b\%%c" (
@@ -280,6 +283,7 @@ REM ---- the menu: ::G~number~section~title~MB~license or page -----------------
 ::G~6~LORAS~Anything2Real - the LoRA the Re-render tab converts with~230~Apache 2.0: huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters
 ::G~7~TOOLS~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
 ::G~8~TOOLS~Auto prompt - the Ollama vision model that describes your pictures~6140~Needs the Ollama app (ollama.com). Model: huihui_ai/qwen3-vl-abliterated
+::G~9~TOOLS~Swap - the BFS face swap LoRA, on the same Qwen Edit engine as 7~30470~MIT: huggingface.co/Alissonerdx/BFS-Best-Face-Swap. Files 7 already fetched are skipped
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
 ::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
@@ -302,6 +306,10 @@ REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ---------
 ::M~7~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
 ::M~7~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
 ::M~8~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~6140~https://ollama.com/huihui_ai/qwen3-vl-abliterated
+::M~9~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
+::M~9~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
+::M~9~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~9~loras~bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~307~-
 
 ::~          .-"-.               .-"-.
 ::~         /     \   .-"""-.   /     \

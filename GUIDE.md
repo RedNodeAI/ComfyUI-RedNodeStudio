@@ -67,7 +67,9 @@ downloads the models, text encoders and VAEs the RedNode Studio workflow uses, e
 publisher (Hugging Face, or Civitai where a model only lives there) into the right folder,
 under the name the workflow expects. Pick what you want; Krea 2 Turbo and the Re-render LoRA
 are all you need to start. Civitai files ask for your own free Civitai API key, or open the
-page in your browser and move the file into place when it lands.
+page in your browser and move the file into place when it lands. Its Tools section fetches the
+Qwen Edit engine behind Re-angle and Swap, with Re-angle's angle and speed LoRAs and Swap's BFS
+LoRA, and pulls the Ollama model that auto prompt describes pictures with.
 
 None of these are required. The Workspace renders without every one of them and says on the Run
 tab when a pass wanted one that is not installed. The Workspace Manager's **Check installs** button
