@@ -29,6 +29,10 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### New
 
+- The Workspace's shelf column and Generate opening the Run page are on by default. Both
+  are switches under Settings if you prefer them off
+- The RedNode Studio workflow's auto prompt uses huihui_ai/qwen3-vl-abliterated:8b-instruct,
+  the Ollama model the model downloader pulls
 - ComfyUI's built-in SAM3 as a second mask engine beside Easy-Sam3, for the Detailer, the Paint
   auto mask and the reference cut-outs. Put sam3.1_multiplex_fp16.safetensors in
   models/checkpoints (ComfyUI 0.37+) and pick it as the SAM file, shown as (ComfyUI built-in).

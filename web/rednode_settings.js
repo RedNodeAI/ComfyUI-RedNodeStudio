@@ -112,14 +112,15 @@ const WS_PREFS = [
     defaultValue: "red",
   },
   {
-    // THE RAIL'S GENERATE BUTTON can open the Run page as it queues; off by default
+    // THE RAIL'S GENERATE BUTTON opens the Run page as it queues; on by default
     id: "RedNode.Workspace.GenerateOpensRun",
     name: "Generate opens the Run page",
     category: ["RedNode", "Workspace", "Generate opens Run"],
-    tooltip: "Off by default. On, pressing the red Generate button on the Workspace rail "
-           + "also switches the panel to the Run page, so you watch the stages.",
+    tooltip: "On by default. Pressing the red Generate button on the Workspace rail "
+           + "also switches the panel to the Run page, so you watch the stages. "
+           + "Turn it off to stay on the page you are on.",
     type: "boolean",
-    defaultValue: false,
+    defaultValue: true,
   },
   {
     // AUTOMATIC UNLOADING, off by default. Automatic behaviour that guesses wrong is

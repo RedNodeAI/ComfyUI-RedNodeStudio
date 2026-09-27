@@ -7590,7 +7590,7 @@ function workspacePrefs(node, body) {
     sl.style.cssText = "flex:none;width:110px";
     sl.textContent = "Shelf column";
     const sb = document.createElement("button");
-    const son = !!wsPref("ShelfColumn", false);
+    const son = !!wsPref("ShelfColumn", true);
     sb.className = "rn-ws-btn rn-ws-compact" + (son ? " on" : "");
     sb.style.cssText = "width:auto;padding:0 12px";
     sb.textContent = son ? "On" : "Off";
@@ -7669,7 +7669,7 @@ function workspacePrefs(node, body) {
     gl.style.cssText = "flex:none;width:110px";
     gl.textContent = "Generate opens Run";
     const gb = document.createElement("button");
-    const on = !!wsPref("GenerateOpensRun", false);
+    const on = !!wsPref("GenerateOpensRun", true);
     gb.className = "rn-ws-btn rn-ws-compact" + (on ? " on" : "");
     gb.style.cssText = "width:auto;padding:0 12px";
     gb.textContent = on ? "On" : "Off";
@@ -14387,7 +14387,7 @@ function generateButton(node, cls) {
   b.title = "Queue the workflow, the same as ComfyUI's Run button.";
   b.onclick = () => {
     // optional, off by default: land on the Run page to watch the stages
-    if (wsPref("GenerateOpensRun", false)) {
+    if (wsPref("GenerateOpensRun", true)) {
       node._rnTab = "run";
       node._rnRunSub = "run";
       Object.assign((node.properties ||= {}), { rn_tab: "run", rn_run_sub: "run" });
@@ -20925,7 +20925,7 @@ function renderPage(node) {
   // every page, kept in this Workspace's config. An option, off to begin with
   // (you, 2026-09-25); the shell reverses with the rail, so "last" is always the
   // far side from it.
-  if (wsPref("ShelfColumn", false)) {
+  if (wsPref("ShelfColumn", true)) {
     const col = document.createElement("div");
     col.className = "rn-ws-shelfcol";
     const ch = document.createElement("div");
