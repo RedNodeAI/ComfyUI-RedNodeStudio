@@ -4,7 +4,7 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
-**1.6.2** - unreleased
+**1.6.2** - 2026-09-27
 
 ### Fixes
 
@@ -37,9 +37,11 @@ format matters: **version** then a date, notes below until the next bold line.
 - An extras installer for the portable ComfyUI, extras/install_rednode_extras.bat on GitHub.
   It installs the optional packs through ComfyUI Manager's command line, one at a time,
   skips what is already there, names anything that fails, and says when SAM3 needs Triton
-- A model downloader beside it, extras/download_rednode_models.bat: the workflow's models,
-  encoders and VAEs from their publishers into the right folders, with Civitai files through
-  your own key or your browser
+- A model downloader beside it, extras/download_rednode_models.bat, in three sections: the
+  workflow's models with their encoders and VAEs, its LoRAs, and the tools (Re-angle, Swap's
+  BFS LoRA, the built-in SAM3.1, the Ollama caption model). Each file comes from its publisher
+  into the right folder, Civitai files through your own key or your browser, and files already
+  there are skipped. Both .bat files are attached to every release
 
 **1.6.1** - 2026-09-26
 
