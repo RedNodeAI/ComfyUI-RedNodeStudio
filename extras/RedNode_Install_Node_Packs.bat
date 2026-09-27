@@ -55,17 +55,6 @@ powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"name
 if errorlevel 1 goto :comfy_running
 echo      %GREEN%OK%X%  ComfyUI is closed
 
-if exist "%CMCLI%" goto :manager_ready
-echo      %YELLOW%..%X%  ComfyUI Manager is not here yet, adding it first %GREY%(a minute or two)%X%
-echo %GREY%
-"%PY%" -s -m pip install -q --no-warn-script-location -r "%ROOT%ComfyUI\manager_requirements.txt"
-echo %X%
-if not exist "%CMCLI%" goto :no_manager
-set "MANAGER_NEW=1"
-:manager_ready
-echo      %GREEN%OK%X%  ComfyUI Manager is ready
-echo.
-
 REM id^|name: the Comfy Registry id, or a GitHub address for a pack that is not on it
 set PACKS=^
  "rednode-studio|RedNode Studio"^
@@ -95,7 +84,27 @@ set PACKS=^
 
 set /a TOTAL=0
 for %%P in (%PACKS%) do set /a TOTAL+=1
-echo    %WHITE%What gets installed%X% %GREY%(%TOTAL% packs, any you already have are skipped)%X%
+REM the ones not in custom_nodes yet: with none missing, Manager and its Registry fetch are skipped
+set /a MISSING=0
+for %%P in (%PACKS%) do for /f "tokens=1 delims=|" %%A in (%%P) do for %%F in ("%%A") do if not exist "%COMFYUI_PATH%\custom_nodes\%%~nxF\" set /a MISSING+=1
+
+if %MISSING% equ 0 goto :manager_skip
+if exist "%CMCLI%" goto :manager_ready
+echo      %YELLOW%..%X%  ComfyUI Manager is not here yet, adding it first %GREY%(a minute or two)%X%
+echo %GREY%
+"%PY%" -s -m pip install -q --no-warn-script-location -r "%ROOT%ComfyUI\manager_requirements.txt"
+echo %X%
+if not exist "%CMCLI%" goto :no_manager
+set "MANAGER_NEW=1"
+:manager_ready
+echo      %GREEN%OK%X%  ComfyUI Manager is ready
+goto :manager_done
+:manager_skip
+echo      %GREEN%OK%X%  Every pack is already in custom_nodes
+:manager_done
+echo.
+
+echo    %WHITE%What gets installed%X% %GREY%(%TOTAL% packs, %MISSING% not here yet; the rest are skipped)%X%
 echo.
 set /a I=0
 for %%P in (%PACKS%) do (
@@ -106,6 +115,12 @@ for %%P in (%PACKS%) do (
   )
 )
 echo.
+if %MISSING% gtr 0 goto :ask
+set /a OK=0, SKIP=%TOTAL%, BAD=0
+set "FAILED="
+echo    %GREEN%OK%X%  %WHITE%All %TOTAL% are already here, so there is nothing to install.%X%
+goto :the_end
+:ask
 if /i "%~1"=="/y" goto :go
 echo    %WHITE%Ready?%X%  %GREY%Y starts, N closes without changing anything.%X%
 choice /c YN /n /m "   Start the install [Y/N] "
@@ -137,6 +152,12 @@ for %%P in (%PACKS%) do (
     set "NUM=  !N!"
     title RedNode Studio node pack installer - !N! of %TOTAL% - %%B
     <nul set /p "=%GREY%     !NUM:~-2!/%TOTAL%%X%  %%B ... "
+    set "HAVE="
+    for %%F in ("%%A") do if exist "%COMFYUI_PATH%\custom_nodes\%%~nxF\" set "HAVE=1"
+    if defined HAVE (
+      echo %GREY%already here%X%
+      set /a SKIP+=1
+    ) else (
     "%CMCLI%" install "%%A" >"%LOG%" 2>&1
     findstr /l /c:"[INSTALLED]" "%LOG%" >nul
     if not errorlevel 1 (
@@ -154,10 +175,12 @@ for %%P in (%PACKS%) do (
         copy /y "%LOG%" "%TEMP%\rednode_node_packs_failed_!N!.txt" >nul
       )
     )
+    )
   )
 )
 
 REM ---- the end --------------------------------------------------------------------
+:the_end
 title RedNode Studio node pack installer - done
 echo.
 echo    %GREY%--------------------------------------------------------------------%X%
