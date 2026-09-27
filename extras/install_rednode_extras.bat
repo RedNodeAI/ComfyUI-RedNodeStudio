@@ -1,7 +1,7 @@
 @echo off
-REM RedNode Studio extras installer, for the portable ComfyUI on Windows.
+REM RedNode Studio installer, for the portable ComfyUI on Windows.
 REM
-REM Installs the node packs the RedNode Studio workflows can use, one at a time, through
+REM Installs RedNode Studio and the node packs its workflows use, one at a time, through
 REM ComfyUI-Manager's own command line (cm-cli), and says for each one whether it went in.
 REM Packs you already have are skipped: nothing is updated, downgraded or removed.
 REM
@@ -18,8 +18,8 @@ set "PYTHONUTF8=1"
 set "LOG=%TEMP%\rednode_extras_step.txt"
 
 echo.
-echo RedNode Studio extras installer
-echo ===============================
+echo RedNode Studio installer
+echo ========================
 echo.
 
 if not exist "%PY%" (
@@ -43,6 +43,7 @@ if errorlevel 1 (
 if not exist "%CMCLI%" (
   echo ComfyUI-Manager is not installed in this ComfyUI yet. Installing it first...
   "%PY%" -s -m pip install -r "%ROOT%ComfyUI\manager_requirements.txt"
+  set "MANAGER_NEW=1"
   if not exist "%CMCLI%" (
     echo Could not install ComfyUI-Manager. Nothing else was changed.
     goto :done
@@ -51,6 +52,7 @@ if not exist "%CMCLI%" (
 
 REM id^|name: the Comfy Registry id, or a GitHub address for a pack that is not on it
 set PACKS=^
+ "rednode-studio|RedNode Studio"^
  "rgthree-comfy|rgthree nodes"^
  "derfuu_comfyui_moddednodes|Derfuu Modded Nodes (Text node)"^
  "erosdiffusion-eulerflowmatchingdiscretescheduler|FlowMatch scheduler"^
@@ -152,6 +154,10 @@ echo.
 :restart
 echo.
 echo Start ComfyUI again so the new nodes load.
+if defined MANAGER_NEW (
+  echo ComfyUI Manager was installed too. Its window only shows when ComfyUI starts with
+  echo --enable-manager: add that to the end of the python line in run_nvidia_gpu.bat.
+)
 
 :done
 echo.

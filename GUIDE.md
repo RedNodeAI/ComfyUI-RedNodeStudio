@@ -57,8 +57,9 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs. 
 **One-click install on the portable ComfyUI.** Download
 [install_rednode_extras.bat](extras/install_rednode_extras.bat), put it in your
 ComfyUI_windows_portable folder next to run_nvidia_gpu.bat, close ComfyUI and double-click it.
-It installs every pack below through ComfyUI Manager's own installer, one at a time, skips
-the ones you already have and names any that fail. The desktop app and venv installs use
+It installs RedNode Studio and every pack below through ComfyUI Manager's own installer, one
+at a time, installs Manager first if your ComfyUI does not have it, skips the ones you
+already have and names any that fail. The desktop app and venv installs use
 Manager instead.
 
 None of these are required. The Workspace renders without every one of them and says on the Run
