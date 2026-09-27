@@ -92,15 +92,20 @@ if /i not "%~1"=="/y" (
 )
 
 echo.
-echo Fetching the pack list...
-"%CMCLI%" update-cache >"%LOG%" 2>&1
-findstr /l /c:"Cache update complete" "%LOG%" >nul
+echo Fetching the pack list from the Comfy Registry, about a minute...
+"%CMCLI%" update-cache
+dir /b "%COMFYUI_PATH%\user\__manager\cache\*custom-node-list.json" >nul 2>&1
 if errorlevel 1 (
   echo Could not fetch the pack list from the Comfy Registry. Check the internet
   echo connection and run this again. Nothing was changed.
   goto :done
 )
 
+echo.
+echo Installing, one pack at a time. Each pack also downloads its own Python
+echo packages, so a big one can sit on its line for a few minutes. The window
+echo has not frozen: it moves on by itself.
+echo.
 set /a N=0, OK=0, SKIP=0, BAD=0
 set "FAILED="
 for %%P in (%PACKS%) do (
