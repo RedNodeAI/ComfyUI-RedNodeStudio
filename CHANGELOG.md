@@ -34,7 +34,8 @@ format matters: **version** then a date, notes below until the next bold line.
   models/checkpoints (ComfyUI 0.37+) and pick it as the SAM file, shown as (ComfyUI built-in).
   It needs no Triton. A target that is not in the picture comes back as not found, the way
   Easy-Sam3 answers, rather than as the detector's best guess
-- A node pack installer for the portable ComfyUI, extras/RedNode_Install_Node_Packs.bat on GitHub.
+- A node pack installer for the portable ComfyUI and the desktop app,
+  extras/RedNode_Install_Node_Packs.bat on GitHub.
   It installs the optional packs through ComfyUI Manager's command line, one at a time,
   names anything that fails, and says when SAM3 needs Triton. It looks in custom_nodes first:
   packs already there are skipped without Manager, and with all of them there it finishes in
