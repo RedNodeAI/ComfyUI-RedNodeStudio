@@ -68,7 +68,7 @@ echo    %GREY%press Enter for 1 and 2, the recommended start.%X%
 set "ANS="
 set /p "ANS=   Your choice: "
 if defined ANS set "SEL=%ANS%"
-if /i "%SEL%"=="A" set "SEL=1 2 3 4 5"
+if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6"
 :chosen
 set "SEL= %SEL% "
 
@@ -239,6 +239,7 @@ REM ---- the menu: ::G~number~title~MB~license or page -------------------------
 ::G~3~Qwen Image 2.1 - a second rig, with its own encoder and VAE~24260~Qwen research license: huggingface.co/Qwen/Qwen-Image-2.1
 ::G~4~PornMaster Krea 2 - the workflow's mix rig, from Civitai~19430~Its creator's terms: civitai.com/models/2735032
 ::G~5~JANKU Illustrious - the SDXL rig, from Civitai~6780~Its creator's terms: civitai.com/models/1277670
+::G~6~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
 ::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
@@ -255,6 +256,11 @@ REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ---------
 ::M~4~text_encoders~qwen3VLInstruct4bHeretic_v10.safetensors~civ~https://civitai.com/api/download/models/3066989~5120~https://civitai.com/models/2728378?modelVersionId=3066989
 ::M~4~vae~wan_2.1_vae_fp32.safetensors~hf~https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_fp32.safetensors~510~-
 ::M~5~checkpoints~JANKUTrainedChenkinNoobai_v777.safetensors~civkey~https://civitai.com/api/download/models/2786084~6780~https://civitai.com/models/1277670?modelVersionId=2786084
+::M~6~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
+::M~6~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
+::M~6~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~6~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
+::M~6~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
 
 ::~          .-"-.               .-"-.
 ::~         /     \   .-"""-.   /     \
