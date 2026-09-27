@@ -334,9 +334,10 @@ def assemble(style, subject, surroundings, framing, placement, light_and_colour,
             parts.append(_cap(surroundings) + ".")
         tail = []
         join = "" if (studio_live or camera_off) else JOIN.get(framing, "")
-        if placement:
+        # both lead into the subject: with none they dangled as "In the middle of it,."
+        if placement and subject:
             tail.append(placement.rstrip(",") + ",")
-        elif join:
+        elif join and subject:
             tail.append(join.rstrip())
         if subject:
             tail.append(subject)

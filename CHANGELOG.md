@@ -21,6 +21,11 @@ format matters: **version** then a date, notes below until the next bold line.
   (none) still turns it off
 - A picture dragged from the shelf or the result pane onto the Upscale tab's picture box lands
   there. It replaced the Paint canvas's picture instead, and the Upscale box stayed empty
+- A Frame prompt with Subject empty no longer starts its subject sentence with a dangling
+  "In the middle of it,." or placement; the lead-in only appears with a subject to lead into
+- When Re-angle, Re-render or Swap fails on the Editor's picture, the console says the run
+  carries on without it, and says plainly when nothing landed and the run became a normal
+  render from the prompt. It claimed the picture was kept as it was
 
 ### New
 

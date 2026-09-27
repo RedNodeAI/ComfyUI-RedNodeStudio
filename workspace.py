@@ -3588,7 +3588,7 @@ class RedNodeStudioWorkspace:
                                      ed_img.shape[2], ed_img.shape[1]), flush=True)
             except Exception as exc:
                 _run.end("reangle", "Re-angle", "error", error=str(exc)[:200])
-                print("[RedNode Workspace] re-angle failed: %s; the source is used as it is"
+                print("[RedNode Workspace] re-angle failed: %s; the run carries on without it"
                       % exc, flush=True)
         # REALISM: an illustration becomes a photograph, through the workflow's
         # own nodes and a conversion LoRA. AFTER Re-angle, so the final viewpoint
@@ -3608,7 +3608,7 @@ class RedNodeStudioWorkspace:
                       "(%d x %d)" % (ed_img.shape[2], ed_img.shape[1]), flush=True)
             except Exception as exc:
                 _run.end("realism", "Re-render", "error", error=str(exc)[:200])
-                print("[RedNode Workspace] realism failed: %s; the source is used as it is"
+                print("[RedNode Workspace] realism failed: %s; the run carries on without it"
                       % exc, flush=True)
         # SWAP: the Subject onto the person in the
         # picture, in the engine where a swap lands - Qwen-Image-Edit + the BFS
@@ -3632,7 +3632,7 @@ class RedNodeStudioWorkspace:
             _ref, _ref_name = _swap_ref()
             if _ref is None:
                 print("[RedNode Workspace] swap: the %s gallery is off or empty, so there "
-                      "is no reference; the source is used as it is" % _ref_name, flush=True)
+                      "is no reference; the run carries on without the swap" % _ref_name, flush=True)
             else:
                 try:
                     from . import swap as _swap
@@ -3649,7 +3649,7 @@ class RedNodeStudioWorkspace:
                                                         ed_img.shape[1]), flush=True)
                 except Exception as exc:
                     _run.end("swap", "Swap", "error", error=str(exc)[:200])
-                    print("[RedNode Workspace] swap failed: %s; the source is used as it is"
+                    print("[RedNode Workspace] swap failed: %s; the run carries on without it"
                           % exc, flush=True)
 
         # THE EDITED PICTURE IS THE IMAGE OUTPUT: the Editor is not Img2Img, so no
@@ -3669,7 +3669,8 @@ class RedNodeStudioWorkspace:
 
         if _rig_deferred and not _stage_only:
             # the edit did not land, so this is an ordinary render after all
-            print("[RedNode Workspace] no source edit landed, so the rig loads now",
+            print("[RedNode Workspace] no source edit landed, so this is a normal render from "
+                  "the prompt, not an edit of the Editor's picture; the rig loads now",
                   flush=True)
             rig_name, rig_model, rig_clip, rig_vae = load_active_rig(cfg, prompt=prompt)
             if model is None and rig_model is not None:
