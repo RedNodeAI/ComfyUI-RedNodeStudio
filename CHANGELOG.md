@@ -16,6 +16,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - The Camera tab's Auto latent sizes the Workspace's canvas. The switch only reached the
   standalone Camera Studio node; now the Latent tab takes the camera's size while it is on and
   says so, keeping its own batch, scale and passes
+- Re-angle loads its Lightning speed LoRA when the Speed LoRA picker is left on its default.
+  It ran the 4 steps without it, so the new view came out soft and washed out. Choosing
+  (none) still turns it off
 
 ### New
 
