@@ -9,7 +9,7 @@ REM Put this file in your ComfyUI_windows_portable folder (next to run_nvidia_gp
 REM close ComfyUI, and double-click it. Source: github.com/RedNodeAI/ComfyUI-RedNodeStudio
 
 setlocal EnableDelayedExpansion
-title RedNode Studio installer
+title RedNode Studio node pack installer
 for /f %%a in ('echo prompt $E ^| cmd') do set "ESC=%%a"
 set "RED=%ESC%[91m"
 set "WHITE=%ESC%[97m"
@@ -25,7 +25,7 @@ set "PY=%ROOT%python_embeded\python.exe"
 set "CMCLI=%ROOT%python_embeded\Scripts\cm-cli.exe"
 set "COMFYUI_PATH=%ROOT%ComfyUI"
 set "PYTHONUTF8=1"
-set "LOG=%TEMP%\rednode_extras_step.txt"
+set "LOG=%TEMP%\rednode_node_packs_step.txt"
 
 cls
 echo.
@@ -115,7 +115,7 @@ if errorlevel 2 goto :cancelled
 REM ---- step 1: the pack list ------------------------------------------------------
 echo.
 echo    %RED%Step 1 of 2%X%  %WHITE%Getting the pack list from the Comfy Registry%X% %GREY%(about a minute)%X%
-title RedNode Studio installer - getting the pack list
+title RedNode Studio node pack installer - getting the pack list
 echo %GREY%
 "%CMCLI%" update-cache
 echo %X%
@@ -135,7 +135,7 @@ for %%P in (%PACKS%) do (
   for /f "tokens=1,* delims=|" %%A in (%%P) do (
     set /a N+=1
     set "NUM=  !N!"
-    title RedNode Studio installer - !N! of %TOTAL% - %%B
+    title RedNode Studio node pack installer - !N! of %TOTAL% - %%B
     <nul set /p "=%GREY%     !NUM:~-2!/%TOTAL%%X%  %%B ... "
     "%CMCLI%" install "%%A" >"%LOG%" 2>&1
     findstr /l /c:"[INSTALLED]" "%LOG%" >nul
@@ -151,14 +151,14 @@ for %%P in (%PACKS%) do (
         echo %RED%did not install%X%
         set /a BAD+=1
         set "FAILED=!FAILED! "%%B""
-        copy /y "%LOG%" "%TEMP%\rednode_extras_failed_!N!.txt" >nul
+        copy /y "%LOG%" "%TEMP%\rednode_node_packs_failed_!N!.txt" >nul
       )
     )
   )
 )
 
 REM ---- the end --------------------------------------------------------------------
-title RedNode Studio installer - done
+title RedNode Studio node pack installer - done
 echo.
 echo    %GREY%--------------------------------------------------------------------%X%
 if %BAD% equ 0 (
@@ -171,7 +171,7 @@ if %BAD% equ 0 (
   echo.
   echo    %GREY%RedNode Studio still works without them; only the parts that use them wait.%X%
   echo    %GREY%Run this file again later, or install them from ComfyUI Manager. The reason%X%
-  echo    %GREY%for each is saved in %TEMP% as rednode_extras_failed_N.txt%X%
+  echo    %GREY%for each is saved in %TEMP% as rednode_node_packs_failed_N.txt%X%
 )
 echo    %GREY%--------------------------------------------------------------------%X%
 echo.

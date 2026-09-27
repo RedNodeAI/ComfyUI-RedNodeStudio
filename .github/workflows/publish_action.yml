@@ -63,6 +63,6 @@ jobs:
           body_path: release_notes.md
           # releases/latest/download/<name> must keep working, so every release carries both
           files: |
-            extras/install_rednode_extras.bat
-            extras/download_rednode_models.bat
+            extras/RedNode_Install_Node_Packs.bat
+            extras/RedNode_Download_Models.bat
           fail_on_unmatched_files: true

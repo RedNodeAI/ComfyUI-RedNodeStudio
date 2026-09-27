@@ -55,14 +55,14 @@ Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs. 
 ### Optional packs
 
 **One-click install on the portable ComfyUI.** Download
-[install_rednode_extras.bat](extras/install_rednode_extras.bat), put it in your
+[RedNode_Install_Node_Packs.bat](extras/RedNode_Install_Node_Packs.bat), put it in your
 ComfyUI_windows_portable folder next to run_nvidia_gpu.bat, close ComfyUI and double-click it.
 It installs RedNode Studio and every pack below through ComfyUI Manager's own installer, one
 at a time, installs Manager first if your ComfyUI does not have it, skips the ones you
 already have and names any that fail. The desktop app and venv installs use
 Manager instead.
 
-**The models, the same way.** [download_rednode_models.bat](extras/download_rednode_models.bat)
+**The models, the same way.** [RedNode_Download_Models.bat](extras/RedNode_Download_Models.bat)
 downloads the models, text encoders and VAEs the RedNode Studio workflow uses, each from its
 publisher (Hugging Face, or Civitai where a model only lives there) into the right folder,
 under the name the workflow expects. Pick what you want; Krea 2 Turbo and the Re-render LoRA
