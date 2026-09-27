@@ -2909,7 +2909,7 @@ export function adoptResult(node, r, why = "unknown", key = "paint") {
   // canvas by themselves, and every call site here is a deliberate press, so either
   // something else writes the source or one of these is firing when it should not.
   // Guessing between those two cost a round trip; one line settles it.
-  console.log(`[RedNode Workspace] paint source <- ${resultEntry(r)} (${why}; `
+  console.log(`[RedNode Workspace] ${key} source <- ${resultEntry(r)} (${why}; `
             + `run ${r.prompt_id || "none"})`);
   P.source = resultEntry(r);
   if (key === "paint") node._rnStrokes = [];
@@ -8141,7 +8141,8 @@ export function paintDropZone(node, el, key = "paint") {
       // a result dragged from the pane next door arrives as data, not as a file
       const inApp = e.dataTransfer?.getData?.("application/x-rednode-result");
       if (inApp) {
-        adoptResult(node, JSON.parse(inApp), "dragged onto the canvas");
+        // into THIS box: without the key a shelf picture dropped on Upscale replaced Paint's
+        adoptResult(node, JSON.parse(inApp), "dragged onto the canvas", key);
         return;
       }
       await adoptPaintSource(node, (e.dataTransfer?.files || [])[0], key);

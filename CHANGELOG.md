@@ -19,6 +19,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - Re-angle loads its Lightning speed LoRA when the Speed LoRA picker is left on its default.
   It ran the 4 steps without it, so the new view came out soft and washed out. Choosing
   (none) still turns it off
+- A picture dragged from the shelf or the result pane onto the Upscale tab's picture box lands
+  there. It replaced the Paint canvas's picture instead, and the Upscale box stayed empty
 
 ### New
 
