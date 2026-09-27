@@ -4,6 +4,14 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.6.2** - unreleased
+
+### New
+
+- An extras installer for the portable ComfyUI, extras/install_rednode_extras.bat on GitHub.
+  It installs the optional packs through ComfyUI Manager's command line, one at a time,
+  skips what is already there, names anything that fails, and says when SAM3 needs Triton
+
 **1.6.1** - 2026-09-26
 
 ### Fixes
