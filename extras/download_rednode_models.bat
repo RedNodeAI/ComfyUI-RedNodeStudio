@@ -38,7 +38,7 @@ echo.
 echo      %RED%*%X%  Each file comes straight from its publisher, under its own license
 echo      %RED%*%X%  Saved into the right ComfyUI folder, with the name the workflow expects
 echo      %RED%*%X%  Files you already have are skipped; a stopped download picks up again
-echo      %RED%*%X%  Pick only what you want; the first one is all you need to start
+echo      %RED%*%X%  Pick only what you want; 1 and 2 are all you need to start
 echo    %GREY%--------------------------------------------------------------------%X%
 echo.
 
@@ -235,7 +235,7 @@ exit /b
 
 REM ---- the menu: ::G~number~title~MB~license or page ----------------------------------
 ::G~1~Krea 2 Turbo, official - the model, its text encoder and VAE~18630~Krea 2 license: huggingface.co/krea/Krea-2-Turbo
-::G~2~Anything2Real - the LoRA the Re-render tab converts with~230~Apache 2.0: huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters
+::G~2~Krea 2 LoRAs the workflow uses - Identity Edit, Filter Bypass, Refusal Reduction, Anything2Real~2085~Each from its author, under its own terms
 ::G~3~Qwen Image 2.1 - a second rig, with its own encoder and VAE~24260~Qwen research license: huggingface.co/Qwen/Qwen-Image-2.1
 ::G~4~PornMaster Krea 2 - the workflow's mix rig, from Civitai~19430~Its creator's terms: civitai.com/models/2735032
 ::G~5~JANKU Illustrious - the SDXL rig, from Civitai~6780~Its creator's terms: civitai.com/models/1277670
@@ -244,6 +244,9 @@ REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ---------
 ::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
 ::M~1~text_encoders~qwen3vl_4b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors~5240~-
 ::M~1~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~2~loras~krea2_identity_edit_v1_2.safetensors~hf~https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors~1828~-
+::M~2~loras~krea2filterbypass3.safetensors~civkey~https://civitai.com/api/download/models/3067151~1~https://civitai.com/models/2728234?modelVersionId=3067151
+::M~2~loras~Krea2_TextFusion_Refusal_Reduction.safetensors~civkey~https://civitai.com/api/download/models/3125118~27~https://civitai.com/models/2775340?modelVersionId=3125118
 ::M~2~loras~Krea2_Anything2RealCharacters-V3.safetensors~hf~https://huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters/resolve/main/Krea2_Anything2RealCharacters-V3.safetensors~230~-
 ::M~3~diffusion_models~qwen_image_2.1_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors~14230~-
 ::M~3~text_encoders~qwen3vl_8b_int8_convrot.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors~9350~-
