@@ -852,6 +852,107 @@ def _defaults_for(cls):
 
 _SAM3_CACHE = {"key": None, "model": None}
 
+# ComfyUI's own SAM3 (0.37+): a checkpoint in models/checkpoints carrying its text
+# encoder, run by SAM3_Detect. No Triton and no third-party pack. The SAM file picker
+# lists these files with this prefix; anything else is an Easy-Sam3 file.
+CORE_SAM_PREFIX = "core:"
+
+
+def core_sam3_files():
+    """The SAM3 checkpoints core can run, or [] when this ComfyUI has no SAM3_Detect."""
+    if _core.NODE_CLASS_MAPPINGS.get("SAM3_Detect") is None:
+        return []
+    try:
+        import folder_paths
+        return [f for f in folder_paths.get_filename_list("checkpoints")
+                if "sam3" in f.lower().replace("\\", "/").rsplit("/", 1)[-1]]
+    except Exception:
+        return []
+
+
+def _core_call(name, **kw):
+    """A core node by name, V1 or V3, its outputs as a tuple."""
+    cls = _core.NODE_CLASS_MAPPINGS[name]
+    if hasattr(cls, "execute") and not hasattr(cls, "FUNCTION"):
+        out = cls.execute(**kw)
+        out = getattr(out, "args", out)
+    else:
+        out = getattr(cls(), cls.FUNCTION)(**kw)
+        out = getattr(out, "args", out)
+    return tuple(out) if isinstance(out, (tuple, list)) else (out,)
+
+
+def _core_sam3_present(model, clip, image, parts):
+    """The targets SAM3's presence head says are in the picture.
+
+    Core's SAM3_Detect ignores that head, so a target that is not there still came
+    back as its best guess: "a dragon" masked 80% of a portrait at score 0.68, where
+    Easy-Sam3 returns nothing. Presence splits cleanly (in the picture 0.9+, absent
+    under 0.03). It reads core internals, so when they move the check steps aside.
+    """
+    try:
+        import comfy.model_management as mm
+        import comfy.utils
+        from comfy_extras.nodes_sam3 import _extract_text_prompts
+        mm.load_model_gpu(model)
+        dev, dt = mm.get_torch_device(), model.model.get_dtype()
+        sm = model.model.diffusion_model
+        h, w = int(image.shape[1]), int(image.shape[2])
+        frame = comfy.utils.common_upscale(image[:1, :, :, :3].movedim(-1, 1), 1008, 1008,
+                                           "bilinear", crop="disabled").to(dev, dt)
+        keep = []
+        for p in parts:
+            word = re.sub(r":\s*[\d.]+\s*$", "", p).strip()
+            cond = _core_call("CLIPTextEncode", clip=clip, text=word)[0]
+            emb, msk, _n = _extract_text_prompts(cond, dev, dt)[0]
+            with torch.no_grad():
+                res = sm(frame, text_embeddings=emb, text_mask=msk, threshold=0.5,
+                         orig_size=(h, w))
+            if float(torch.sigmoid(res["presence"].float()).max()) >= 0.5:
+                keep.append(p)
+            else:
+                print("[RedNode Detailer] built-in SAM3: no %r in the picture" % word, flush=True)
+        return keep
+    except Exception as exc:
+        print("[RedNode Detailer] built-in SAM3: the presence check is unavailable (%s); "
+              "a target that is not in the picture may still come back as a mask" % exc,
+              flush=True)
+        return parts
+
+
+def _core_sam3_mask(image, target, threshold, ckpt):
+    """_sam3_mask through core's Load Checkpoint, CLIP Text Encode and SAM3_Detect."""
+    if _core.NODE_CLASS_MAPPINGS.get("SAM3_Detect") is None:
+        return None, ("this ComfyUI has no built-in SAM3 (it came in 0.37). Update "
+                      "ComfyUI, or pick an Easy-Sam3 file as the SAM file")
+    ckey = json.dumps(["core", ckpt])
+    if _SAM3_CACHE["key"] == ckey and _SAM3_CACHE["model"] is not None:
+        model, clip = _SAM3_CACHE["model"]
+    else:
+        model, clip = _core_call("CheckpointLoaderSimple", ckpt_name=ckpt)[:2]
+        if clip is None:
+            return None, "%s holds no text encoder, so it cannot find %r" % (ckpt, target)
+        _SAM3_CACHE["key"] = ckey
+        _SAM3_CACHE["model"] = (model, clip)
+    # core keeps one detection per category unless told more ("face:4"); the
+    # Detailer wants every face or hand in the picture, as Easy-Sam3 returns them
+    parts = [p.strip() for p in str(target).split(",") if p.strip()]
+    parts = _core_sam3_present(model, clip, image, parts)
+    if not parts:
+        return None, "the built-in SAM3 found no %r in the picture" % target
+    words = ", ".join(p if re.search(r":\s*[\d.]+\s*$", p) else p + ":16" for p in parts)
+    cond = _core_call("CLIPTextEncode", clip=clip, text=words)[0]
+    out = _core_call("SAM3_Detect", model=model, image=image[..., :3], conditioning=cond,
+                     threshold=float(threshold))
+    mask = out[0]
+    if not torch.is_tensor(mask) or mask.ndim != 3:
+        return None, "the built-in SAM3 returned no mask for %r" % target
+    if mask.shape[0] > 1:
+        mask = mask.amax(0, keepdim=True)
+    if float(mask.max()) <= 0:
+        return None, "the built-in SAM3 found no %r in the picture" % target
+    return mask, None
+
 
 def _sam3_mask(image, target, threshold, sam_model="", precision=""):
     """A [1,H,W] mask for `target`, through ComfyUI-Easy-Sam3, or None with a reason.
@@ -865,11 +966,22 @@ def _sam3_mask(image, target, threshold, sam_model="", precision=""):
     bf16, fp32) when set; its default is fp32, which is twice the memory.
     """
     try:
+        if str(sam_model).startswith(CORE_SAM_PREFIX):
+            return _core_sam3_mask(image, target, threshold, sam_model[len(CORE_SAM_PREFIX):])
         loader_cls = _core.NODE_CLASS_MAPPINGS.get("easy sam3ModelLoader")
         seg_cls = _core.NODE_CLASS_MAPPINGS.get("easy sam3ImageSegmentation")
+        if (loader_cls is None or seg_cls is None) and not sam_model:
+            # (first file) with no Easy-Sam3: the picker's first file is a built-in one
+            _files = core_sam3_files()
+            if _files:
+                print("[RedNode Detailer] SAM file (first file): Easy-Sam3 is not installed, "
+                      "so ComfyUI's built-in SAM3 with %s" % _files[0], flush=True)
+                return _core_sam3_mask(image, target, threshold, _files[0])
         if loader_cls is None or seg_cls is None:
             return None, ("ComfyUI-Easy-Sam3 is not installed, and it is what "
-                          "segments %r. Install it in Manager." % target)
+                          "segments %r. Install it in Manager, or put ComfyUI's own "
+                          "sam3.1_multiplex_fp16.safetensors in models/checkpoints and "
+                          "pick it as the SAM file." % target)
         loader = loader_cls()
         lkw = _defaults_for(loader_cls)
         if sam_model:

@@ -409,7 +409,14 @@ export function runNeeds(node, cfg) {
     if (stages.some((s) => s.type === "upscale")) wantPack("seedvr2", null, { tab: "detailer" });
     if (stages.some((s) => s.type === "vosr2")) wantPack("vosr2", null, { tab: "detailer" });
     if (stages.some((s) => s.type === "usdu")) wantPack("usdu", null, { tab: "detailer" });
-    if (stages.some((s) => s.type === "detailer")) {
+    const coreSam = (modelListsNow()?.sam3core || []).length > 0;
+    if (stages.some((s) => s.type === "detailer") && coreSam) {
+      // ComfyUI's built-in SAM3 file is enough on its own: no pack to ask for
+      out.push({ kind: "file", ok: true, label: "ComfyUI's built-in SAM3",
+                 what: "finding what a Detailer pass works on",
+                 how: "Pick its file as the SAM file on the Detailer tab.",
+                 to: { tab: "detailer" } });
+    } else if (stages.some((s) => s.type === "detailer")) {
       wantPack("sam3", "finding what a Detailer pass works on", { tab: "detailer" });
       // the pack installs without its checkpoints, and the pass then fails on the
       // file rather than the pack, which read as the pack being fine

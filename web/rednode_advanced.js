@@ -489,6 +489,16 @@ async function fetchLists() {
       if (opts.some((x) => /sam/i.test(String(x)))) { samModels = opts; break; }
     }
   }
+  // ComfyUI's own SAM3 (0.37+): its checkpoints in models/checkpoints, marked so the
+  // server runs them through core's SAM3_Detect (refine_pipeline.CORE_SAM_PREFIX)
+  const samLabels = {};
+  if (Object.keys(await inputs("SAM3_Detect")).length) {
+    const ckpts = await pull("CheckpointLoaderSimple", "ckpt_name");
+    for (const f of ckpts.filter((x) => /sam3/i.test(String(x).split(/[\\/]/).pop()))) {
+      samModels = [...samModels, `core:${f}`];
+      samLabels[`core:${f}`] = `${f} (ComfyUI built-in)`;
+    }
+  }
   // the SeedVR2 pack's three nodes, for the upscale card; absent, the card says so
   const dit = await inputs("SeedVR2LoadDiTModel");
   const svae = await inputs("SeedVR2LoadVAEModel");
@@ -508,6 +518,7 @@ async function fetchLists() {
     schedulers: await pull("KSampler", "scheduler"),
     loras: await pull("LoraLoaderModelOnly", "lora_name"),
     samModels,
+    samLabels,
     samPrecisions: optionsOf(sam.precision),
     seedvr: !!Object.keys(dit).length,
     ditModels: optionsOf(dit.model),
@@ -1014,11 +1025,12 @@ function buildPanel(node, hostEl = null) {
         sel(L.samModels, d.sam_model,
             L.samModels.length
               ? "Which SAM3 checkpoint segments the targets, for every detailer "
-                + "pass left at (node's). The files in models/sam3. (first file) "
-                + "takes whichever the loader lists first."
-              : "ComfyUI-Easy-Sam3 is not installed, or models/sam3 holds no "
-                + "checkpoint, so there is nothing to pick yet.",
-            (v) => { d.sam_model = v; writeCfg(node, d); }, "(first file)"),
+                + "pass left at (node's). Easy-Sam3's files in models/sam3, and "
+                + "ComfyUI's built-in SAM3 files in models/checkpoints, which need "
+                + "no Triton. (first file) takes whichever is listed first."
+              : "No SAM3 yet: install ComfyUI-Easy-Sam3, or put ComfyUI's own "
+                + "sam3.1_multiplex_fp16.safetensors in models/checkpoints.",
+            (v) => { d.sam_model = v; writeCfg(node, d); }, "(first file)", L.samLabels),
         lab("Precision"),
         sel(L.samPrecisions, d.sam_precision,
             "The precision SAM3 loads at. fp16 or bf16 halves its memory on the "
@@ -1585,11 +1597,10 @@ function buildPanel(node, hostEl = null) {
                          L.samModels.length
                            ? "A SAM checkpoint for this pass only. (node's) "
                              + "follows the SAM file chosen at the top."
-                           : "ComfyUI-Easy-Sam3 is not installed, so there is "
-                             + "nothing to pick; this pass will say so and pass "
-                             + "the image through.",
+                           : "No SAM3 yet, so there is nothing to pick; this pass "
+                             + "will say so and pass the image through.",
                          (v) => { s.sam_model = v; writeCfg(node, d); },
-                         "(node's)")));
+                         "(node's)", L.samLabels)));
           top.append(...A(lab("Res"),
                      sel(["512", "768", "1024", "1280", "1536", "2048"],
                          s.crop_res ? String(s.crop_res) : "",

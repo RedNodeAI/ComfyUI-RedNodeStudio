@@ -110,6 +110,12 @@ ComfyUI-Easy-Sam3 installs without a checkpoint. Put one in `models/sam3` as wel
 [facebook/sam3](https://huggingface.co/facebook/sam3), and pick it as the SAM file on a
 Detailer pass.
 
+**Or no pack at all.** ComfyUI 0.37 and newer has SAM3 built in. Put
+`sam3.1_multiplex_fp16.safetensors` from [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1)
+in `models/checkpoints` (the model downloader's item 10 does it) and pick it as the SAM file; it
+shows as "(ComfyUI built-in)". It needs no Triton, which Easy-Sam3 does and which a fresh Windows
+portable often cannot get yet. Both can be installed side by side; the SAM file decides which runs.
+
 Ollama is a program of its own rather than a node pack. Install it from
 [ollama.com](https://ollama.com) and pull a vision model to use the Ollama caption engine.
 
@@ -866,8 +872,8 @@ In `example_workflows/`, and in ComfyUI's own template browser once the pack is 
   are the free Civitai files above.
 
 Two optional packs matter to the STUDIO itself rather than to a workflow. **ComfyUI-Easy-Sam3**
-gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in `models/sam3`). Without
-it the pack runs fine and a detailer pass says so and passes the picture through untouched, rather
+gives the Detailer its face, hair and hands masks (it wants `sam3.pt` in `models/sam3`); ComfyUI's
+built-in SAM3 does the same job from `models/checkpoints` with no pack. Without either the pack runs fine and a detailer pass says so and passes the picture through untouched, rather
 than failing. **ComfyUI-SeedVR2_VideoUpscaler** is what the Detailer's upscale pass runs on, and
 an upscale pass without it passes the picture through the same way.
 
@@ -914,6 +920,7 @@ with none of them, and the brightness slot takes whichever light slider you pick
 |---|---|---|
 | [ComfyUI-Easy-Sam3](https://github.com/yolain/ComfyUI-Easy-Sam3), the pack | Manager | the face, hair and hands masks |
 | `sam3.pt` | `models/sam3` | [facebook/sam3](https://huggingface.co/facebook/sam3), gated: request access on the page, then download |
+| or `sam3.1_multiplex_fp16.safetensors`, no pack needed | `models/checkpoints` | [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1), ComfyUI 0.37+, no Triton |
 | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler), the pack | Manager | the upscale pass |
 | `seedvr2_ema_7b_fp8_e4m3fn_mixed_block35_fp16.safetensors` | `models/SEEDVR2` | [AInVFX/SeedVR2_comfyUI](https://huggingface.co/AInVFX/SeedVR2_comfyUI/tree/main) |
 | `ema_vae_fp16.safetensors` | `models/SEEDVR2` | [numz/SeedVR2_comfyUI](https://huggingface.co/numz/SeedVR2_comfyUI/blob/main/ema_vae_fp16.safetensors) |

@@ -12214,6 +12214,9 @@ async function fetchModelLists() {
     // the segmenter's own checkpoints (models/sam3): the pack installs without
     // them, and a Detailer pass then fails on the file rather than the pack
     sam3: await pull("easy sam3ModelLoader", "model"),
+    // ComfyUI's own SAM3 checkpoints (0.37+), which need neither Easy-Sam3 nor Triton
+    sam3core: (await pull("CheckpointLoaderSimple", "ckpt_name"))
+      .filter((x) => /sam3/i.test(String(x).split(/[\\/]/).pop())),
     loras: await pull("LoraLoader", "lora_name"),
     samplers: await pull("KSampler", "sampler_name"),
     // RES4LYF's own sampler list, for its ClownsharKSampler; empty without the pack

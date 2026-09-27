@@ -192,7 +192,9 @@ echo    %WHITE%Good to know%X% %GREY%- optional, nothing here stops you%X%
 if not defined SAM3NOTE goto :note_manager
 echo      %GREY%-%X%  SAM3 automatic masks need one more piece, Triton, before they load.
 echo         %GREY%Everything else works without it.%X%
-"%PY%" -s -c "import torch;v='.'.join(torch.__version__.split('+')[0].split('.')[:2]);m={'2.6':'3.2','2.7':'3.3','2.8':'3.4','2.9':'3.5','2.10':'3.6'};t=m.get(v);q=chr(34);print('         To add it now, close ComfyUI and run this from this folder:\n           python_embeded\\python.exe -s -m pip install '+q+'triton-windows=='+t+'.*'+q if t else '         No Triton build matches this ComfyUI yet; a coming RedNode Studio\n         update adds masks that do not need it.')"
+"%PY%" -s -c "import torch;v='.'.join(torch.__version__.split('+')[0].split('.')[:2]);m={'2.6':'3.2','2.7':'3.3','2.8':'3.4','2.9':'3.5','2.10':'3.6'};t=m.get(v);q=chr(34);print('         To add it now, close ComfyUI and run this from this folder:\n           python_embeded\\python.exe -s -m pip install '+q+'triton-windows=='+t+'.*'+q if t else '         No Triton build matches this ComfyUI yet.')"
+echo         %GREY%Or skip Triton: model downloader item 10 gets ComfyUI's own SAM3.1, which
+echo         needs no Triton; pick it as the SAM file on the Detailer tab.%X%
 :note_manager
 if not defined MANAGER_NEW goto :notes_end
 echo      %GREY%-%X%  ComfyUI Manager was added too. To see its window in ComfyUI, add
