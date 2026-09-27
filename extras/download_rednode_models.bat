@@ -38,7 +38,7 @@ echo.
 echo      %RED%*%X%  Each file comes straight from its publisher, under its own license
 echo      %RED%*%X%  Saved into the right ComfyUI folder, with the name the workflow expects
 echo      %RED%*%X%  Files you already have are skipped; a stopped download picks up again
-echo      %RED%*%X%  Pick only what you want; 1 and 2 are all you need to start
+echo      %RED%*%X%  Pick only what you want; 1, 5 and 6 are all you need to start
 echo    %GREY%--------------------------------------------------------------------%X%
 echo.
 
@@ -48,15 +48,21 @@ if not exist "%SystemRoot%\System32\curl.exe" goto :no_curl
 REM ---- the menu -------------------------------------------------------------------
 echo    %WHITE%What would you like?%X%
 echo.
-for /f "tokens=2-5 delims=~" %%a in ('findstr /b "::G~" "%~f0"') do (
-  set /a GB10=%%c/100
+set "LASTSEC="
+for /f "tokens=2-6 delims=~" %%a in ('findstr /b "::G~" "%~f0"') do (
+  if not "%%b"=="!LASTSEC!" (
+    echo.
+    echo    %RED%%%b%X%
+    set "LASTSEC=%%b"
+  )
+  set /a GB10=%%d/100
   set "GBT=!GB10:~0,-1!.!GB10:~-1!"
   if "!GBT:~0,1!"=="." set "GBT=0!GBT!"
-  echo      %RED%%%a%X%  %WHITE%%%b%X%  %GREY%!GBT! GB%X%
-  echo         %GREY%%%d%X%
+  echo      %RED%%%a%X%  %WHITE%%%c%X%  %GREY%!GBT! GB%X%
+  echo         %GREY%%%e%X%
 )
 echo.
-set "SEL=1 2"
+set "SEL=1 5 6"
 set "YES="
 if /i "%~1"=="/y" (
   set "YES=1"
@@ -64,11 +70,11 @@ if /i "%~1"=="/y" (
   goto :chosen
 )
 echo    %GREY%Type the numbers you want with spaces between, A for all of them, or just%X%
-echo    %GREY%press Enter for 1 and 2, the recommended start.%X%
+echo    %GREY%press Enter for 1, 5 and 6: the Krea 2 model and its LoRAs, the recommended start.%X%
 set "ANS="
 set /p "ANS=   Your choice: "
 if defined ANS set "SEL=%ANS%"
-if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6"
+if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6 7 8"
 :chosen
 set "SEL= %SEL% "
 
@@ -76,7 +82,9 @@ REM ---- what that adds up to --------------------------------------------------
 set /a NEEDMB=0, COUNT=0, NEEDKEY=0
 for /f "tokens=2-8 delims=~" %%a in ('findstr /b "::M~" "%~f0"') do (
   if not "!SEL: %%a =!"=="!SEL!" (
-    if not exist "%MODELS%\%%b\%%c" (
+    if "%%d"=="ollama" (
+      set /a COUNT+=1
+    ) else if not exist "%MODELS%\%%b\%%c" (
       set /a NEEDMB+=%%f, COUNT+=1
       if "%%d"=="civkey" set NEEDKEY=1
     )
@@ -88,9 +96,9 @@ if %COUNT% equ 0 (
   goto :finish
 )
 for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%ROOT:~0,1%').Free/1MB)"') do set "FREEMB=%%f"
-set /a NEEDGB=NEEDMB/1000+1, FREEGB=FREEMB/1000
+set /a NEEDGB=(NEEDMB+999)/1000, FREEGB=FREEMB/1000
 echo.
-echo    %WHITE%%COUNT% files to download, about %NEEDGB% GB.%X% %GREY%Free on %ROOT:~0,2% %FREEGB% GB.%X%
+echo    %WHITE%%COUNT% to download, about %NEEDGB% GB into this folder.%X% %GREY%Free on %ROOT:~0,2% %FREEGB% GB. Ollama keeps its own models.%X%
 if %FREEMB% lss %NEEDMB% (
   echo.
   echo      %RED%Not enough space.%X% Free up some room on %ROOT:~0,2% or pick fewer, then run this again.
@@ -155,6 +163,7 @@ set "PAGE=%~7"
 set "DEST=%MODELS%\%FOLDER%\%NAME%"
 title RedNode Studio models - %NAME%
 echo.
+if "%SRC%"=="ollama" goto :ollama
 echo      %WHITE%%NAME%%X%  %GREY%into models\%FOLDER%%X%
 if exist "%DEST%" (
   echo        %GREY%already here%X%
@@ -179,6 +188,35 @@ if errorlevel 1 (
   exit /b
 )
 move /y "%DEST%.part" "%DEST%" >nul
+echo        %GREEN%downloaded%X%
+set /a OK+=1
+exit /b
+
+REM ---- an Ollama model: the Ollama app pulls and stores it itself ----------------------
+:ollama
+echo      %WHITE%%NAME%%X%  %GREY%into Ollama%X%
+set "OLL="
+for %%x in (ollama.exe) do if not "%%~$PATH:x"=="" set "OLL=%%~$PATH:x"
+if not defined OLL if exist "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" set "OLL=%LOCALAPPDATA%\Programs\Ollama\ollama.exe"
+if not defined OLL (
+  echo        %YELLOW%needs the Ollama app%X% - install it from %WHITE%ollama.com/download%X%, then run this again
+  set /a BAD+=1
+  set "FAILED=!FAILED! "%NAME%""
+  exit /b
+)
+"%OLL%" list 2>nul | findstr /i /l /c:"%NAME%" >nul
+if not errorlevel 1 (
+  echo        %GREY%already here%X%
+  set /a SKIP+=1
+  exit /b
+)
+"%OLL%" pull %NAME%
+if errorlevel 1 (
+  echo        %RED%did not download%X% %GREY%- is the Ollama app running? Start it and run this again%X%
+  set /a BAD+=1
+  set "FAILED=!FAILED! "%NAME%""
+  exit /b
+)
 echo        %GREEN%downloaded%X%
 set /a OK+=1
 exit /b
@@ -233,34 +271,37 @@ pause >nul
 endlocal
 exit /b
 
-REM ---- the menu: ::G~number~title~MB~license or page ----------------------------------
-::G~1~Krea 2 Turbo, official - the model, its text encoder and VAE~18630~Krea 2 license: huggingface.co/krea/Krea-2-Turbo
-::G~2~Krea 2 LoRAs the workflow uses - Identity Edit, Filter Bypass, Refusal Reduction, Anything2Real~2085~Each from its author, under its own terms
-::G~3~Qwen Image 2.1 - a second rig, with its own encoder and VAE~24260~Qwen research license: huggingface.co/Qwen/Qwen-Image-2.1
-::G~4~PornMaster Krea 2 - the workflow's mix rig, from Civitai~19430~Its creator's terms: civitai.com/models/2735032
-::G~5~JANKU Illustrious - the SDXL rig, from Civitai~6780~Its creator's terms: civitai.com/models/1277670
-::G~6~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
+REM ---- the menu: ::G~number~section~title~MB~license or page --------------------------
+::G~1~MODELS~Krea 2 Turbo, official - the model, its text encoder and VAE~18630~Krea 2 license: huggingface.co/krea/Krea-2-Turbo
+::G~2~MODELS~Qwen Image 2.1 - a second rig, with its own encoder and VAE~24260~Qwen research license: huggingface.co/Qwen/Qwen-Image-2.1
+::G~3~MODELS~PornMaster Krea 2 - the workflow's mix rig, from Civitai~19430~Its creator's terms: civitai.com/models/2735032
+::G~4~MODELS~JANKU Illustrious - the SDXL rig, from Civitai~6780~Its creator's terms: civitai.com/models/1277670
+::G~5~LORAS~The workflow's LoRA set - Identity Edit, Filter Bypass, Refusal Reduction~1860~Each from its author, under its own terms
+::G~6~LORAS~Anything2Real - the LoRA the Re-render tab converts with~230~Apache 2.0: huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters
+::G~7~TOOLS~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
+::G~8~TOOLS~Auto prompt - the Ollama vision model that describes your pictures~6140~Needs the Ollama app (ollama.com). Model: huihui_ai/qwen3-vl-abliterated
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
 ::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
 ::M~1~text_encoders~qwen3vl_4b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors~5240~-
 ::M~1~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
-::M~2~loras~krea2_identity_edit_v1_2.safetensors~hf~https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors~1828~-
-::M~2~loras~krea2filterbypass3.safetensors~civkey~https://civitai.com/api/download/models/3067151~1~https://civitai.com/models/2728234?modelVersionId=3067151
-::M~2~loras~Krea2_TextFusion_Refusal_Reduction.safetensors~civkey~https://civitai.com/api/download/models/3125118~27~https://civitai.com/models/2775340?modelVersionId=3125118
-::M~2~loras~Krea2_Anything2RealCharacters-V3.safetensors~hf~https://huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters/resolve/main/Krea2_Anything2RealCharacters-V3.safetensors~230~-
-::M~3~diffusion_models~qwen_image_2.1_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors~14230~-
-::M~3~text_encoders~qwen3vl_8b_int8_convrot.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors~9350~-
-::M~3~vae~qwen_image_2.1_vae_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors~680~-
-::M~4~diffusion_models~pornmasterKrea2_v2TurboInt8.safetensors~civkey~https://civitai.com/api/download/models/3119653~13800~https://civitai.com/models/2735032?modelVersionId=3119653
-::M~4~text_encoders~qwen3VLInstruct4bHeretic_v10.safetensors~civ~https://civitai.com/api/download/models/3066989~5120~https://civitai.com/models/2728378?modelVersionId=3066989
-::M~4~vae~wan_2.1_vae_fp32.safetensors~hf~https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_fp32.safetensors~510~-
-::M~5~checkpoints~JANKUTrainedChenkinNoobai_v777.safetensors~civkey~https://civitai.com/api/download/models/2786084~6780~https://civitai.com/models/1277670?modelVersionId=2786084
-::M~6~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
-::M~6~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
-::M~6~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
-::M~6~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
-::M~6~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
+::M~2~diffusion_models~qwen_image_2.1_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors~14230~-
+::M~2~text_encoders~qwen3vl_8b_int8_convrot.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors~9350~-
+::M~2~vae~qwen_image_2.1_vae_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors~680~-
+::M~3~diffusion_models~pornmasterKrea2_v2TurboInt8.safetensors~civkey~https://civitai.com/api/download/models/3119653~13800~https://civitai.com/models/2735032?modelVersionId=3119653
+::M~3~text_encoders~qwen3VLInstruct4bHeretic_v10.safetensors~civ~https://civitai.com/api/download/models/3066989~5120~https://civitai.com/models/2728378?modelVersionId=3066989
+::M~3~vae~wan_2.1_vae_fp32.safetensors~hf~https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_fp32.safetensors~510~-
+::M~4~checkpoints~JANKUTrainedChenkinNoobai_v777.safetensors~civkey~https://civitai.com/api/download/models/2786084~6780~https://civitai.com/models/1277670?modelVersionId=2786084
+::M~5~loras~krea2_identity_edit_v1_2.safetensors~hf~https://huggingface.co/conradlocke/krea2-identity-edit/resolve/main/krea2_identity_edit_v1_2.safetensors~1828~-
+::M~5~loras~krea2filterbypass3.safetensors~civkey~https://civitai.com/api/download/models/3067151~1~https://civitai.com/models/2728234?modelVersionId=3067151
+::M~5~loras~Krea2_TextFusion_Refusal_Reduction.safetensors~civkey~https://civitai.com/api/download/models/3125118~27~https://civitai.com/models/2775340?modelVersionId=3125118
+::M~6~loras~Krea2_Anything2RealCharacters-V3.safetensors~hf~https://huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters/resolve/main/Krea2_Anything2RealCharacters-V3.safetensors~230~-
+::M~7~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
+::M~7~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
+::M~7~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~7~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
+::M~7~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
+::M~8~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~6140~https://ollama.com/huihui_ai/qwen3-vl-abliterated
 
 ::~          .-"-.               .-"-.
 ::~         /     \   .-"""-.   /     \
