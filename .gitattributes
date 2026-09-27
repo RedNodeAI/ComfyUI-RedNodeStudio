@@ -6,5 +6,5 @@ tests/** export-ignore
 .comfyignore export-ignore
 .gitattributes export-ignore
 extras/** export-ignore
-# batch files keep Windows line endings
-*.bat text eol=crlf
+# batch files are stored exactly as written (Windows line endings), so a raw download runs
+*.bat -text
