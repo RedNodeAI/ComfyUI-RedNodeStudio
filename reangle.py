@@ -70,7 +70,8 @@ def parse(raw):
         "vae": str(r.get("vae") or DEFAULTS["vae"]),
         "lora_angles": str(r.get("lora_angles") or DEFAULTS["lora_angles"]),
         "lora_angles_strength": num("lora_angles_strength", 1.0, 0.0, 2.0),
-        "lora_light": str(r.get("lora_light") if r.get("lora_light") is not None else DEFAULTS["lora_light"]),
+        # "" is the panel's default and "None" its (none): only "None" turns Lightning off
+        "lora_light": str(r.get("lora_light") or DEFAULTS["lora_light"]),
         "lora_light_strength": num("lora_light_strength", 1.0, 0.0, 2.0),
         "steps": num("steps", 4, 1, 60, int),
         "cfg": num("cfg", 1.0, 0.0, 20.0),
