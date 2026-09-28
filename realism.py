@@ -481,13 +481,34 @@ def _engine(rc, cfg, ws):
                     "official on the Models tab, or name its files under Engine on the "
                     "Re-render page." % (act.get("name") or "", act.get("clip_type")))
             rig_name, model, clip, vae = ws.load_active_rig(cfg)
+    # THE ENGINE'S OWN FILES LOAD ONCE and are reused while they stay the same. Loaded
+    # fresh every run, each run's model was a new object, the id-keyed prep and Ostris
+    # caches never hit, and their last two entries held two old 13 GB copies alive:
+    # VRAM filled a little more with every Re-render.
     if rc["unet"]:
-        model = _call("UNETLoader", unet_name=rc["unet"], weight_dtype="default")[0]
+        model = _own_file("unet", rc["unet"],
+                          lambda: _call("UNETLoader", unet_name=rc["unet"], weight_dtype="default")[0])
     if rc["clip"]:
-        clip = _call("CLIPLoader", clip_name=rc["clip"], type="krea2")[0]
+        clip = _own_file("clip", rc["clip"],
+                         lambda: _call("CLIPLoader", clip_name=rc["clip"], type="krea2")[0])
     if rc["vae"]:
-        vae = _call("VAELoader", vae_name=rc["vae"])[0]
+        vae = _own_file("vae", rc["vae"], lambda: _call("VAELoader", vae_name=rc["vae"])[0])
     return rig_name, model, clip, vae
+
+
+_OWN_FILES = {}
+
+
+def _own_file(kind, name, load):
+    """One loaded copy per engine file slot: reused while the name stays, replaced (and
+    the old copy dropped) when it changes."""
+    hit = _OWN_FILES.get(kind)
+    if hit and hit[0] == name:
+        return hit[1]
+    _OWN_FILES.pop(kind, None)
+    obj = load()
+    _OWN_FILES[kind] = (name, obj)
+    return obj
 
 
 def render(rc, source, cfg, seed, node_id=None):
