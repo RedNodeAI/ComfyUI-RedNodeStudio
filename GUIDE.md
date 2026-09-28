@@ -325,7 +325,11 @@ count per pass are there too, which is how a HighNoise and LowNoise pair relays:
 one rig in a step or two, pass 2 finishes on the other at a denoise just under 1, with Hold two
 rigs keeping both models loaded. Continue the noise between passes makes the passes segments of
 one schedule instead, each carrying the last one's leftover noise on with none added, which is
-how a Wan-style pair is meant to relay. The Img2Img tab's passes have the same sections.
+how a Wan-style pair is meant to relay. **Enlarge as a picture between passes** (off by default)
+makes a pass that grows decode the picture, resize it and encode it again, the way a Detailer pass
+does, instead of stretching the latent: a little slower, and sharper when a pass grows a lot at a
+low denoise, which is where SDXL in particular goes soft. The Img2Img tab's passes have the same
+sections.
 
 ![The Img2Img tab's Source page: the gallery and the picture in use](images/img2img.webp)
 
@@ -359,7 +363,8 @@ attention, so SageAttention does not break them, and each shows its steps on the
 
 **Re-render.** Turns an
 illustration into a photograph, from the Tools tab's source picture or from the new render,
-a **Picture** choice at the top of the page. Switched off, the page keeps its recipe on show. Its Exact engine is the Anything2Real workflow node for node, with
+a **Picture** choice at the top of the page. **Repeat** under the engine choice runs it again
+over its own result, each round on the next seed, like Paint's passes. Switched off, the page keeps its recipe on show. Its Exact engine is the Anything2Real workflow node for node, with
 an optional photo finish (a second, lighter pass) and a choice of the Ostris encoder; the
 Alternative engine is the pack's own and needs no other pack. It runs on the rig marked
 **Official Krea 2 model** on the Models tab, whichever rig is active, so a Qwen 2.1 or SDXL render
@@ -820,7 +825,7 @@ what they did. Treat them as legacy.
 | RedNode Prompt Keywords | The global @keyword library that every Prompt Box reads. |
 | RedNode Wildcards | Write a __wildcard__ from the canvas: a name, a value per line, Save. A plain .txt in ComfyUI's wildcards folder, so every wildcard node reads it. |
 | RedNode Selector | A dropdown of your own choices, output as a string. |
-| RedNode Note | A canvas label with big glowing text, a colour and a font. Unselected it is just the sign, with no title bar and no settings. |
+| RedNode Note | A canvas label with big glowing text, a colour and a font. Unselected it is just the sign, with no title bar and no settings. Ctrl+click a link in it to open it, or right-click the note for its links. |
 | RedNode Note Panel | Every RedNode Note in the workflow in one list, with its size, font, colour and glow. Drives them live, and can restyle all of them at once. |
 | RedNode Report | A sign whose words come from the run: wire a value through it and it reports what went past, in the same styling. Passes the value straight on. |
 

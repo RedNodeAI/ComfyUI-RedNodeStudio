@@ -4,6 +4,34 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.6.3** - unreleased
+
+### Fixes
+
+- Re-render no longer fills the graphics card run after run. With its engine files named on
+  the page, every run loaded a fresh copy of the model, and old copies stayed in memory. The
+  engine now loads its files once and reuses them while they stay the same
+- The Post tab keeps its layout on a shorter or narrower panel. The effect list's rows no longer
+  squeeze into each other, the settings card no longer spills past its box, and on a narrow
+  panel the card moves under the list instead of being crushed beside it
+- Clicking a button on the Save page no longer jumps the page to the bottom. The Recent saves
+  list only scrolls when the arrow keys move through it
+- The Shelf's Override names the Re-render tab where it said Editor. Re-angle and Swap on the
+  Tools tab use the same picture, and its tooltip says so
+
+### New
+
+- Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
+  result on the next seed
+- An option on the Latent and Img2Img Passes pages to enlarge the picture itself between
+  passes, the way a Detailer pass does, instead of stretching the latent. Sharper when a pass
+  grows, a little slower. Off by default
+- The Detailer's Head swap and Body swap layouts pick their BFS Krea 2 LoRA from your loras
+  folder, and with Picture on, a pass's LoRA list shows only the BFS Krea 2 files. The model
+  downloader's Swap item now also fetches both of them
+- Re-angle's Angles and Speed LoRA boxes are searchable, like Swap's, with a None choice
+- Links in a RedNode Note open with Ctrl+click, and the note's right-click menu lists them
+
 **1.6.2** - 2026-09-27
 
 ### Fixes
