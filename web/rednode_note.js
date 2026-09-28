@@ -186,6 +186,43 @@ function setChrome(node, shown) {
   areaOf(node)?.classList.toggle("rn-note-idle", !shown && !isPlain(node));
 }
 
+// LINKS. The text is ComfyUI's own textarea, which cannot hold a real link, so a link is
+// opened two ways that work inside one: Ctrl+click on it (a plain click still places the
+// caret for editing), and an "Open ..." entry per link on the note's right-click menu.
+const URL_RE = /https?:\/\/[^\s<>"'`)\]]+[^\s<>"'`)\].,;:!?]/g;
+const linksIn = (text) => [...new Set(String(text || "").match(URL_RE) || [])];
+
+function linkAt(text, pos) {
+  for (const m of String(text || "").matchAll(URL_RE)) {
+    if (pos >= m.index && pos <= m.index + m[0].length) return m[0];
+  }
+  return null;
+}
+
+function openLink(url) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function hookLinks(node) {
+  const area = areaOf(node);
+  if (!area || area._rnNoteLinks) return;
+  area._rnNoteLinks = true;
+  area.addEventListener("click", (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const url = linkAt(area.value, area.selectionStart ?? 0);
+    if (!url) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openLink(url);
+  });
+  const tip = () => {
+    area.title = linksIn(area.value).length
+      ? "Ctrl+click a link to open it, or right-click the note for its links." : "";
+  };
+  area.addEventListener("input", tip);
+  tip();
+}
+
 /** Re-read the widgets whenever one of them changes. */
 function hookWidgets(node) {
   for (const w of node.widgets || []) {
@@ -213,7 +250,7 @@ app.registerExtension({
       node._rnNotePaint = () => paint(node);
       node._rnNoteChrome = undefined;
       // the textarea is not in the DOM on the frame the node is created
-      requestAnimationFrame(() => { paint(node); node.setDirtyCanvas?.(true, true); });
+      requestAnimationFrame(() => { paint(node); hookLinks(node); node.setDirtyCanvas?.(true, true); });
     };
 
     const onCreated = nodeType.prototype.onNodeCreated;
@@ -264,6 +301,14 @@ app.registerExtension({
                                    : "Always show the controls",
         callback: flip("rn_note_controls"),
       });
+      const links = linksIn(widget(node, "note")?.value);
+      for (const url of links.slice(0, 8)) {
+        const shown = url.replace(/^https?:\/\//, "");
+        options.push({
+          content: "Open " + (shown.length > 60 ? shown.slice(0, 57) + "..." : shown),
+          callback: () => openLink(url),
+        });
+      }
       return options;
     };
 

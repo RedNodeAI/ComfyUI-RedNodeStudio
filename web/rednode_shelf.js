@@ -218,7 +218,7 @@ function writeCfg(node) {
 /** Where a picture can be sent from the shelf, and the tab it lands on. */
 const SEND_TO = [
   ["i2i", "Img2Img"],
-  ["editor_src", "the Editor"],
+  ["editor_src", "Re-render"],
   ["subject", "Subject"],
   ["scene", "Scene"],
   ["moodboard", "Moodboard"],
@@ -227,7 +227,8 @@ const SEND_TO = [
 // Editor's source, both "the picture I am working on"; which of them renders is
 // the Editor's own switch. Subject or Moodboard would rewrite the render, so
 // they stay a choice.
-const OVERRIDE_LABEL = { i2i: "Img2Img", editor_src: "Editor", subject: "Subject",
+// editor_src is the Tools source picture: Re-render reads it, and so do Re-angle and Swap
+const OVERRIDE_LABEL = { i2i: "Img2Img", editor_src: "Re-render", subject: "Subject",
                          scene: "Scene", moodboard: "Moodboard" };
 const OVERRIDE_DEFAULT = ["i2i", "editor_src"];
 
@@ -494,6 +495,9 @@ function render(node) {
         ? `${OVERRIDE_LABEL[id] || name} renders from this picture, and is switched `
           + "on for the run."
         : `Click to hand ${OVERRIDE_LABEL[id] || name} this picture too.`;
+      if (id === "editor_src") {
+        b.title += " Re-angle and Swap on the Tools tab use the same picture.";
+      }
       b.onclick = () => {
         cfg.override_tabs = ticked ? cfg.override_tabs.filter((x) => x !== id)
                                    : [...cfg.override_tabs, id];

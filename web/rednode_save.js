@@ -214,6 +214,9 @@ const selected = new Set();
 // panel exists for, and doing that with a mouse is the slow way: arrows to move, one
 // key to keep, one to delete, eyes on the picture rather than on the buttons.
 let cursor = 0;
+// set when the arrows move the cursor, so only that redraw scrolls the list to it; any
+// other redraw (a button click) leaves the list where it was
+let cursorMoved = false;
 
 // HOW MANY CARDS ARE BUILT AT ONCE.
 //
@@ -1155,6 +1158,7 @@ function render(node) {
 
   const list = document.createElement("div");
   list.className = "rn-sv-list";
+  let cursorRow = null;
   if (!saved.length && !pendingSaves.size) {
     const empty = document.createElement("div");
     empty.className = "rn-sv-note";
@@ -1286,8 +1290,7 @@ Click to bring it up above, or to pick it once something is selected. `
     }
     if (idx === cursor) {
       row.classList.add("at");
-      // keep the cursor on screen while the arrows walk past the fold
-      requestAnimationFrame(() => row.scrollIntoView({ block: "nearest" }));
+      cursorRow = row;
     }
     list.appendChild(row);
   });
@@ -1296,6 +1299,16 @@ Click to bring it up above, or to pick it once something is selected. `
   requestAnimationFrame(() => {
     if (keepScroll) list.scrollTop = keepScroll;
     if (keepPanel) wrap.scrollTop = keepPanel;
+    // keep the cursor on screen while the arrows walk past the fold, by moving THE LIST
+    // ONLY. scrollIntoView scrolled every box around it too (the Workspace page, the
+    // panel), so any click that redrew the panel yanked the page down to Recent saves.
+    if (cursorRow && cursorMoved) {
+      cursorMoved = false;
+      const lr = list.getBoundingClientRect();
+      const rr = cursorRow.getBoundingClientRect();
+      if (rr.top < lr.top) list.scrollTop -= lr.top - rr.top;
+      else if (rr.bottom > lr.bottom) list.scrollTop += rr.bottom - lr.bottom;
+    }
   });
 
   wrap.appendChild(recent);
@@ -1334,6 +1347,7 @@ function wireKeys(node, wrap) {
     cursor = dir === "first" ? 0
            : dir === "last" ? n - 1
            : Math.max(0, Math.min(n - 1, cursor + dir));
+    cursorMoved = true;
     render(node);
   });
   wrap.addEventListener("keydown", (e) => {

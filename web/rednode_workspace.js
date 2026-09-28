@@ -1026,9 +1026,13 @@ css.textContent = `
 .rn-ws-sect > .head .ttl.rn-ws-savedttl{font-size:13px;letter-spacing:0;opacity:.9}
 .rn-ws-sect .rn-ws-dial{margin-left:12px}
 /* The Post tab: the chain list beside one editor. */
-.rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px}
+/* flex:none on the split and on every list row: the page body is a flex column, and on a
+   short panel it shrank the split to its min-height (the card's controls spilled out of
+   its box) and the list's rows below their text (one row's words ran into the next) */
+.rn-ws-fxsplit{display:flex;gap:10px;align-items:stretch;min-height:220px;flex:none;flex-wrap:wrap}
 .rn-ws-fxlist{flex:none;width:280px;display:flex;flex-direction:column;border:1px solid #2a2e35;
   border-radius:6px;background:#16181c;padding:0 0 6px;max-height:760px;overflow-y:auto}
+.rn-ws-fxlist > *{flex:none}
 .rn-ws-fxband{font-size:11.5px;letter-spacing:.12em;font-weight:700;color:#e0e4ea;
   background:#252a32;border-left:2px solid #b8283c;padding:7px 10px;margin:6px 0 2px}
 .rn-ws-fxband:first-child{margin-top:0}
@@ -1120,7 +1124,9 @@ css.textContent = `
 .rn-ws-eye.gear{color:#474b52;font-size:12px;cursor:default}
 .rn-ws-fxlimitpill{margin-left:auto;font-size:9px;border:1px solid #6b5a2a;color:#d4b25f;
   border-radius:8px;padding:0 5px;line-height:14px}
-.rn-ws-fxedit{flex:1;min-width:0;border:1px solid #2a2e35;border-radius:6px;background:#16181c;
+/* 340px floor: on a narrow panel (the shelf column open) the card drops under the list
+   instead of being crushed to a sliver beside it */
+.rn-ws-fxedit{flex:1;min-width:340px;border:1px solid #2a2e35;border-radius:6px;background:#16181c;
   padding:14px 20px 14px 20px;display:flex;flex-direction:column;gap:10px}
 .rn-ws-fxedit > .head{display:flex;align-items:center;gap:10px}
 .rn-ws-fxedit > .head .ttl{font-size:13px;font-weight:700;letter-spacing:.4px;opacity:.9}
@@ -19319,8 +19325,28 @@ function reangleSection(node, body, tabName, { flat = false } = {}) {
       pick("Edit model", L.unets, "unet", RA_DEFAULT.unet, "Qwen-Image-Edit-2511 (diffusion_models). fp8 fits beside Krea 2 with Comfy swapping them.");
       pick("Text encoder", L.clips, "clip", RA_DEFAULT.clip, "Qwen2.5-VL 7B (text_encoders).");
       pick("VAE", L.vaes, "vae", RA_DEFAULT.vae, "The Qwen Image VAE.");
-      pick("Angles LoRA", L.loras, "lora_angles", RA_DEFAULT.lora_angles, "fal's Multiple-Angles LoRA: the viewpoint vocabulary.");
-      pick("Speed LoRA", L.loras, "lora_light", RA_DEFAULT.lora_light, "The Lightning 4-step LoRA: 4 steps, cfg 1. (none) = a plain 20+ step run at cfg 2.5-4.");
+      // LoRA fields are searchable pickers, as on Swap: a native select is unusable at a
+      // few hundred files. Empty is the default file (reangle.parse fills it in); "None"
+      // is a real choice here, the speed LoRA switched off.
+      const raLoras = L.loras || [];
+      const raPick = (label, key, dflt, lead, tip) => {
+        const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
+        const inp = document.createElement("input"); inp.type = "text";
+        inp.value = R[key] || "";
+        inp.placeholder = "(default) " + dflt.replace(/\.safetensors$/i, "") + " - click and type to search";
+        inp.title = tip + " Click and type to search; recently used come first.";
+        inp.style.cssText = "background:#101216;border:1px solid #2a2e34;border-radius:4px;color:#e2e5ea;font-size:12px;padding:3px 6px";
+        makePicker(inp, () => [{ value: "None", hint: "(none): no LoRA in this slot" }]
+                                .concat(raLoras.filter((n) => lead.test(n)))
+                                .concat(raLoras.filter((n) => !lead.test(n))),
+                   (v) => { R[key] = v || ""; writeCfg(node); render(node); },
+                   { current: () => R[key] || "", emptyLabel: "(default) " + dflt, recent: "reangle-lora" });
+        grid.append(l, inp);
+      };
+      raPick("Angles LoRA", "lora_angles", RA_DEFAULT.lora_angles, /angle/i,
+             "fal's Multiple-Angles LoRA: the viewpoint vocabulary.");
+      raPick("Speed LoRA", "lora_light", RA_DEFAULT.lora_light, /lightning/i,
+             "The Lightning 4-step LoRA: 4 steps, cfg 1. None = a plain 20+ step run at cfg 2.5-4.");
       const num = (label, key, min, max, step, tip) => {
         const l = document.createElement("span"); l.className = "rn-ws-note"; l.textContent = label;
         const wrap = document.createElement("div"); wrap.style.cssText = "display:flex;gap:6px;align-items:center";
