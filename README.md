@@ -18,6 +18,26 @@ single node in ComfyUI, on Krea 2, Qwen Image 2.1, Z-Image, Anima, SDXL, Illustr
 
 **63 nodes · No pip dependencies · Every model, every purpose**
 
+**Quick install on Windows**
+
+Two files on the [latest release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/latest)
+set everything up, on the portable ComfyUI or the desktop app:
+
+1. Download **RedNode_Install_Node_Packs.bat** and **RedNode_Download_Models.bat**.
+2. Put both in your ComfyUI folder: next to `run_nvidia_gpu.bat` for the portable, or in the desktop
+   app's base folder, the one with `custom_nodes` and `models`. Run from anywhere else, they find the
+   desktop app's folder and ask before doing anything.
+3. Close ComfyUI and run **RedNode_Install_Node_Packs.bat**. It installs RedNode Studio and the node
+   packs its workflows use through ComfyUI Manager, and skips any you already have.
+4. Run **RedNode_Download_Models.bat** and type the numbers you want: the models, LoRAs and tools,
+   each from its publisher into the right folder. Press Enter for the recommended start, or A for
+   everything, which is well over 100 GB.
+5. Start ComfyUI, open **Templates**, then **RedNode Studio**, and load **RedNodeStudio_V1.6**.
+
+Both files are plain text, so you can open them in Notepad and read every line before you run them.
+
+**Any other install**
+
 Search **RedNode Studio** in ComfyUI Manager, or clone it:
 
 ```
