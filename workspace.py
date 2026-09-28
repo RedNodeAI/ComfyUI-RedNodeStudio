@@ -1214,6 +1214,9 @@ def parse_config(config_json):
                 tabs[name]["scale"], 0.25, 3.0, tabs[name]["passes"])
             if tabs[name]["scale_custom"]:
                 tabs[name]["scale"] = tabs[name]["pass_scale"][0]
+            # HOW A PASS GROWS: "latent" stretches the latent (fast, the default), "pixels"
+            # decodes, resizes the picture and encodes again, as a Detailer pass does
+            tabs[name]["enlarge"] = "pixels" if t.get("enlarge") == "pixels" else "latent"
             # A RIG PER PASS and STEPS PER PASS: the relay a HighNoise / LowNoise
             # pair wants, pass 1 drafting on one rig and pass 2 finishing on the
             # other at a denoise just under 1. "" is the run's rig, 0 its steps.
@@ -1351,6 +1354,7 @@ def parse_config(config_json):
         latent_cfg["passes"])
     latent_cfg["pass_steps"] = [int(round(v)) for v in _lst]
     latent_cfg["handoff_continue"] = bool(lat_in.get("handoff_continue"))
+    latent_cfg["enlarge"] = "pixels" if lat_in.get("enlarge") == "pixels" else "latent"
     # the LoRAs tab: the stack the panel edits, in the same shape the LoRA Stack
     # node's hidden widget uses, so one panel implementation serves both
     lin = data.get("loras") if isinstance(data.get("loras"), dict) else {}
@@ -4946,7 +4950,35 @@ class RedNodeStudioWorkspace:
                             _th = max(8, int(round(_base_hw[0] * _ratio)))
                             _tw = max(8, int(round(_base_hw[1] * _ratio)))
                             _sm = _out["samples"]
-                            if (_th, _tw) != tuple(_sm.shape[-2:]):
+                            _px_grow = (_pass_cfg.get("enlarge") == "pixels"
+                                        and _lat_vae is not None
+                                        and bool(torch.count_nonzero(_sm)))
+                            if (_th, _tw) != tuple(_sm.shape[-2:]) and _px_grow:
+                                # ENLARGE THE PICTURE, NOT THE LATENT: decode, resize the
+                                # pixels, encode again, the way a Detailer pass grows a
+                                # picture. A stretched latent decodes soft and streaky
+                                # (SDXL at 1.5-2x, 0.5 denoise); real pixels stay sharp.
+                                try:
+                                    import comfy.utils as _cu_px
+                                    _pix = vae_images(_lat_vae.decode(_sm))[..., :3]
+                                    _f = float(_pix.shape[1]) / float(_sm.shape[-2])
+                                    _ph, _pw = int(round(_th * _f)), int(round(_tw * _f))
+                                    _pix = _cu_px.common_upscale(
+                                        _pix.movedim(-1, 1), _pw, _ph, "lanczos",
+                                        "disabled").movedim(1, -1).clamp(0.0, 1.0)
+                                    _res = {k_: v_ for k_, v_ in _out.items() if k_ != "noise_mask"}
+                                    _res["samples"] = _lat_vae.encode(_pix)
+                                    _out = _res
+                                    print("[RedNode Workspace] %s pass %d scale %.2fx: %d x %d "
+                                          "pixels, enlarged as a picture" % (
+                                              _pass_what, _p + 1, float(_sc_steps[_p]), _pw, _ph),
+                                          flush=True)
+                                except Exception as _px_exc:
+                                    print("[RedNode Workspace] pass %d could not be enlarged as "
+                                          "a picture (%s); stretching the latent instead"
+                                          % (_p + 1, _px_exc), flush=True)
+                                    _px_grow = False
+                            if (_th, _tw) != tuple(_sm.shape[-2:]) and not _px_grow:
                                 try:
                                     # A LATENT IS NOT ALWAYS (B, C, H, W). A frame
                                     # axis makes it (B, C, T, H, W), and interpolate

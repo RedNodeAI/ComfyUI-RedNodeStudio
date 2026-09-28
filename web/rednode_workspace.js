@@ -1894,6 +1894,7 @@ export function readCfg(node) {
         : [];
       t.rig_custom = !!t.rig_custom;
       t.handoff_continue = !!t.handoff_continue;
+      t.enlarge = t.enlarge === "pixels" ? "pixels" : "latent";
       t.pass_rig = Array.isArray(t.pass_rig) ? t.pass_rig.map((v) => String(v || "")) : [];
       t.steps_custom = !!t.steps_custom;
       t.pass_steps = Array.isArray(t.pass_steps)
@@ -2239,6 +2240,7 @@ export function readCfg(node) {
   d.latent.scale_custom = !!d.latent.scale_custom;
   d.latent.rig_custom = !!d.latent.rig_custom;
   d.latent.handoff_continue = !!d.latent.handoff_continue;
+  d.latent.enlarge = d.latent.enlarge === "pixels" ? "pixels" : "latent";
   d.latent.pass_rig = Array.isArray(d.latent.pass_rig) ? d.latent.pass_rig.map((v) => String(v || "")) : [];
   d.latent.steps_custom = !!d.latent.steps_custom;
   d.latent.pass_steps = Array.isArray(d.latent.pass_steps)
@@ -15701,6 +15703,29 @@ function continueRow(node, t) {
   return { row, sync };
 }
 
+// HOW A PASS GROWS. Off (the default): the latent is stretched, fast. On: the picture
+// is decoded, resized and encoded again, the way a Detailer pass grows one, which stays
+// sharp where a stretched latent goes soft (SDXL at 1.5-2x and 0.5 denoise).
+function enlargeRow(node, t) {
+  const row = document.createElement("div");
+  row.className = "rn-ws-row";
+  const on = t.enlarge === "pixels";
+  const b = document.createElement("button");
+  b.className = "rn-ws-sw" + (on ? " on" : "");
+  b.dataset.choice = "pass_enlarge";
+  b.title = on
+    ? "On: a pass that grows decodes the picture, resizes it and encodes it again, like a "
+      + "Detailer pass. Sharper, a little slower. Switch off to stretch the latent instead."
+    : "Off: a pass that grows stretches the latent, which is fast but can go soft or "
+      + "streaky, most of all on SDXL. Switch on to enlarge the picture itself instead.";
+  b.onclick = () => { t.enlarge = on ? "latent" : "pixels"; writeCfg(node); render(node); };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-note";
+  lab.textContent = "Enlarge as a picture between passes";
+  row.append(b, lab);
+  return row;
+}
+
 // Which page of the panel is showing: the tab, and the sub-tab (and inner tab) inside
 // it where there is one. The body's kept scroll position is keyed on this.
 function viewKeyOf(node, cur) {
@@ -18384,6 +18409,7 @@ function passesTab(node, body, kind = "i2i") {
     if (many) {
       setup.appendChild(document.createElement("hr"));
       setup.appendChild(continueRow(node, t).row);
+      setup.appendChild(enlargeRow(node, t));
     }
   }
 
