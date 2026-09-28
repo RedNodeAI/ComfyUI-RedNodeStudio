@@ -1782,6 +1782,7 @@ export function readCfg(node) {
       const rlPick = (k, options, dv) => { if (!options.includes(RL[k])) RL[k] = dv; };
       if (typeof RL.on !== "boolean") RL.on = false;
       rlPick("engine", ["exact", "alternative"], "exact");
+      rlNum("repeat", 1);
       rlNum("boost", 1);
       rlStr("lora", ""); rlStr("lora_sha256", ""); rlNum("strength", 1);
       if (typeof RL.loras !== "boolean") RL.loras = true;
@@ -18908,6 +18909,10 @@ function realismSection(node, body, tabName, { flat = false } = {}) {
            "Faithful keeps the picture as close as it can while changing the medium, and "
            + "needs a few extra packs, named here if one is missing. Loose treats the source "
            + "as a reference more than a copy, and needs no extra pack.");
+    // REPEAT, like Paint's passes: each round re-renders the last one's result
+    num(eng, "Repeat", "repeat", 1, 10, 1,
+        "How many times to run it, each round over the last round's result, on the next "
+        + "seed. 1 is a single pass. More rounds push the look further, and take longer.");
     card.appendChild(eng);
 
     // THE CONVERSION LORA, found for you. Once per page opening, and only when

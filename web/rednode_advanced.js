@@ -52,6 +52,9 @@ export const EXPRESSIONS = [
   "eyes closed", "looking away", "looking at the viewer",
 ];
 
+/** The BFS files made for Krea 2 (Alissonerdx's bfs_*_krea2), the Detailer swap passes' LoRAs. */
+export const bfsKrea2 = (names) => (names || []).filter((n) => /bfs/i.test(n) && /krea[_ -]?2/i.test(n));
+
 const PREMADES = {
   "Face identity chain": [
     { type: "sampler", on: true, rig: "", steps: 4, denoise: 0.09, scale: 1.5,
@@ -960,6 +963,16 @@ function buildPanel(node, hostEl = null) {
                                             : (SAVED || {})[v];
         if (!src) return;
         d.stages = src.map((x) => JSON.parse(JSON.stringify(x)));
+        // THE BFS SWAP LAYOUTS FILL THEIR OWN LoRA: the first Krea 2 BFS head or body file
+        // in the loras folder. File names differ per machine, so this is found, never
+        // shipped; with none installed the pass stays empty and its card says so.
+        const want = /head swap/i.test(v) ? "head" : /body swap/i.test(v) ? "body" : "";
+        if (want) {
+          const hit = bfsKrea2(L.loras || []).find((n) => new RegExp(want, "i").test(n));
+          for (const s of d.stages) {
+            if (s.use_picture && !s.lora && hit) s.lora = hit;
+          }
+        }
         node.properties = node.properties || {};
         node.properties.rn_adv_folds = {};
         writeCfg(node, d);
@@ -2114,12 +2127,20 @@ function buildPanel(node, hostEl = null) {
         const lp = document.createElement("input");
         lp.type = "text";
         lp.value = s.lora && s.lora !== "None" ? s.lora : "";
-        lp.placeholder = "LoRA for this pass: click and type to search";
+        // WITH THE PICTURE ON this pass is a BFS Krea 2 swap, and only those two files
+        // work in it, so the list offers only them
+        const swapOnly = !!s.use_picture;
+        const bfsFiles = bfsKrea2(L.loras || []);
+        lp.placeholder = swapOnly && !bfsFiles.length
+          ? "No BFS Krea 2 file found: get it with the model downloader (Swap)"
+          : swapOnly ? "BFS Krea 2 head or body file: click to pick"
+          : "LoRA for this pass: click and type to search";
         lp.style.cssText = "flex:1;min-width:140px";
         lp.title = "A LoRA only this pass loads, model side, on top of the stack (or "
                  + "of the raw rig): the swap file goes here, so the main render "
-                 + "never sees it. Click and type to search; recently used come first.";
-        makePicker(lp, () => L.loras || [], (v) => {
+                 + "never sees it. Click and type to search; recently used come first."
+                 + (swapOnly ? " With Picture on, only the BFS Krea 2 head and body files are listed." : "");
+        makePicker(lp, () => (swapOnly ? bfsFiles : L.loras || []), (v) => {
           s.lora = v; writeCfg(node, d); render();
         }, { current: () => (s.lora && s.lora !== "None" ? s.lora : ""),
              emptyLabel: "(none)", recent: "detailer-lora" });

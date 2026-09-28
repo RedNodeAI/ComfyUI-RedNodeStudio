@@ -307,7 +307,7 @@ REM ---- the menu: ::G~number~section~title~MB~license or page -----------------
 ::G~8~LORAS~Camera and light LoRAs - zoom, height, orbit and back, brightness and colour temperature~180~RedNode camera LoRAs on GitHub; Loraholic and iamddtla on Civitai, each under its own terms
 ::G~9~TOOLS~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
 ::G~10~TOOLS~Auto prompt - the Ollama vision model that describes your pictures~6140~Needs the Ollama app (ollama.com). Model: huihui_ai/qwen3-vl-abliterated
-::G~11~TOOLS~Swap - the BFS face swap LoRA, on the same Qwen Edit engine as 9~30470~MIT: huggingface.co/Alissonerdx/BFS-Best-Face-Swap. Files 9 already fetched are skipped
+::G~11~TOOLS~Swap - the BFS face swap LoRAs: Qwen Edit for the Swap tab, Krea 2 for Detailer swap passes~32298~MIT: huggingface.co/Alissonerdx/BFS-Best-Face-Swap. Files 9 already fetched are skipped
 ::G~12~TOOLS~Masks - ComfyUI's built-in SAM3.1 for the Detailer and Paint, no Triton needed~1750~SAM license: huggingface.co/Comfy-Org/sam3.1
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
@@ -344,6 +344,8 @@ REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ---------
 ::M~11~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
 ::M~11~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
 ::M~11~loras~bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~307~-
+::M~11~loras~bfs_head_swap_v1.1_krea2.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_swap_v1.1_krea2.safetensors~914~-
+::M~11~loras~bfs_body_swap_v1_krea2.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_body_swap_v1_krea2.safetensors~914~-
 ::M~12~checkpoints~sam3.1_multiplex_fp16.safetensors~hf~https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors~1750~-
 
 ::~          .-"-.               .-"-.

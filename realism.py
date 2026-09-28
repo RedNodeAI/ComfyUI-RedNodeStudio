@@ -242,6 +242,9 @@ def parse(raw):
         "kv_cache": bool(r.get("kv_cache", True)),
         # KSampler
         "steps": num("steps", 8, 1, 100, int),
+        # REPEAT, like Paint's passes: the re-render runs again over its own result,
+        # each round on the next seed. 1 is a single pass, the behaviour before it.
+        "repeat": num("repeat", 1, 1, 10, int),
         "cfg": num("cfg", 1.0, 0.0, 20.0),
         # HOW MUCH IS REPAINTED. 1.00 is the conversion as the workflow runs it and
         # is what the Editor's page uses; below it the source is the starting point
@@ -515,8 +518,13 @@ def render(rc, source, cfg, seed, node_id=None):
     """IMAGE [1,H,W,3]: the source as a photograph. Cached by what made it."""
     _TIMES.clear()
     t0 = time.perf_counter()
+    rounds = max(1, int(rc.get("repeat", 1) or 1))
     with torch.inference_mode():
-        out = _render(rc, source, cfg, seed, node_id)
+        out = source
+        for i in range(rounds):
+            if rounds > 1:
+                print("[RedNode Re-render] round %d of %d" % (i + 1, rounds), flush=True)
+            out = _render(rc, out, cfg, int(seed) + i, node_id)
     total = time.perf_counter() - t0
     if total >= 0.5:
         # the nodes called by name, largest first; what is left is the sampler
