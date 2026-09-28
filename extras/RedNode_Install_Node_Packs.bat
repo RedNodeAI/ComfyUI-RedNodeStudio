@@ -256,7 +256,7 @@ if not defined SAM3NOTE goto :note_manager
 echo      %GREY%-%X%  SAM3 automatic masks need one more piece, Triton, before they load.
 echo         %GREY%Everything else works without it.%X%
 "%PY%" -s -c "import torch,os;v='.'.join(torch.__version__.split('+')[0].split('.')[:2]);m={'2.6':'3.2','2.7':'3.3','2.8':'3.4','2.9':'3.5','2.10':'3.6'};t=m.get(v);q=chr(34);print('         To add it now, close ComfyUI and run this from this folder:\n           '+os.environ['PYREL']+' -s -m pip install '+q+'triton-windows=='+t+'.*'+q if t else '         No Triton build matches this ComfyUI yet.')"
-echo         %GREY%Or skip Triton: model downloader item 11 gets ComfyUI's own SAM3.1, which
+echo         %GREY%Or skip Triton: model downloader item 12 gets ComfyUI's own SAM3.1, which
 echo         needs no Triton; pick it as the SAM file on the Detailer tab.%X%
 :note_manager
 if not defined MANAGER_NEW goto :notes_end

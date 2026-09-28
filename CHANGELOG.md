@@ -45,7 +45,8 @@ format matters: **version** then a date, notes below until the next bold line.
   packs already there are skipped without Manager, and with all of them there it finishes in
   seconds, without the Registry download
 - A model downloader beside it, extras/RedNode_Download_Models.bat, in three sections: the
-  workflow's models with their encoders and VAEs, its LoRAs, and the tools (Re-angle, Swap's
+  workflow's models with their encoders and VAEs, its LoRAs (the camera and light LoRAs
+  among them), and the tools (Re-angle, Swap's
   BFS LoRA, the built-in SAM3.1, the Ollama caption model). Each file comes from its publisher
   into the right folder, Civitai files through your own key or your browser, and files already
   there are skipped. It works on the portable, the desktop app and manual installs. Both .bat

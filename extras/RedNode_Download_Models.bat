@@ -92,7 +92,7 @@ echo    %GREY%press Enter for 1, 6 and 7: the Krea 2 model and its LoRAs, the re
 set "ANS="
 set /p "ANS=   Your choice: "
 if defined ANS set "SEL=%ANS%"
-if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6 7 8 9 10 11"
+if /i "%SEL%"=="A" set "SEL=1 2 3 4 5 6 7 8 9 10 11 12"
 :chosen
 set "SEL= %SEL% "
 
@@ -118,8 +118,10 @@ if %COUNT% equ 0 (
 )
 for /f %%f in ('powershell -NoProfile -Command "[math]::Floor((Get-PSDrive '%MODELS:~0,1%').Free/1MB)"') do set "FREEMB=%%f"
 set /a NEEDGB=(NEEDMB+999)/1000, FREEGB=FREEMB/1000
+set "NEEDTXT=%NEEDGB% GB"
+if %NEEDMB% lss 1000 set "NEEDTXT=%NEEDMB% MB"
 echo.
-echo    %WHITE%%COUNT% to download, about %NEEDGB% GB into this folder.%X% %GREY%Free on %MODELS:~0,2% %FREEGB% GB. Ollama keeps its own models.%X%
+echo    %WHITE%%COUNT% to download, about %NEEDTXT% into this folder.%X% %GREY%Free on %MODELS:~0,2% %FREEGB% GB. Ollama keeps its own models.%X%
 if %FREEMB% lss %NEEDMB% (
   echo.
   echo      %RED%Not enough space.%X% Free up some room on %MODELS:~0,2% or pick fewer, then run this again.
@@ -302,10 +304,11 @@ REM ---- the menu: ::G~number~section~title~MB~license or page -----------------
 ::G~5~MODELS~ZTurbo - DarkBeast Z-Image Turbo, its abliterated encoder and the UltraFlux VAE~33000~Apache 2.0: GuangyuanSD, IIEleven11, Owen777 on Hugging Face
 ::G~6~LORAS~The workflow's LoRA set - Identity Edit, Filter Bypass, Refusal Reduction~1860~Each from its author, under its own terms
 ::G~7~LORAS~Anything2Real - the LoRA the Re-render tab converts with~230~Apache 2.0: huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters
-::G~8~TOOLS~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
-::G~9~TOOLS~Auto prompt - the Ollama vision model that describes your pictures~6140~Needs the Ollama app (ollama.com). Model: huihui_ai/qwen3-vl-abliterated
-::G~10~TOOLS~Swap - the BFS face swap LoRA, on the same Qwen Edit engine as 8~30470~MIT: huggingface.co/Alissonerdx/BFS-Best-Face-Swap. Files 8 already fetched are skipped
-::G~11~TOOLS~Masks - ComfyUI's built-in SAM3.1 for the Detailer and Paint, no Triton needed~1750~SAM license: huggingface.co/Comfy-Org/sam3.1
+::G~8~LORAS~Camera and light LoRAs - zoom, height, orbit and back, brightness and colour temperature~180~RedNode camera LoRAs on GitHub; Loraholic and iamddtla on Civitai, each under its own terms
+::G~9~TOOLS~Re-angle - Qwen Image Edit 2511, its encoder, the angles and speed LoRAs~31060~Qwen and Apache 2.0 terms: huggingface.co/Comfy-Org, fal, lightx2v
+::G~10~TOOLS~Auto prompt - the Ollama vision model that describes your pictures~6140~Needs the Ollama app (ollama.com). Model: huihui_ai/qwen3-vl-abliterated
+::G~11~TOOLS~Swap - the BFS face swap LoRA, on the same Qwen Edit engine as 9~30470~MIT: huggingface.co/Alissonerdx/BFS-Best-Face-Swap. Files 9 already fetched are skipped
+::G~12~TOOLS~Masks - ComfyUI's built-in SAM3.1 for the Detailer and Paint, no Triton needed~1750~SAM license: huggingface.co/Comfy-Org/sam3.1
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
 ::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
@@ -325,17 +328,23 @@ REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ---------
 ::M~6~loras~krea2filterbypass3.safetensors~civkey~https://civitai.com/api/download/models/3067151~1~https://civitai.com/models/2728234?modelVersionId=3067151
 ::M~6~loras~Krea2_TextFusion_Refusal_Reduction.safetensors~civkey~https://civitai.com/api/download/models/3125118~27~https://civitai.com/models/2775340?modelVersionId=3125118
 ::M~7~loras~Krea2_Anything2RealCharacters-V3.safetensors~hf~https://huggingface.co/WarmBloodAban/Krea2_Anything2RealCharacters/resolve/main/Krea2_Anything2RealCharacters-V3.safetensors~230~-
-::M~8~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
-::M~8~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
-::M~8~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
-::M~8~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
-::M~8~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
-::M~9~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~6140~https://ollama.com/huihui_ai/qwen3-vl-abliterated
-::M~10~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
-::M~10~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
-::M~10~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
-::M~10~loras~bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~307~-
-::M~11~checkpoints~sam3.1_multiplex_fp16.safetensors~hf~https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors~1750~-
+::M~8~loras~camera_height_krea2_rednode.safetensors~hf~https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_height_krea2_rednode.safetensors~29~-
+::M~8~loras~camera_orbit_krea2_rednode.safetensors~hf~https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_orbit_krea2_rednode.safetensors~29~-
+::M~8~loras~camera_back_krea2_rednode.safetensors~hf~https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/download/v1.2.0/camera_back_krea2_rednode.safetensors~29~-
+::M~8~loras~zoom_krea2_loraholic.safetensors~civkey~https://civitai.com/api/download/models/3153611~57~https://civitai.com/models/2717832?modelVersionId=3153611
+::M~8~loras~color_temp_krea2_loraholic.safetensors~civkey~https://civitai.com/api/download/models/3107144~7~https://civitai.com/models/2760910?modelVersionId=3107144
+::M~8~loras~PornMaster_Krea2_Light_Slider_V1.safetensors~civkey~https://civitai.com/api/download/models/3132251~30~https://civitai.com/models/2781150?modelVersionId=3132251
+::M~9~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
+::M~9~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
+::M~9~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~9~loras~qwen-image-edit-2511-multiple-angles-lora.safetensors~hf~https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/resolve/main/qwen-image-edit-2511-multiple-angles-lora.safetensors~300~-
+::M~9~loras~Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~hf~https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/resolve/main/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors~850~-
+::M~10~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~ollama~huihui_ai/qwen3-vl-abliterated:8b-instruct~6140~https://ollama.com/huihui_ai/qwen3-vl-abliterated
+::M~11~diffusion_models~qwen_image_edit_2511_fp8mixed.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors~20530~-
+::M~11~text_encoders~qwen_2.5_vl_7b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors~9380~-
+::M~11~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
+::M~11~loras~bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~hf~https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/main/bfs_head_v5_2511_merged_version_rank_16_fp16.safetensors~307~-
+::M~12~checkpoints~sam3.1_multiplex_fp16.safetensors~hf~https://huggingface.co/Comfy-Org/sam3.1/resolve/main/checkpoints/sam3.1_multiplex_fp16.safetensors~1750~-
 
 ::~          .-"-.               .-"-.
 ::~         /     \   .-"""-.   /     \
