@@ -12948,6 +12948,24 @@ function modelsBody(node, page) {
       ts.onchange = () => { rig.int8_type = ts.value; writeCfg(node); };
       pill(body, "INT8 type", ts);
     }
+    // QWEN 2.1 SIZE SHIFT, the same flag as the Sampler dials switch, shown here
+    // when the file looks like Qwen Image 2.1 (or the flag is already on)
+    if (/qwen[_ -]?image[_ -]?2[._]?1/i.test(rig.unet || "") || rig.q21_shift) {
+      const qb = document.createElement("button");
+      qb.className = "rn-ws-sw" + (rig.q21_shift ? " on" : "");
+      qb.dataset.choice = "q21_shift_model";
+      qb.title = "Sets the shift from the picture size, like Qwen Image 2.1's own "
+               + "scheduler. No number to set. Off: ComfyUI's 1024 x 1024 shift at every size.";
+      qb.onclick = () => { rig.q21_shift = !rig.q21_shift; writeCfg(node); render(node); };
+      const qrow = document.createElement("div");
+      qrow.className = "rn-ws-filerow";
+      qrow.title = qb.title;
+      const qlab = document.createElement("span");
+      qlab.className = "k";
+      qlab.textContent = "Size shift";
+      qrow.append(qlab, qb);
+      body.appendChild(qrow);
+    }
   }
   body = mkBox("Text encoder", "", "", "", "The CLIP model that reads the prompt.");
   statusBadge(body, rig.clip ? "Set" : rig.checkpoint ? "Set" : "Missing",

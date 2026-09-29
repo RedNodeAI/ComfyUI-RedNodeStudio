@@ -21,7 +21,7 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### New
 
-- Qwen 2.1 size shift, a rig sampler dial: Qwen Image 2.1 samples with its own scheduler's
+- Size shift, a switch in the rig's Model box when the model is Qwen Image 2.1: it samples with its own scheduler's
   shift for the canvas size, where ComfyUI keeps the 1024 x 1024 value at every size. Every
   pass, Detailer and Paint run on the rig gets it. Off by default
 - Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
