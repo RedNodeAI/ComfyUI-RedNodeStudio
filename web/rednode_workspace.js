@@ -2024,6 +2024,7 @@ export function readCfg(node) {
     if (typeof r.cfg !== "number") r.cfg = 1.0;
     // sampler dials, all off until switched on (sampler_dials.py parses them)
     if (typeof r.shift !== "number") r.shift = 0;
+    if (typeof r.q21_shift !== "boolean") r.q21_shift = false;
     for (const k of ["dd", "variance", "densify"]) {
       if (!r[k] || typeof r[k] !== "object") r[k] = {};
     }
@@ -15517,6 +15518,7 @@ function dialsCard(node, rig, body) {
   const lab = document.createElement("span");
   lab.className = "rn-ws-note";
   const on = [rig.shift > 0 ? "shift " + Number(rig.shift).toFixed(2) : "",
+              rig.q21_shift ? "Qwen 2.1 size shift" : "",
               rig.dd.on ? "detail daemon" : "", rig.variance.on ? "seed variance" : "",
               rig.densify.on ? "densify" : ""].filter(Boolean);
   lab.textContent = "Sampler dials" + (on.length ? ": " + on.join(", ") : "");
@@ -15598,6 +15600,14 @@ function dialsCard(node, rig, body) {
   snote.textContent = rig.shift > 0 ? "" : "0 = model default";
   srow.append(slab, sinp, snote);
   box.appendChild(srow);
+
+  // QWEN 2.1 SIZE SHIFT
+  const q21 = sw(box, "Qwen 2.1 size shift", () => !!rig.q21_shift, (v) => { rig.q21_shift = v; },
+     "Qwen Image 2.1's own scheduler: the shift follows the canvas size (ComfyUI fixes it "
+     + "at the 1024 x 1024 value) and the last step lands on sigma 0.02. Every pass, "
+     + "Detailer and Paint run on this rig gets it. Only acts on a Qwen Image 2.1 model; "
+     + "the Shift above is replaced while it is on.");
+  q21.querySelector("button").dataset.choice = "q21_shift";
 
   // DETAIL DAEMON
   const dd = rig.dd;

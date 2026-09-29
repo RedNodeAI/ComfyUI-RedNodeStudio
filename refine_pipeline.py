@@ -1441,6 +1441,7 @@ class RedNodeStudioDetailer:
             self._rn_chain = _rigc.rig_for(rig)
             if self._rn_dials.get("shift"):
                 model = _dials.apply_shift(model, self._rn_dials["shift"])
+            model = _dials.mark_qwen21(model, self._rn_dials.get("q21_shift"))
             # THE STACK, unless this pass says raw: the main LoRAs tab applied to
             # model AND clip, the same halves the rest of the pack learned to keep
             # together the hard way

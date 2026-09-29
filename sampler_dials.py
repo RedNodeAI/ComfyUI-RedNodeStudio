@@ -11,6 +11,8 @@
              conditioning's values are jittered by a small amount, so the same seed
              and prompt land on a different composition. The clean conditioning is
              back for the rest of the steps.
+  q21_shift  Qwen Image 2.1's size-aware shift: its own scheduler's mu for the canvas
+             being sampled, and the schedule's last step on sigma 0.02.
   densify    the tail of the schedule resampled to more steps, so the detail band
              gets the extra steps and the rest of the run stays as it was.
 
@@ -56,6 +58,8 @@ def parse_dials(r):
     de = r.get("densify") if isinstance(r.get("densify"), dict) else {}
     return {
         "shift": _num(r, "shift", 0.0, 100.0, 0.0),
+        # Qwen Image 2.1's own size-aware shift (qwen21_mu below), off by default
+        "q21_shift": bool(r.get("q21_shift")),
         "dd": {
             "on": bool(dd.get("on")),
             "amount": _num(dd, "amount", -5.0, 5.0, 0.1),
@@ -189,15 +193,20 @@ def rig_sigmas(model, sampler, scheduler, steps, denoise=1.0):
     if scheduler in EXTRA_SCHEDULERS:
         steps = max(1, int(steps))
         if denoise is None or denoise > 0.9999:
-            return extra_sigmas(model, scheduler, steps)
+            return _terminal(model, extra_sigmas(model, scheduler, steps))
         if denoise <= 0.0:
             return torch.FloatTensor([])
         new_steps = int(steps / denoise)
-        return extra_sigmas(model, scheduler, new_steps)[-(steps + 1):]
+        return _terminal(model, extra_sigmas(model, scheduler, new_steps)[-(steps + 1):])
     ks = comfy.samplers.KSampler(model, steps=max(1, int(steps)), device=model.load_device,
                                  sampler=sampler, scheduler=scheduler, denoise=denoise,
                                  model_options=model.model_options)
-    return ks.sigmas
+    return _terminal(model, ks.sigmas)
+
+
+def _terminal(model, sigmas):
+    term = (getattr(model, "model_options", None) or {}).get("rn_q21_terminal")
+    return stretch_terminal(sigmas, term) if term else sigmas
 
 
 def densify(sigmas, last, extra):
@@ -257,6 +266,79 @@ def apply_shift(model, shift):
         print("[RedNode sampler dials] shift %.2f could not be applied (%s); the model "
               "runs as it loads" % (shift, exc), flush=True)
         return model
+
+
+# ------------------------------------------------------------------ Qwen Image 2.1
+# Qwen Image 2.1's published scheduler moves its shift with the picture: mu runs from
+# 0.5 at 256 tokens to 0.9 at 8192 (one token per 16 px square, one per latent cell)
+# and the schedule is stretched so its last step lands on sigma 0.02. Core fixes mu at
+# 0.69, the 1024 x 1024 value, so any other canvas samples with the wrong shift.
+Q21_BASE_TOKENS, Q21_BASE_MU = 256, 0.5
+Q21_MAX_TOKENS, Q21_MAX_MU = 8192, 0.9
+Q21_TERMINAL = 0.02
+_Q21_SAMPLING = None
+
+
+def is_qwen21(model):
+    try:
+        return type(model.model.model_config).__name__ == "QwenImage21"
+    except AttributeError:
+        return False
+
+
+def qwen21_mu(h, w):
+    """mu for a latent of h x w cells, the scheduler's straight line, not clamped."""
+    n = max(1, int(h)) * max(1, int(w))
+    return Q21_BASE_MU + (Q21_MAX_MU - Q21_BASE_MU) * (n - Q21_BASE_TOKENS) / float(
+        Q21_MAX_TOKENS - Q21_BASE_TOKENS)
+
+
+def stretch_terminal(sigmas, terminal):
+    """The schedule stretched so its last non-zero sigma is `terminal`, the top held
+    (diffusers' shift_terminal)."""
+    sig = sigmas.detach().float().cpu()
+    nz = sig > 0
+    if not bool(nz.any()) or terminal <= 0:
+        return sigmas
+    last = float(sig[nz][-1])
+    if last >= 1.0:
+        return sigmas
+    scale = (1.0 - last) / (1.0 - float(terminal))
+    out = sig.clone()
+    out[nz] = 1.0 - (1.0 - sig[nz]) / scale
+    return out.to(sigmas.device, sigmas.dtype)
+
+
+def mark_qwen21(model, on):
+    """A clone of a Qwen Image 2.1 model flagged for the size-aware shift, which the
+    sampler call applies once it knows the canvas; anything else comes back as is."""
+    if not on or model is None or not is_qwen21(model):
+        return model
+    m = model.clone()
+    m.model_options["rn_q21_dyn"] = True
+    return m
+
+
+def qwen21_shift(model, hw):
+    """A clone sampling with mu for this canvas and the 0.02 tail, on a flagged model."""
+    global _Q21_SAMPLING
+    opts = getattr(model, "model_options", None) or {}
+    if not opts.get("rn_q21_dyn") or opts.get("rn_q21_terminal"):
+        return model
+    import comfy.model_sampling as _ms
+    if _Q21_SAMPLING is None:
+        class _Q21Sampling(_ms.ModelSamplingFlux, _ms.CONST):
+            pass
+        _Q21_SAMPLING = _Q21Sampling
+    mu = qwen21_mu(*hw)
+    s = _Q21_SAMPLING(model.model.model_config)
+    s.set_parameters(shift=mu)
+    m = model.clone()
+    m.add_object_patch("model_sampling", s)
+    m.model_options["rn_q21_terminal"] = Q21_TERMINAL
+    print("[RedNode sampler dials] Qwen 2.1 shift for %d x %d px: mu %.3f, last step "
+          "sigma %.2f" % (int(hw[1]) * 16, int(hw[0]) * 16, mu, Q21_TERMINAL), flush=True)
+    return m
 
 
 def make_wrapper(sigmas, dials, seed, cfg_scale, prev=None):
@@ -355,6 +437,9 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
     wrapper, and the run goes through ksample."""
     # A RIG MADE OF YOUR OWN NODES (custom_rig.py, rig_chain.py): while a caller samples on
     # one, its own sampler runs instead, with this call's model, prompts, latent and numbers
+    # Qwen 2.1's size-aware shift: the canvas is known only here
+    if latent is not None and torch.is_tensor(latent.get("samples")):
+        model = qwen21_shift(model, tuple(latent["samples"].shape[-2:]))
     from . import rig_chain as _rigc
     _rig = _rigc.active()
     if _rig:
@@ -374,7 +459,8 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
                       start_step=start_step, last_step=last_step)
         if got is not None:
             return got
-    if sigmas is None and not any_on(dials) and scheduler not in EXTRA_SCHEDULERS:
+    if (sigmas is None and not any_on(dials) and scheduler not in EXTRA_SCHEDULERS
+            and not (getattr(model, "model_options", None) or {}).get("rn_q21_terminal")):
         # only the keywords that differ from core's defaults travel, so a caller
         # (or a test's stand-in) that knows only denoise= keeps working
         kw = {"denoise": denoise}

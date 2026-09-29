@@ -226,8 +226,9 @@ an external one, holds the seed, and can keep two rigs in RAM at once so a two-r
 reloading. Each rig also folds away a set of sampler dials, all off by default: an AuraFlow shift
 on the model, Detail Daemon (a sigma nudge over the run for finer detail without more steps),
 Seed Variance (a jitter on the conditioning early in the run, so one seed lands on different
-compositions) and densify the tail (extra steps only in the last part of the schedule). They ride
-the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
+compositions), densify the tail (extra steps only in the last part of the schedule) and Qwen 2.1
+size shift (Qwen Image 2.1's own schedule, its shift set by the canvas size, where ComfyUI keeps the
+1024 x 1024 value at every size). They ride the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
 pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock KSampler on the
 scheduler socket is handed simple when a rig names one of those. A diffusion model file goes
 through the loader the rig names: by file name, a .gguf through ComfyUI-GGUF and anything else

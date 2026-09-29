@@ -2531,6 +2531,8 @@ def load_paint_rig(cfg, name=""):
     nm, model, clip, vae = load_active_rig(cfg, name)
     if model is None:
         return nm, model, clip, vae
+    _rec = next((r for r in cfg["models"].get("rigs") or [] if r.get("name") == nm), None) or {}
+    model = _dials.mark_qwen21(model, (_rec.get("dials") or {}).get("q21_shift"))
     use_paint = cfg["paint"].get("lora_mode") == "paint"
     lc = (cfg.get("paint_loras") if use_paint
           else lora_set_cfg(cfg, cfg["paint"].get("lora_set") or rig_lora_set(cfg, name),
@@ -3060,6 +3062,7 @@ class RedNodeStudioWorkspace:
         dials = rec.get("dials") or _dials.parse_dials(rec)
         if dials.get("shift"):
             model = _dials.apply_shift(model, dials["shift"])
+        model = _dials.mark_qwen21(model, dials.get("q21_shift"))
         lc = lora_set_cfg(cfg, rec.get("lora_set") or "", "Workspace pass rig")
         if lc.get("on", True) and lc.get("slots"):
             model, _c, _w, _applied = _lora.apply_stack(
@@ -3291,10 +3294,12 @@ class RedNodeStudioWorkspace:
         _rigs0 = cfg["models"]["rigs"]
         _rig0 = _rigs0[cfg["models"]["active"]] if _rigs0 else {}
         _shift0 = float(((_rig0.get("dials") or {}).get("shift")) or 0.0)
+        _q21_0 = bool((_rig0.get("dials") or {}).get("q21_shift"))
         if model is not None and _shift0 > 0:
             model = _dials.apply_shift(model, _shift0)
             print("[RedNode Workspace] rig %r shift %.2f" % (_rig0.get("name") or "", _shift0),
                   flush=True)
+        model = _dials.mark_qwen21(model, _q21_0)
         # ONE SEED PER QUEUE, shared by the wildcard picks, the embedded sampler and
         # the built-in paint pass, so a single number reproduces the whole render and
         # Randomize re-rolls all of it together.
@@ -3687,6 +3692,7 @@ class RedNodeStudioWorkspace:
                 model = _dials.apply_shift(model, _shift0)
                 print("[RedNode Workspace] rig %r shift %.2f"
                       % (_rig0.get("name") or "", _shift0), flush=True)
+            model = _dials.mark_qwen21(model, _q21_0)
         elif _rig_deferred:
             print("[RedNode Workspace] source edit run: the rig %r stays unloaded"
                   % rig_name, flush=True)
@@ -4922,7 +4928,9 @@ class RedNodeStudioWorkspace:
                             _c = int(_sl0[min(_q, len(_sl0) - 1)]) if _sl0 else 0
                             _cnt.append(_c if _c > 0 else int(rig_steps))
                         try:
-                            _full = _dials.rig_sigmas(_model_i, rig_sampler, rig_scheduler,
+                            _m_sched = (_dials.qwen21_shift(_model_i, tuple(_out["samples"].shape[-2:]))
+                                        if _out is not None else _model_i)
+                            _full = _dials.rig_sigmas(_m_sched, rig_sampler, rig_scheduler,
                                                       sum(_cnt), _dn)
                             _de = (_ar.get("dials") or {}).get("densify") or {}
                             if _de.get("on"):
