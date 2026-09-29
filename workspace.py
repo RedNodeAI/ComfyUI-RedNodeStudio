@@ -5390,12 +5390,12 @@ class RedNodeStudioWorkspace:
                 _pseed = run_seed
                 _n_stack = len([x for x in
                                 (pls["slots"] if paint_mode == "paint"
-                                 else _base_lc["slots"])
+                                 else (_pl or _base_lc)["slots"])
                                 if isinstance(x, dict) and x.get("type") != "title"])
                 print("[RedNode Workspace] built-in paint pass: %s, %d LoRA slot(s) "
                       "on the model going in"
                       % ("the Paint LoRAs stack" if paint_mode == "paint"
-                         else "LoRA set %r" % (_pl["name"] if _paint_set else _base_lc["name"]),
+                         else "LoRA set %r" % (_pl or _base_lc)["name"],
                          _n_stack), flush=True)
                 _pr = RedNodePaintRender().render(
                     model=paint_model if paint_model is not None else model,

@@ -19,6 +19,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - The Shelf's Override names the Re-render tab where it said Editor. Re-angle and Swap on the
   Tools tab use the same picture, and its tooltip says so
 
+- Paint no longer fails with "'NoneType' object is not subscriptable" when its LoRA set is
+  the same one the rig renders with
+
 ### New
 
 - Size shift, a switch in the rig's Model box when the model is Qwen Image 2.1: it samples
