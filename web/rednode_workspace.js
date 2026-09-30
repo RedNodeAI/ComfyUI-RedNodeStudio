@@ -21455,17 +21455,27 @@ async function importPromptFromPng(node, cfg, rows, file, opts = {}) {
     // matched on the server: file name, then the name and hash stored in each
     // LoRA's header (what Neo writes), then, when asked, the files' full hashes
     const lhash = st.lora_hashes || {};
-    let byServer = {};
+    let byServer = {}, matchErr = "", loraList = MODEL_LISTS?.loras || [];
     if (tags.loras.length) {
       try {
         const r = await api.fetchApi("/rednode/lora_match", { method: "POST",
           body: JSON.stringify({ deep: !!opts.deep,
             items: tags.loras.map((l) => ({ name: l.name, hash: lhash[l.name] || "" })) }) });
-        byServer = (await r.json())?.found || {};
-      } catch (e) { byServer = {}; }
+        if (!r.ok) matchErr = `HTTP ${r.status}`;
+        else byServer = (await r.json())?.found || {};
+      } catch (e) { matchErr = String(e?.message || e); }
+      // the panel's list may not be loaded yet: ask ComfyUI for the LoRA names
+      if (!loraList.length) {
+        try {
+          const r = await api.fetchApi("/object_info/LoraLoader");
+          loraList = (await r.json())?.LoraLoader?.input?.required?.lora_name?.[0] || [];
+        } catch (e) { loraList = []; }
+      }
+      console.log("[RedNode Workspace] LoRA tag match:", { server: byServer, error: matchErr,
+                  listed: loraList.length });
     }
     const found = tags.loras.map((l) => ({ ...l,
-      file: byServer[l.name] || matchLora(l.name, MODEL_LISTS?.loras) }));
+      file: byServer[l.name] || matchLora(l.name, loraList) }));
     const missing = found.filter((l) => !l.file);
     const canDeep = !opts.deep && missing.some((l) => lhash[l.name]);
     const sampler = comfySampler(st.sampler), scheduler = comfyScheduler(st.scheduler);
@@ -21484,7 +21494,9 @@ async function importPromptFromPng(node, cfg, rows, file, opts = {}) {
       + (st.model ? "\nModel named in the file: " + st.model + " (not changed here)" : "")
       + (found.length ? "\n\nLoRAs in the prompt: " + found.length
           + (missing.length ? ", " + (found.length - missing.length) + " installed. Not installed: "
-             + missing.map((l) => l.name).join(", ") : ", all installed") + "." : "")
+             + missing.map((l) => l.name).join(", ") : ", all installed") + "."
+          + (matchErr ? "\nThe server could not match them (" + matchErr + "): restart ComfyUI "
+             + "so it loads this version, then import again." : "") : "")
       + (applies.length ? "\n\nSettings in the file: " + applies.join(", ") + "." : "\n\nNo settings line in the file.");
     // UNSORTED WORDS GO INTO ANYTHING ELSE, not a box that claims to know
     // what they are: a Frame box row with the text there, ready for Auto sort
