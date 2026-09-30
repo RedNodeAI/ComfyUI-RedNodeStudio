@@ -29,6 +29,10 @@ format matters: **version** then a date, notes below until the next bold line.
   value at every size. Every pass, Detailer and Paint run on the rig gets it. Off by default
 - CLIP skip on each rig's Text encoder box, core's CLIP Set Last Layer: Off, 2, 3 or 4, on
   any text encoder. The render, Detailer and Paint on the rig all use it. Off by default
+- Importing a picture from A1111, Forge or Neo reads its <lora:name:weight> tags: a new choice
+  loads them into the active rig's LoRA set at the file's strengths (matched to your LoRA files
+  by name), with the tags taken out of the prompt. Clip skip and Shift come over too, and the
+  sampler and schedule names are turned into ComfyUI's
 - Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
   result on the next seed
 - An option on the Latent and Img2Img Passes pages to enlarge the picture itself between

@@ -27,7 +27,8 @@ import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITO
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
-import { pngTextChunks, parseParameters, workspaceConfigIn, chosenRow } from "./rednode_png_meta.js";
+import { pngTextChunks, parseParameters, workspaceConfigIn, chosenRow, loraTags, matchLora,
+         comfySampler, comfyScheduler } from "./rednode_png_meta.js";
 import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
 import { setting, wsPref, setWsPref, onWsPrefChange } from "./rednode_settings.js";
 import { bindSliderWheel } from "./rednode_wheel.js";
@@ -21447,43 +21448,79 @@ async function importPromptFromPng(node, cfg, rows, file) {
     // ANY PICTURE WITH A PARAMETERS CHUNK: the words as a plain row, and the
     // settings line onto the active rig and the canvas when asked
     const st = params.settings;
+    // A1111 / FORGE / NEO LORA TAGS: <lora:name:weight> in the prompt become LoRA
+    // stack rows, matched to installed files by name; the words keep no tags
+    const tags = loraTags(params.positive);
+    const words = tags.text;
+    const found = tags.loras.map((l) => ({ ...l, file: matchLora(l.name, MODEL_LISTS?.loras) }));
+    const missing = found.filter((l) => !l.file);
+    const sampler = comfySampler(st.sampler), scheduler = comfyScheduler(st.scheduler);
     const applies = [];
     if (st.steps != null) applies.push(`steps ${st.steps}`);
     if (st.cfg != null) applies.push(`CFG ${st.cfg}`);
-    if (st.sampler) applies.push(`sampler ${st.sampler}`);
-    if (st.scheduler) applies.push(`scheduler ${st.scheduler}`);
+    if (sampler) applies.push(`sampler ${sampler}`);
+    if (scheduler) applies.push(`scheduler ${scheduler}`);
+    if (st.shift != null) applies.push(`shift ${st.shift}`);
+    if (st.clip_skip != null && st.clip_skip > 1) applies.push(`CLIP skip ${st.clip_skip}`);
     if (st.width && st.height) applies.push(`size ${st.width}\u00d7${st.height}`);
     if (st.seed != null) applies.push(`seed ${st.seed}, fixed`);
     if (st.denoise != null) applies.push(`denoise ${st.denoise}`);
-    const summary = "Prompt: " + clip(params.positive)
+    const summary = "Prompt: " + clip(words)
       + (params.negative ? "\nNegative: " + clip(params.negative, 160) : "")
       + (st.model ? "\nModel named in the file: " + st.model + " (not changed here)" : "")
+      + (found.length ? "\n\nLoRAs in the prompt: " + found.length
+          + (missing.length ? ", " + (found.length - missing.length) + " installed. Not installed: "
+             + missing.map((l) => l.name).join(", ") : ", all installed") + "." : "")
       + (applies.length ? "\n\nSettings in the file: " + applies.join(", ") + "." : "\n\nNo settings line in the file.");
     // UNSORTED WORDS GO INTO ANYTHING ELSE, not a box that claims to know
     // what they are: a Frame box row with the text there, ready for Auto sort
     // to file it, and the negative on the row
     const plainRow = () => ({ name: "Imported", rig: "", rigs: [], kind: "krea2",
-                              text: params.positive, negative: params.negative,
-                              frame: { extra: params.positive, camera_off: true } });
+                              text: words, negative: params.negative,
+                              frame: { extra: words, camera_off: true } });
+    const applySettings = () => {
+      const rig = cfg.models.rigs[cfg.models.active] || null;
+      if (rig) {
+        if (st.steps != null) rig.steps = st.steps;
+        if (st.cfg != null) rig.cfg = st.cfg;
+        if (sampler) rig.sampler = sampler;
+        if (scheduler) rig.scheduler = scheduler;
+        if (st.shift != null) rig.shift = st.shift;
+        if (st.clip_skip != null) rig.clip_skip = Math.max(1, st.clip_skip);
+        if (st.denoise != null) rig.denoise = st.denoise;
+      }
+      if (st.width && st.height) { cfg.latent.w = st.width; cfg.latent.h = st.height; }
+      if (st.seed != null) { cfg.models.seed = st.seed; cfg.models.seed_random = false; }
+    };
+    // into the set the active rig renders with: its other LoRAs switched off (kept),
+    // then a group named after the file with one row per installed LoRA
+    const loadLoras = () => {
+      const rig = cfg.models.rigs[cfg.models.active] || {};
+      const setName = rig.lora_set || MAIN_SET;
+      const set = setName === MAIN_SET ? (cfg.loras ||= { on: true, slots: [] })
+        : ((cfg.lora_sets || []).find((x) => x.name === setName) || (cfg.loras ||= { on: true, slots: [] }));
+      set.slots = Array.isArray(set.slots) ? set.slots : [];
+      for (const s of set.slots) if (s && s.type !== "title") s.enabled = false;
+      set.slots.push({ type: "title", text: "From " + file.name, color: "#3a3f47" });
+      for (const l of found.filter((x) => x.file)) {
+        set.slots.push({ ...LS_newSlot(), name: l.file, strength: l.weight,
+                         scale_min: Math.min(-2, l.weight), scale_max: Math.max(2, l.weight) });
+      }
+      set.on = true;
+    };
     const choices = [{ label: "Add as a prompt",
                        tip: "A new prompt row with these words in its Anything else box, ready for Auto sort.",
                        run: () => addRow(plainRow()) }];
     if (applies.length) {
       choices.push({ label: "Add and apply settings",
-        tip: "The prompt row, its words in Anything else, plus the steps, CFG, sampler, scheduler, size, seed and denoise from the file onto the active rig and the canvas.",
-        run: () => {
-          const rig = cfg.models.rigs[cfg.models.active] || null;
-          if (rig) {
-            if (st.steps != null) rig.steps = st.steps;
-            if (st.cfg != null) rig.cfg = st.cfg;
-            if (st.sampler) rig.sampler = st.sampler;
-            if (st.scheduler) rig.scheduler = st.scheduler;
-            if (st.denoise != null) rig.denoise = st.denoise;
-          }
-          if (st.width && st.height) { cfg.latent.w = st.width; cfg.latent.h = st.height; }
-          if (st.seed != null) { cfg.models.seed = st.seed; cfg.models.seed_random = false; }
-          addRow(plainRow());
-        } });
+        tip: "The prompt row, its words in Anything else, plus the steps, CFG, sampler, scheduler, shift, CLIP skip, size, seed and denoise from the file onto the active rig and the canvas.",
+        run: () => { applySettings(); addRow(plainRow()); } });
+    }
+    if (found.length > missing.length) {
+      choices.push({ label: "Add, apply settings and LoRAs",
+        tip: "All of the above, and the prompt's LoRAs into the LoRA set the active rig uses, at the "
+           + "file's strengths. That set's other LoRAs are switched off, not removed.",
+        run: () => { applySettings(); loadLoras(); addRow(plainRow()); } });
     }
     importChoice("Import from " + file.name, summary, choices);
     return;

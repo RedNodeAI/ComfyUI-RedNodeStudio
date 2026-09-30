@@ -75,8 +75,58 @@ export function parseParameters(text) {
       height: size ? Number(size[2]) : null,
       denoise: num(grab(/Denoising strength: ([\d.]+)/)),
       model: grab(/(?:^|, )Model: ([^,]+)/),
+      clip_skip: num(grab(/Clip skip: (\d+)/)),
+      shift: num(grab(/(?:^|, )Shift: ([\d.]+)/)),
     },
   };
+}
+
+// <lora:name:weight> tags, the way A1111 / Forge / Neo write them in the prompt:
+// the LoRAs in order, and the words with the tags and their loose commas taken out
+export function loraTags(text) {
+  const loras = [];
+  const clean = String(text || "").replace(/<(lora|lyco):([^:>]+)(?::([^:>]*))?(?::[^>]*)?>/gi, (m, kind, name, w) => {
+    const v = Number(String(w ?? "1").trim());
+    loras.push({ name: name.trim(), weight: Number.isFinite(v) ? v : 1 });
+    return "";
+  });
+  const words = clean.split("\n").map((l) => l.replace(/\s*,(\s*,)+/g, ",").replace(/^[\s,]+|[\s,]+$/g, ""))
+    .join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { text: words, loras };
+}
+
+// A1111's sampler and schedule names as ComfyUI's; unknown names come back lowercased
+const A1111_SAMPLERS = {
+  "euler": "euler", "euler a": "euler_ancestral", "heun": "heun", "lms": "lms",
+  "dpm2": "dpm_2", "dpm2 a": "dpm_2_ancestral", "dpm++ 2s a": "dpmpp_2s_ancestral",
+  "dpm++ 2m": "dpmpp_2m", "dpm++ sde": "dpmpp_sde", "dpm++ 2m sde": "dpmpp_2m_sde",
+  "dpm++ 2m sde heun": "dpmpp_2m_sde", "dpm++ 3m sde": "dpmpp_3m_sde", "dpm fast": "dpm_fast",
+  "dpm adaptive": "dpm_adaptive", "lcm": "lcm", "ddim": "ddim", "unipc": "uni_pc",
+  "ipndm": "ipndm", "deis": "deis", "res multistep": "res_multistep", "er sde": "er_sde",
+};
+const A1111_SCHEDULES = {
+  "automatic": "", "simple": "simple", "normal": "normal", "karras": "karras",
+  "exponential": "exponential", "sgm uniform": "sgm_uniform", "beta": "beta",
+  "ddim": "ddim_uniform", "linear quadratic": "linear_quadratic", "kl optimal": "kl_optimal",
+};
+export function comfySampler(name) {
+  const k = String(name || "").trim().toLowerCase();
+  if (!k) return "";
+  return A1111_SAMPLERS[k] ?? k.replace(/\+\+/g, "pp").replace(/[\s-]+/g, "_");
+}
+export function comfyScheduler(name) {
+  const k = String(name || "").trim().toLowerCase();
+  if (!k) return "";
+  return A1111_SCHEDULES[k] ?? k.replace(/[\s-]+/g, "_");
+}
+
+// an installed LoRA file for a tag's name: the same file name with any folder and
+// extension, case ignored; "" when there is none
+export function matchLora(name, installed) {
+  const want = String(name || "").trim().toLowerCase();
+  if (!want) return "";
+  const base = (f) => String(f).split(/[\\/]/).pop().replace(/\.(safetensors|pt|ckpt|bin)$/i, "").toLowerCase();
+  return (installed || []).find((f) => base(f) === want) || "";
 }
 
 // the Workspace's own config out of the embedded graph, if the picture has one
