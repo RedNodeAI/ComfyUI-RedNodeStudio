@@ -2025,6 +2025,7 @@ export function readCfg(node) {
     // sampler dials, all off until switched on (sampler_dials.py parses them)
     if (typeof r.shift !== "number") r.shift = 0;
     if (typeof r.q21_shift !== "boolean") r.q21_shift = false;
+    if (typeof r.clip_skip !== "number") r.clip_skip = 1;
     for (const k of ["dd", "variance", "densify"]) {
       if (!r[k] || typeof r[k] !== "object") r[k] = {};
     }
@@ -13000,6 +13001,21 @@ function modelsBody(node, page) {
       typeRow.appendChild(m);
     }
     if (rig.clip_type === "krea2") officialRow(node, body, rig);
+    // CLIP SKIP: core's CLIP Set Last Layer, 1 = off
+    const sk = document.createElement("select");
+    sk.dataset.choice = "clip_skip";
+    const cur = Math.max(1, Math.round(Number(rig.clip_skip) || 1));
+    for (const v of [...new Set([1, 2, 3, 4, cur])].sort((a, b) => a - b)) {
+      const o = document.createElement("option");
+      o.value = String(v);
+      o.textContent = v === 1 ? "Off" : String(v);
+      o.selected = v === cur;
+      sk.appendChild(o);
+    }
+    sk.title = "CLIP Set Last Layer, on any text encoder. 2 is what most Pony, Illustrious "
+             + "and NoobAI models ask for. Off uses every layer.";
+    sk.onchange = () => { rig.clip_skip = Number(sk.value); writeCfg(node); render(node); };
+    pill(body, "CLIP skip", sk, sk.title);
   }
   body = mkBox("Decoder", "", "", "", "The VAE that turns the result into a picture.");
   statusBadge(body, rig.vae ? "Set" : rig.checkpoint ? "Set" : "Missing",

@@ -1461,6 +1461,8 @@ def parse_config(config_json):
             "int8_type": str(r.get("int8_type") or ""),   # the INT8 loader's model_type
             "clip": str(r.get("clip") or ""),
             "clip_type": str(r.get("clip_type") or ""),
+            # CLIP SKIP, core's CLIP Set Last Layer: 1 = every layer (off), 2 = -2
+            "clip_skip": _num("clip_skip", 1, 12, 1),
             "vae": str(r.get("vae") or ""),
             # the rig's OWN sampler settings, the same five keys a Sampler Config
             # profile carries, so "load the workspace and it works" includes the
@@ -2107,7 +2109,8 @@ def rig_text_key(rec, clip, from_rec=True):
     ctype = str((rec or {}).get("clip_type") or "")
     if not from_rec or (rec or {}).get("kind") == "node":
         return ("obj", id(clip), ctype)
-    return ("file", str(rec.get("clip") or "ckpt:%s" % (rec.get("checkpoint") or "")), ctype)
+    return ("file", str(rec.get("clip") or "ckpt:%s" % (rec.get("checkpoint") or "")), ctype,
+            int(rec.get("clip_skip") or 1))
 
 
 def rig_vae_key(rec, vae, from_rec=True):
@@ -2322,6 +2325,33 @@ def _say_vae_mismatch(rig, model, vae):
 
 
 def load_active_rig(cfg, name="", prompt=None):
+    """(name, model, clip, vae) for a Models-tab rig, its CLIP skip applied."""
+    nm, model, clip, vae = _load_active_rig(cfg, name, prompt)
+    rec = next((r for r in (cfg.get("models") or {}).get("rigs") or []
+                if r.get("name") == nm), None) or {}
+    return nm, model, clip_skip(clip, rec), vae
+
+
+def clip_skip(clip, rec):
+    """Core's CLIP Set Last Layer on a clone, for a files rig with a skip above 1."""
+    try:
+        n = int((rec or {}).get("clip_skip") or 1)
+    except (TypeError, ValueError):
+        n = 1
+    if clip is None or n <= 1 or (rec or {}).get("kind") == "node":
+        return clip
+    try:
+        c = clip.clone()
+        c.clip_layer(-n)
+        print("[RedNode Workspace] rig %r: CLIP skip %d" % (rec.get("name") or "", n), flush=True)
+        return c
+    except Exception as exc:
+        print("[RedNode Workspace] rig %r: CLIP skip %d could not be applied (%s)"
+              % (rec.get("name") or "", n, exc), flush=True)
+        return clip
+
+
+def _load_active_rig(cfg, name="", prompt=None):
     """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
 
     `name` pins a specific rig, which is how two Paint Out nodes carry two different

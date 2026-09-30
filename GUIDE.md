@@ -223,8 +223,9 @@ second sampler pair for image to image runs, and which LoRA set it carries. Keep
 the active one; a Detailer pass can name any of them, so a face can be detailed by a different
 model from the one that rendered the frame. The same tab chooses between the built-in sampler and
 an external one, holds the seed, and can keep two rigs in RAM at once so a two-rig chain stops
-reloading. Each rig also folds away a set of sampler dials, all off by default: an AuraFlow shift
-on the model, Detail Daemon (a sigma nudge over the run for finer detail without more steps),
+reloading. The Text encoder box has a CLIP skip picker (CLIP Set Last Layer: Off, 2, 3 or 4)
+that works on any encoder; 2 is what most Pony, Illustrious and NoobAI models ask for. Each rig
+also folds away a set of sampler dials, all off by default: an AuraFlow shift on the model, Detail Daemon (a sigma nudge over the run for finer detail without more steps),
 Seed Variance (a jitter on the conditioning early in the run, so one seed lands on different
 compositions), densify the tail (extra steps only in the last part of the schedule) and Qwen 2.1
 size shift (Qwen Image 2.1's own schedule, its shift set by the canvas size, where ComfyUI keeps the

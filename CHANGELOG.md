@@ -27,6 +27,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - Size shift, a switch in the rig's Model box when the model is Qwen Image 2.1: it samples
   with its own scheduler's shift for the canvas size, where ComfyUI keeps the 1024 x 1024
   value at every size. Every pass, Detailer and Paint run on the rig gets it. Off by default
+- CLIP skip on each rig's Text encoder box, core's CLIP Set Last Layer: Off, 2, 3 or 4, on
+  any text encoder. The render, Detailer and Paint on the rig all use it. Off by default
 - Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
   result on the next seed
 - An option on the Latent and Img2Img Passes pages to enlarge the picture itself between
