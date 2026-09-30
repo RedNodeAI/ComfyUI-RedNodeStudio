@@ -30,8 +30,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - CLIP skip on each rig's Text encoder box, core's CLIP Set Last Layer: Off, 2, 3 or 4, on
   any text encoder. The render, Detailer and Paint on the rig all use it. Off by default
 - Importing a picture from A1111, Forge or Neo reads its <lora:name:weight> tags: a new choice
-  loads them into the active rig's LoRA set at the file's strengths (matched to your LoRA files
-  by name), with the tags taken out of the prompt. Clip skip and Shift come over too, and the
+  loads them into the active rig's LoRA set at the file's strengths, with the tags taken out of
+  the prompt. A tag finds its file by file name, by the name and hash stored inside the LoRA,
+  or, on a button, by hashing your LoRA files once (remembered after). Clip skip and Shift come over too, and the
   sampler and schedule names are turned into ComfyUI's
 - Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
   result on the next seed

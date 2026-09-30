@@ -21388,7 +21388,7 @@ async function droppedPackPicture(e) {
   return entry ? fileForEntry(entry) : null;
 }
 
-async function importPromptFromPng(node, cfg, rows, file) {
+async function importPromptFromPng(node, cfg, rows, file, opts = {}) {
   let chunks = {};
   try { chunks = pngTextChunks(await file.arrayBuffer()); } catch (e) { chunks = {}; }
   const config = workspaceConfigIn(chunks);
@@ -21452,8 +21452,22 @@ async function importPromptFromPng(node, cfg, rows, file) {
     // stack rows, matched to installed files by name; the words keep no tags
     const tags = loraTags(params.positive);
     const words = tags.text;
-    const found = tags.loras.map((l) => ({ ...l, file: matchLora(l.name, MODEL_LISTS?.loras) }));
+    // matched on the server: file name, then the name and hash stored in each
+    // LoRA's header (what Neo writes), then, when asked, the files' full hashes
+    const lhash = st.lora_hashes || {};
+    let byServer = {};
+    if (tags.loras.length) {
+      try {
+        const r = await api.fetchApi("/rednode/lora_match", { method: "POST",
+          body: JSON.stringify({ deep: !!opts.deep,
+            items: tags.loras.map((l) => ({ name: l.name, hash: lhash[l.name] || "" })) }) });
+        byServer = (await r.json())?.found || {};
+      } catch (e) { byServer = {}; }
+    }
+    const found = tags.loras.map((l) => ({ ...l,
+      file: byServer[l.name] || matchLora(l.name, MODEL_LISTS?.loras) }));
     const missing = found.filter((l) => !l.file);
+    const canDeep = !opts.deep && missing.some((l) => lhash[l.name]);
     const sampler = comfySampler(st.sampler), scheduler = comfyScheduler(st.scheduler);
     const applies = [];
     if (st.steps != null) applies.push(`steps ${st.steps}`);
@@ -21521,6 +21535,12 @@ async function importPromptFromPng(node, cfg, rows, file) {
         tip: "All of the above, and the prompt's LoRAs into the LoRA set the active rig uses, at the "
            + "file's strengths. That set's other LoRAs are switched off, not removed.",
         run: () => { applySettings(); loadLoras(); addRow(plainRow()); } });
+    }
+    if (canDeep) {
+      choices.push({ label: "Find the rest by hash",
+        tip: "Reads every LoRA file once to match the hashes in the picture, then asks again. "
+           + "Slow the first time on a big folder; remembered after that.",
+        run: () => importPromptFromPng(node, cfg, rows, file, { deep: true }) });
     }
     importChoice("Import from " + file.name, summary, choices);
     return;

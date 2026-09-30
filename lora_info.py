@@ -85,6 +85,111 @@ def file_sha256(path):
     return digest
 
 
+# ---------------------------------------------------------------------------
+# <lora:name:weight> tags from A1111 / Forge / Neo: which installed file each means.
+# Those tools write the LoRA's own name (ss_output_name in its header, "alias") and a
+# 12-character hash in "Lora hashes": the header's sshs_model_hash, or the kohya
+# "addnet" SHA-256 of everything after the header.
+# ---------------------------------------------------------------------------
+_HEAD = {}                       # path -> (sig, {"alias", "sshs"})
+
+
+def _stem(name):
+    return os.path.splitext(os.path.basename(str(name).replace("\\", "/")))[0].lower()
+
+
+def lora_header(path):
+    """The alias and stored hash from a .safetensors header; reads the header only."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return {}
+    sig = f"{st.st_size}:{int(st.st_mtime)}"
+    hit = _HEAD.get(path)
+    if hit and hit[0] == sig:
+        return hit[1]
+    out = {}
+    if path.lower().endswith(".safetensors"):
+        try:
+            with open(path, "rb") as f:
+                n = int.from_bytes(f.read(8), "little")
+                if 0 < n < 100 * 1024 * 1024:
+                    meta = (json.loads(f.read(n)) or {}).get("__metadata__") or {}
+                    out = {"alias": str(meta.get("ss_output_name") or ""),
+                           "sshs": str(meta.get("sshs_model_hash") or "").lower()}
+        except (OSError, ValueError):
+            out = {}
+    _HEAD[path] = (sig, out)
+    return out
+
+
+def addnet_hash(path):
+    """kohya's safetensors hash (SHA-256 after the header), what A1111 and Neo shorten
+    to 12 characters; cached on disk by path, size and date."""
+    st = os.stat(path)
+    sig = f"{st.st_size}:{int(st.st_mtime)}"
+    cache = _load("addnet")
+    hit = cache.get(path)
+    if isinstance(hit, dict) and hit.get("sig") == sig and hit.get("hash"):
+        return hit["hash"]
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        n = int.from_bytes(f.read(8), "little")
+        f.seek(n + 8)
+        for chunk in iter(lambda: f.read(1 << 22), b""):
+            h.update(chunk)
+    digest = h.hexdigest()
+    cache[path] = {"sig": sig, "hash": digest}
+    _store("addnet", cache)
+    return digest
+
+
+def match_lora_tags(items, deep=False):
+    """{tag name: installed LoRA name} for [{name, hash}]: by file name, then by the
+    alias or stored hash in each file's header, then (deep) by hashing the files."""
+    installed = folder_paths.get_filename_list("loras")
+    paths = {}
+    for nm in installed:
+        try:
+            paths[nm] = folder_paths.get_full_path("loras", nm)
+        except Exception:
+            paths[nm] = None
+    found, left = {}, []
+    for it in items:
+        want = str(it.get("name") or "").strip()
+        hit = next((nm for nm in installed if _stem(nm) == want.lower()), "")
+        if hit:
+            found[want] = hit
+        else:
+            left.append(it)
+    if left:
+        heads = {nm: lora_header(p) for nm, p in paths.items() if p}
+        for it in list(left):
+            want = str(it.get("name") or "").strip()
+            hsh = str(it.get("hash") or "").lower()
+            hit = next((nm for nm, h in heads.items() if h.get("alias") and h["alias"].lower() == want.lower()), "")
+            if not hit and len(hsh) >= 8:
+                hit = next((nm for nm, h in heads.items() if h.get("sshs") and h["sshs"].startswith(hsh)), "")
+            if hit:
+                found[want] = hit
+                left.remove(it)
+    if left and deep:
+        todo = {str(it.get("hash") or "").lower(): str(it.get("name") or "").strip()
+                for it in left if len(str(it.get("hash") or "")) >= 8}
+        used = set(found.values())
+        for nm, p in paths.items():
+            if not todo or not p or nm in used or not p.lower().endswith(".safetensors"):
+                continue
+            try:
+                full = addnet_hash(p)
+            except OSError:
+                continue
+            for short in list(todo):
+                if full.startswith(short):
+                    found[todo.pop(short)] = nm
+    return found
+
+
 CIVITAI_MISSING = "Civitai lookups are not part of this build"
 
 
@@ -507,6 +612,17 @@ try:
         pass
     except Exception as _e:
         print(f"[RedNode Krea2] local LoRA download not loaded: {_e}", flush=True)
+
+    @PromptServer.instance.routes.post("/rednode/lora_match")
+    async def _rednode_lora_match(request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        items = [x for x in (data.get("items") or []) if isinstance(x, dict)][:200]
+        loop = asyncio.get_running_loop()
+        found = await loop.run_in_executor(None, match_lora_tags, items, bool(data.get("deep")))
+        return web.json_response({"found": found})
 
     @PromptServer.instance.routes.get("/rednode/lora_folders")
     async def _rednode_lora_folders(request):

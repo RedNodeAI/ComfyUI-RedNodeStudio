@@ -76,6 +76,9 @@ export function parseParameters(text) {
       denoise: num(grab(/Denoising strength: ([\d.]+)/)),
       model: grab(/(?:^|, )Model: ([^,]+)/),
       clip_skip: num(grab(/Clip skip: (\d+)/)),
+      // "Lora hashes": name to its 12-character hash, as A1111 and Neo write it
+      lora_hashes: Object.fromEntries((grab(/Lora hashes: "([^"]*)"/) || "").split(",")
+        .map((x) => x.split(":").map((y) => y.trim())).filter((x) => x.length === 2 && x[0] && x[1])),
       shift: num(grab(/(?:^|, )Shift: ([\d.]+)/)),
     },
   };
