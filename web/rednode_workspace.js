@@ -15738,7 +15738,10 @@ function dialsCard(node, rig, body) {
      + "default. Re-implemented from the MIT description of Jonseed's Detail Daemon.");
   if (dd.on) {
     bar(box, "Amount", () => dd.amount ?? 0.1, (v) => { dd.amount = v; }, -1, 1, 0.01, f2,
-        "How much detail. 0.1 is gentle, 0.3 strong; negative smooths instead.");
+        "How much detail: 0.1 hides 1% of the noise from the model at the peak, 1.0 hides 10%. "
+        + "On Krea 2 Turbo 1.0 with Look only is a clear but clean gain; much past that starts to "
+        + "break into blocks. Negative smooths instead. A sampler that adds noise every step "
+        + "(the _sde and ancestral ones, er_sde, RES4LYF's res_ without _ode) leaves specks with it.");
     bar(box, "Start", () => dd.start ?? 0.2, (v) => { dd.start = v; }, 0, 1, 0.01, pct,
         "Where in the run the nudge begins, as a share of the steps.");
     bar(box, "End", () => dd.end ?? 0.8, (v) => { dd.end = v; }, 0, 1, 0.01, pct,

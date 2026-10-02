@@ -85,14 +85,16 @@ BUILTIN_PROFILES = {
     # crisper than euler/simple with no speckle, the best of six pairs on three prompts
     "Krea 2 Crisp": {"steps": 8, "cfg": 1.0, "sampler": "dpmpp_2m", "scheduler": "beta",
                      "detailer_steps": 8, "dials": dict(_OFF)},
-    # the same with Detail Daemon at the amount that stayed clean, look only by noise
+    # the same with Detail Daemon look only by noise at 1.0, a 10% nudge (the dial's
+    # 0.1 is only 1%): more texture on cloth and hair, no speckle on three prompts
     "Krea 2 Crisp detail": {"steps": 8, "cfg": 1.0, "sampler": "dpmpp_2m", "scheduler": "beta",
                             "detailer_steps": 8,
-                            "dials": dict(_OFF, dd={"on": True, "amount": 0.1, "start": 0.2,
+                            "dials": dict(_OFF, dd={"on": True, "amount": 1.0, "start": 0.2,
                                                     "end": 0.8, "method": "look",
                                                     "window": "noise", "cfg_scale": 1.0})},
-    # softer skin and light than the crisp pair, about euler's finish
-    "Krea 2 Soft": {"steps": 8, "cfg": 1.0, "sampler": "er_sde", "scheduler": "beta",
+    # the plain finish: euler, softer than the crisp pair. Not er_sde: a sampler that
+    # adds noise every step leaves pepper specks once Detail Daemon is on
+    "Krea 2 Soft": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "beta57",
                     "detailer_steps": 8, "dials": dict(_OFF)},
 }
 
