@@ -18,6 +18,10 @@ single node in ComfyUI, on Krea 2, Qwen Image 2.1, Z-Image, Anima, SDXL, Illustr
 
 **63 nodes · No pip dependencies · Every model, every purpose**
 
+**Watch the full tutorial:** install, models and every tab you need to make, fix and save a picture.
+
+[![RedNode Studio full tutorial on YouTube](https://img.youtube.com/vi/GSwWz7awvpw/maxresdefault.jpg)](https://www.youtube.com/watch?v=GSwWz7awvpw)
+
 **Quick install on Windows**
 
 Two files on the [latest release](https://github.com/RedNodeAI/ComfyUI-RedNodeStudio/releases/latest)

@@ -1,7 +1,9 @@
 # RedNode Studio: the full guide
 
 Everything the pack does, tab by tab and node by node. The [landing page](README.md)
-is the short tour; this is the manual.
+is the short tour; this is the manual. Prefer to watch? The
+[full video tutorial](https://www.youtube.com/watch?v=GSwWz7awvpw) covers the install, the models and every tab you need to make, fix
+and save a picture.
 
 ## Contents
 
