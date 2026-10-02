@@ -10598,6 +10598,7 @@ function paintBody(node, body) {
       apLab.textContent = "AnyPaint";
       apRow.append(apSw, apLab);
       if (P.anypaint) {
+        if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
         const all = MODEL_LISTS?.loras || [];
         const hits = all.filter((n) => /anypaint/i.test(n));
         const sel = document.createElement("select");
@@ -10605,7 +10606,8 @@ function paintBody(node, body) {
         sel.dataset.choice = "anypaint_lora";
         sel.title = "The AnyPaint LoRA. Automatic picks the installed file with anypaint in "
                   + "its name. Get it from huggingface.co/yijunwang2/krea2-anypaint.";
-        for (const [v, t] of [["", hits.length ? "Automatic (" + hits[0].split(/[\\/]/).pop() + ")" : "Automatic (not found)"],
+        for (const [v, t] of [["", hits.length ? "Automatic (" + hits[0].split(/[\\/]/).pop() + ")"
+                                    : MODEL_LISTS ? "Automatic (not found)" : "Automatic (loading)"],
                               ...hits.map((n) => [n, n])]) {
           const o = document.createElement("option");
           o.value = v; o.textContent = t; o.selected = (P.anypaint_lora || "") === v;
@@ -12256,16 +12258,25 @@ function modelsSetupPage(node, host) {
   }
 }
 
+let MODEL_LISTS_PENDING = null;
 async function fetchModelLists() {
   if (MODEL_LISTS) return MODEL_LISTS;
+  if (MODEL_LISTS_PENDING) return MODEL_LISTS_PENDING;
+  MODEL_LISTS_PENDING = pullModelLists().finally(() => { MODEL_LISTS_PENDING = null; });
+  return MODEL_LISTS_PENDING;
+}
+// a list pulled while the server was down or restarting is not "no models": it is
+// not kept, and the next ask (after a pause, so a render loop cannot spin) pulls again
+async function pullModelLists() {
+  let failed = false;
   const pull = async (nodeName, field) => {
     try {
       const r = await api.fetchApi("/object_info/" + nodeName);
       const d = await r.json();
       return comboOptions(d?.[nodeName]?.input?.required?.[field]);
-    } catch (e) { return []; }
+    } catch (e) { failed = true; return []; }
   };
-  MODEL_LISTS = {
+  const lists = {
     checkpoints: await pull("CheckpointLoaderSimple", "ckpt_name"),
     unets: await pull("UNETLoader", "unet_name"),
     // quantised files with loaders of their own (workspace.py UNET_LOADERS);
@@ -12288,6 +12299,11 @@ async function fetchModelLists() {
     clownSamplers: await pull("ClownsharKSampler_Beta", "sampler_name"),
     schedulers: await pull("KSampler", "scheduler"),
   };
+  if (failed) {
+    await new Promise((res) => setTimeout(res, 3000));
+    return lists;
+  }
+  MODEL_LISTS = lists;
   return MODEL_LISTS;
 }
 // SAMPLER NODES from other packs a rig can sample through, mirroring
