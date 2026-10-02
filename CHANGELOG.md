@@ -19,6 +19,10 @@ format matters: **version** then a date, notes below until the next bold line.
 - The Shelf's Override names the Re-render tab where it said Editor. Re-angle and Swap on the
   Tools tab use the same picture, and its tooltip says so
 
+- The pack's Krea 2 reference path only takes over references its own nodes attached. Before,
+  any reference on a Krea 2 model (core's ReferenceLatent, another pack's edit nodes) was
+  rendered by the pack's version, ignoring that node's own method. Those now run as ComfyUI
+  runs them
 - Paint no longer fails with "'NoneType' object is not subscriptable" when its LoRA set is
   the same one the rig renders with
 

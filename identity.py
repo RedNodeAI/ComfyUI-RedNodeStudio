@@ -307,8 +307,10 @@ def scene_window(conditioning, has_scene, start, end, who):
 def _krea2_extra_conds(self, **kwargs):
     out = comfy.model_base.Krea2._rednode_orig_extra_conds(self, **kwargs)
     ref_latents = kwargs.get("reference_latents", None)
-    if ref_latents is not None:
+    # refs another node attached (core's ReferenceLatent, another pack) stay core's
+    if ref_latents is not None and kwargs.get("reference_rednode"):
         out["ref_latents"] = comfy.conds.CONDList([self.process_latent_in(lat) for lat in ref_latents])
+        out["ref_rednode"] = comfy.conds.CONDConstant(True)
         ref_boosts = kwargs.get("reference_boosts", None)
         if ref_boosts is not None:
             out["ref_boosts"] = comfy.conds.CONDConstant(list(ref_boosts))
@@ -349,7 +351,7 @@ def _krea2_extra_conds(self, **kwargs):
 def _krea2_extra_conds_shapes(self, **kwargs):
     out = comfy.model_base.Krea2._rednode_orig_extra_conds_shapes(self, **kwargs)
     ref_latents = kwargs.get("reference_latents", None)
-    if ref_latents is not None:
+    if ref_latents is not None and kwargs.get("reference_rednode"):
         out["ref_latents"] = list([1, 16, sum(map(lambda a: math.prod(a.size()[2:]), ref_latents))])
     return out
 
@@ -449,7 +451,10 @@ def _krea2_forward(self, x, timesteps, context, attention_mask=None, *_drift, tr
     # argument layout it arrived in. *_drift is the ORIGINAL tuple and still carries
     # transformer_options when it came positionally, so passing it as a keyword as well
     # gives the same argument twice.
-    if not ref_latents:
+    # nothing of ours on this cond (no refs, or refs another node attached, which
+    # core's own path renders with its ref_latents_method): the stock forward
+    ours = bool(kwargs.pop("ref_rednode", False))
+    if not ref_latents or not ours:
         orig = SingleStreamDiT._rednode_orig_forward
         if transformer_options is None or to_positional:
             return orig(self, x, timesteps, context, attention_mask, *_drift, **kwargs)
@@ -830,7 +835,9 @@ class Krea2IdentityEdit:
             conditioning, {"krea2_template_tail": 5, "krea2_picture_labels": bool(picture_labels)})
         if ref_latents:
             extra = {"reference_latents": ref_latents,
-                     "reference_fit": [target_latent is not None] * len(ref_latents)}
+                     "reference_fit": [target_latent is not None] * len(ref_latents),
+                     # ours: only these refs take the pack's forward (identity.py)
+                     "reference_rednode": True}
             boosts = [ref_boost_a] * (len(ref_latents) - 1) + [ref_boost]
             if any(b != 1.0 for b in boosts):
                 extra["reference_boosts"] = boosts

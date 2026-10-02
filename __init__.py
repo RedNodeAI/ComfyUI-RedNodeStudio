@@ -578,7 +578,9 @@ class Krea2MoodboardIdentityFusion:
             conditioning, {"krea2_template_tail": 5, "krea2_picture_labels": bool(picture_labels)})
         if ref_latents:
             extra = {"reference_latents": ref_latents,
-                     "reference_fit": [target_latent is not None] * len(ref_latents)}
+                     "reference_fit": [target_latent is not None] * len(ref_latents),
+                     # ours: only these refs take the pack's forward (identity.py)
+                     "reference_rednode": True}
             # one boost per reference, in encode order: the last is the subject, the
             # chained extras take source_boost when given, the rest take ref_boost_a
             if edit_source2 is not None:
