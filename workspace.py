@@ -4924,7 +4924,14 @@ class RedNodeStudioWorkspace:
                   "community mixes; render on the official Turbo, or mark the rig "
                   "official on the Models tab if it is."
                   % _rigs_now[cfg["models"]["active"]]["name"], flush=True)
-        _enc_on = bool(clip is not None and not _stage_only and (
+        # an AnyPaint run encodes its own prompt with the picture; the paint queue is
+        # pruned to this node, so nothing reads the Studio conditioning
+        _ap_only = bool(str(cfg["paint"].get("run_token") or "") and cfg["paint"].get("anypaint")
+                        and cfg["paint"].get("mask_only") and _rig_is_krea2)
+        if _ap_only:
+            print("[RedNode Workspace] AnyPaint run: the Studio encode is skipped, "
+                  "AnyPaint encodes its own prompt", flush=True)
+        _enc_on = bool(clip is not None and not _stage_only and not _ap_only and (
             _mode == "internal" or (_prow or {}).get("text", "").strip()))
         if _enc_on:
             _run.begin("encode", "Encode", krea2=bool(_rig_is_krea2))

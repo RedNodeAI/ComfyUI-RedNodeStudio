@@ -872,6 +872,13 @@ class RedNodePaintRender:
             anypaint_alpha = _ap_alpha
         else:
             model, clip = self._apply_loras(model, clip, pc, prompt)
+            if positive is None:
+                # an AnyPaint run that fell back: the Workspace skipped its encode
+                if clip is None:
+                    raise ValueError("AnyPaint fell back to ordinary painting, which needs "
+                                     "a text encoder, and the rig has none")
+                positive = _encode_text(clip, self._anypaint_words(pc, prompt))
+                negative = _encode_text(clip, "")
             pos, neg = self._conditioning(clip, positive, negative, pc,
                                           positive_override, negative_override,
                                           prompt=prompt, vae=vae, seed=seed)

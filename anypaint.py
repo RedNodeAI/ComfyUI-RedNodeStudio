@@ -68,13 +68,21 @@ def reference(rgb, gen):
                                       "disabled").movedim(1, -1).clamp(0, 1)
 
 
+def _max_sq(m, r):
+    """max_pool2d over a (2r+1) square, as a row pass then a column pass: the same
+    result for 2(2r+1) work per pixel instead of (2r+1)^2."""
+    k = 2 * r + 1
+    m = F.max_pool2d(m, (1, k), stride=1, padding=(0, r))
+    return F.max_pool2d(m, (k, 1), stride=1, padding=(r, 0))
+
+
 def keep_mask(gen, border_px, lh, lw):
     """The sampler's noise mask (1 = generate) at latent size: a 2 x 2 token is kept only
     when every pixel of it lies outside the paint grown by the border."""
     g = gen[None, None].float()
     r = int(border_px)
     if r > 0:
-        g = F.max_pool2d(g, 2 * r + 1, stride=1, padding=r)
+        g = _max_sq(g, r)
     keep = (F.interpolate(1.0 - g.clamp(0, 1), size=(lh, lw), mode="nearest") > 0.5).float()
     hb, wb = lh // 2, lw // 2
     kt = keep[..., :hb * 2, :wb * 2].reshape(1, 1, hb, 2, wb, 2).amin(dim=(3, 5))
@@ -87,7 +95,7 @@ def keep_mask(gen, border_px, lh, lw):
 def grow(m, px):
     """A (1,1,H,W) mask grown by px (square)."""
     r = int(round(px))
-    return F.max_pool2d(m, 2 * r + 1, stride=1, padding=r) if r > 0 else m
+    return _max_sq(m, r) if r > 0 else m
 
 
 def soften(m, px):
@@ -95,7 +103,8 @@ def soften(m, px):
     r = max(0, int(round(px)))
     for _ in range(2):
         if r > 0:
-            m = F.avg_pool2d(F.pad(m, (r, r, r, r), mode="replicate"), 2 * r + 1, stride=1)
+            m = F.pad(m, (r, r, r, r), mode="replicate")
+            m = F.avg_pool2d(F.avg_pool2d(m, (1, 2 * r + 1), stride=1), (2 * r + 1, 1), stride=1)
     return m
 
 
@@ -208,6 +217,9 @@ def _reference_kv(dit, refs, timesteps, bs, device, dtype, th, tw, to):
     return kvs
 
 
+_KV_CACHE = {}       # one paint's reference K/V: fixed across its steps (t0, same refs)
+
+
 def _forward(executor, x, timesteps, context, attention_mask=None, ref_latents=None,
              transformer_options={}, **kwargs):
     """The diffusion model with the reference attended as extra keys. No reference: the
@@ -227,7 +239,13 @@ def _forward(executor, x, timesteps, context, attention_mask=None, ref_latents=N
     x = comfy.ldm.common_dit.pad_to_patch_size(x, (p, p))
     th, tw = x.shape[-2] // p, x.shape[-1] // p
     dev = x.device
-    kvs = _reference_kv(dit, ref_latents, timesteps, bs, dev, x.dtype, th, tw, to)
+    key = (tuple(tuple(r.shape) for r in ref_latents),
+           tuple(round(float(r.float().mean()), 6) for r in ref_latents),
+           th, tw, bs, str(dev), x.dtype)
+    kvs = _KV_CACHE.get(key)
+    if kvs is None:
+        _KV_CACHE.clear()
+        kvs = _KV_CACHE[key] = _reference_kv(dit, ref_latents, timesteps, bs, dev, x.dtype, th, tw, to)
     ctx = dit.txtmlp(dit.txtfusion(dit._unpack_context(context), mask=None, transformer_options=to))
     img = dit.first(rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=p, pw=p))
     t = dit.tmlp(timestep_embedding(timesteps, dit.tdim).unsqueeze(1).to(img.dtype))
@@ -289,10 +307,14 @@ def paint(model, clip, vae, rgb, gen, words, seed, steps=STEPS, border_px=BORDER
     noise_mask = keep_mask(gen, border_px, lh, lw)
     noise = comfy.sample.prepare_noise(latent, int(seed))
     callback = latent_preview.prepare_callback(model, int(steps))
-    samples = comfy.sample.sample(
-        model, noise, int(steps), 1.0, SAMPLER, SCHEDULER, pos, neg, latent,
-        denoise=1.0, noise_mask=noise_mask, callback=callback,
-        disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=int(seed))
+    _KV_CACHE.clear()
+    try:
+        samples = comfy.sample.sample(
+            model, noise, int(steps), 1.0, SAMPLER, SCHEDULER, pos, neg, latent,
+            denoise=1.0, noise_mask=noise_mask, callback=callback,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=int(seed))
+    finally:
+        _KV_CACHE.clear()
     out = vae.decode(samples)
     while out.ndim > 4:
         out = out[0]
