@@ -15,6 +15,7 @@
              being sampled, and the schedule's last step on sigma 0.02.
   densify    the tail of the schedule resampled to more steps, so the detail band
              gets the extra steps and the rest of the run stays as it was.
+  focus      the same steps bent toward high noise (structure) or low noise (detail).
 
 Everything here works on the sigma schedule and a clone of the model, through the
 model function wrapper, so the wired originals are never touched. sample_with_dials is
@@ -72,6 +73,12 @@ def parse_dials(r):
             "fade": _num(dd, "fade", 0.0, 1.0, 0.0),
             "smooth": dd.get("smooth", True) is not False,
             "cfg_scale": _num(dd, "cfg_scale", 0.0, 100.0, 1.0),
+            # classic: the smaller sigma reaches the whole model call; look: only the
+            # timestep the model is shown, the denoising maths keeps the real sigma
+            "method": "look" if dd.get("method") == "look" else "classic",
+            # steps: start and end are shares of this pass's steps; noise: shares of
+            # the model's own noise range, the same place in any pass layout
+            "window": "noise" if dd.get("window") == "noise" else "steps",
         },
         "variance": {
             "on": bool(va.get("on")),
@@ -84,6 +91,8 @@ def parse_dials(r):
             "last": _num(de, "last", 0.0, 1.0, 0.3),
             "extra": int(round(_num(de, "extra", 0, 60, 4))),
         },
+        # the schedule bent toward structure (below 0) or detail (above 0); 0 = as it is
+        "focus": _num(r, "focus", -1.0, 1.0, 0.0),
         # a sampler node from another pack in place of ComfyUI's KSampler
         # (sampler_nodes.py); rides the dials so every call that samples on the rig
         # carries it
@@ -152,7 +161,8 @@ def extra_sigmas(model, name, steps):
 def any_on(dials):
     d = dials or {}
     return bool((d.get("dd") or {}).get("on") or (d.get("variance") or {}).get("on")
-                or (d.get("densify") or {}).get("on"))
+                or (d.get("densify") or {}).get("on")
+                or abs(float(d.get("focus") or 0.0)) >= 1e-6)
 
 
 # ------------------------------------------------------------------ the curve
@@ -226,6 +236,38 @@ def densify(sigmas, last, extra):
     new_tail[0], new_tail[-1] = float(tail[0]), float(tail[-1])
     out = torch.cat([sig[:k], torch.tensor(new_tail, dtype=sig.dtype)])
     return out.to(sigmas.device, sigmas.dtype)
+
+
+def refocus(sigmas, focus):
+    """The schedule's steps moved toward structure or detail: `focus` below 0 bunches
+    the steps at high noise (composition), above 0 at low noise (texture), 0 leaves it
+    alone. Same step count, both ends pinned; the sigma curve is resampled on warped
+    positions, the way densify resamples the tail."""
+    try:
+        f = float(focus or 0.0)
+    except (TypeError, ValueError):
+        f = 0.0
+    if f != f:                                   # NaN
+        f = 0.0
+    f = max(-1.0, min(1.0, f))
+    sig = sigmas.detach().float().cpu()
+    n = len(sig) - 1
+    if abs(f) < 1e-6:
+        return sigmas
+    # the closing 0 is not a step to bend toward: the warp runs over the sigmas above
+    # it, so the model's floor (SDXL's sigma_min, Qwen 2.1's 0.02 tail) stays put
+    ends_zero = n >= 1 and float(sig[-1]) == 0.0
+    m = n - 1 if ends_zero else n
+    if m < 2:                                    # one interval has nothing to bend
+        return sigmas
+    g = 1.0 + 2.0 * abs(f)
+    u = np.linspace(0.0, 1.0, m + 1)
+    w = (1.0 - (1.0 - u) ** g) if f > 0 else (u ** g)
+    out = np.interp(w * m, np.arange(m + 1, dtype=np.float64), sig[:m + 1].numpy().astype(np.float64))
+    out[0], out[m] = float(sig[0]), float(sig[m])
+    if ends_zero:
+        out = np.append(out, 0.0)
+    return torch.tensor(out, dtype=sig.dtype).to(sigmas.device, sigmas.dtype)
 
 
 def segments(sigmas, counts):
@@ -319,7 +361,7 @@ def mark_qwen21(model, on):
     return m
 
 
-def qwen21_shift(model, hw):
+def qwen21_shift(model, hw, quiet=False):
     """A clone sampling with mu for this canvas and the 0.02 tail, on a flagged model."""
     global _Q21_SAMPLING
     opts = getattr(model, "model_options", None) or {}
@@ -336,9 +378,40 @@ def qwen21_shift(model, hw):
     m = model.clone()
     m.add_object_patch("model_sampling", s)
     m.model_options["rn_q21_terminal"] = Q21_TERMINAL
-    print("[RedNode sampler dials] Qwen 2.1 shift for %d x %d px: mu %.3f, last step "
-          "sigma %.2f" % (int(hw[1]) * 16, int(hw[0]) * 16, mu, Q21_TERMINAL), flush=True)
+    if not quiet:
+        print("[RedNode sampler dials] Qwen 2.1 shift for %d x %d px: mu %.3f, last step "
+              "sigma %.2f" % (int(hw[1]) * 16, int(hw[0]) * 16, mu, Q21_TERMINAL), flush=True)
     return m
+
+
+DENSE = 1000     # points on the by-noise detail curve
+
+
+def progress_of(ms, sigma):
+    """How far along the run this sigma is on a model_sampling's own noise range: 0 at
+    pure noise, 1 at done. Measured on the model's timestep between its top and its
+    floor, so flow models read 1 - sigma, discrete models their index, and an EDM model
+    (whose timestep goes negative below sigma 1) still counts straight. None when the
+    object cannot say. The one place this ratio is written: the dials, the schedule
+    preview and the starting-noise note all read it."""
+    try:
+        dev = ms.sigmas.device
+
+        def ts(v):
+            return float(ms.timestep(torch.tensor([float(v)], device=dev)).float().max())
+        tm, tmax, tmin = ts(sigma), ts(float(ms.sigma_max)), ts(float(ms.sigma_min))
+        span = tmax - tmin
+        if span <= 0:
+            return None
+        return max(0.0, min(1.0, (tmax - tm) / span))
+    except Exception:
+        return None
+
+
+def noise_progress(apply_model, sigma):
+    """progress_of on the live model behind a bound apply_model; None without one."""
+    ms = getattr(getattr(apply_model, "__self__", None), "model_sampling", None)
+    return None if ms is None else progress_of(ms, sigma)
 
 
 def make_wrapper(sigmas, dials, seed, cfg_scale, prev=None):
@@ -350,24 +423,70 @@ def make_wrapper(sigmas, dials, seed, cfg_scale, prev=None):
     dd = (dials or {}).get("dd") or {}
     va = (dials or {}).get("variance") or {}
     curve = None
+    look = dd.get("method") == "look"
+    by_noise = dd.get("window") == "noise"
     if dd.get("on"):
-        curve = detail_schedule(n, dd["start"], dd["end"], dd["bias"], dd["amount"],
-                                dd["exponent"], dd["start_offset"], dd["end_offset"],
-                                dd["fade"], dd["smooth"])
+        # by noise: a dense curve over the model's whole noise range, read at the
+        # call's own position, so start and end mean the same in every pass layout
+        curve = detail_schedule(DENSE if by_noise else n, dd["start"], dd["end"], dd["bias"],
+                                dd["amount"], dd["exponent"], dd["start_offset"],
+                                dd["end_offset"], dd["fade"], dd["smooth"])
         scale = float(dd.get("cfg_scale") or 0.0) or float(cfg_scale or 1.0)
     var_on = bool(va.get("on")) and va.get("strength", 0) > 0 and va.get("percent", 0) > 0
+    warned = [False]
 
     def wrapper(apply_model, args):
         x, t, c = args["input"], args["timestep"], dict(args.get("c") or {})
+        sigma_f = 0.0
         try:
             sigma_f = float(t.max().detach().cpu())
             idx = int(torch.argmin((sig - sigma_f).abs()).item())
         except Exception:
             idx = 0
         idx = max(0, min(n - 1, idx))
+        restore = None
         if curve is not None:
-            adj = float(curve[idx]) * 0.1 * scale
-            t = t * max(1e-6, 1.0 - adj)
+            at = idx
+            if by_noise:
+                p = noise_progress(apply_model, sigma_f)
+                at = idx * DENSE // max(1, n) if p is None else int(round(p * (DENSE - 1)))
+                at = max(0, min(DENSE - 1, at))
+            adj = float(curve[at]) * 0.1 * scale
+            lie = max(1e-6, 1.0 - adj)
+            if look:
+                # LOOK ONLY: the model's timestep embedding sees the smaller sigma, the
+                # input scaling and the denoised maths keep the real one. The live
+                # model_sampling is looked up per call, since an object patch can
+                # replace it between runs.
+                ms = getattr(getattr(apply_model, "__self__", None), "model_sampling", None)
+                if ms is not None and abs(adj) > 1e-9:
+                    orig_ts, had = ms.timestep, "timestep" in ms.__dict__
+                    ms.timestep = lambda s, _o=orig_ts, _l=lie: _o(s * _l)
+                    restore = (ms, orig_ts, had)
+                elif ms is None:
+                    # another pack re-wrapped the model call, so there is no live
+                    # model_sampling to show the lie to: the classic nudge instead
+                    t = t * lie
+                    if not warned[0]:
+                        warned[0] = True
+                        print("[RedNode sampler dials] look only: no live model sampling on "
+                              "this call, nudging the sigma the classic way", flush=True)
+            else:
+                t = t * lie
+        try:
+            return _call(apply_model, args, x, t, c, idx)
+        finally:
+            if restore is not None:
+                ms, orig_ts, had = restore
+                if had:
+                    ms.timestep = orig_ts
+                else:
+                    try:
+                        del ms.timestep
+                    except AttributeError:
+                        pass
+
+    def _call(apply_model, args, x, t, c, idx):
         if var_on and (idx / n) < float(va.get("window", 0.0)):
             ctx = c.get("c_crossattn")
             if torch.is_tensor(ctx) and ctx.ndim >= 2:
@@ -453,7 +572,7 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
         from . import sampler_nodes as _sn
         if any_on(dials):
             print("[RedNode sampler dials] the rig's sampler node runs this, so its "
-                  "Detail Daemon, Seed Variance and densify dials sit out", flush=True)
+                  "Detail Daemon, Seed Variance, densify and focus dials sit out", flush=True)
         got = _sn.run(dials["node"], model, seed, steps, cfg, scheduler, positive, negative,
                       latent, denoise=denoise, sigmas=sigmas, disable_noise=disable_noise,
                       start_step=start_step, last_step=last_step)
@@ -492,11 +611,17 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
                   "runs %d steps instead of %d" % (round(float(de.get("last", 0.3)) * 100),
                                                    len(sigmas) - 1 - (before - int(round(before * float(de.get("last", 0.3))))),
                                                    int(round(before * float(de.get("last", 0.3))))), flush=True)
+        if abs(float(dials.get("focus") or 0.0)) >= 1e-6:
+            sigmas = refocus(sigmas, dials["focus"])
+            print("[RedNode sampler dials] focus %+.2f: the steps lean toward %s"
+                  % (float(dials["focus"]), "detail" if float(dials["focus"]) > 0 else "structure"),
+                  flush=True)
     m = dial_model(model, sigmas, dials, seed, cfg)
     if (dials.get("dd") or {}).get("on"):
-        print("[RedNode sampler dials] detail daemon amount %.2f, %.0f%% to %.0f%%"
-              % (dials["dd"]["amount"], dials["dd"]["start"] * 100, dials["dd"]["end"] * 100),
-              flush=True)
+        print("[RedNode sampler dials] detail daemon amount %.2f, %.0f%% to %.0f%% of the %s%s"
+              % (dials["dd"]["amount"], dials["dd"]["start"] * 100, dials["dd"]["end"] * 100,
+                 "noise range" if dials["dd"].get("window") == "noise" else "steps",
+                 ", look only" if dials["dd"].get("method") == "look" else ""), flush=True)
     if (dials.get("variance") or {}).get("on"):
         print("[RedNode sampler dials] seed variance: %.0f%% of the conditioning at %.2f "
               "for the first %.0f%% of steps" % (dials["variance"]["percent"] * 100,

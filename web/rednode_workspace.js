@@ -2026,6 +2026,7 @@ export function readCfg(node) {
     // sampler dials, all off until switched on (sampler_dials.py parses them)
     if (typeof r.shift !== "number") r.shift = 0;
     if (typeof r.q21_shift !== "boolean") r.q21_shift = false;
+    if (typeof r.focus !== "number") r.focus = 0;
     if (typeof r.clip_skip !== "number") r.clip_skip = 1;
     for (const k of ["dd", "variance", "densify"]) {
       if (!r[k] || typeof r[k] !== "object") r[k] = {};
@@ -6791,6 +6792,7 @@ function lorasBody(node, body) {
                 : "Off: the model passes through untouched.");
     on.onclick = () => { L.on = !L.on; writeCfg(node); render(node); };
     row.appendChild(on);
+    row.appendChild(exactSwitch(node, L));
   }
   const hint = document.createElement("span");
   hint.className = "hint";
@@ -7015,7 +7017,7 @@ function paintLorasBody(node, body) {
     PL.seed = Math.max(0, parseInt(seed.value, 10) || 0);
     writeCfg(node);
   });
-  seedRow.append(slab, seed);
+  seedRow.append(slab, seed, exactSwitch(node, PL));
   body.appendChild(seedRow);
   // the same saved stacks the main tab and the LoRA Stack node use: save a "Face
   // detailer" once, load it here, on the main tab, or on the node
@@ -13238,6 +13240,8 @@ function modelsBody(node, page) {
     });
     pill(body, label, inp, hint);
   };
+  // a pair that runs too hot on flow models, said under the pickers as they change
+  let flowWarnRefresh = () => {};
   const selRow = (label, key, items, hint) => {
     const sel = document.createElement("select");
     for (const v of items.length ? items : [rig[key]]) {
@@ -13248,8 +13252,22 @@ function modelsBody(node, page) {
       sel.appendChild(o);
     }
     sel.title = hint;
-    sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
+    sel.onchange = () => { rig[key] = sel.value; writeCfg(node); flowWarnRefresh(); };
     pill(body, label, sel, hint);
+  };
+  const flowWarnNote = () => {
+    const d = document.createElement("div");
+    d.className = "rn-ws-note rn-ws-peoplewarn rn-ws-flowwarn";
+    d.style.display = "none";
+    body.appendChild(d);
+    return d;
+  };
+  const flowWarnSet = (el, sampler, scheduler) => {
+    const bad = flowModelRig(rig) && hotPair(sampler, scheduler);
+    el.style.display = bad ? "" : "none";
+    el.textContent = bad ? `${bad} tends to burn on Krea 2, Z-Image and Flux models: blown `
+      + "highlights and crushed faces. Beta, beta57 and simple are the safe schedules; "
+      + "euler, dpmpp_2m and res_2m the safe samplers." : "";
   };
   numRow("Steps", "steps", 1, "Sampling steps for this rig.");
   numRow("CFG", "cfg", 0.1, "CFG for this rig. Turbo distills live near 1.");
@@ -13311,6 +13329,7 @@ function modelsBody(node, page) {
            + "hyperbolic are this pack's own shapes: the built-in sampler and the "
            + "Detailer run them, and the scheduler socket hands a stock KSampler "
            + "simple instead.");
+    const warnMain = flowWarnNote();
     // A SECOND PAIR, for image to image runs only. Blank is what every rig saved
     // before this had, and blank means the pair above, so nothing moves unasked.
     const i2iRow = (label, key, items, hint) => {
@@ -13324,7 +13343,7 @@ function modelsBody(node, page) {
         sel.appendChild(o);
       }
       sel.title = hint;
-      sel.onchange = () => { rig[key] = sel.value; writeCfg(node); };
+      sel.onchange = () => { rig[key] = sel.value; writeCfg(node); flowWarnRefresh(); };
       pill(body, label, sel, hint);
     };
     // THE SAMPLER NODE: ComfyUI's KSampler, or a sampler node from another pack
@@ -13415,6 +13434,12 @@ function modelsBody(node, page) {
            "The scheduler an image to image run uses in place of the one above, on "
          + "the same terms as the i2i sampler beside it. Same as above leaves i2i "
          + "on the main scheduler.");
+    const warnI2i = flowWarnNote();
+    flowWarnRefresh = () => {
+      flowWarnSet(warnMain, rig.sampler, rig.scheduler);
+      flowWarnSet(warnI2i, rig.i2i_sampler || rig.sampler, rig.i2i_scheduler || rig.scheduler);
+    };
+    flowWarnRefresh();
   }
   body = mkBox("Detailer", "", "", "", "Settings for the detailer pass.");
   statusBadge(body, "Set");
@@ -13847,6 +13872,47 @@ async function fetchFrameDef() {
 // than one session of confusion. Every two-way (or three-way) choice on the
 // panel is a segment: every option visible, the live one filled, like the
 // Canvas row and the Camera tab's Prompt / Image to image pair.
+// EXACT LORAS, per stack: the same ui.exact the stack's cog writes, as a switch in
+// plain sight on the tab. On, every LoRA runs beside the model at full precision
+// instead of being rounded into fp8 or INT8 weights.
+function exactSwitch(node, S) {
+  const wrap = document.createElement("span");
+  wrap.style.cssText = "display:inline-flex;align-items:center;gap:6px;margin-left:10px";
+  const sw = document.createElement("button");
+  sw.className = "rn-ws-sw" + (S.ui?.exact ? " on" : "");
+  sw.dataset.choice = "lora_exact";
+  sw.title = "Exact LoRAs. Off: each LoRA is merged into the model's weights, the usual way; "
+           + "on an fp8 or INT8 model the rounding eats part of a LoRA, most of all a slider at "
+           + "a low strength. On: every LoRA runs beside the model at full precision, so the "
+           + "whole effect lands. A little slower per step, and the LoRA weights stay in "
+           + "memory while the model is loaded.";
+  sw.onclick = () => {
+    S.ui = { ...(S.ui || {}), exact: !S.ui?.exact || undefined };
+    writeCfg(node); render(node);
+  };
+  const lab = document.createElement("span");
+  lab.className = "rn-ws-swlabel";
+  lab.textContent = "Exact LoRAs";
+  wrap.append(sw, lab);
+  return wrap;
+}
+// a rig whose model counts noise from 1 to 0 (Krea 2, Z-Image, Flux and kin): by its
+// CLIP type or its file's name
+export function flowModelRig(rig) {
+  if (!rig) return false;
+  if (rig.clip_type === "krea2") return true;
+  // anima and zit only as whole words: animagineXL is SDXL
+  return /krea[_ -]?2|z[_ -]?image|(?:^|[^a-z])zit(?![a-z])|qwen|flux|klein|chroma|lumina|(?:^|[^a-z])anima(?![a-z])|hidream/i
+    .test(`${rig.unet || ""} ${rig.checkpoint || ""}`);
+}
+// the sampler and scheduler pairs that ran hot on every flow model in a fixed-seed
+// sweep: the name of the offender, or "" when the pair is fine
+export function hotPair(sampler, scheduler) {
+  const sc = String(scheduler || "").toLowerCase(), sa = String(sampler || "").toLowerCase();
+  if (["karras", "kl_optimal", "linear_quadratic"].includes(sc)) return "The " + sc + " schedule";
+  if (sa === "uni_pc" || sa === "uni_pc_bh2") return "The " + sa + " sampler";
+  return "";
+}
 function segSwitch(options, current, onPick, title) {
   const seg = document.createElement("div");
   seg.className = "rn-ws-seg rn-ws-switch";
@@ -15554,6 +15620,7 @@ function dialsCard(node, rig, body) {
   lab.className = "rn-ws-note";
   const on = [rig.shift > 0 ? "shift " + Number(rig.shift).toFixed(2) : "",
               rig.q21_shift ? "Qwen 2.1 size shift" : "",
+              Math.abs(Number(rig.focus) || 0) >= 0.005 ? "focus " + (Number(rig.focus) > 0 ? "+" : "") + Number(rig.focus).toFixed(2) : "",
               rig.dd.on ? "detail daemon" : "", rig.variance.on ? "seed variance" : "",
               rig.densify.on ? "densify" : ""].filter(Boolean);
   lab.textContent = "Sampler dials" + (on.length ? ": " + on.join(", ") : "");
@@ -15657,6 +15724,27 @@ function dialsCard(node, rig, body) {
         "Where in the run the nudge begins, as a share of the steps.");
     bar(box, "End", () => dd.end ?? 0.8, (v) => { dd.end = v; }, 0, 1, 0.01, pct,
         "Where it ends.");
+    // METHOD and WINDOW: how the nudge reaches the model, and what start/end count
+    const choice = (label, key, opts, dv, tip) => {
+      const row = document.createElement("div");
+      row.className = "rn-ws-row";
+      const l = document.createElement("span");
+      l.className = "rn-ws-note";
+      l.style.minWidth = "84px";
+      l.textContent = label;
+      const seg = segSwitch(opts, dd[key] || dv, (v) => { dd[key] = v; writeCfg(node); render(node); }, tip);
+      seg.dataset.choice = "dd_" + key;
+      row.append(l, seg);
+      box.appendChild(row);
+    };
+    choice("Method", "method", [
+      ["classic", "Classic", "The smaller sigma reaches the whole model call, so less noise is removed and the leftover becomes detail. Right for SDXL and SD 1.5."],
+      ["look", "Look only", "Only the timestep the model is shown is smaller; the real noise is still removed. Right for Krea 2, Z-Image and Flux, where Classic softens instead of sharpening. Keep Amount at 0.10 or under there."],
+    ], "classic", "How the nudge reaches the model. Classic for SDXL; Look only for flow models like Krea 2, Z-Image and Flux.");
+    choice("Window", "window", [
+      ["steps", "Steps", "Start and End are shares of this pass's steps."],
+      ["noise", "Noise level", "Start and End are shares of the model's noise range, so the nudge lands in the same place in a one-pass or a multi-pass run."],
+    ], "steps", "What Start and End count.");
     const akey = "dials_adv:" + (rig.name || "");
     const aopen = !!folds[akey];
     const arow = document.createElement("div");
@@ -15706,6 +15794,16 @@ function dialsCard(node, rig, body) {
         "How far into the run the jitter applies. The first 30% decides composition.");
   }
 
+  // FOCUS
+  {
+    const frow = bar(box, "Focus", () => Number(rig.focus) || 0, (v) => { rig.focus = v; }, -1, 1, 0.05,
+        (x) => (Number(x) > 0 ? "+" : "") + Number(x).toFixed(2),
+        "Where the steps go. Below 0 spends more of them at high noise, where composition "
+        + "and pose are decided. Above 0 spends more at low noise, on texture and fine "
+        + "detail. 0 is the schedule exactly as ComfyUI makes it. Same step count either way.");
+    frow.querySelector("input").dataset.choice = "focus";
+  }
+
   // DENSIFY
   const de = rig.densify;
   sw(box, "Densify the tail", () => !!de.on, (v) => { de.on = v; },
@@ -15723,6 +15821,115 @@ function dialsCard(node, rig, body) {
 // CONTINUE THE NOISE between passes: the passes become segments of one schedule,
 // each picking up the last one's leftover noise with none added, the hand-off's
 // other form. Denoise per pass has no say while it is on.
+// THE SCHEDULE PREVIEW: what the built-in sampler would run on this page, drawn from
+// the server's own schedule builder on the rig's loaded model, never from a guess. A
+// rig that has not loaded yet says so. The call is debounced and only repeats when
+// the settings it reads have changed.
+const SCHED_COLOURS = ["#e0a84a", "#4a8fe0", "#b8283c", "#2e7d4f", "#9b59b6", "#1abc9c"];
+function schedulePreviewFetch(node, page, denoise, cb) {
+  const cfg = node._rnCfg;
+  if (!cfg || typeof api?.fetchApi !== "function") return;
+  const rig = (cfg.models?.rigs || [])[cfg.models?.active || 0] || {};
+  const t = page === "latent" ? cfg.latent : cfg.tabs?.i2i;
+  const key = JSON.stringify({ page, denoise, rig, t, w: cfg.latent?.w, h: cfg.latent?.h, s: cfg.latent?.scale });
+  const store = (node._rnSched ||= {});
+  if (store[key]) { cb(store[key]); return; }
+  // one timer per key: the card and the note on one page ask in the same render
+  const timers = (node._rnSchedTimers ||= {});
+  clearTimeout(timers[key]);
+  timers[key] = setTimeout(async () => {
+    delete timers[key];
+    try {
+      const r = await api.fetchApi("/rednode/schedule_preview", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: cfg, page, denoise }) });
+      const d = await r.json();
+      if (!d || typeof d !== "object") return;
+      // only an answer with a schedule is worth keeping: "not loaded yet" and
+      // "run busy" must be asked again on the next render
+      if (d.loaded) store[key] = d;
+      // one entry per page and denoise is plenty; the rest can go
+      const keys = Object.keys(store);
+      if (keys.length > 12) for (const k of keys.slice(0, keys.length - 12)) delete store[k];
+      cb(d);
+    } catch (e) { /* the preview is a courtesy: a missing route says nothing */ }
+  }, 250);
+}
+function drawSchedule(cv, d) {
+  const ctx = cv.getContext?.("2d");
+  if (!ctx) return;
+  const W = cv.width, H = cv.height, padL = 6, padR = 6, padT = 6, padB = 6;
+  ctx.clearRect(0, 0, W, H);
+  const smax = Number(d.sigma_max) || 1;
+  const segs = (d.segments || []).filter((s) => s.length);
+  const total = segs.reduce((n, s) => n + Math.max(1, s.length - 1), 0) || 1;
+  const X = (i) => padL + (W - padL - padR) * i;
+  const Y = (v) => padT + (H - padT - padB) * (1 - Math.max(0, Math.min(1, v / smax)));
+  // the model's plain schedule, dashed, on its own step axis
+  const plain = d.plain || [];
+  if (plain.length > 1) {
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = "#555b66";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    plain.forEach((v, i) => { const x = X(i / (plain.length - 1)), y = Y(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  let at = 0;
+  segs.forEach((seg, k) => {
+    const n = Math.max(1, seg.length - 1);
+    ctx.strokeStyle = SCHED_COLOURS[k % SCHED_COLOURS.length];
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    seg.forEach((v, i) => { const x = X((at + i) / total), y = Y(v); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+    ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle;
+    seg.forEach((v, i) => { ctx.beginPath(); ctx.arc(X((at + i) / total), Y(v), 2, 0, Math.PI * 2); ctx.fill(); });
+    at += n;
+  });
+}
+function schedulePreviewCard(node, page) {
+  const wrap = document.createElement("div");
+  wrap.className = "rn-ws-schedprev";
+  wrap.dataset.page = page;
+  wrap.style.cssText = "display:flex;flex-direction:column;gap:4px";
+  const head = document.createElement("div");
+  head.className = "ch";
+  head.style.cssText = "font-size:10.5px;font-weight:700;letter-spacing:.08em;color:#8a919b";
+  head.textContent = "SCHEDULE";
+  const cv = document.createElement("canvas");
+  cv.width = 320; cv.height = 72;
+  cv.style.cssText = "width:100%;height:72px;background:#111316;border:1px solid #2a2e34;border-radius:6px";
+  cv.title = "The noise each step starts from, pass by pass; the dashed line is the model's "
+           + "own schedule at the rig's step count. Built from the rig's loaded model, so it "
+           + "shows after the first run.";
+  const line = document.createElement("div");
+  line.className = "rn-ws-note rn-ws-schedline";
+  line.style.fontStyle = "italic";
+  line.textContent = "Shows after the rig has loaded once";
+  wrap.append(head, cv, line);
+  schedulePreviewFetch(node, page, null, (d) => {
+    if (!wrap.isConnected && wrap.parentElement == null) return;
+    if (!d.loaded) { line.textContent = d.why || "Shows after the rig has loaded once"; return; }
+    line.style.fontStyle = "";
+    line.textContent = d.summary || "";
+    drawSchedule(cv, d);
+  });
+  return wrap;
+}
+// THE STARTING NOISE beside a denoise dial: where a run at that denoise really begins
+// on the rig's noise range, which on a shifted flow model is far above the number
+function startNoiseNote(node, page, denoise) {
+  const n = document.createElement("div");
+  n.className = "rn-ws-note rn-ws-startnoise";
+  n.style.cssText = "font-style:italic;margin-top:2px";
+  n.textContent = "";
+  schedulePreviewFetch(node, page, Number(denoise), (d) => {
+    if (d.loaded && d.start_for != null) n.textContent = `Starts at ${d.start_for}% noise`;
+  });
+  return n;
+}
 function continueRow(node, t) {
   const row = document.createElement("div");
   row.className = "rn-ws-row";
@@ -16297,6 +16504,7 @@ function i2iQuickDials(node, body, t) {
   card.append(
     dial("Denoise", "denoise", 0, 1, 0.01, "#b8283c", fmtD,
       "How much the sampler repaints the source. 0.5 keeps composition, 0.75 reworks it."),
+    startNoiseNote(node, "i2i", t.denoise),
     dial("Scale", "scale", 0.25, 3, 0.05, "#4a8fe0", fmtS,
       "Scales the source before it is encoded, so the pass can come out bigger or smaller "
       + "than the resize at the bottom."));
@@ -18417,6 +18625,8 @@ function passesTab(node, body, kind = "i2i") {
         val.textContent = fmt(t[key]);
         writeCfg(node);
       });
+      // the starting-noise note beside it reads the number at render time
+      rg.addEventListener("change", () => render(node));
       w.append(k, rg, val);
       return w;
     };
@@ -18435,6 +18645,7 @@ function passesTab(node, body, kind = "i2i") {
       setup.appendChild(shDial("Denoise", "denoise", 0, 1, 0.01, "#b8283c", fmtD,
         "How much the sampler repaints the source. 0.5 keeps composition, 0.75 reworks "
         + "it. Rides the denoise output socket."));
+      setup.appendChild(startNoiseNote(node, "i2i", t.denoise));
       sharedCount++;
     }
     if (!lists.scale_custom && isLat) {
@@ -18456,6 +18667,8 @@ function passesTab(node, body, kind = "i2i") {
       setup.appendChild(continueRow(node, t).row);
       setup.appendChild(enlargeRow(node, t));
     }
+    setup.appendChild(document.createElement("hr"));
+    setup.appendChild(schedulePreviewCard(node, isLat ? "latent" : "i2i"));
   }
 
   const right = document.createElement("div");

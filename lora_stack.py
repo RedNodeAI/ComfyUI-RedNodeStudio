@@ -196,6 +196,52 @@ def trigger_words(slots, strengths):
     return ", ".join(words)
 
 
+try:
+    from comfy.patcher_extension import PatcherInjection
+except Exception:                      # an older core: the slots keep their own keys
+    PatcherInjection = None
+
+EXACT_KEY = "rn_exact:"
+
+
+def _exact_take(model, clip, taken, label):
+    """Core's bypass loader files every LoRA's hooks under one fixed key, so a second
+    LoRA would replace the first: each slot's hooks are lifted out here under its
+    own label, to be sealed into one ordered injection at the end."""
+    for patcher, bucket in ((model, "model"), (getattr(clip, "patcher", None), "clip")):
+        if patcher is None or not hasattr(patcher, "get_injections"):
+            continue
+        inj = patcher.get_injections("bypass_lora")
+        if inj:
+            patcher.remove_injections("bypass_lora")
+            taken[bucket].append((label, list(inj)))
+
+
+def _exact_seal(patcher, lists, tag):
+    """One injection for the whole stack: inject in order, eject in reverse, since
+    the hooks nest on shared layers and core ejects a list front to back. A stack
+    sealed earlier on this patcher (main, then the paint or camera LoRAs) is kept in
+    front. The key names the stack's contents, so two different stacks on one model
+    never read as the same weights."""
+    if patcher is None or not lists or not hasattr(patcher, "set_injections"):
+        return
+    prior = next((k for k in list(getattr(patcher, "injections", {})) if k.startswith(EXACT_KEY)), None)
+    if prior:
+        prev = patcher.injections.pop(prior)
+        lists = list(getattr(prev[0], "_rn_lists", None) or []) + lists
+    flat = [i for _l, L in lists for i in L]
+    if PatcherInjection is None:
+        for n, (label, L) in enumerate(lists):
+            patcher.set_injections("%s%d:%s" % (EXACT_KEY, n, label), L)
+        return
+    inj = PatcherInjection(inject=lambda mp, _f=flat: [i.inject(mp) for i in _f],
+                           eject=lambda mp, _f=flat: [i.eject(mp) for i in reversed(_f)])
+    inj._rn_lists = lists
+    patcher.set_injections(EXACT_KEY + "|".join(l for l, _ in lists), [inj])
+    print(f"[RedNode {tag}] exact: {len(flat)} LoRA hook set(s) sealed as one, "
+          f"ejected in reverse", flush=True)
+
+
 def _report_rolls(unique_id, slots, strengths):
     """Tell the panel what the randomized slots actually drew this run (display only —
     a websocket hiccup can never affect sampling, hence the blanket except)."""
@@ -277,7 +323,20 @@ def apply_stack(model, clip=None, preset=CUSTOM_SENTINEL, stack_json="[]", seed=
 
         _slots_raw, ui = parse_stack(stack_json)
         strengths = resolve_strengths(slots, seed, float(ui.get("rand_step") or 0.0))
+        # EXACT: the LoRA runs beside the model at full precision (core's bypass
+        # adapter) instead of being rounded into fp8 or INT8 weights. Off by default.
+        exact = bool(ui.get("exact")) and hasattr(comfy.sd, "load_bypass_lora_for_models")
+        if ui.get("exact") and not exact:
+            print(f"[RedNode {tag}] Exact LoRAs needs a newer ComfyUI (no bypass loader); "
+                  "the stack is baked in as usual", flush=True)
         cache, applied, missing = {}, [], []
+        taken = {"model": [], "clip": []}
+        if exact:
+            # a core bypass node wired upstream keeps its LoRA: lifted off CLONES (the
+            # wired objects are another node's cached output) and sealed in with ours
+            model = model.clone() if hasattr(model, "clone") else model
+            clip = clip.clone() if clip is not None and hasattr(clip, "clone") else clip
+            _exact_take(model, clip, taken, "upstream")
         for s, st in zip(slots, strengths):
             if s.get("type") == "title":
                 continue
@@ -292,14 +351,23 @@ def apply_stack(model, clip=None, preset=CUSTOM_SENTINEL, stack_json="[]", seed=
                 lora = comfy.utils.load_torch_file(path, safe_load=True)
                 cache[path] = lora
             cs = st if s["clip_strength"] is None else s["clip_strength"]
-            model, clip = comfy.sd.load_lora_for_models(model, clip, lora, st,
-                                                        cs if clip is not None else 0.0)
+            if exact:
+                model, clip = comfy.sd.load_bypass_lora_for_models(
+                    model, clip, lora, st, cs if clip is not None else 0.0)
+                _exact_take(model, clip, taken, f"{s['name']}@{st:g}/{cs:g}")
+            else:
+                model, clip = comfy.sd.load_lora_for_models(model, clip, lora, st,
+                                                            cs if clip is not None else 0.0)
             applied.append(f"{s['name']} @ {st:g}" + ("" if s["clip_strength"] is None else f"/{cs:g}"))
 
         if missing:
             print(f"[RedNode {tag}] WARNING: {len(missing)} LoRA file(s) not found, skipped: "
                   f"{', '.join(missing)}. Fix the names in the stack or re-save the preset.")
-        print(f"[RedNode {tag}] applied {len(applied)}: {'; '.join(applied) if applied else 'none'}")
+        if exact:
+            _exact_seal(model, taken["model"], tag)
+            _exact_seal(getattr(clip, "patcher", None), taken["clip"], tag)
+        print(f"[RedNode {tag}] applied {len(applied)}{' beside the model (exact)' if exact and applied else ''}: "
+              f"{'; '.join(applied) if applied else 'none'}")
         _report_rolls(unique_id, slots, strengths)
         return (model, clip, trigger_words(slots, strengths), "; ".join(applied))
 

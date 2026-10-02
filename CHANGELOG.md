@@ -4,6 +4,30 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.6.4** - unreleased
+
+### New
+
+- Detail Daemon has a Method: Classic, as before, or Look only, where only the timestep the model
+  is shown is nudged and the real noise is still removed. Classic softens Krea 2, Z-Image and
+  Flux instead of sharpening them; Look only is the one for those. And a Window: Steps, as
+  before, or Noise level, so Start and End land in the same place in a one-pass or a multi-pass
+  run. Both on the rig's Sampler dials, defaults unchanged
+- Focus, a rig sampler dial: the same steps leaned toward structure (below 0, more steps at
+  high noise) or detail (above 0). 0 is the schedule exactly as ComfyUI makes it
+- Exact LoRAs, a switch on the LoRAs tab, the Paint LoRAs tab and the stack's cog: every LoRA
+  runs beside the model at full precision instead of being merged into fp8 or INT8 weights,
+  where the rounding eats part of a LoRA, most of all a slider at a low strength. Off by
+  default; a little slower per step
+- The Passes page draws the schedule the run will use: each pass's noise levels, the model's
+  plain schedule dashed behind, and one line such as "20 steps (14 + 6), starts at 100% noise,
+  pass 2 takes over at 58% noise". Beside a denoise dial, the noise a run at that denoise
+  really starts from. Both show once the rig has loaded
+- The rig card warns when the sampler and scheduler pair tends to burn Krea 2, Z-Image and
+  Flux models (karras, kl_optimal, linear_quadratic, uni_pc); beta, beta57 and simple are safe
+- Burn check, a switch under the Run tab's review: one line per render on the log with the
+  share clipped to pure white or black, and a warning past a tenth. Off by default
+
 **1.6.3** - 2026-10-02
 
 ### Fixes

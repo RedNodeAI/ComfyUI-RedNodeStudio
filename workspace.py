@@ -27,6 +27,7 @@ it, and it is hand-editable if the UI is ever unavailable.
 import hashlib
 from .overrides import env as _env
 import random as _random
+import asyncio
 import json
 import os
 
@@ -1855,6 +1856,8 @@ def parse_config(config_json):
             "detailer": data.get("detailer") if isinstance(data.get("detailer"), dict) else {},
             "post_on": data.get("post_on") is not False,
             "save_on": bool(data.get("save_on")),
+            # BURN CHECK: the render's clipped share on the Run log. Off by default.
+            "burn_check": bool(data.get("burn_check")),
             "save": data.get("save") if isinstance(data.get("save"), dict) else {},
             # THE UPSCALE TAB: one Detailer pass of an upscale kind, run on its own
             # by RedNodeUpscaleRender. The stage rides RAW, exactly as "detailer"
@@ -2351,6 +2354,220 @@ def clip_skip(clip, rec):
         return clip
 
 
+def _rig_cache_key(rig):
+    """What a files rig loads as; built in one place so the schedule preview finds the
+    same slot the run would. The rescue fields ride the key: toggling Rescue or moving
+    its dial must reload, or the cache would keep handing out the unpatched model."""
+    _resc = (bool(rig.get("rescue")) and rig.get("rescue_base")
+             and rig.get("rescue_lora"))
+    return (rig.get("checkpoint") or "", rig.get("unet") or "", rig.get("clip") or "",
+            rig.get("clip_type") or "", rig.get("vae") or "",
+            (rig.get("rescue_base"), rig.get("rescue_lora"),
+             rig.get("rescue_strength", 1.0)) if _resc else None,
+            (rig.get("unet_loader") or "", rig.get("int8_type") or ""))
+
+
+def cached_rig_model(rig):
+    """The rig's model if a run has loaded it already, else None. Read-only: the cache
+    order, the Run log and the rig naming are left to real loads."""
+    if not rig or rig.get("kind") in ("node", "external") or rig.get("kind") in RIG_KIND_HANDLERS:
+        return None
+    key = _rig_cache_key(rig)
+    for slot in _RIG_CACHE["slots"]:
+        if slot.get("key") == key:
+            return slot.get("model")
+    return None
+
+
+def _noise_pct(ms, sigma, sigma_max):
+    """A sigma as a share of the model's noise range, the way the sampler dials count
+    it (sampler_dials.progress_of); the plain sigma ratio when the object cannot say."""
+    p = _dials.progress_of(ms, sigma)
+    if p is not None:
+        return int(round(100.0 * (1.0 - p)))
+    return int(round(100.0 * float(sigma) / float(sigma_max))) if sigma_max else 0
+
+
+def _preview_model(cfg, rig, page="latent"):
+    """The cached model dressed the way the run dresses it before sampling."""
+    model = cached_rig_model(rig)
+    if model is None:
+        return None, None
+    dials = rig.get("dials") or _dials.parse_dials(rig)
+    if dials.get("shift"):
+        model = _dials.apply_shift(model, dials["shift"])
+    model = _dials.mark_qwen21(model, dials.get("q21_shift"))
+    if page == "latent":
+        # the canvas as the Latent tab builds it, pass 1's scale included; a Camera auto
+        # latent or a random preset can still change the run's, so a Qwen 2.1 preview
+        # is only as exact as that. An image to image source has its own size the
+        # server never sees, so that page keeps the model's own shift.
+        lat = cfg["latent"]
+        sc = float(lat.get("scale", 1.0) or 1.0)
+        if lat.get("scale_custom") and lat.get("pass_scale"):
+            try:
+                sc *= float(lat["pass_scale"][0])
+            except (TypeError, ValueError, IndexError):
+                pass
+        hw = (max(1, int(int(lat["h"]) * sc) // 8), max(1, int(int(lat["w"]) * sc) // 8))
+        model = _dials.qwen21_shift(model, hw, quiet=True)
+    return model, dials
+
+
+def _preview_pair(cfg, rig, page):
+    """The sampler and scheduler the run would use on this page, validated as the run
+    validates them, the second pair swapped in for a real image to image run (the tab
+    on and not prompt only, as the run gates it)."""
+    import comfy.samplers as _cs
+    sampler = rig["sampler"] if rig["sampler"] in _cs.KSampler.SAMPLERS else "euler"
+    scheduler = rig["scheduler"] if _dials.scheduler_ok(rig["scheduler"]) else "simple"
+    it = cfg["tabs"].get("i2i") or {}
+    # a wired latent canvas runs the passes with the main pair, as the run does
+    if page != "latent" and it.get("on") and not it.get("prompt_only") and it.get("canvas") != "latent":
+        s2, c2 = str(rig.get("i2i_sampler") or ""), str(rig.get("i2i_scheduler") or "")
+        if s2 in _cs.KSampler.SAMPLERS:
+            sampler = s2
+        if c2 and _dials.scheduler_ok(c2):
+            scheduler = c2
+    return sampler, scheduler
+
+
+def _run_busy():
+    """True while a Workspace run has a stage open (run_events keeps the open stages)."""
+    try:
+        from . import run_events as _rev
+        return bool(_rev._state.get("active"))
+    except Exception:
+        return False
+
+
+def _active_rig(cfg):
+    rigs = cfg["models"]["rigs"]
+    if not rigs:
+        return None
+    return rigs[max(0, min(int(cfg["models"].get("active", 0)), len(rigs) - 1))]
+
+
+def schedule_preview(cfg, page="latent"):
+    """The schedule the built-in sampler would run for the Latent or Img2Img page, on
+    the active rig's loaded model: each pass's sigmas, the model's plain schedule, and
+    one plain sentence. {"loaded": False, "why": ...} when the rig has not loaded yet,
+    since a preview must never load a model."""
+    rig = _active_rig(cfg)
+    if rig is None:
+        return {"loaded": False, "why": "No rig on the Models tab"}
+    if rig.get("kind") in ("node", "external") or rig.get("kind") in RIG_KIND_HANDLERS:
+        return {"loaded": False, "why": "This rig samples outside the built-in sampler"}
+    if _run_busy():
+        return {"loaded": False, "why": "Shows again when the run finishes"}
+    model, dials = _preview_model(cfg, rig, page)
+    if model is None:
+        return {"loaded": False, "why": "Shows after the rig has loaded once"}
+    sampler, scheduler = _preview_pair(cfg, rig, page)
+    t = cfg["latent"] if page == "latent" else cfg["tabs"]["i2i"]
+    denoise = 1.0 if page == "latent" else float(t.get("denoise", 0.5))
+    npass = max(1, int(t.get("passes", 1) or 1))
+    steps0 = max(1, int(rig.get("steps") or 8))
+    # A PASS ON ANOTHER RIG (a relay): drawn on that rig when it is loaded, with its own
+    # pair, steps and dials, else left out of the drawing and named in the line
+    others, missing = {}, []
+    if t.get("rig_custom") and isinstance(t.get("pass_rig"), list):
+        for q, nm in enumerate(t["pass_rig"][:npass]):
+            nm = str(nm or "")
+            if not nm or nm == rig.get("name"):
+                continue
+            rec = next((r for r in cfg["models"]["rigs"] if r.get("name") == nm), None)
+            m2, d2 = _preview_model(cfg, rec, page) if rec else (None, None)
+            if m2 is None:
+                missing.append(q + 1)
+            else:
+                others[q] = (rec, m2, d2) + _preview_pair(cfg, rec, page)
+    sl = t.get("pass_steps") if t.get("steps_custom") else None
+    counts = []
+    for q in range(npass):
+        c = int(sl[min(q, len(sl) - 1)]) if sl else 0
+        base = max(1, int(others[q][0].get("steps") or 8)) if q in others else steps0
+        counts.append(c if c > 0 else base)
+    dl = t.get("pass_denoise") if t.get("pass_custom") else None
+
+    def pass_denoise(q):
+        if dl:
+            return float(dl[min(q, len(dl) - 1)])
+        if page == "latent":
+            return 1.0 if q == 0 else float(t.get("refine", 0.5))
+        return denoise
+
+    def shape(sig, d=None):
+        d = d or dials
+        de = d.get("densify") or {}
+        if de.get("on"):
+            sig = _dials.densify(sig, de.get("last", 0.3), de.get("extra", 0))
+        return _dials.refocus(sig, d.get("focus"))
+
+    ms = model.get_model_object("model_sampling")
+    sigma_max = float(ms.sigma_max)
+    cont = bool(t.get("handoff_continue")) and npass > 1
+    if cont:
+        # one schedule for every pass, at the tab's own denoise, as the run cuts it
+        full = shape(_dials.rig_sigmas(model, sampler, scheduler, sum(counts), denoise))
+        segs = _dials.segments(full, counts)
+    else:
+        segs = []
+        for q in range(npass):
+            if q in others:
+                rec, m2, d2, s2, c2 = others[q]
+                segs.append(shape(_dials.rig_sigmas(m2, s2, c2, counts[q], pass_denoise(q)), d2))
+            elif (q + 1) in missing:
+                segs.append(torch.FloatTensor([]))
+            else:
+                segs.append(shape(_dials.rig_sigmas(model, sampler, scheduler, counts[q], pass_denoise(q))))
+    plain = _dials.rig_sigmas(model, sampler, scheduler, steps0, 1.0)
+
+    def lst(s_):
+        return [round(float(v), 5) for v in s_.detach().float().cpu()]
+
+    segs_l = [lst(s_) for s_ in segs]
+    starts = [_noise_pct(ms, s_[0], sigma_max) if s_ else 0 for s_ in segs_l]
+    ncount = [max(0, len(s_) - 1) for s_ in segs_l]
+    if cont:
+        summary = "%d steps (%s), starts at %d%% noise" % (
+            sum(ncount), " + ".join(str(c) for c in ncount), starts[0])
+        for q in range(1, npass):
+            if q == 1:
+                summary += ", pass 2 takes over at %d%% noise" % starts[q]
+            else:
+                summary += ", pass %d at %d%% noise" % (q + 1, starts[q])
+    elif npass > 1:
+        summary = "Pass 1: %d steps from %d%% noise" % (ncount[0], starts[0])
+        for q in range(1, npass):
+            summary += ", pass %d: %d steps from %d%% noise" % (q + 1, ncount[q], starts[q])
+    else:
+        summary = "%d steps, starts at %d%% noise" % (ncount[0], starts[0])
+    if missing:
+        summary += ". Pass %s on a rig that has not loaded, not drawn" % ", ".join(str(q) for q in missing)
+    return {"loaded": True, "rig": rig.get("name") or "", "sampler": sampler, "scheduler": scheduler,
+            "denoise": denoise, "continue": cont, "counts": ncount, "starts": starts,
+            "sigma_max": sigma_max, "plain": lst(plain), "segments": segs_l, "summary": summary}
+
+
+def start_noise_for(cfg, page, denoise):
+    """Where a run at this denoise starts on the rig's noise range, in percent, from
+    the schedule core would trim: None when the rig is not loaded."""
+    rig = _active_rig(cfg)
+    if rig is None or _run_busy():
+        return None
+    model, _d = _preview_model(cfg, rig, page)
+    if model is None:
+        return None
+    sampler, scheduler = _preview_pair(cfg, rig, page)
+    sig = _dials.rig_sigmas(model, sampler, scheduler, max(1, int(rig.get("steps") or 8)),
+                            max(0.0, min(1.0, float(denoise))))
+    if sig is None or len(sig) == 0:
+        return 0
+    ms = model.get_model_object("model_sampling")
+    return _noise_pct(ms, float(sig[0]), float(ms.sigma_max))
+
+
 def _load_active_rig(cfg, name="", prompt=None):
     """(name, model, clip, vae) for a Models-tab rig; Nones when unset.
 
@@ -2396,15 +2613,8 @@ def _load_active_rig(cfg, name="", prompt=None):
         print("[RedNode Workspace] rig %r is %s: no files load"
               % (rig["name"] or "(unnamed)", rig.get("kind")), flush=True)
         return rig["name"], None, None, None
-    # the rescue fields ride the cache key: toggling Rescue or moving its dial
-    # must reload, or the cache would keep handing out the unpatched model
-    _resc = (bool(rig.get("rescue")) and rig.get("rescue_base")
-             and rig.get("rescue_lora"))
-    key = (rig["checkpoint"], rig["unet"], rig["clip"], rig["clip_type"],
-           rig["vae"],
-           (rig["rescue_base"], rig["rescue_lora"],
-            rig.get("rescue_strength", 1.0)) if _resc else None,
-           (rig.get("unet_loader") or "", rig.get("int8_type") or ""))
+    key = _rig_cache_key(rig)
+    _resc = key[5] is not None          # the rescue fields, read again below
     if not any(key[:5]):
         return rig["name"], None, None, None
     from . import run_events as _rev
@@ -3211,6 +3421,17 @@ class RedNodeStudioWorkspace:
                                for k in ("detailer", "post", "save")))
         # the Run tab's feed (run_events.py): a new run, then each stage as it goes
         from . import run_events as _run
+
+        def _burn(img):
+            # BURN CHECK, on the switch only: the share of the render clipped to pure
+            # white or black, one line on the Run log, never a reason to fail a run
+            try:
+                if cfg.get("burn_check"):
+                    from . import clipcheck as _cc
+                    _ctext, _cwarn = _cc.burn_note(img)
+                    _run.note(_ctext, level="warn" if _cwarn else "info")
+            except Exception:
+                pass
         _run.run_start(node=unique_id, draft=bool(cfg.get("draft")))
         if _shelf_tabs:
             _run.note("The shelf is the picture: %s on %s"
@@ -4965,6 +5186,7 @@ class RedNodeStudioWorkspace:
                             _de = (_ar.get("dials") or {}).get("densify") or {}
                             if _de.get("on"):
                                 _full = _dials.densify(_full, _de.get("last", 0.3), _de.get("extra", 0))
+                            _full = _dials.refocus(_full, (_ar.get("dials") or {}).get("focus"))
                             _segs = _dials.segments(_full, _cnt)
                             print("[RedNode Workspace] continuing the noise across %d passes: "
                                   "one schedule of %d steps, cut at %s"
@@ -5303,6 +5525,7 @@ class RedNodeStudioWorkspace:
         if rig_image is not None:
             _tap("render", "Render", rig_image)
             _tapped["render"] = rig_image
+            _burn(rig_image)
 
         # RE-ANGLE ON THE RENDER: the finished picture (a Latent tab render as much
         # as an Img2Img one) is re-shot from the camera on the page, then the rig
@@ -5406,6 +5629,7 @@ class RedNodeStudioWorkspace:
             # as the output) still gets its Render
             _tap("render", "Render", rig_image)
             _tapped["render"] = rig_image
+            _burn(rig_image)
 
         # THE BUILT-IN PAINT DOOR. When Generate chose a rig as the model choice, it
         # queued THIS node with a run token stamped into the config copy. The pass
@@ -6167,6 +6391,30 @@ try:
         except ValueError as e:
             return web.json_response({"error": str(e)}, status=400)
         return web.json_response({"presets": sorted(load_presets())})
+
+    @PromptServer.instance.routes.post("/rednode/schedule_preview")
+    async def _rednode_schedule_preview(request):
+        """The Passes page's schedule drawing and the note beside a denoise dial: the
+        config as the panel holds it, which page asks, and an optional denoise to
+        read the start for. Never loads a model; a rig not in the cache says so."""
+        try:
+            data = await request.json()
+            cfg = parse_config(json.dumps(data.get("config") or {}))
+            page = "i2i" if data.get("page") == "i2i" else "latent"
+        except Exception as e:
+            return web.json_response({"error": "bad request body: %s" % e}, status=400)
+        def work():
+            out = schedule_preview(cfg, page)
+            if out.get("loaded") and data.get("denoise") is not None:
+                out["start_for"] = start_noise_for(cfg, page, float(data["denoise"]))
+            return out
+        try:
+            # off the event loop: building a schedule reads the model's sigma table,
+            # which waits on the card while a render is sampling
+            loop = asyncio.get_running_loop()
+            return web.json_response(await loop.run_in_executor(None, work))
+        except Exception as e:
+            return web.json_response({"loaded": False, "why": "Could not build the schedule: %s" % e})
 
 except Exception as e:  # server/aiohttp unavailable (e.g. standalone tests)
     print(f"[RedNode Krea2] workspace preset HTTP routes not registered: {e}", flush=True)

@@ -596,6 +596,7 @@ def _render(rc, source, cfg, seed, node_id=None):
     prep_key = json.dumps({"rig": rig_name, "m": id(model), "c": id(clip),
                            "set": lc.get("name", ""), "slots": lc.get("slots") or [],
                            "seed": int(lc.get("seed", 0) or 0), "on": bool(lc.get("on", True)),
+                           "exact": bool((lc.get("ui") or {}).get("exact")),
                            "loras": bool(rc["loras"]), "lora": rc["lora"],
                            "strength": float(rc["strength"]), "conv": conv_now},
                           sort_keys=True, default=str)

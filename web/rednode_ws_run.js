@@ -143,6 +143,8 @@ function finishRun(status, why = "") {
   if (RUN.status !== "running") return;
   RUN.status = status;
   RUN.t1 = Date.now();
+  // the schedule preview asks again now the rig is loaded (or changed)
+  for (const n of workspaceNodes()) if (n._rnSched) n._rnSched = {};
   for (const [, s] of RUN.stages) {
     if (s.state === "start" || s.state === "progress") {
       s.state = status === "done" ? "done" : "error";
@@ -685,6 +687,20 @@ function tapsCard(node) {
   }
   row.appendChild(chips);
   card.appendChild(row);
+  // BURN CHECK: one line on this log per render, the share clipped to pure white or
+  // black, and a warning past a tenth. Off by default.
+  {
+    const brow = el("div", "rn-ws-row");
+    const bsw = el("button", "rn-ws-sw" + (cfg.burn_check ? " on" : ""));
+    bsw.dataset.choice = "burn_check";
+    bsw.title = "After each render, note on this log how much of the picture is clipped to "
+              + "pure white or black. A few percent is normal; past a tenth the line says "
+              + "the render may be burned and points at the sampler and scheduler. Anime "
+              + "renders clip their highlights on purpose, so read it as a hint.";
+    bsw.onclick = () => { cfg.burn_check = !cfg.burn_check; writeCfg(node); render(node); };
+    brow.append(bsw, el("span", "rn-ws-swlabel", "Burn check"));
+    card.appendChild(brow);
+  }
   // THE BUILT-IN DETAILER'S OWN SWITCH, the same one as the Taps button on its page:
   // its input, a frame after every pass and its output. It lived only on the
   // Detailer page, so a strip with the Workspace taps on still showed no passes

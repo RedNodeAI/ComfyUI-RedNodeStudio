@@ -231,7 +231,8 @@ also folds away a set of sampler dials, all off by default: an AuraFlow shift on
 Seed Variance (a jitter on the conditioning early in the run, so one seed lands on different
 compositions), densify the tail (extra steps only in the last part of the schedule) and Qwen 2.1
 size shift (Qwen Image 2.1's own schedule, its shift set by the canvas size, where ComfyUI keeps the
-1024 x 1024 value at every size). They ride the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
+1024 x 1024 value at every size). The rig card warns when a sampler and scheduler pair tends to burn
+Krea 2, Z-Image and Flux models (karras, kl_optimal, linear_quadratic, uni_pc). They ride the built-in sampler and every Detailer pass on that rig, and so do three schedule shapes of the
 pack's own on the scheduler list, beta57, bong_tangent and hyperbolic; a stock KSampler on the
 scheduler socket is handed simple when a rig names one of those. A diffusion model file goes
 through the loader the rig names: by file name, a .gguf through ComfyUI-GGUF and anything else
@@ -281,7 +282,9 @@ finished picture, kept as a temp file, so the Live picture and the Review are ne
 because nothing was written to disk. History under the log
 reopens any run of the session. The Review page keeps every finished picture from this
 Workspace like an Image Review node and, under them, the last run's Stage Taps like a Stage
-View node, so one page reads the run start to finish; the Save page holds RedNode Save's
+View node, so one page reads the run start to finish; a Burn check switch beside the taps (off
+by default) adds one line per render to the log with the share clipped to pure white or black,
+and a warning past a tenth. The Save page holds RedNode Save's
 settings: switched on, the Workspace files every finished picture itself.
 
 **Detailer.** The RedNode Studio Detailer's passes, run by the Workspace after the render and
@@ -329,7 +332,11 @@ count per pass are there too, which is how a HighNoise and LowNoise pair relays:
 one rig in a step or two, pass 2 finishes on the other at a denoise just under 1, with Hold two
 rigs keeping both models loaded. Continue the noise between passes makes the passes segments of
 one schedule instead, each carrying the last one's leftover noise on with none added, which is
-how a Wan-style pair is meant to relay. **Enlarge as a picture between passes** (off by default)
+how a Wan-style pair is meant to relay. Under the page's settings a Schedule card draws the noise
+each step starts from, pass by pass, with the model's own schedule dashed behind and one line
+such as "8 steps (6 + 2), starts at 100% noise, pass 2 takes over at 51% noise"; beside an
+Img2Img denoise dial the same route says where a run at that denoise really starts (0.5 on Krea 2
+is 76% noise). Both show once the rig has loaded. **Enlarge as a picture between passes** (off by default)
 makes a pass that grows decode the picture, resize it and encode it again, the way a Detailer pass
 does, instead of stretching the latent: a little slower, and sharper when a pass grows a lot at a
 low denoise, which is where SDXL in particular goes soft. The Img2Img tab's passes have the same
@@ -812,7 +819,7 @@ what they did. Treat them as legacy.
 
 | Node | What it does |
 |---|---|
-| RedNode LoRA Stack | Multi-LoRA loader with per-slot strength, random ranges, trigger words and presets. |
+| RedNode LoRA Stack | Multi-LoRA loader with per-slot strength, random ranges, trigger words and presets. Exact LoRAs, in the cog and on the Workspace's LoRA tabs, runs every LoRA beside the model at full precision instead of merging it into fp8 or INT8 weights. |
 | RedNode LoRA Stack Save | Saves a stack under a name. Keep it muted unless you are saving. |
 | RedNode Sampler Config (auto turbo) | Detects a turbo distill from the loader's filename and outputs matching settings. |
 

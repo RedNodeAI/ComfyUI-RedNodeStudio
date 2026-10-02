@@ -1225,6 +1225,30 @@ export function openCog(node, anchor) {
     });
   describe();
 
+  // EXACT: the stack runs beside the model instead of being baked into its weights
+  const hEx = document.createElement("h5");
+  hEx.textContent = "Exact LoRAs";
+  const exRow = document.createElement("div");
+  exRow.className = "rn-ls-steps";
+  exRow.title = "Off: each LoRA is merged into the model's weights, the usual way. On an fp8 "
+    + "or INT8 model the rounding eats part of a LoRA, most of all a slider at a low "
+    + "strength. On: every LoRA runs beside the model at full precision, so the whole "
+    + "effect lands. A little slower per step.";
+  [["Off", false], ["On", true]].forEach(([label, v]) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.dataset.choice = "exact_" + (v ? "on" : "off");
+    if (!!node._rnUI?.exact === v) b.classList.add("on");
+    b.onclick = () => {
+      node._rnUI = { ...(node._rnUI || {}), exact: v || undefined };
+      writeSlots(node); render(node); m.remove();
+    };
+    exRow.appendChild(b);
+  });
+  const exNote = document.createElement("div");
+  exNote.style.cssText = "font-size:10.5px;opacity:.6";
+  exNote.textContent = "Keeps every LoRA's full effect on fp8 and INT8 models. The LoRA weights stay in memory while the model is loaded.";
+
   const hSort = document.createElement("h5");
   hSort.textContent = "LoRA list order";
   const sortRow = document.createElement("div");
@@ -1459,7 +1483,7 @@ export function openCog(node, anchor) {
     report.innerHTML = html;
   };
 
-  m.append(hStep, steps, hRnd, rndRow, rndNote, hSort, sortRow, hFil, fil, rescan, hDl, dlWrap, hPre, saveBtn, delBtn, hAct, collapse, nickBtn, reset, addTitle, check, report);
+  m.append(hStep, steps, hRnd, rndRow, rndNote, hEx, exRow, exNote, hSort, sortRow, hFil, fil, rescan, hDl, dlWrap, hPre, saveBtn, delBtn, hAct, collapse, nickBtn, reset, addTitle, check, report);
   document.body.appendChild(m);
   placePopup(m, r.right, r.top - 4, true);       // sits above-left of the cog
   const close = (e) => { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("pointerdown", close, true); } };
