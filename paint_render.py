@@ -507,6 +507,51 @@ class RedNodePaintRender:
         return positive, negative
 
     @staticmethod
+    def _anypaint_lora(pc):
+        """The AnyPaint LoRA: the tab's pick, else the installed file named for it."""
+        from . import anypaint as _ap
+        picked = str(pc.get("anypaint_lora") or "")
+        installed = folder_paths.get_filename_list("loras")
+        return picked if picked in installed else _ap.find_lora(installed)
+
+    @staticmethod
+    def _anypaint_words(pc, prompt):
+        """What the finished picture shows: the tab's own prompt, else the prompt row
+        the Workspace renders. AnyPaint wants the whole picture described, not the edit."""
+        typed = str((pc or {}).get("prompt") or "").strip()
+        if typed:
+            return typed
+        try:
+            from .workspace import parse_config as _pcfg, prompt_row_for
+            full = _pcfg(json.dumps(_workspace_cfg(prompt)))
+            row = prompt_row_for(full["models"], full["prompts"])
+            return str((row or {}).get("text") or "").strip()
+        except Exception:
+            return ""
+
+    def _anypaint_ready(self, model, clip, vae, mask, prompt):
+        """Every part AnyPaint needs is there; says what is missing and lets the ordinary
+        paint pass run when one is not."""
+        from . import anypaint as _ap
+        pc = _paint_from_prompt(prompt) or {}
+        why = None
+        if mask is None:
+            why = "AnyPaint needs a painted area; nothing is painted"
+        elif model is None or clip is None or vae is None:
+            why = "AnyPaint needs a model, a text encoder and a VAE from the rig"
+        elif not _ap.is_krea2(model):
+            why = "AnyPaint is for Krea 2 Turbo, and this rig's model is not Krea 2"
+        elif not self._anypaint_lora(pc):
+            why = ("AnyPaint needs the krea2_anypaint LoRA in your loras folder "
+                   "(huggingface.co/yijunwang2/krea2-anypaint)")
+        elif not self._anypaint_words(pc, prompt):
+            why = "AnyPaint needs a prompt describing the whole finished picture"
+        if why:
+            _say(why + "; painting the ordinary way instead")
+            return False
+        return True
+
+    @staticmethod
     def _apply_loras(model, clip, pc, prompt):
         """Put the Workspace's LoRAs tab onto the model this node was handed.
 
@@ -774,6 +819,7 @@ class RedNodePaintRender:
         # the choice lives on the raw paint block (parse_config keeps the dials, not
         # the renderer id), the same place _paint_rig reads it
         _rr_pick = str(((_workspace_cfg(prompt).get("paint") or {}).get("renderer") or ""))
+        anypaint_alpha = None            # set by an AnyPaint pass: its paste matte
         if _rr_pick == "rerender":
             # THE RE-RENDER ENGINE ON THE PAINT: the Re-render tab's recipe on the
             # painted region (or the whole frame) at the tab's denoise, its passes
@@ -797,6 +843,33 @@ class RedNodePaintRender:
                 painted = F.interpolate(painted.permute(0, 3, 1, 2), size=rgb.shape[1:3],
                                         mode="bilinear", align_corners=False
                                         ).permute(0, 2, 3, 1)
+        elif pc.get("anypaint") and self._anypaint_ready(model, clip, vae, mask, prompt):
+            # ANYPAINT: the krea2-anypaint LoRA's own recipe on the painted area, one
+            # pass at full strength (anypaint.py). The rig's paint LoRAs stay on the
+            # model; the AnyPaint LoRA and its reference wrapper go on top for this
+            # pass only. The paste matte replaces the brush mask in the composite.
+            from . import anypaint as _ap
+            model, clip = self._apply_loras(model, clip, pc, prompt)
+            _ap_lora = self._anypaint_lora(pc)
+            _ap_model = _ap.prepare_model(model, _ap_lora, float(pc.get("anypaint_strength", 1.0)))
+            rgb = work[:, :, :, :3]
+            _gm = F.interpolate(mask[:, y0:y1, x0:x1].unsqueeze(1).float(),
+                                size=(rgb.shape[1], rgb.shape[2]), mode="bilinear",
+                                align_corners=False)[0, 0]
+            _gen = (_gm > 0.5).float()
+            _words = self._anypaint_words(pc, prompt)
+            _ap_steps = _ap.STEPS            # the recipe; the tab's Steps are for ordinary paint
+            _run.progress("paint", "Paint", what="AnyPaint, %d steps" % _ap_steps)
+            _say("AnyPaint: %s at %.2f, %d steps, euler / simple, the whole picture as "
+                 "the reference, a %d px blend border; region %d x %d at %d x %d"
+                 % (_ap_lora, float(pc.get("anypaint_strength", 1.0)), _ap_steps,
+                    _ap.BORDER_PX, crop_w, crop_h, rgb.shape[2], rgb.shape[1]))
+            if int(pc.get("passes", passes) or 1) > 1:
+                _say("AnyPaint paints at full strength in one pass; the extra passes "
+                     "are skipped")
+            painted, _ap_alpha = _ap.paint(_ap_model, clip, vae, rgb, _gen, _words, seed,
+                                           steps=_ap_steps)
+            anypaint_alpha = _ap_alpha
         else:
             model, clip = self._apply_loras(model, clip, pc, prompt)
             pos, neg = self._conditioning(clip, positive, negative, pc,
@@ -900,6 +973,9 @@ class RedNodePaintRender:
                 return _out(painted)
             m = F.interpolate(mask.unsqueeze(1), size=(big_h, big_w),
                               mode="bilinear", align_corners=False).squeeze(1)
+            if anypaint_alpha is not None:
+                m = F.interpolate(anypaint_alpha[None, None].float(), size=(big_h, big_w),
+                                  mode="bilinear", align_corners=False)[:, 0]
             m = blend_mask(m.unsqueeze(-1).to(painted.dtype), pc)
             result = up * (1 - m) + painted[..., :up.shape[-1]] * m
             _say(f"done; the frame comes back at {big_w} x {big_h}, "
@@ -918,7 +994,11 @@ class RedNodePaintRender:
             # the model can see the entire picture for context, not so it may repaint
             # all of it. Compositing the raw render in whole-frame mode replaced parts
             # of the image nobody painted over.
-            m = blend_mask(mask[:, y0:y1, x0:x1].unsqueeze(-1).to(back.dtype), pc)
+            m = mask[:, y0:y1, x0:x1]
+            if anypaint_alpha is not None:
+                m = F.interpolate(anypaint_alpha[None, None].float(), size=(crop_h, crop_w),
+                                  mode="bilinear", align_corners=False)[:, 0]
+            m = blend_mask(m.unsqueeze(-1).to(back.dtype), pc)
             result[:, y0:y1, x0:x1, :] = crop * (1 - m) + back * m
         else:
             result[:, y0:y1, x0:x1, :] = back

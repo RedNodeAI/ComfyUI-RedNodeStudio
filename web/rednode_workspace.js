@@ -2142,6 +2142,8 @@ export function readCfg(node) {
     d.paint.region_shape = "auto";
   }
   d.paint.region_floor = !!d.paint.region_floor;
+  d.paint.anypaint = !!d.paint.anypaint;
+  if (typeof d.paint.anypaint_lora !== "string") d.paint.anypaint_lora = "";
   // ONE CFG/STEPS PER RENDERER, keyed by the same display name the picker already
   // shows: models genuinely disagree about what CFG and Steps mean, and switching
   // between an SDXL bridge and Krea 2 used to leave whichever number was last on the
@@ -10575,6 +10577,55 @@ function paintBody(node, body) {
     }
     sampBox.appendChild(wrap);
     node._rnSyncShapeNote?.();
+
+    // ANYPAINT: the krea2-anypaint LoRA's own recipe on the painted area, for a Krea 2
+    // rig. Painted only: it needs the brush mask to know what to redraw.
+    if (P.mask_only) {
+      const apRow = document.createElement("div");
+      apRow.className = "rn-ws-row rn-ws-anypaint";
+      apRow.style.flexWrap = "wrap";
+      const apSw = document.createElement("button");
+      apSw.className = "rn-ws-sw" + (P.anypaint ? " on" : "");
+      apSw.dataset.choice = "anypaint";
+      apSw.title = "Inpaint with the krea2-anypaint LoRA the way it was trained: the whole "
+                 + "picture as a reference, everything outside the paint kept exactly, a "
+                 + "32 px border the model blends, and the seam colour matched. Krea 2 Turbo "
+                 + "rigs only; euler / simple at full strength in one pass. Describe the whole "
+                 + "finished picture in the prompt, not just the change. Off by default.";
+      apSw.onclick = () => { P.anypaint = !P.anypaint; writeCfg(node); render(node); };
+      const apLab = document.createElement("span");
+      apLab.className = "rn-ws-swlabel";
+      apLab.textContent = "AnyPaint";
+      apRow.append(apSw, apLab);
+      if (P.anypaint) {
+        const all = MODEL_LISTS?.loras || [];
+        const hits = all.filter((n) => /anypaint/i.test(n));
+        const sel = document.createElement("select");
+        sel.className = "rn-ws-res";
+        sel.dataset.choice = "anypaint_lora";
+        sel.title = "The AnyPaint LoRA. Automatic picks the installed file with anypaint in "
+                  + "its name. Get it from huggingface.co/yijunwang2/krea2-anypaint.";
+        for (const [v, t] of [["", hits.length ? "Automatic (" + hits[0].split(/[\\/]/).pop() + ")" : "Automatic (not found)"],
+                              ...hits.map((n) => [n, n])]) {
+          const o = document.createElement("option");
+          o.value = v; o.textContent = t; o.selected = (P.anypaint_lora || "") === v;
+          sel.appendChild(o);
+        }
+        sel.onchange = () => { P.anypaint_lora = sel.value; writeCfg(node); };
+        apRow.appendChild(sel);
+        const how = document.createElement("span");
+        how.className = "rn-ws-note";
+        how.textContent = "8 steps, CFG 1, euler, as the LoRA was trained. Steps and CFG above are for ordinary painting.";
+        apRow.appendChild(how);
+        if (MODEL_LISTS && !hits.length) {
+          const miss = document.createElement("span");
+          miss.className = "rn-ws-note rn-ws-peoplewarn";
+          miss.textContent = "No AnyPaint LoRA in your loras folder: the pass paints the ordinary way.";
+          apRow.appendChild(miss);
+        }
+      }
+      sampBox.appendChild(apRow);
+    }
   }
 
   const row2 = document.createElement("div");

@@ -1651,6 +1651,12 @@ def parse_config(config_json):
         # It changes what renders, so it belongs here in the workflow rather than in
         # the install's display settings.
         "region_floor": bool(pin.get("region_floor")),
+        # ANYPAINT: the krea2-anypaint LoRA's recipe on the painted area (anypaint.py).
+        # Off by default; the LoRA is found by name when none is picked.
+        "anypaint": bool(pin.get("anypaint")),
+        "anypaint_lora": str(pin.get("anypaint_lora") or "")[:256],
+        "anypaint_strength": max(0.0, min(2.0, float(pin.get("anypaint_strength", 1.0) or 0.0)))
+            if isinstance(pin.get("anypaint_strength", 1.0), (int, float)) else 1.0,
         "feather": max(0, min(64, int(pin.get("feather", 4))
                               if isinstance(pin.get("feather"), (int, float)) else 4)),
         # BLEND, the Detailer's: how much of the repaint goes back under the mask.

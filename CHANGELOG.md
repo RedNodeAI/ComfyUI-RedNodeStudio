@@ -37,6 +37,12 @@ format matters: **version** then a date, notes below until the next bold line.
   only at 1.0) and Krea 2 Soft (euler and beta57). The shipped ones cannot be changed or deleted
 - Burn check, a switch under the Run tab's review: one line per render on the log with the
   share clipped to pure white or black, and a warning past a tenth. Off by default
+- AnyPaint, a Paint tab switch beside Mask only: the painted area is redrawn with the
+  krea2_anypaint LoRA the way it was trained, the picture around it shown to the model as a
+  reference, so a new garment or object fits the scene instead of arriving as a picture of its
+  own. Paint with the tab's own brush, write a prompt for the whole finished picture, queue.
+  Krea 2 rigs only, 8 steps at CFG 1, and the area outside the paint comes back untouched.
+  Off by default; without the LoRA the pass paints the ordinary way and says why
 
 **1.6.3** - 2026-10-02
 

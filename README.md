@@ -179,7 +179,8 @@ row-list UI that inspired RedNode LoRA Stack, implemented independently here.
 [skatardude10/ComfyUI-Optical-Realism](https://github.com/skatardude10/ComfyUI-Optical-Realism),
 which I read as a survey of which optical effects were worth having while building the grading
 chain. Loraholic for the Krea 2 zoom and colour temperature sliders the Camera LoRAs card drives.
-ethanfel and ostris for the Krea 2 vision-conditioning recipes. Krea.ai for Krea 2, under
+ethanfel and ostris for the Krea 2 vision-conditioning recipes. yijunwang2 for the
+krea2-anypaint LoRA and its inpaint recipe, which the Paint tab's AnyPaint follows. Krea.ai for Krea 2, under
 the Krea Community License.
 
 Not affiliated with Krea.ai.

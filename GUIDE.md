@@ -404,6 +404,14 @@ Subject, Scene and Moodboard reference toggles follow the Model choice's rig. Bl
 a white sheet at the Latent tab's size to paint on from nothing, grey or black on a right-click,
 and Clear canvas takes the picture off as well as the paint, where Clear paint keeps it.
 
+**AnyPaint.** With Mask only on, the AnyPaint switch redraws the painted area with the
+krea2_anypaint LoRA (`models/loras`, from [yijunwang2/krea2-anypaint](https://huggingface.co/yijunwang2/krea2-anypaint)).
+The model sees the rest of the picture while it paints, so a raincoat over a jumper or a cup on a
+table blends into what is there. Write the prompt as the whole finished picture, not as an
+instruction: "a woman by a train window wearing a yellow raincoat", not "make the coat yellow".
+It runs on a Krea 2 rig at 8 steps and CFG 1 whatever the tab's dials say, and everything outside
+the paint comes back pixel for pixel.
+
 ![The Hero Creator's Headshot page: the source photo, the head cut out above the clothing, and the front-on headshot](images/hero-headshot.webp)
 
 ![The Hero Creator's Redesign page: the headshot it works from, a redesign and the instruction that made it](images/hero-redesign.webp)
@@ -1100,7 +1108,8 @@ row-list UI that inspired RedNode LoRA Stack, implemented independently here.
 [skatardude10/ComfyUI-Optical-Realism](https://github.com/skatardude10/ComfyUI-Optical-Realism),
 which I read as a survey of which optical effects were worth having while building the grading
 chain. Loraholic for the Krea 2 zoom and colour temperature sliders the Camera LoRAs card drives.
-ethanfel and ostris for the Krea 2 vision-conditioning recipes. Krea.ai for Krea 2, under
+ethanfel and ostris for the Krea 2 vision-conditioning recipes. yijunwang2 for the
+krea2-anypaint LoRA and its inpaint recipe, which the Paint tab's AnyPaint follows. Krea.ai for Krea 2, under
 the Krea Community License.
 
 Not affiliated with Krea.ai.
