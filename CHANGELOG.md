@@ -8,6 +8,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The Moodboard did almost nothing with the Workspace's Studio preset on custom: the encoder
+  did not know the Workspace's name for custom, said the preset was not found and fell back to
+  Balanced, so every Moodboard and identity dial was ignored. Custom now uses the dials
 - A prompt imported from a picture rendered as an empty prompt when the row's camera words
   were off, which is how the import makes its rows: the run rebuilt the words from the frame
   and left out the Anything else box, the only place an imported prompt lives

@@ -433,7 +433,8 @@ class Krea2RedNode:
 
         # Preset rules: 'custom (use settings)' hands control to the connected Settings
         # node; any NAMED preset (built-in or saved) wins even when settings are connected.
-        if preset == CUSTOM_SENTINEL:
+        # the Workspace names its custom choice "custom (live)"; both mean the dials
+        if preset in (CUSTOM_SENTINEL, "custom (live)"):
             if settings is not None:
                 cfg = dict(settings)
                 print("[Krea2 RedNode] using the connected settings")
