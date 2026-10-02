@@ -10579,8 +10579,9 @@ function paintBody(node, body) {
     node._rnSyncShapeNote?.();
 
     // ANYPAINT: the krea2-anypaint LoRA's own recipe on the painted area, for a Krea 2
-    // rig. Painted only: it needs the brush mask to know what to redraw.
-    if (P.mask_only) {
+    // rig. Painted only: it needs the brush mask to know what to redraw. On Whole frame
+    // the row stays, greyed with the reason, so the switch never seems to vanish.
+    {
       const apRow = document.createElement("div");
       apRow.className = "rn-ws-row rn-ws-anypaint";
       apRow.style.flexWrap = "wrap";
@@ -10597,7 +10598,14 @@ function paintBody(node, body) {
       apLab.className = "rn-ws-swlabel";
       apLab.textContent = "AnyPaint";
       apRow.append(apSw, apLab);
-      if (P.anypaint) {
+      if (!P.mask_only) {
+        apSw.disabled = true;
+        apRow.style.opacity = ".5";
+        const off = document.createElement("span");
+        off.className = "rn-ws-note";
+        off.textContent = "Works on the painted area only: switch to Painted to use it.";
+        apRow.appendChild(off);
+      } else if (P.anypaint) {
         if (!MODEL_LISTS) fetchModelLists().then(() => render(node));
         const all = MODEL_LISTS?.loras || [];
         const hits = all.filter((n) => /anypaint/i.test(n));
