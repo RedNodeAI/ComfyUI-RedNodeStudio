@@ -18,6 +18,7 @@ DisplayName = "RedNode Studio"
 # path, so the file has to be committed and pushed before the listing can fetch it.
 Icon = "https://raw.githubusercontent.com/RedNodeAI/ComfyUI-RedNodeStudio/main/icon.png"
 # Krea 2 first shipped in ComfyUI v0.26.0 (commit 2a61015, 2026-06-23), which is what
-# the ten Krea 2 nodes need. On anything older the other 52 nodes still load and work
-# with any model, and the pack says so on startup rather than failing to import.
-requires-comfyui = ">=0.26.0"
+# the ten Krea 2 nodes need; the shipped workflows' INT8 Krea 2 file needs v0.27.0
+# (INT8 support, commit 1a510f0). On anything older the other 52 nodes still load and
+# work with any model, and the pack says so on startup rather than failing to import.
+requires-comfyui = ">=0.27.0"

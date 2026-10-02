@@ -297,7 +297,7 @@ endlocal
 exit /b
 
 REM ---- the menu: ::G~number~section~title~MB~license or page --------------------------
-::G~1~MODELS~Krea 2 Turbo, official - the model, its text encoder and VAE~18630~Krea 2 license: huggingface.co/krea/Krea-2-Turbo
+::G~1~MODELS~Krea 2 Turbo, official - the model, its text encoder and VAE~18980~Krea 2 license: huggingface.co/krea/Krea-2-Turbo
 ::G~2~MODELS~Qwen Image 2.1 - a second rig, with its own encoder and VAE~24260~Qwen research license: huggingface.co/Qwen/Qwen-Image-2.1
 ::G~3~MODELS~PornMaster Krea 2 - the workflow's mix rig, from Civitai~19430~Its creator's terms: civitai.com/models/2735032
 ::G~4~MODELS~JANKU Illustrious - the SDXL rig, from Civitai~6780~Its creator's terms: civitai.com/models/1277670
@@ -311,7 +311,7 @@ REM ---- the menu: ::G~number~section~title~MB~license or page -----------------
 ::G~12~TOOLS~Masks - ComfyUI's built-in SAM3.1 for the Detailer and Paint, no Triton needed~1750~SAM license: huggingface.co/Comfy-Org/sam3.1
 
 REM ---- the files: ::M~group~folder~save as~hf/civ/civkey~url~MB~page ------------------
-::M~1~diffusion_models~krea2TurboOfficialComfy_krea2TurboFp8.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors~13140~-
+::M~1~diffusion_models~krea2_turbo_int8_convrot.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_int8_convrot.safetensors~13490~-
 ::M~1~text_encoders~qwen3vl_4b_fp8_scaled.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors~5240~-
 ::M~1~vae~qwen_image_vae.safetensors~hf~https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors~250~-
 ::M~2~diffusion_models~qwen_image_2.1_bf16.safetensors~hf~https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/main/diffusion_models/qwen_image_2.1_bf16.safetensors~14230~-

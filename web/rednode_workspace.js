@@ -16828,8 +16828,11 @@ function editorSourcePage(node, body) {
 
 // The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community mixes
 // lose it. A rig says so itself, or its model file's name does (matching workspace.py).
+// Comfy-Org's own Krea 2 Turbo files, every precision (matching workspace.py)
+const OFFICIAL_KREA2_FILE = /(^|[\\/\s])krea2_turbo_(bf16|fp8_scaled|int8_convrot|mxfp8|nvfp4)\.safetensors/i;
 const rigOfficial = (rig) => (typeof rig?.official === "boolean" ? rig.official
-  : /official/i.test(`${rig?.unet || ""} ${rig?.checkpoint || ""}`));
+  : /official/i.test(`${rig?.unet || ""} ${rig?.checkpoint || ""}`)
+    || OFFICIAL_KREA2_FILE.test(`${rig?.unet || ""} ${rig?.checkpoint || ""}`));
 
 // The switch on a Krea 2 rig's card
 function officialRow(node, body, rig) {
@@ -17969,7 +17972,8 @@ function heroBody(node, body, sub, page) {
   // always "then what have I got?". Each row names the thing, its state and its
   // current value, so a wrong model reads as wrong rather than as missing.
   const official = modelName
-    && /krea2turboofficial/i.test(modelName.replace(/[^a-z0-9]/gi, ""));
+    && (/krea2turboofficial/i.test(modelName.replace(/[^a-z0-9]/gi, ""))
+        || OFFICIAL_KREA2_FILE.test(modelName));
   const reqs = [
     { what: "Model", val: modelName,
       state: !modelName ? "missing" : official ? "ok" : "wrong",

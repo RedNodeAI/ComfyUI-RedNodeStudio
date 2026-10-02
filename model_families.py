@@ -32,10 +32,12 @@ FAMILIES = (
         "blurb": "The official distilled Krea 2. The model this pack is built around, and "
                  "the one Krea 2 Identity was trained on.",
         "roles": {
-            # INT8 files need the INT8 loader and its model type, which a name cannot
-            # tell, so they are left for the Files page
+            # community INT8 files need the INT8 loader and its model type, which a
+            # name cannot tell, so they are left for the Files page; Comfy-Org's own
+            # convrot INT8 loads on the ordinary loader and is allowed by name
             "unet": {"all": ("krea2", "turbo"), "none": ("raw", "int8", "lora"),
-                     "example": "krea2_turbo_fp8.safetensors in models/diffusion_models"},
+                     "allow": ("krea2_turbo_int8_convrot",),
+                     "example": "krea2_turbo_int8_convrot.safetensors in models/diffusion_models"},
             "clip": {"all": ("qwen3", "vl", "4b"), "none": (),
                      "example": "qwen3vl_4b_fp8_scaled.safetensors in models/text_encoders"},
             # an upscale VAE decodes at twice the size: never a rig's VAE
@@ -128,6 +130,8 @@ def matches(name, rule):
     """Whether a file name fits a role's rule."""
     stem = _norm(os.path.splitext(os.path.basename(str(name)))[0])
     full = _norm(os.path.splitext(str(name))[0])
+    if stem in {_norm(w) for w in rule.get("allow", ())}:
+        return True
     if any(_norm(w) in full for w in rule.get("none", ())):
         return False
     if not all(_norm(w) in full for w in rule.get("all", ())):

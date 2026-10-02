@@ -30,6 +30,7 @@ import random as _random
 import asyncio
 import json
 import os
+import re
 
 import numpy as np
 import torch
@@ -2103,13 +2104,18 @@ def prompt_row_for(models_cfg, prompts_cfg, rig_name=""):
             return row
     return None
 
+# Comfy-Org's own Krea 2 Turbo files (huggingface.co/Comfy-Org/Krea-2), every precision
+OFFICIAL_KREA2_FILE = re.compile(r"(^|[\\/\s])krea2_turbo_(bf16|fp8_scaled|int8_convrot|mxfp8|nvfp4)\.safetensors", re.I)
+
+
 def rig_is_official(rec):
     """The Identity Edit LoRA takes faces on the official Krea 2 Turbo; community
     mixes lose it. A rig says so itself, or its model file's name does."""
     rec = rec or {}
     if isinstance(rec.get("official"), bool):
         return rec["official"]
-    return "official" in ("%s %s" % (rec.get("unet") or "", rec.get("checkpoint") or "")).lower()
+    names = "%s %s" % (rec.get("unet") or "", rec.get("checkpoint") or "")
+    return "official" in names.lower() or bool(OFFICIAL_KREA2_FILE.search(names))
 
 
 def rig_text_key(rec, clip, from_rec=True):

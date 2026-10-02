@@ -52,7 +52,8 @@ Search for **RedNode Studio** in ComfyUI Manager, or clone it with the line abov
 Restart ComfyUI. Everything registers under the `krea2` and `RedNode` categories in the node menu.
 
 Python 3.10 or newer. No pip dependencies beyond what ComfyUI already installs. ComfyUI
-0.26.0 or newer, which is where Krea 2 arrived; Qwen Image 2.1 rigs need 0.37.0 or newer.
+0.27.0 or newer: Krea 2 arrived in 0.26.0, and the INT8 Krea 2 the workflows use needs 0.27.0.
+Qwen Image 2.1 rigs need 0.37.0 or newer.
 
 ### Optional packs
 
@@ -920,6 +921,7 @@ goes. ComfyUI Manager installs the packs; the files are yours to fetch.
 
 | File | Goes in | Where from |
 |---|---|---|
+| `krea2_turbo_int8_convrot.safetensors`, the model the workflows' Krea 2 rig uses (half the size of the bf16, close to it in quality, ComfyUI 0.27 or newer); the fp8, bf16, mxfp8 and nvfp4 files from the same page work too, picked in the rig's Model box | `models/diffusion_models` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/diffusion_models) |
 | `qwen3vl_4b_fp8_scaled.safetensors` (or the bf16) | `models/text_encoders` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/text_encoders) |
 | `qwen_image_vae.safetensors` | `models/vae` | [Comfy-Org/Krea-2](https://huggingface.co/Comfy-Org/Krea-2/tree/main/vae) |
 | `krea2_identity_edit_v1_2.safetensors`, the identity edit LoRA by lbouaraba | `models/loras` | [Civitai](https://civitai.com/models/2761113) or [Hugging Face](https://huggingface.co/conradlocke/krea2-identity-edit) |

@@ -87,7 +87,7 @@
         "previewExposures": []
       },
       "widgets_values": [
-        "krea2TurboOfficialComfy_krea2TurboFp8.safetensors",
+        "krea2_turbo_int8_convrot.safetensors",
         "qwen3VLInstruct4bHeretic_v10.safetensors",
         "wan_2.1_vae_fp32.safetensors"
       ],
@@ -1553,7 +1553,7 @@
               }
             },
             "widgets_values": [
-              "krea2TurboOfficialComfy_krea2TurboFp8.safetensors",
+              "krea2_turbo_int8_convrot.safetensors",
               "default"
             ]
           }

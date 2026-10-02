@@ -17,6 +17,11 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### New
 
+- The shipped workflows' Krea 2 rig and the model download now use Comfy-Org's INT8 Krea 2
+  Turbo (krea2_turbo_int8_convrot): half the VRAM of the bf16, closer to it than the fp8, and
+  faster. Needs ComfyUI 0.27.0 or newer. Already have the fp8? Pick it in the rig's Model box,
+  or run the download once more for the INT8. Comfy-Org's Krea 2 files in every precision now
+  count as the official Krea 2, so the identity warning no longer fires on them
 - Detail Daemon has a Method: Classic, as before, or Look only, where only the timestep the model
   is shown is nudged and the real noise is still removed. Classic softens Krea 2, Z-Image and
   Flux instead of sharpening them; Look only is the one for those. And a Window: Steps, as
