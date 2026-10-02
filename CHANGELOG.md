@@ -18,7 +18,6 @@ format matters: **version** then a date, notes below until the next bold line.
   list only scrolls when the arrow keys move through it
 - The Shelf's Override names the Re-render tab where it said Editor. Re-angle and Swap on the
   Tools tab use the same picture, and its tooltip says so
-
 - The pack's Krea 2 reference path only takes over references its own nodes attached. Before,
   any reference on a Krea 2 model (core's ReferenceLatent, another pack's edit nodes) was
   rendered by the pack's version, ignoring that node's own method. Those now run as ComfyUI
@@ -36,8 +35,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - Importing a picture from A1111, Forge or Neo reads its <lora:name:weight> tags: a new choice
   loads them into the active rig's LoRA set at the file's strengths, with the tags taken out of
   the prompt. A tag finds its file by file name, by the name and hash stored inside the LoRA,
-  or, on a button, by hashing your LoRA files once (remembered after). Clip skip and Shift come over too, and the
-  sampler and schedule names are turned into ComfyUI's
+  or, on a button, by hashing your LoRA files once (remembered after). Clip skip and Shift
+  come over too, and the sampler and schedule names are turned into ComfyUI's
 - Re-render has a Repeat count, like Paint's passes: each round re-renders the last round's
   result on the next seed
 - An option on the Latent and Img2Img Passes pages to enlarge the picture itself between
