@@ -821,7 +821,7 @@ what they did. Treat them as legacy.
 |---|---|
 | RedNode LoRA Stack | Multi-LoRA loader with per-slot strength, random ranges, trigger words and presets. Exact LoRAs, in the cog and on the Workspace's LoRA tabs, runs every LoRA beside the model at full precision instead of merging it into fp8 or INT8 weights. |
 | RedNode LoRA Stack Save | Saves a stack under a name. Keep it muted unless you are saving. |
-| RedNode Sampler Config (auto turbo) | Detects a turbo distill from the loader's filename and outputs matching settings. |
+| RedNode Sampler Config (auto turbo) | Detects a turbo distill from the loader's filename and outputs matching settings. Its presets are the same list as the Workspace rig's Sampler presets, where a preset also carries the rig's Sampler dials; a few ship with the pack and cannot be changed or deleted. |
 
 ### Prompting
 

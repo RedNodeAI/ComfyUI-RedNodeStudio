@@ -74,6 +74,42 @@ def is_turbo_name(filename):
 # never changes.
 
 PROFILE_KEYS = ("steps", "cfg", "sampler", "scheduler", "detailer_steps")
+# A Workspace rig's sampler dials ride a preset too, under "dials"; the Sampler Config
+# node reads only the five numbers above, so its presets mean what they always meant
+DIAL_KEYS = ("shift", "q21_shift", "focus", "dd", "variance", "densify")
+
+# PRESETS THAT SHIP WITH THE PACK, picked from fixed-seed renders (hub sampling_test).
+# Read-only: listed beside your own, never written to your file, never deleted.
+_OFF = {"shift": 0, "q21_shift": False, "focus": 0, "dd": {}, "variance": {}, "densify": {}}
+BUILTIN_PROFILES = {
+    # crisper than euler/simple with no speckle, the best of six pairs on three prompts
+    "Krea 2 Crisp": {"steps": 8, "cfg": 1.0, "sampler": "dpmpp_2m", "scheduler": "beta",
+                     "detailer_steps": 8, "dials": dict(_OFF)},
+    # the same with Detail Daemon at the amount that stayed clean, look only by noise
+    "Krea 2 Crisp detail": {"steps": 8, "cfg": 1.0, "sampler": "dpmpp_2m", "scheduler": "beta",
+                            "detailer_steps": 8,
+                            "dials": dict(_OFF, dd={"on": True, "amount": 0.1, "start": 0.2,
+                                                    "end": 0.8, "method": "look",
+                                                    "window": "noise", "cfg_scale": 1.0})},
+    # softer skin and light than the crisp pair, about euler's finish
+    "Krea 2 Soft": {"steps": 8, "cfg": 1.0, "sampler": "er_sde", "scheduler": "beta",
+                    "detailer_steps": 8, "dials": dict(_OFF)},
+}
+
+
+def _clean(cfg):
+    out = {k: cfg.get(k) for k in PROFILE_KEYS}
+    d = cfg.get("dials")
+    if isinstance(d, dict):
+        out["dials"] = {k: d[k] for k in DIAL_KEYS if k in d}
+    return out
+
+
+def all_profiles():
+    """The pack's built-in presets with your own over them by name."""
+    out = {k: _clean(v) for k, v in BUILTIN_PROFILES.items()}
+    out.update(load_profiles())
+    return out
 
 
 def _profiles_path(make=False):
@@ -95,7 +131,7 @@ def load_profiles():
         for name, cfg in raw.items():
             if not isinstance(cfg, dict) or not str(name).strip():
                 continue
-            out[str(name).strip()[:48]] = {k: cfg.get(k) for k in PROFILE_KEYS}
+            out[str(name).strip()[:48]] = _clean(cfg)
     return out
 
 
@@ -134,7 +170,7 @@ class RedNodeSamplerConfig:
                 # APPENDED, so saved workflows keep loading by position. The list is
                 # rebuilt whenever the frontend refreshes object_info, which is how
                 # every dynamic combo in ComfyUI stays current.
-                "profile": (["auto"] + sorted(load_profiles()), {"default": "auto",
+                "profile": (["auto"] + sorted(all_profiles()), {"default": "auto",
                             "tooltip": "auto detects turbo against full from the "
                             "loader's file name, exactly as before. A NAMED profile "
                             "overrides every dial with the set saved under that name: "
@@ -172,7 +208,7 @@ class RedNodeSamplerConfig:
         # UPSTREAM loader's filename, and the CONTENTS of the picked profile, which
         # live in a file you edits from the menu. Hash both, or a checkpoint
         # swap or a profile edit would serve stale settings.
-        chosen = load_profiles().get(str(profile or "")) if profile != "auto" else None
+        chosen = all_profiles().get(str(profile or "")) if profile != "auto" else None
         return f"{find_model_file(prompt, unique_id)}|{json.dumps(chosen, sort_keys=True)}"
 
     def pick(self, model, override="auto", turbo_steps=8, turbo_cfg=1.0,
@@ -181,7 +217,7 @@ class RedNodeSamplerConfig:
              denoise=1.0, turbo_detailer_steps=6, full_detailer_steps=12,
              profile="auto", denoise_in=None, prompt=None, unique_id=None):
         if profile and profile != "auto":
-            chosen = load_profiles().get(str(profile))
+            chosen = all_profiles().get(str(profile))
             if chosen is None:
                 print(f"[RedNode Sampler Config] profile {profile!r} no longer "
                       f"exists; falling back to auto detection", flush=True)
@@ -236,7 +272,7 @@ try:
 
     @PromptServer.instance.routes.get("/rednode/sampler_profiles")
     async def _rn_sampler_profiles(request):
-        return web.json_response({"profiles": load_profiles()})
+        return web.json_response({"profiles": all_profiles(), "builtin": sorted(BUILTIN_PROFILES)})
 
     @PromptServer.instance.routes.post("/rednode/sampler_profiles")
     async def _rn_sampler_profiles_post(request):
@@ -247,17 +283,19 @@ try:
         name = str(body.get("name") or "").strip()[:48]
         if not name or name.lower() == "auto":
             return web.json_response({"error": "that name cannot be used"}, status=400)
+        if name in BUILTIN_PROFILES:
+            return web.json_response({"error": "%r ships with the pack and cannot be changed; "
+                                      "save it under another name" % name}, status=400)
         profiles = load_profiles()
         if body.get("delete"):
             profiles.pop(name, None)
         else:
-            values = body.get("values") or {}
-            profiles[name] = {k: values.get(k) for k in PROFILE_KEYS}
+            profiles[name] = _clean(body.get("values") or {})
         try:
             save_profiles(profiles)
         except OSError as e:
             return web.json_response({"error": str(e)}, status=500)
-        return web.json_response({"profiles": profiles})
+        return web.json_response({"profiles": all_profiles(), "builtin": sorted(BUILTIN_PROFILES)})
 except Exception as _e:
     print(f"[RedNode Sampler Config] profile routes not registered: {_e}", flush=True)
 

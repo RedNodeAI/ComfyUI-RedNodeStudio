@@ -13154,18 +13154,29 @@ function modelsBody(node, page) {
     fill(node._rnSamplerProfiles);
     if (!node._rnSamplerProfiles) {
       api.fetchApi("/rednode/sampler_profiles").then(async (r) => {
-        node._rnSamplerProfiles = (await r.json())?.profiles || {};
+        const d = await r.json();
+        node._rnSamplerProfiles = d?.profiles || {};
+        node._rnSamplerBuiltin = d?.builtin || [];
         fill(node._rnSamplerProfiles);
       }).catch(() => {});
     }
-    psel.title = "Apply a saved sampler profile (the Sampler Config node's "
-               + "presets) to this rig's steps, cfg, sampler, scheduler and "
-               + "detailer steps.";
+    psel.title = "Apply a sampler preset to this rig: steps, cfg, sampler, scheduler and "
+               + "detailer steps, and the Sampler dials when the preset carries them. "
+               + "The same presets as the Sampler Config node.";
     psel.onchange = () => {
       const pr = node._rnSamplerProfiles?.[psel.value];
       if (!pr) return;
       for (const k of keys) {
         if (pr[k] !== undefined && pr[k] !== null) rig[k] = pr[k];
+      }
+      // THE DIALS: a preset saved with them sets every dial, the ones it has off
+      // switched off; an older preset without them leaves the dials alone
+      if (pr.dials && typeof pr.dials === "object") {
+        const D = JSON.parse(JSON.stringify(pr.dials));
+        rig.shift = Number(D.shift) || 0;
+        rig.q21_shift = !!D.q21_shift;
+        rig.focus = Number(D.focus) || 0;
+        for (const k of ["dd", "variance", "densify"]) rig[k] = (D[k] && typeof D[k] === "object") ? D[k] : {};
       }
       rig.sampler_preset = psel.value;
       writeCfg(node); render(node);
@@ -13181,6 +13192,7 @@ function modelsBody(node, page) {
         const d = await r.json();
         if (d?.error) throw new Error(d.error);
         if (d?.profiles) node._rnSamplerProfiles = d.profiles;
+        if (d?.builtin) node._rnSamplerBuiltin = d.builtin;
       } catch (e) {
         alert("Could not save the sampler preset: " + e.message);
       }
@@ -13190,12 +13202,18 @@ function modelsBody(node, page) {
     psave.className = "rn-ws-btn rn-ws-compact rn-ws-presetsave";
     psave.style.cssText = "width:auto;padding:0 10px;flex:none";
     psave.textContent = "Save";
-    psave.title = "Save this rig's steps, cfg, sampler, scheduler and detailer steps as a "
-                + "preset, under a name, for every workflow.";
+    psave.title = "Save this rig's steps, cfg, sampler, scheduler, detailer steps and Sampler "
+                + "dials as a preset, under a name, for every workflow.";
     psave.onclick = () => {
-      const name = (window.prompt("Name this sampler preset", psel.value || "") || "").trim();
+      const builtin = node._rnSamplerBuiltin || [];
+      const name = (window.prompt("Name this sampler preset",
+        builtin.includes(psel.value) ? psel.value + " (mine)" : (psel.value || "")) || "").trim();
       if (!name) return;
+      if (builtin.includes(name)) { alert(`"${name}" ships with the pack. Save it under another name.`); return; }
       const values = Object.fromEntries(keys.map((k) => [k, rig[k]]));
+      values.dials = JSON.parse(JSON.stringify({
+        shift: rig.shift || 0, q21_shift: !!rig.q21_shift, focus: rig.focus || 0,
+        dd: rig.dd || {}, variance: rig.variance || {}, densify: rig.densify || {} }));
       (node._rnSamplerProfiles ||= {})[name] = values;
       rig.sampler_preset = name;
       writeCfg(node);
@@ -13206,7 +13224,8 @@ function modelsBody(node, page) {
     wrap.style.cssText = "display:flex;gap:6px;align-items:center;flex:1 1 auto;min-width:0";
     psel.style.flex = "1 1 auto";
     wrap.append(psel, psave);
-    if (psel.value && node._rnSamplerProfiles?.[psel.value]) {
+    if (psel.value && node._rnSamplerProfiles?.[psel.value]
+        && !(node._rnSamplerBuiltin || []).includes(psel.value)) {
       const pdel = document.createElement("button");
       pdel.className = "rn-ws-btn rn-ws-compact rn-ws-presetdel";
       pdel.style.cssText = "width:auto;padding:0 10px;flex:none";

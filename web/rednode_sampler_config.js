@@ -61,7 +61,8 @@ app.registerExtension({
           callback: async (value, opts, e, prev) => {
             const res = await api.fetchApi("/rednode/sampler_profiles");
             const d = await res.json();
-            const names = Object.keys(d.profiles || {}).sort();
+            // the pack's own presets cannot be deleted
+            const names = Object.keys(d.profiles || {}).filter((n) => !(d.builtin || []).includes(n)).sort();
             const items = names.length ? names : ["(no profiles saved)"];
             new LiteGraph.ContextMenu(items, {
               event: e, parentMenu: prev,

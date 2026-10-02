@@ -31,6 +31,10 @@ format matters: **version** then a date, notes below until the next bold line.
   really starts from. Both show once the rig has loaded
 - The rig card warns when the sampler and scheduler pair tends to burn Krea 2, Z-Image and
   Flux models (karras, kl_optimal, linear_quadratic, uni_pc); beta, beta57 and simple are safe
+- Sampler presets carry the rig's Sampler dials as well as its steps, CFG, sampler and
+  scheduler, and three ship with the pack, picked from fixed-seed renders on Krea 2 Turbo:
+  Krea 2 Crisp (dpmpp_2m and beta), Krea 2 Crisp detail (the same with Detail Daemon) and
+  Krea 2 Soft (er_sde and beta). The shipped ones cannot be changed or deleted
 - Burn check, a switch under the Run tab's review: one line per render on the log with the
   share clipped to pure white or black, and a warning past a tenth. Off by default
 
