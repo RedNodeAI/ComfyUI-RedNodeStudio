@@ -3272,6 +3272,8 @@ class RedNodeStudioWorkspace:
                                else str(fr.get("camera_height") or "Eye level")),
                 camera=cam_json,
                 camera_off=words_off,
+                # the Anything else box: an imported prompt lives only there
+                extra=str(fr.get("extra") or ""),
                 seed=run_seed)
         return text
 

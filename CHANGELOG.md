@@ -6,6 +6,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.6.4** - unreleased
 
+### Fixes
+
+- A prompt imported from a picture rendered as an empty prompt when the row's camera words
+  were off, which is how the import makes its rows: the run rebuilt the words from the frame
+  and left out the Anything else box, the only place an imported prompt lives
+
 ### New
 
 - Detail Daemon has a Method: Classic, as before, or Look only, where only the timestep the model
