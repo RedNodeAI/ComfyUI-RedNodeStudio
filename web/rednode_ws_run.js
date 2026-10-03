@@ -596,6 +596,9 @@ const viewUrl = (f) => api.apiURL(`/view?${fileQuery(f)}`);
 // the strip's copies come resized from the server, so a batch of eight does not
 // decode eight full pictures for eight small squares
 const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileQuery(f)}&px=160`);
+// what the Live picture card draws: a 1024 px copy, so three versions of a big render
+// are not each held decoded at full size; full screen still opens the file itself
+const showUrl = (f) => api.apiURL(`/rednode/thumb?${fileQuery(f)}&px=1024`);
 
 const workspaceNodes = () => allNodes(app.graph)
   .filter((n) => n.type === "RedNodeStudioWorkspace");
@@ -1331,6 +1334,10 @@ function runPage(node, body) {
     node._rnRunFsLive = { ov, big };
     document.body.appendChild(ov);
   };
+  img.addEventListener("error", () => {
+    const full = img.dataset.full;
+    if (full && img.src !== full && img.dataset.want) { img.dataset.want = ""; img.src = full; }
+  });
   img.style.cursor = "zoom-in";
   img.addEventListener("click", showBig);
   img.addEventListener("contextmenu", (e) => {
@@ -1582,8 +1589,15 @@ function refresh(view) {
     b.className = "rn-ws-segb" + (v === stage ? " on" : "");
   }
   if (done) {
-    const src = stage === "raw" ? S.raw : stage === "before" ? S.before : S.final;
-    if (refs.img.src !== src) refs.img.src = src;
+    const full = stage === "raw" ? S.raw : stage === "before" ? S.before : S.final;
+    const file = stage === "raw" ? S.rawFile
+               : stage === "before" ? S.beforeFile : S.finalFiles[S.finalIdx];
+    const src = file ? showUrl(file) : full;
+    if (refs.img.dataset.want !== src) {
+      refs.img.dataset.want = src;
+      refs.img.dataset.full = full;
+      refs.img.src = src;
+    }
     dragPicture(refs.img, stage === "raw" ? S.rawFile
                 : stage === "before" ? S.beforeFile : S.finalFiles[S.finalIdx]);
     refs.img.style.display = "";
@@ -1616,7 +1630,7 @@ function refresh(view) {
     refs.strip.style.display = "none";
   } else if (fr?.src) {
     refs.strip.style.display = "none";
-    if (refs.img.src !== fr.src) refs.img.src = fr.src;
+    if (refs.img.src !== fr.src) { refs.img.src = fr.src; refs.img.dataset.want = ""; }
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
     const s = RUN.stages.get(RUN.running);
@@ -1737,6 +1751,17 @@ function refresh(view) {
       b.appendChild(hold);
     }
     b.append(el("span", "n", label), el("span", "m", meta));
+    if (sheet?.promptId) {
+      b.addEventListener("contextmenu", (e) => {
+        const hist = node.properties?.rn_run_review?.rn_review || [];
+        const at = hist.findIndex((x) => x.prompt === sheet.promptId);
+        if (at < 0) return;                  // the Review no longer holds this run
+        e.preventDefault();
+        e.stopPropagation();
+        reviewMenu(reviewHost(node), hist[at], at, e, sheet.finalIdx || 0);
+      });
+      b.title = "Click to show this run. Right-click for open in a new tab, rerun and more.";
+    }
     const sv = sheet ? savedState(sheet) : null;
     if (sv) {
       b.classList.add("saved-" + sv);

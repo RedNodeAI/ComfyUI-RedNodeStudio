@@ -23,6 +23,11 @@ format matters: **version** then a date, notes below until the next bold line.
   seed to copy it. The seed in a picture's Generation data copies on a click too
 - With drafts and keepers split on the Save tab, the Run page marks each run's picture Draft or
   Final, on the picture and down the runs column
+- Right-click a run in the Run page's runs column for the same menu as the picture: open in a
+  new tab, copy, rerun with the same seed or new seeds
+- The Run page's Live picture draws a 1024 px copy of each version instead of the full file,
+  so Raw, Before Post and After Post of a big render no longer each sit in memory at full size.
+  Full screen still opens the full picture
 
 **1.6.4** - 2026-10-03
 
