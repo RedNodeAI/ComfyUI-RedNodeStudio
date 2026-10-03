@@ -44,6 +44,12 @@ format matters: **version** then a date, notes below until the next bold line.
   saved card (Raw render, Before Post FX, Finished render), What gets written beside it is
   Metadata, and When a run finishes is Finish sound
 - The Run page's caption says Finished render
+- Auto name on the Save page's Name card, off by default: the vision model picked on the AI tab
+  titles each picture as it saves. Put the new Auto name chip (%name%) in Where or Name to place
+  the title, or leave it out and the title is the file name. It warns that every save waits for
+  the model. Raw and Before Post copies keep the usual name
+- A picture named with Name this image, or by Auto name, never shares a title: a repeat is
+  numbered, Rainy Day Stroll 2
 - The Run tab's Save page has the power button in its corner, like every page with a switch: it
   turns Save on and off, and Space over the panel does the same
 - S, or K, keeps the picture you are looking at, or puts it back with the drafts: over an Image Review

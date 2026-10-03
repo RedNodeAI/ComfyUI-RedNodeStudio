@@ -54,6 +54,8 @@ DEFAULTS = {
     "format": "png",             # png | jpeg | webp
     "quality": 90,               # jpeg and webp only; png is lossless
     "compress": 4,               # png only: 0..9, file size against save time
+    "auto_name": False,          # name each picture with the vision model (slow)
+    "auto_name_model": "",       # which one; the Workspace fills in its AI tab's
     "civitai": True,             # the A1111 parameters text with AutoV2 hashes, so
                                  # Civitai lists the model and LoRAs under the picture
 }
@@ -62,7 +64,7 @@ NUMBERING = ("counter", "time", "seed", "none")
 FORMATS = {"png": ".png", "jpeg": ".jpg", "webp": ".webp"}
 
 TOKENS = ("%date%", "%time%", "%year%", "%month%", "%day%",
-          "%preset%", "%seed%", "%model%", "%w%", "%h%", "%size%")
+          "%preset%", "%seed%", "%model%", "%w%", "%h%", "%size%", "%name%")
 
 # Naming conventions worth starting from. These ship built in and cannot be deleted;
 # anything you save lives beside them and can be.
@@ -194,6 +196,8 @@ def resolve(text, ctx):
         "%w%": str(ctx.get("width", 0)),
         "%h%": str(ctx.get("height", 0)),
         "%size%": f"{ctx.get('width', 0)}x{ctx.get('height', 0)}",
+        # Auto name's title; "untitled" when Auto name is off or got no answer
+        "%name%": _slug(ctx.get("title"), "untitled"),
     }
     out = str(text or "")
     for token, value in values.items():
@@ -810,6 +814,37 @@ def clean_title(raw, words=4):
     return " ".join(parts[:words])
 
 
+def _auto_title(img, cfg):
+    """A title for a picture about to be saved, or "" (the Save names it as usual)."""
+    import uuid
+    tmp = os.path.join(folder_paths.get_temp_directory(), f"rn_autoname_{uuid.uuid4().hex}.png")
+    try:
+        os.makedirs(os.path.dirname(tmp), exist_ok=True)
+        img.save(tmp)
+        return make_title(tmp, str(cfg.get("auto_name_model") or ""))
+    except Exception as exc:
+        print(f"[RedNode Save] Auto name gave no title ({exc}); named as usual", flush=True)
+        return ""
+    finally:
+        TITLES.pop(os.path.realpath(tmp), None)
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
+def unique_title(title, path):
+    """The title, numbered when another picture already has it: "Rainy Day Stroll 2"."""
+    me = os.path.realpath(path)
+    taken = {str(v).lower() for p, v in TITLES.items() if p != me}
+    if title.lower() not in taken:
+        return title
+    n = 2
+    while f"{title} {n}".lower() in taken:
+        n += 1
+    return f"{title} {n}"
+
+
 def make_title(path, model="", url=None):
     """A short title for one image, from the installed vision model."""
     from . import autoprompt
@@ -831,6 +866,7 @@ def make_title(path, model="", url=None):
     title = clean_title(raw)
     if not title:
         raise ValueError(f"{chosen} did not give anything usable as a title")
+    title = unique_title(title, path)
     TITLES[os.path.realpath(path)] = title
     while len(TITLES) > MAX_TITLES:
         TITLES.pop(next(iter(TITLES)))
@@ -1378,7 +1414,12 @@ class RedNodeSave:
                    "width": img.width, "height": img.height, "words": words}
             meta = collect_meta(prompt, ctx)
             ctx["model"] = meta.get("model")
+            auto_title = _auto_title(img, cfg) if cfg.get("auto_name") else ""
+            ctx["title"] = auto_title
             folder, stem = build_path(cfg, ctx)
+            if auto_title and not any("%name%" in str(cfg.get(k) or "")
+                                      for k in ("root", "subfolder", "name")):
+                stem = _slug(auto_title, stem)
             path = final_path(out_dir, folder, stem, cfg, ctx)
 
             civ_text = ""
@@ -1477,6 +1518,8 @@ class RedNodeSave:
                                "kept": bool(keep), "run": run, "seed": seed,
                                **meta}, f, indent=2, ensure_ascii=False)
 
+            if auto_title:
+                TITLES[os.path.realpath(path)] = auto_title
             remember({"path": path, "kept": bool(keep), "preset": preset,
                       "seed": seed, "when": when, "run": run,
                       "index": len(results), "stage": str(stage or "")})

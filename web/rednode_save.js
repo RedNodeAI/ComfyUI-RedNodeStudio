@@ -24,7 +24,7 @@ const DEFAULTS = {
   // EXTRA COPIES of the run at earlier stages, each in a level of its own under
   // the same folder. Off, because a run that writes three files when it used to
   // write one is a surprise, and disk is the user's.
-  stage_raw: false, stage_prepost: false,
+  stage_raw: false, stage_prepost: false, auto_name: false,
   root: "", subfolder: "%date%/%preset%", name: "%date%_%time%",
   numbering: "counter", pad: 4, split_drafts: true, keep: false,
   write_text: true, write_json: false, embed_png: true, prompts_folder: "",
@@ -55,6 +55,7 @@ const TOKENS = [
   ["Year", "%year%", "2026"],
   ["Month", "%month%", "07"],
   ["Day", "%day%", "29"],
+  ["Auto name", "%name%", "Rainy Day Stroll"],
 ];
 const SAMPLES = Object.fromEntries(TOKENS.map(([, t, v]) => [t, v]));
 
@@ -145,6 +146,7 @@ css.textContent = `
   color:#9aa2ad}
 .rn-sv-tag.kept{border-color:#4a7a4a;color:#8fd08f}
 .rn-sv-note{color:#7c848f;font-size:10.5px;line-height:1.45}
+.rn-sv-note.rn-sv-warn{color:#e8c890}
 .rn-sv-sel{flex:1;min-width:0;background:#1a1d22;border:1px solid #33373d;border-radius:5px;
   color:#ddd;padding:5px 8px;font-size:11.5px}
 .rn-sv-sel:focus{outline:none;border-color:#b8283c}
@@ -917,6 +919,22 @@ function render(node) {
     numRow.appendChild(pad);
   }
   naming.appendChild(numRow);
+  // AUTO NAME: the vision model titles each picture and the title is its file name
+  naming.appendChild(choiceRow("Auto name",
+    [[false, "Off", "The name above."],
+     [true, "On", "A short title from your vision model, as the file name."]],
+    !!cfg.auto_name, (v) => { cfg.auto_name = v; writeCfg(node); render(node); },
+    "Name each picture with a title from the vision model picked on the AI tab."));
+  if (cfg.auto_name) {
+    const an = document.createElement("div");
+    an.className = "rn-sv-note rn-sv-warn";
+    an.textContent = "Every save calls your vision model (the AI tab's) for a title and waits "
+      + "for it, a few seconds a picture, and the model loads beside the render. Fine for a "
+      + "handful of keepers, slow for a batch. Repeated titles are numbered; with no answer "
+      + "the picture is named as usual. Put %name% (the Auto name chip) in Where or Name to "
+      + "place the title yourself; used nowhere, the title is the file name.";
+    naming.appendChild(an);
+  }
   wrap.appendChild(naming);
 
   const fileSect = section("File");
