@@ -1295,7 +1295,11 @@ def move_saved(path, root="", to_keepers=True):
     while os.path.exists(dest):
         dest = f"{stem}_{n:03d}{ext}"
         n += 1
+    old_real = os.path.realpath(src)
     shutil.move(src, dest)
+    # the title travels with the picture: titles are kept by path
+    if old_real in TITLES:
+        TITLES[os.path.realpath(dest)] = TITLES.pop(old_real)
     for suffix in COMPANIONS:
         companion = os.path.splitext(src)[0] + suffix
         if os.path.isfile(companion):
