@@ -5813,7 +5813,8 @@ class RedNodeStudioWorkspace:
                     _base = str(_scfg.get("subfolder") or "").strip()
                     _scfg["subfolder"] = (_base + "/" + level) if _base else level
                     _SaveCls().save(img, config=json.dumps(_scfg), seed=run_seed,
-                                    prompt=prompt, extra_pnginfo=extra_pnginfo)
+                                    prompt=prompt, extra_pnginfo=extra_pnginfo,
+                                    stage=level)
                 except Exception as exc:
                     print("[RedNode Workspace] the %s copy did not save: %s"
                           % (level, exc), flush=True)

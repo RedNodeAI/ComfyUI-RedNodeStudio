@@ -359,10 +359,12 @@ async function copyImage(f) {
 // against every image so Rerun works, and Save records it against every file it
 // writes. That shared key is the whole of the link, so "keep the one I am looking
 // at" needs no wire and no matching of pixels.
-async function savedFor(entry, slot = 0) {
+// `stage`: "raw" or "before_post" for the run's stage copies, empty for the finished one
+async function savedFor(entry, slot = 0, stage = "") {
   if (!entry?.prompt) return null;
   try {
     const q = new URLSearchParams({ prompt_id: entry.prompt, index: String(slot) });
+    if (stage) q.set("stage", stage);
     const res = await api.fetchApi(`/rednode/saved_for?${q}`);
     const d = await res.json();
     return d.found ? d : null;
@@ -478,10 +480,15 @@ function flash(text, bad = false) {
 }
 
 // S: Keep, or Unkeep, the picture on show. Only a picture a Save filed can be kept.
-export async function keepToggle(entry, slot = 0) {
+export async function keepToggle(entry, slot = 0, stage = "") {
   if (!entry) return null;
-  const found = await savedFor(entry, slot);
-  if (!found) { flash("Not saved, so it cannot be kept. Switch Save on to keep pictures.", true); return null; }
+  const found = await savedFor(entry, slot, stage);
+  if (!found) {
+    flash(stage ? `This run saved no ${stage === "raw" ? "Raw" : "Before Post"} copy to keep. `
+                  + "Switch it on under Also, on the Save page."
+                : "Not saved, so it cannot be kept. Switch Save on to keep pictures.", true);
+    return null;
+  }
   if (found.missing) { flash("The saved file is gone.", true); return null; }
   try {
     await setKept(found, !found.kept);
@@ -498,11 +505,13 @@ export async function keepToggle(entry, slot = 0) {
 // rooms show versions that are not the saved picture, so they let S pass.
 function keepKey(node) {
   return () => {
-    if (/:run-(raw|before)$/.test(String(node.id))) return false;
+    // the Raw and Before Post rooms keep their own copy of the run
+    const m = /:run-(raw|before)$/.exec(String(node.id));
+    const stage = m ? (m[1] === "raw" ? "raw" : "before_post") : "";
     const h = hist(node);
     const at = node._rnView || 0;
     if (!h[at]) return false;
-    keepToggle(h[at], node._rnSlotFor === at ? (node._rnSlot || 0) : 0).then(() => {
+    keepToggle(h[at], m ? 0 : (node._rnSlotFor === at ? (node._rnSlot || 0) : 0), stage).then(() => {
       node.graph?.change?.();
       render(node);
       node._rnOwner?._rnKeepChanged?.();
@@ -511,6 +520,11 @@ function keepKey(node) {
 }
 
 export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
+  // the Run page's Raw and Before Post rooms keep their own copy of the run
+  if (opts.stage == null) {
+    const sm = /:run-(raw|before)$/.exec(String(node?.id || ""));
+    opts = { ...opts, stage: sm ? (sm[1] === "raw" ? "raw" : "before_post") : "" };
+  }
   document.querySelector(".rn-rv-menu")?.remove();
   const m = document.createElement("div");
   m.className = "rn-rv-menu";
@@ -633,7 +647,7 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
   );
   // The Save entry has to be asked for, so the item arrives a moment after the menu.
   // It is only inserted when this picture really was filed by a Save node.
-  savedFor(entry, slot).then((found) => {
+  savedFor(entry, slot, opts.stage || "").then((found) => {
     if (keepBtn && (!found || found.missing)) {
       keepBtn.title = !found
         ? "This picture was not saved, so there is nothing to keep. Switch Save on, on the "
@@ -673,7 +687,8 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
     item.style.color = found.kept ? "#e6c35c" : "";
     if (keepBtn) {
       keepBtn.disabled = false;
-      keepBtn.textContent = found.kept ? "\u2605 Kept, click to unkeep" : "\u2606 Keep";
+      const which = opts.stage === "raw" ? " Raw" : opts.stage === "before_post" ? " Before Post" : "";
+      keepBtn.textContent = found.kept ? `\u2605 Kept${which}, click to unkeep` : `\u2606 Keep${which}`;
       keepBtn.classList.toggle("on", !!found.kept);
       keepBtn.title = item.title;
       keepBtn.onclick = () => { item.click(); };

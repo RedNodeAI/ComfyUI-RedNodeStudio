@@ -867,11 +867,28 @@ def run_id():
     return ""
 
 
-def find_saved(prompt_id, index=0):
-    """The file a given run's Nth image was written to, or None."""
+# THE STAGE A SAVED FILE IS. A run with Raw or Before Post on files three pictures
+# under one run id, and "the run's first picture" was the Raw copy, so Keep on the
+# finished picture kept the raw one. Entries carry their stage now; older ones are read
+# from the folder the stage copy was written into.
+STAGES = ("raw", "before_post")
+
+
+def stage_of(entry):
+    st = str(entry.get("stage") or "")
+    if st:
+        return st
+    parts = {p.lower() for p in os.path.normpath(str(entry.get("path") or "")).split(os.sep)[:-1]}
+    return next((s for s in STAGES if s in parts), "")
+
+
+def find_saved(prompt_id, index=0, stage=""):
+    """The file a given run's Nth image was written to, or None. `stage` picks the
+    run's Raw ("raw") or Before Post ("before_post") copy; empty is the finished one."""
     if not prompt_id:
         return None
-    same = [e for e in LAST_SAVED if e.get("run") == str(prompt_id)]
+    same = [e for e in LAST_SAVED if e.get("run") == str(prompt_id)
+            and stage_of(e) == str(stage or "")]
     if not same:
         return None
     try:
@@ -1311,14 +1328,14 @@ class RedNodeSave:
                    "moving between ComfyUI and other front ends.")
 
     def save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
-             words=None, carry=None):
+             words=None, carry=None, stage=""):
         from . import run_events as _re
         return _re.tracked("save", "Save")(self._save)(
             images, config=config, seed=seed, prompt=prompt, extra_pnginfo=extra_pnginfo,
-            words=words, carry=carry)
+            words=words, carry=carry, stage=stage)
 
     def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
-              words=None, carry=None):
+              words=None, carry=None, stage=""):
         from . import builtin_chain as _chain
         if _chain.done("save"):
             from . import run_events as _re
@@ -1462,7 +1479,7 @@ class RedNodeSave:
 
             remember({"path": path, "kept": bool(keep), "preset": preset,
                       "seed": seed, "when": when, "run": run,
-                      "index": len(results)})
+                      "index": len(results), "stage": str(stage or "")})
             rel = os.path.relpath(path, out_dir).replace("\\", "/")
             results.append({"filename": os.path.basename(path),
                             "subfolder": os.path.dirname(rel), "type": "output",
@@ -1688,7 +1705,8 @@ try:
     async def _rednode_saved_for(request):
         """What a given run wrote, so another node can act on the image it is showing."""
         entry = find_saved(request.query.get("prompt_id") or "",
-                           request.query.get("index") or 0)
+                           request.query.get("index") or 0,
+                           request.query.get("stage") or "")
         if entry is None:
             return web.json_response({"found": False})
         out_root = folder_paths.get_output_directory()

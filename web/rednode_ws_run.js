@@ -1378,7 +1378,8 @@ function runPage(node, body) {
     const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
     if (!S.final || !entry) return;
     reviewMenu(reviewHost(node), entry, at, e, S.finalIdx,
-               { compact: true, fullscreen: showBig, onSaved: () => { forgetSaved(S); refreshAll(); } });
+               { compact: true, fullscreen: showBig, onSaved: () => { forgetSaved(S); refreshAll(); },
+                 stage: SAVE_STAGE[node._rnRunShownStage || "after"] });
   });
   // S keeps the run on show, or puts it back with the drafts
   node._rnKeepChanged = () => { SAVED.clear(); refreshAll(); };
@@ -1387,7 +1388,8 @@ function runPage(node, body) {
     const at = entryAt();
     const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
     if (!S.final || !entry) return false;
-    keepToggle(entry, S.finalIdx || 0).then(() => { forgetSaved(S); refreshAll(); });
+    keepToggle(entry, S.finalIdx || 0, SAVE_STAGE[node._rnRunShownStage || "after"])
+      .then(() => { forgetSaved(S); refreshAll(); });
   });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
@@ -1511,15 +1513,18 @@ function stageRows(node) {
 // DRAFT OR FINAL: what the Save filed this run's picture as, when the Save tab splits
 // drafts and keepers. null while unknown or when the split is off.
 const SAVED = new Map();
-function savedState(S) {
+// the Run page's versions as the Save names its copies
+const SAVE_STAGE = { raw: "raw", before: "before_post", after: "" };
+function savedState(S, stage = "") {
   const pid = S?.promptId;
   if (!pid || S.status !== "done") return null;
-  const key = `${pid}:${S.finalIdx || 0}`;
+  const key = `${pid}:${S.finalIdx || 0}:${stage}`;
   const c = SAVED.get(key);
   const fresh = c && Date.now() - c.at < 4000;
   if (!fresh && !c?.pending) {
     SAVED.set(key, { ...(c || {}), pending: true, at: c?.at || 0 });
     const q = new URLSearchParams({ prompt_id: pid, index: String(S.finalIdx || 0) });
+    if (stage) q.set("stage", stage);
     api.fetchApi(`/rednode/saved_for?${q}`).then((r) => r.json()).catch(() => ({}))
       .then((d) => {
         const ok = d?.found && !d.missing;
@@ -1532,9 +1537,25 @@ function savedState(S) {
   }
   return c?.val || null;
 }
-const savedTitle = (S) => (S?.promptId && SAVED.get(`${S.promptId}:${S.finalIdx || 0}`)?.title) || "";
-// forget a run's saved state so the next draw asks again (after Keep in its menu)
-const forgetSaved = (S) => { if (S?.promptId) SAVED.delete(`${S.promptId}:${S.finalIdx || 0}`); };
+const savedTitle = (S) => (S?.promptId && SAVED.get(`${S.promptId}:${S.finalIdx || 0}:`)?.title) || "";
+// forget a run's saved state, every version, so the next draw asks again
+const forgetSaved = (S) => {
+  if (!S?.promptId) return;
+  for (const k of [...SAVED.keys()]) if (k.startsWith(`${S.promptId}:`)) SAVED.delete(k);
+};
+// a run's kept versions for the runs column: "Kept Raw", "Kept BP", "Kept AP", or
+// plain "Kept" for a run that saved only the finished picture
+function keptMarks(S) {
+  const has = { raw: !!S.rawFile, before: !!S.beforeFile, after: true };
+  const multi = has.raw || has.before;
+  const out = [];
+  for (const [v, short] of [["raw", "Raw"], ["before", "BP"], ["after", "AP"]]) {
+    if (!has[v]) continue;
+    const st = savedState(S, SAVE_STAGE[v]);
+    if (st === "kept") out.push(multi ? `Kept ${short}` : "Kept");
+  }
+  return out;
+}
 function saveBadge(state) {
   const b = el("span", `rn-run-savebadge ${state}`, state === "kept" ? "Kept" : "Draft");
   b.title = state === "kept" ? "Kept. Right-click the picture to move it back to drafts."
@@ -1661,9 +1682,9 @@ function refresh(view) {
     const n = S.finals.length;
     node._rnRunShownStage = stage;
     const what = runCaption(S, stage);
-    const sv = savedState(S);
+    const sv = savedState(S, SAVE_STAGE[stage]);
     refs.picSave.replaceChildren(...(sv ? [saveBadge(sv)] : []));
-    refs.img.classList.toggle("kept", sv === "kept" && stage === "after");
+    refs.img.classList.toggle("kept", sv === "kept");
     refs.picLabel.textContent = n > 1 && stage === "after"
       ? `${what} ${S.finalIdx + 1} of ${n}` : what;
     refs.strip.replaceChildren();
@@ -1827,11 +1848,18 @@ function refresh(view) {
               + "S keeps it.";
       b._rnSheet = sheet;
     }
-    const sv = sheet ? savedState(sheet) : null;
-    if (sv) {
-      b.classList.add("saved-" + sv);
-      b.appendChild(saveBadge(sv));
-    }
+    const kept = sheet ? keptMarks(sheet) : [];
+    const sv = kept.length ? "kept" : sheet ? savedState(sheet) : null;
+    if (sv) b.classList.add("saved-" + sv);
+    if (kept.length) {
+      const row = el("span", "rn-run-keptrow");
+      for (const k of kept) {
+        const m = saveBadge("kept");
+        m.textContent = k;
+        row.appendChild(m);
+      }
+      b.appendChild(row);
+    } else if (sv) b.appendChild(saveBadge(sv));
     b.onclick = onPick;
     refs.histList.appendChild(b);
   };
@@ -2068,6 +2096,7 @@ export const RUN_CSS = `
 .rn-run-savebadge.draft{color:#e8c890;border-color:#7a5a20;background:#251d10}
 .rn-run-histitem.saved-kept{border-color:#d4a72c !important;box-shadow:0 0 0 1px #d4a72c}
 .rn-run-histitem .nm{color:#f0d27a;font-weight:600}
+.rn-run-keptrow{display:flex;gap:4px;flex-wrap:wrap}
 .rn-run-histitem .rn-run-savebadge{align-self:flex-start}
 .rn-run-fscap{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:#cfe0f5;font-size:13px;pointer-events:none}
 .rn-run-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}

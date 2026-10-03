@@ -8,6 +8,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- Keep on the finished picture kept the Raw copy instead when Also: raw output was on: the
+  Save files the Raw copy first, and the lookup took the run's first saved file. Each saved file
+  now carries its stage, so Raw, Before Post and the finished picture are kept on their own
 - Rerun (same seed) re-rolled the seed when the Workspace's seed was on Random each run:
   the seed is rolled when the run starts, so the re-queued prompt rolled a new one. The rerun
   now pins the seed that run used; Rerun with new seeds switches Random on for that rerun
@@ -27,6 +30,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A new Workspace links every part of a run to Main on the Seed tab, and so does the shipped
   RedNode Studio workflow, so one seed reproduces the whole picture and Rerun with the same seed
   gives the same result through the Detailer, Upscale and Post. Saved workflows keep their links
+- Keep, the S key and the Kept marks follow the version on show: keeping the Raw picture keeps
+  only the Raw copy. A run's marks in the runs column say which are kept: Kept Raw, Kept BP
+  (Before Post), Kept AP (After Post)
 - S keeps the picture you are looking at, or puts it back with the drafts: over an Image Review
   panel, in its full screen, over the Run page's picture or a run in its runs column. A note
   at the bottom of the screen says what happened, or why a picture cannot be kept
