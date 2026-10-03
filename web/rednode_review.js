@@ -138,6 +138,10 @@ css.textContent = `
 .rn-rv-menu .quick{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 2px 4px}
 .rn-rv-menu .quick .q{background:#24282f;border:1px solid #33373d;text-align:center;padding:6px 4px;font-size:12px}
 .rn-rv-menu .saved{display:flex;flex-direction:column;gap:3px}
+.rn-rv-menu button.keep{border:1px solid #d4a72c;color:#f0d27a;background:#2a2110;text-align:center;
+  font-weight:700;margin:0 2px 2px}
+.rn-rv-menu button.keep.on{background:#d4a72c;color:#1b1e23}
+.rn-rv-menu button.keep:hover:not(:disabled){background:#d4a72c;color:#1b1e23}
 .rn-rv-menu .saved:empty{display:none}
 `;
 let styled = false;
@@ -502,6 +506,7 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
   // Name under them, then the two reruns. Node and history housekeeping stay on the
   // Review itself, where the strip they act on is.
   let savedBox = null;
+  let keepBtn = null;
   if (opts.compact) {
     m.classList.add("compact");
     const row = document.createElement("div");
@@ -522,7 +527,12 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
     });
     savedBox = document.createElement("div");
     savedBox.className = "saved";
-    m.append(note, row, savedBox, sep(),
+    keepBtn = document.createElement("button");
+    keepBtn.className = "keep";
+    keepBtn.textContent = "Keep";
+    keepBtn.disabled = true;
+    keepBtn.title = "Checking where this picture was saved...";
+    m.append(note, row, keepBtn, savedBox, sep(),
       mk("Rerun, same seed", async () => {
         await queuePrompt(await workspaceSeeds(await fetchPrompt(entry.prompt), entry.prompt, false));
       }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "re-queues the exact prompt that made this image" }),
@@ -577,6 +587,13 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
   // The Save entry has to be asked for, so the item arrives a moment after the menu.
   // It is only inserted when this picture really was filed by a Save node.
   savedFor(entry, slot).then((found) => {
+    if (keepBtn && (!found || found.missing)) {
+      keepBtn.title = !found
+        ? "This picture was not saved, so there is nothing to keep. Switch Save on, on the "
+          + "Run tab's Save page, and the next pictures can be kept."
+        : "The saved file is gone from the output folder.";
+      keepBtn.textContent = !found ? "Keep (not saved)" : "Keep (file gone)";
+    }
     if (!found || !m.isConnected || found.missing) return;
     // Naming is on demand only: it loads a vision model and takes a few seconds, so
     // it never taxes a normal run. Ollama rather than the workflow's CLIP, because a
@@ -607,8 +624,12 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
              : "Move this image, and the records written beside it, into the keepers "
              + "folder. RedNode Save did the filing; this is the same button it has." });
     item.style.color = found.kept ? "#e6c35c" : "";
-    if (savedBox) {
-      savedBox.prepend(item);
+    if (keepBtn) {
+      keepBtn.disabled = false;
+      keepBtn.textContent = found.kept ? "\u2605 Kept, click to unkeep" : "\u2606 Keep";
+      keepBtn.classList.toggle("on", !!found.kept);
+      keepBtn.title = item.title;
+      keepBtn.onclick = () => { item.click(); };
       if (opts.onSaved) item.addEventListener("click", () => setTimeout(opts.onSaved, 400));
       return;
     }
