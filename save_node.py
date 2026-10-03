@@ -46,6 +46,9 @@ DEFAULTS = {
     "numbering": "counter",      # counter | time | seed | none
     "pad": 4,
     "split_drafts": True,        # drafts and keepers subfolders
+    "split_at": "before",        # before | after the subfolder levels
+    "stage_dir": "",             # raw | before_post | after_post: the version's folder,
+                                 # always the last level
     "keep": False,
     "write_text": True,          # the readable .txt
     "write_json": False,         # the machine-readable .rn.json
@@ -167,6 +170,8 @@ def parse_config(raw):
             out[key] = str(value or "")
     if out["numbering"] not in NUMBERING:
         out["numbering"] = "counter"
+    if out["split_at"] not in ("before", "after"):
+        out["split_at"] = "before"
     if out["format"] not in FORMATS:
         out["format"] = "png"
     return out
@@ -214,11 +219,17 @@ def build_path(cfg, ctx):
         for piece in resolve(chunk, ctx).replace("\\", "/").split("/"):
             if piece.strip():
                 parts.append(_slug(piece, ""))
-    if cfg["split_drafts"]:
-        parts.append(KEEPERS if ctx.get("keep") else DRAFTS)
+    side = KEEPERS if ctx.get("keep") else DRAFTS
+    after = str(cfg.get("split_at") or "before") == "after"
+    if cfg["split_drafts"] and not after:
+        parts.append(side)
     for piece in resolve(cfg["subfolder"], ctx).replace("\\", "/").split("/"):
         if piece.strip():
             parts.append(_slug(piece, ""))
+    if cfg["split_drafts"] and after:
+        parts.append(side)
+    if str(cfg.get("stage_dir") or "").strip():
+        parts.append(_slug(cfg["stage_dir"], ""))
     folder = "/".join(p for p in parts if p)
     stem = _slug(resolve(cfg["name"], ctx), "image")
     return folder, stem
@@ -1256,19 +1267,23 @@ def move_saved(path, root="", to_keepers=True):
     One function both ways, because keeping and unkeeping are the same move with the
     ends swapped, and a decision you cannot undo is not much of a decision.
     """
-    out_dir = os.path.realpath(folder_paths.get_output_directory())
-    base = os.path.realpath(os.path.join(out_dir, *[p for p in str(root or "").split("/") if p]))
-    if base != out_dir and not _inside(base, out_dir):
-        raise ValueError("that folder is outside the output folder")
-    src_root = os.path.join(base, DRAFTS if to_keepers else KEEPERS)
-    dst_root = os.path.join(base, KEEPERS if to_keepers else DRAFTS)
-    src = os.path.realpath(path)
-    if not _inside(src, src_root):
-        where = "drafts" if to_keepers else "keepers"
-        raise ValueError(f"that file is not in the {where} folder")
+    # THE LEVEL IS FOUND IN THE PATH. The drafts or keepers level sits before or after
+    # the subfolder levels (the Save's choice), so it is the picture's own path that
+    # says where; the last level of that name is the one swapped. `root` is kept for
+    # callers that still pass it.
+    out_dir = folder_paths.get_output_directory()
+    src = os.path.abspath(path)
+    if not _inside(src, out_dir):
+        raise ValueError("that file is outside the output folder")
     if not os.path.isfile(src):
         raise ValueError("that file is gone")
-    dest = os.path.join(dst_root, os.path.relpath(src, os.path.realpath(src_root)))
+    have, want = (DRAFTS, KEEPERS) if to_keepers else (KEEPERS, DRAFTS)
+    parts = src.split(os.sep)
+    at = max((i for i, p in enumerate(parts[:-1]) if p.lower() == have), default=-1)
+    if at < 0:
+        raise ValueError(f"that file is not in a {have} folder")
+    parts[at] = want
+    dest = os.sep.join(parts)
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     stem, ext = os.path.splitext(dest)
     n = 2
@@ -1280,8 +1295,12 @@ def move_saved(path, root="", to_keepers=True):
         companion = os.path.splitext(src)[0] + suffix
         if os.path.isfile(companion):
             shutil.move(companion, os.path.splitext(dest)[0] + suffix)
+    # the list matched through links too: the picture may be named by a linked folder
+    real_src = os.path.normcase(os.path.realpath(src))
     for entry in LAST_SAVED:
-        if os.path.realpath(entry.get("path", "")) == src:
+        p = entry.get("path", "")
+        if (os.path.normcase(os.path.realpath(p)) == real_src
+                or os.path.normcase(os.path.abspath(p)) == os.path.normcase(src)):
             entry["path"] = dest
             entry["kept"] = bool(to_keepers)
     save_index()

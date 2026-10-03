@@ -24,7 +24,7 @@ const DEFAULTS = {
   // EXTRA COPIES of the run at earlier stages, each in a level of its own under
   // the same folder. Off, because a run that writes three files when it used to
   // write one is a surprise, and disk is the user's.
-  stage_raw: false, stage_prepost: false, auto_name: false,
+  stage_raw: false, stage_prepost: false, auto_name: false, split_at: "before",
   root: "", subfolder: "%date%/%preset%", name: "%date%_%time%",
   numbering: "counter", pad: 4, split_drafts: true, keep: false,
   write_text: true, write_json: false, embed_png: true, prompts_folder: "",
@@ -199,8 +199,11 @@ function previewPath(cfg) {
     (t) => (sample[t] !== undefined ? sample[t] : t));
   const parts = [];
   if (cfg.root.trim()) parts.push(fill(cfg.root).replace(/^\/+|\/+$/g, ""));
-  if (cfg.split_drafts) parts.push(cfg.keep ? "keepers" : "drafts");
+  const side = cfg.keep ? "keepers" : "drafts";
+  const after = cfg.split_at === "after";
+  if (cfg.split_drafts && !after) parts.push(side);
   if (cfg.subfolder.trim()) parts.push(fill(cfg.subfolder).replace(/^\/+|\/+$/g, ""));
+  if (cfg.split_drafts && after) parts.push(side);
   if (cfg.stage_raw || cfg.stage_prepost) parts.push("after_post");
   let stem = fill(cfg.name) || "image";
   if (cfg.numbering === "counter") stem += "_" + "1".padStart(cfg.pad, "0");
@@ -862,6 +865,11 @@ function render(node) {
       [[false, "Drafts", "Every new picture starts as a draft; keep the good ones later."],
        [true, "Keepers", "Every new picture is filed as a keeper."]],
       !!cfg.keep, (v) => set("keep", v)));
+    where.appendChild(choiceRow("Drafts and keepers folder",
+      [["before", "Before the subfolder", "root / drafts / your subfolder"],
+       ["after", "After the subfolder", "root / your subfolder / drafts"]],
+      cfg.split_at === "after" ? "after" : "before", (v) => set("split_at", v),
+      "Where the drafts or keepers level goes among the folders above."));
   }
   wrap.appendChild(where);
 

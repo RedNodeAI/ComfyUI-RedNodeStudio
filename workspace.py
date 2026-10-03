@@ -5819,8 +5819,7 @@ class RedNodeStudioWorkspace:
                     from .save_node import RedNodeSave as _SaveCls
                     _scfg = dict(cfg["save"])
                     _scfg["title_fixed"] = str(title or "")
-                    _base = str(_scfg.get("subfolder") or "").strip()
-                    _scfg["subfolder"] = (_base + "/" + level) if _base else level
+                    _scfg["stage_dir"] = level
                     _scfg["auto_name"] = False
                     _SaveCls().save(img, config=json.dumps(_scfg), seed=run_seed,
                                     prompt=prompt, extra_pnginfo=extra_pnginfo,
@@ -5897,8 +5896,7 @@ class RedNodeStudioWorkspace:
                     if _fcfg.get("auto_name") and not _fcfg.get("auto_name_model"):
                         _fcfg["auto_name_model"] = str((cfg.get("auto") or {}).get("model") or "")
                     if _fcfg.get("stage_raw") or _fcfg.get("stage_prepost"):
-                        _fb = str(_fcfg.get("subfolder") or "").strip()
-                        _fcfg["subfolder"] = (_fb + "/after_post") if _fb else "after_post"
+                        _fcfg["stage_dir"] = "after_post"
                     from . import save_node as _svmod
                     _svmod.LAST_AUTO_TITLE = ""
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(_fcfg),

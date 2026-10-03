@@ -44,6 +44,10 @@ format matters: **version** then a date, notes below until the next bold line.
   saved card (Raw render, Before Post FX, Finished render), What gets written beside it is
   Metadata, and When a run finishes is Finish sound
 - The Run page's caption says Finished render
+- Drafts and keepers folder, on the Save page's Where card: the drafts or keepers level before
+  your subfolder, as before, or after it (Comfy_Output/images/2026-10-03/drafts). The Raw,
+  Before Post and After Post folder is always the last level. Keep finds the drafts level in the
+  picture's own path, so it works either way
 - Auto name on the Save page's Name card, off by default: the vision model picked on the AI tab
   titles each picture as it saves. Put the new Auto name chip (%name%) in Where or Name to place
   the title, or leave it out and the title is the file name. It warns that every save waits for
