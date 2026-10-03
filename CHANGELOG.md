@@ -8,6 +8,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- Rerun (same seed) re-rolled the seed when the Workspace's seed was on Random each run:
+  the seed is rolled when the run starts, so the re-queued prompt rolled a new one. The rerun
+  now pins the seed that run used; Rerun with new seeds switches Random on for that rerun
 - Name this image works on a picture saved into a folder linked or junctioned into ComfyUI's
   output, and names it with the vision model picked on the AI tab rather than the first one
   Ollama lists

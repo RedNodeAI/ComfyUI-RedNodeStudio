@@ -284,6 +284,39 @@ function reseed(graph) {
   return out;
 }
 
+// The Workspace rolls its seed on the server, so its config, not a seed input, decides
+// a rerun's seed: pinned to the run's own seed for "same seed", Random for "new seed".
+async function workspaceSeeds(graph, promptId, fresh) {
+  const ws = Object.values(graph).filter((n) => n?.class_type === "RedNodeStudioWorkspace"
+                                                && typeof n.inputs?.config === "string");
+  if (!ws.length) return graph;
+  let seed = null;
+  if (!fresh) {
+    try {
+      const r = await api.fetchApi(`/rednode/run_seed?prompt_id=${encodeURIComponent(promptId)}`);
+      const d = await r.json();
+      if (d.found) seed = d.seed;
+    } catch (e) { /* an older server: fall through */ }
+  }
+  for (const n of ws) {
+    try {
+      const c = JSON.parse(n.inputs.config);
+      c.models ||= {};
+      if (fresh) c.models.seed_random = true;
+      else if (seed != null) { c.models.seed = seed; c.models.seed_random = false; }
+      else if (c.models.seed_random) {
+        throw new Error("the seed this run used is no longer known (ComfyUI restarted "
+                        + "since); Rerun with new seeds still works");
+      }
+      n.inputs.config = JSON.stringify(c);
+    } catch (e) {
+      if (e instanceof SyntaxError) continue;
+      throw e;
+    }
+  }
+  return graph;
+}
+
 async function queuePrompt(graph) {
   const res = await api.fetchApi("/prompt", {
     method: "POST",
@@ -491,10 +524,10 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
     savedBox.className = "saved";
     m.append(note, row, savedBox, sep(),
       mk("Rerun, same seed", async () => {
-        await queuePrompt(await fetchPrompt(entry.prompt));
+        await queuePrompt(await workspaceSeeds(await fetchPrompt(entry.prompt), entry.prompt, false));
       }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "re-queues the exact prompt that made this image" }),
       mk("Rerun, new seed", async () => {
-        await queuePrompt(reseed(await fetchPrompt(entry.prompt)));
+        await queuePrompt(await workspaceSeeds(reseed(await fetchPrompt(entry.prompt)), entry.prompt, true));
       }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "same prompt, every seed re-rolled" }));
   } else m.append(
     note,
@@ -514,10 +547,10 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
     }),
     sep(),
     mk("Rerun (same seed, same everything)", async () => {
-      await queuePrompt(await fetchPrompt(entry.prompt));
+      await queuePrompt(await workspaceSeeds(await fetchPrompt(entry.prompt), entry.prompt, false));
     }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "re-queues the exact prompt that made this image" }),
     mk("Rerun with new seeds", async () => {
-      await queuePrompt(reseed(await fetchPrompt(entry.prompt)));
+      await queuePrompt(await workspaceSeeds(reseed(await fetchPrompt(entry.prompt)), entry.prompt, true));
     }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "same prompt, every seed re-rolled" }),
     sep(),
     mk("Remove from history", () => {

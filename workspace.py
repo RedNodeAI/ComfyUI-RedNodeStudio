@@ -3570,6 +3570,7 @@ class RedNodeStudioWorkspace:
         # Randomize re-rolls all of it together.
         run_seed = (_random.getrandbits(48) if cfg["models"]["seed_random"]
                     else cfg["models"]["seed"])
+        remember_run_seed(int(run_seed))
         _run.info(seed=int(run_seed), rig=rig_name or "")
         # LINKED SEEDS: this queue's number for each named seed, and what each part
         # is linked to; None keeps the part's own seed, as before links existed
@@ -6079,9 +6080,34 @@ def standalone_autoprompt(config_json, tab_name, entry, mode=None):
     return {"prompt": prompt, "skipped": skipped, "mode": mode}
 
 
+# THE SEED EACH QUEUE RAN WITH, by prompt id. The seed is rolled here, not in the
+# queued prompt, so re-queueing a run's prompt with Random on rolls a new one; Rerun
+# with the same seed reads it back from here and pins it.
+RUN_SEEDS = {}
+
+
+def remember_run_seed(seed):
+    try:
+        from server import PromptServer
+        pid = getattr(PromptServer.instance, "last_prompt_id", None)
+    except Exception:
+        pid = None
+    if not pid:
+        return
+    RUN_SEEDS[str(pid)] = int(seed)
+    while len(RUN_SEEDS) > 500:
+        RUN_SEEDS.pop(next(iter(RUN_SEEDS)))
+
+
 try:
     from server import PromptServer
     from aiohttp import web
+
+    @PromptServer.instance.routes.get("/rednode/run_seed")
+    async def _rednode_run_seed(request):
+        pid = request.rel_url.query.get("prompt_id", "")
+        seed = RUN_SEEDS.get(pid)
+        return web.json_response({"found": seed is not None, "seed": seed})
 
     @PromptServer.instance.routes.get("/rednode/autoprompt_status")
     async def _rednode_autoprompt_status(request):
