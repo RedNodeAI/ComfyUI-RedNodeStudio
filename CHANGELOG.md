@@ -33,6 +33,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - Keep, the S key and the Kept marks follow the version on show: keeping the Raw picture keeps
   only the Raw copy. A run's marks in the runs column say which are kept: Kept Raw, Kept BP
   (Before Post), Kept AP (After Post)
+- In the Image Review's full screen, a kept picture's Generation data card has a gold border
+  and a Kept mark beside its title, and both follow Keep and S as you go
 - S keeps the picture you are looking at, or puts it back with the drafts: over an Image Review
   panel, in its full screen, over the Run page's picture or a run in its runs column. A note
   at the bottom of the screen says what happened, or why a picture cannot be kept

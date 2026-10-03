@@ -84,6 +84,9 @@ css.textContent = `
    the furniture up to the room. The picture already fills whatever it is given. */
 .rn-rv-fshost{flex:1;min-height:0;height:auto;border:1px solid #2f333a;border-radius:8px;
   padding:10px}
+.rn-rv-info.kept{border:2px solid #d4a72c;box-shadow:0 0 0 1px #d4a72c55,0 10px 36px #000c}
+.rn-rv-keptmark{font-size:12px;font-weight:700;color:#1b1e23;background:#d4a72c;border-radius:9px;
+  padding:1px 9px;margin-left:8px;align-self:center}
 .rn-rv-info{position:fixed;right:24px;top:60px;width:440px;max-height:calc(100vh - 88px);
   overflow:auto;z-index:9995;background:#16181cf5;border:1px solid #3a3f47;border-radius:12px;
   padding:16px 20px 14px;color:#e2e5ea;font:14.5px 'Segoe UI',system-ui,sans-serif;line-height:1.6;
@@ -680,6 +683,7 @@ export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
         await setKept(found, !found.kept);
         // the Save panel is listening on its own; nudge it so the list agrees
         api.dispatchEvent?.(new CustomEvent("rednode.saved_changed"));
+        render(node);                        // the full screen's Kept mark follows
       }, { why: found.kept
              ? "Move it back to the drafts folder."
              : "Move this image, and the records written beside it, into the keepers "
@@ -814,7 +818,14 @@ function infoCard(node, ov) {
   hide.title = "Fold the card to a tab at the edge.";
   hide.onclick = () => { open = false; remember(); apply(); };
   tab.onclick = () => { open = true; remember(); apply(); };
-  head.append(ttl, copyAll, hide);
+  // KEPT, beside the title, and the card's border in gold: the picture on show is kept
+  const keptMark = document.createElement("span");
+  keptMark.className = "rn-rv-keptmark";
+  keptMark.textContent = "\u2605 Kept";
+  keptMark.title = "This picture is kept. S, or Keep in its right-click menu, puts it back "
+                 + "with the drafts.";
+  keptMark.style.display = "none";
+  head.append(ttl, keptMark, copyAll, hide);
   const body = document.createElement("div");
   body.className = "rn-rv-infobody";
   card.append(head, body);
@@ -915,9 +926,18 @@ function infoCard(node, ov) {
   };
   copyAll.onclick = () => navigator.clipboard?.writeText(plain);
   let token = 0;
+  const sm = /:run-(raw|before)$/.exec(String(node?.id || ""));
+  const stage = sm ? (sm[1] === "raw" ? "raw" : "before_post") : "";
+  const showKept = (on) => {
+    keptMark.style.display = on ? "" : "none";
+    card.classList.toggle("kept", !!on);
+  };
   const refresh = async (entry, slot) => {
     const my = ++token;
     body.replaceChildren(sec("", "Reading\u2026", true));
+    savedFor(entry, sm ? 0 : slot, stage).then((found) => {
+      if (my === token) showKept(found && !found.missing && found.kept);
+    });
     const rec = await gatherInfo(owner, entry, slot);
     if (my !== token) return;
     draw(rec);
