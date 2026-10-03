@@ -56,6 +56,8 @@ DEFAULTS = {
     "compress": 4,               # png only: 0..9, file size against save time
     "auto_name": False,          # name each picture with the vision model (slow)
     "auto_name_model": "",       # which one; the Workspace fills in its AI tab's
+    "title_fixed": "",           # a title already chosen (a run's Raw and Before Post
+                                 # copies take the finished render's), no model call
     "civitai": True,             # the A1111 parameters text with AutoV2 hashes, so
                                  # Civitai lists the model and LoRAs under the picture
 }
@@ -772,6 +774,7 @@ TITLE_JUNK = re.compile(
     r"[\s:,.!-]*", re.I)
 
 TITLES = {}                       # path -> title, for the session
+LAST_AUTO_TITLE = ""              # the last title Auto name chose, for the run's copies
 MAX_TITLES = 400
 
 
@@ -1414,7 +1417,11 @@ class RedNodeSave:
                    "width": img.width, "height": img.height, "words": words}
             meta = collect_meta(prompt, ctx)
             ctx["model"] = meta.get("model")
-            auto_title = _auto_title(img, cfg) if cfg.get("auto_name") else ""
+            auto_title = (str(cfg.get("title_fixed") or "")
+                          or (_auto_title(img, cfg) if cfg.get("auto_name") else ""))
+            if auto_title and not cfg.get("title_fixed"):
+                global LAST_AUTO_TITLE
+                LAST_AUTO_TITLE = auto_title
             ctx["title"] = auto_title
             folder, stem = build_path(cfg, ctx)
             if auto_title and not any("%name%" in str(cfg.get(k) or "")

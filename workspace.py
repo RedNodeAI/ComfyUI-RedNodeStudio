@@ -5796,7 +5796,12 @@ class RedNodeStudioWorkspace:
         if rig_image is not None and (not _norun or _uchain or _uafter):
             from . import builtin_chain as _chain
 
-            def _stage_save(img, level):
+            # AUTO NAME: the Raw and Before Post copies are made before the finished
+            # render exists, and their name is its title, so with Auto name on they
+            # wait here and are saved right after it, under the same title
+            _stage_later = []
+
+            def _stage_save(img, level, title=None):
                 """An extra copy of the run at an earlier stage, one level down.
 
                 Writes through the same Save the finished picture uses, so the
@@ -5807,9 +5812,13 @@ class RedNodeStudioWorkspace:
                 """
                 if img is None:
                     return
+                if title is None and (cfg["save"] or {}).get("auto_name"):
+                    _stage_later.append((img, level))
+                    return
                 try:
                     from .save_node import RedNodeSave as _SaveCls
                     _scfg = dict(cfg["save"])
+                    _scfg["title_fixed"] = str(title or "")
                     _base = str(_scfg.get("subfolder") or "").strip()
                     _scfg["subfolder"] = (_base + "/" + level) if _base else level
                     _scfg["auto_name"] = False
@@ -5890,6 +5899,8 @@ class RedNodeStudioWorkspace:
                     if _fcfg.get("stage_raw") or _fcfg.get("stage_prepost"):
                         _fb = str(_fcfg.get("subfolder") or "").strip()
                         _fcfg["subfolder"] = (_fb + "/after_post") if _fb else "after_post"
+                    from . import save_node as _svmod
+                    _svmod.LAST_AUTO_TITLE = ""
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(_fcfg),
                                              seed=run_seed, prompt=prompt,
                                              extra_pnginfo=extra_pnginfo, words=_words,
@@ -5904,6 +5915,18 @@ class RedNodeStudioWorkspace:
                 except Exception as exc:
                     print("[RedNode Workspace] the built-in save failed: %s" % exc,
                           flush=True)
+                finally:
+                    # the copies that waited for the title: theirs is the finished
+                    # render's, or the usual name when it got none
+                    if _stage_later:
+                        try:
+                            from . import save_node as _svmod
+                            _t = _svmod.LAST_AUTO_TITLE
+                        except Exception:
+                            _t = ""
+                        for _img, _lvl in _stage_later:
+                            _stage_save(_img, _lvl, title=_t)
+                        _stage_later.clear()
             if unique_id and not (ui_extra or {}).get("rn_run_images"):
                 # SAVE OFF, OR IT FAILED: the Run tab's Live picture and the Review
                 # still get this run's result, kept in the temp folder rather than

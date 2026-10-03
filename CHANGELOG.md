@@ -47,7 +47,8 @@ format matters: **version** then a date, notes below until the next bold line.
 - Auto name on the Save page's Name card, off by default: the vision model picked on the AI tab
   titles each picture as it saves. Put the new Auto name chip (%name%) in Where or Name to place
   the title, or leave it out and the title is the file name. It warns that every save waits for
-  the model. Raw and Before Post copies keep the usual name
+  the model. The Raw and Before Post copies take the finished render's title: they wait and
+  are saved right after it
 - A picture named with Name this image, or by Auto name, never shares a title: a repeat is
   numbered, Rainy Day Stroll 2
 - The Run tab's Save page has the power button in its corner, like every page with a switch: it
