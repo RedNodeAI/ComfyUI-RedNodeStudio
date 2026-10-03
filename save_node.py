@@ -47,7 +47,7 @@ DEFAULTS = {
     "pad": 4,
     "split_drafts": True,        # drafts and keepers subfolders
     "split_at": "before",        # before | after the subfolder levels
-    "stage_dir": "",             # raw | before_post | after_post: the version's folder,
+    "stage_dir": "",             # the version's folder (VERSION_FOLDERS),
                                  # always the last level
     "keep": False,
     "write_text": True,          # the readable .txt
@@ -922,14 +922,19 @@ def run_id():
 # finished picture kept the raw one. Entries carry their stage now; older ones are read
 # from the folder the stage copy was written into.
 STAGES = ("raw", "before_post")
+# the folder each version is filed in, named like its button on the Save page
+VERSION_FOLDERS = {"raw": "Raw Render", "before_post": "Before Post FX", "": "Finished Render"}
+# folder name, lower case -> stage, for entries saved before they carried their stage
+_FOLDER_STAGE = {"raw": "raw", "raw render": "raw",
+                 "before_post": "before_post", "before post fx": "before_post"}
 
 
 def stage_of(entry):
     st = str(entry.get("stage") or "")
     if st:
         return st
-    parts = {p.lower() for p in os.path.normpath(str(entry.get("path") or "")).split(os.sep)[:-1]}
-    return next((s for s in STAGES if s in parts), "")
+    parts = [p.lower() for p in os.path.normpath(str(entry.get("path") or "")).split(os.sep)[:-1]]
+    return next((_FOLDER_STAGE[p] for p in reversed(parts) if p in _FOLDER_STAGE), "")
 
 
 def find_saved(prompt_id, index=0, stage=""):

@@ -204,7 +204,7 @@ function previewPath(cfg) {
   if (cfg.split_drafts && !after) parts.push(side);
   if (cfg.subfolder.trim()) parts.push(fill(cfg.subfolder).replace(/^\/+|\/+$/g, ""));
   if (cfg.split_drafts && after) parts.push(side);
-  if (cfg.stage_raw || cfg.stage_prepost) parts.push("after_post");
+  if (cfg.stage_raw || cfg.stage_prepost) parts.push("Finished Render");
   let stem = fill(cfg.name) || "image";
   if (cfg.numbering === "counter") stem += "_" + "1".padStart(cfg.pad, "0");
   else if (cfg.numbering === "time") stem += "_143211";
@@ -881,10 +881,10 @@ function render(node) {
   vrow.className = "rn-sv-toggles";
   const fin = document.createElement("button");
   fin.className = "rn-sv-btn on rn-sv-always";
-  fin.textContent = "Finished render";
+  fin.textContent = "Finished Render";
   fin.title = "Always saved while Save is on.";
   vrow.append(
-    toggle(node, cfg, "stage_raw", "Raw render",
+    toggle(node, cfg, "stage_raw", "Raw Render",
            "The model's own output, before the Tools edits, the Detailer and Post FX "
            + "touch it."),
     toggle(node, cfg, "stage_prepost", "Before Post FX",
@@ -895,7 +895,7 @@ function render(node) {
   const vn = document.createElement("div");
   vn.className = "rn-sv-note";
   vn.textContent = (cfg.stage_raw || cfg.stage_prepost)
-    ? "Each version gets its own folder: raw, before_post and after_post. Keep works on "
+    ? "Each version gets its own folder: Raw Render, Before Post FX and Finished Render. Keep works on "
       + "each one on its own."
     : "Only the finished render is saved, straight into the folder above.";
   versions.appendChild(vn);

@@ -5819,7 +5819,8 @@ class RedNodeStudioWorkspace:
                     from .save_node import RedNodeSave as _SaveCls
                     _scfg = dict(cfg["save"])
                     _scfg["title_fixed"] = str(title or "")
-                    _scfg["stage_dir"] = level
+                    from .save_node import VERSION_FOLDERS as _VF
+                    _scfg["stage_dir"] = _VF.get(level, level)
                     _scfg["auto_name"] = False
                     _SaveCls().save(img, config=json.dumps(_scfg), seed=run_seed,
                                     prompt=prompt, extra_pnginfo=extra_pnginfo,
@@ -5891,12 +5892,14 @@ class RedNodeStudioWorkspace:
                         # text; left unsaid, Save traced the rig's prompt row instead
                         _words = _stage_words
                     # with a Raw or Before Post copy on, the finished picture gets a
-                    # folder of its own beside theirs: raw, before_post, after_post
+                    # folder of its own beside theirs: Raw Render, Before Post FX,
+                    # Finished Render
                     _fcfg = dict(cfg["save"])
                     if _fcfg.get("auto_name") and not _fcfg.get("auto_name_model"):
                         _fcfg["auto_name_model"] = str((cfg.get("auto") or {}).get("model") or "")
                     if _fcfg.get("stage_raw") or _fcfg.get("stage_prepost"):
-                        _fcfg["stage_dir"] = "after_post"
+                        from .save_node import VERSION_FOLDERS as _VF
+                        _fcfg["stage_dir"] = _VF[""]
                     from . import save_node as _svmod
                     _svmod.LAST_AUTO_TITLE = ""
                     _sv = RedNodeSave().save(rig_image, config=json.dumps(_fcfg),

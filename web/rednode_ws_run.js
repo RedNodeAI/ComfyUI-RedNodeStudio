@@ -1569,8 +1569,8 @@ function saveBadge(state) {
 
 // "Run 171 · Raw render": the caption under the picture and on its full screen
 function runCaption(S, stage) {
-  const what = stage === "raw" ? "Raw render"
-             : stage === "before" ? "Before Post FX" : "Finished render";
+  const what = stage === "raw" ? "Raw Render"
+             : stage === "before" ? "Before Post FX" : "Finished Render";
   return S.count ? `Run ${S.count} · ${what}` : what;
 }
 

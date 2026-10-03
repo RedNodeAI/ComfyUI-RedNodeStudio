@@ -36,17 +36,18 @@ format matters: **version** then a date, notes below until the next bold line.
 - In the Image Review's full screen, a kept picture's Generation data card has a gold border
   and a Kept mark beside its title, and both follow Keep and S as you go. Kept pictures also
   wear a gold frame and a star on the Image Review's strip, on the node and in full screen
-- With a Raw or Before Post copy on, the finished picture saves into an after_post folder beside
-  raw and before_post, so each version has a folder of its own. With neither on it saves
-  straight into the folder as before
+- With a Raw or Before Post copy on, each version has a folder of its own, named like its button:
+  Raw Render, Before Post FX and Finished Render. With neither on, the picture saves straight into
+  the folder as before. Pictures already in the old raw and before_post folders are still read
+  as those versions
 - The Save page has a title and its sections as cards. Drafts and keepers is an Off / On switch
   with New pictures go into Drafts or Keepers under it, the versions have their own Versions
-  saved card (Raw render, Before Post FX, Finished render), What gets written beside it is
+  saved card (Raw Render, Before Post FX, Finished Render), What gets written beside it is
   Metadata, and When a run finishes is Finish sound
-- The Run page's caption says Finished render
+- The Run page's captions say Raw Render, Before Post FX and Finished Render
 - Drafts and keepers folder, on the Save page's Where card: the drafts or keepers level before
-  your subfolder, as before, or after it (Comfy_Output/images/2026-10-03/drafts). The Raw,
-  Before Post and After Post folder is always the last level. Keep finds the drafts level in the
+  your subfolder, as before, or after it (Comfy_Output/images/2026-10-03/drafts). The version's
+  folder is always the last level. Keep finds the drafts level in the
   picture's own path, so it works either way
 - Auto name on the Save page's Name card, off by default: the vision model picked on the AI tab
   titles each picture as it saves. Put the new Auto name chip (%name%) in Where or Name to place
