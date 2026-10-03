@@ -620,6 +620,23 @@ function reviewHost(node) {
   return node._rnReviewHost;
 }
 
+// RAW and BEFORE POST as Review rooms of their own: this session's runs that kept that
+// version, newest first, so full screen steps through them like the finished pictures
+function versionHost(node, stage) {
+  const key = stage === "raw" ? "rawFile" : "beforeFile";
+  const host = ((node._rnVersionHosts ||= {})[stage] ||=
+    { id: `${node.id}:run-${stage}`, type: "RedNodeImageReview" });
+  host.graph = node.graph;
+  host.size ||= [0, 0];
+  host.setSize ||= () => {};
+  host._rnSized = true;
+  host._rnOwner = node;
+  host.properties = { rn_review: HISTORY.filter((H) => H[key]).map((H) => ({
+    files: [{ ...H[key] }], prompt: H.promptId || null, ts: H.t1 || H.t0 || null,
+  })) };
+  return host;
+}
+
 function stageHost(node) {
   node._rnStageHost ||= { id: `${node.id}:stages`, type: "RedNodeStageView" };
   node._rnStageHost.graph = node.graph;
@@ -1294,7 +1311,18 @@ function runPage(node, body) {
     const at = entryAt();
     const stage = node._rnRunShownStage || "after";
     if (S.final && stage !== "after") {
-      // Raw or Before Post: a full screen of that version, not the finished picture
+      // Raw or Before Post: that version's own Review room, with its history
+      const host = versionHost(node, stage);
+      const hist = host.properties.rn_review;
+      const i = hist.findIndex((x) => x.prompt && x.prompt === S.promptId);
+      if (i >= 0) {
+        host._rnView = i;
+        host._rnSlot = 0;
+        host._rnSlotFor = i;
+        reviewFullscreen(host);
+        return;
+      }
+      // the live run before it joins the history: a plain full screen of it
       const ov = el("div", "rn-run-fsov");
       ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
         + "display:flex;align-items:center;justify-content:center;cursor:zoom-out";
@@ -1347,7 +1375,8 @@ function runPage(node, body) {
     const at = entryAt();
     const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
     if (!S.final || !entry) return;
-    reviewMenu(reviewHost(node), entry, at, e, S.finalIdx);
+    reviewMenu(reviewHost(node), entry, at, e, S.finalIdx,
+               { compact: true, fullscreen: showBig, onSaved: () => { forgetSaved(S); refreshAll(); } });
   });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
@@ -1356,7 +1385,9 @@ function runPage(node, body) {
   const strip = el("div", "rn-run-strip");
   const picFoot = el("div", "rn-run-picfoot");
   const picSave = el("span", "rn-run-picsave");
-  picFoot.append(picLabel, picSave, postSeg);
+  const capRow = el("div", "rn-run-caprow");
+  capRow.append(picLabel, picSave);
+  picFoot.append(capRow, postSeg);
   view.refs.picSave = picSave;
   pic.append(img, picEmpty, picFoot, strip);
   view.refs.strip = strip;
@@ -1471,18 +1502,23 @@ function savedState(S) {
     const q = new URLSearchParams({ prompt_id: pid, index: String(S.finalIdx || 0) });
     api.fetchApi(`/rednode/saved_for?${q}`).then((r) => r.json()).catch(() => ({}))
       .then((d) => {
-        const val = d?.found && !d.missing && d.split ? (d.kept ? "final" : "draft") : null;
-        const was = SAVED.get(key)?.val;
-        SAVED.set(key, { at: Date.now(), val, pending: false });
-        if (val !== was) refreshAll();
+        const ok = d?.found && !d.missing;
+        const val = ok && d.kept ? "kept" : ok && d.split ? "draft" : null;
+        const title = ok ? String(d.title || "") : "";
+        const was = SAVED.get(key);
+        SAVED.set(key, { at: Date.now(), val, title, pending: false });
+        if (val !== was?.val || title !== (was?.title || "")) refreshAll();
       });
   }
   return c?.val || null;
 }
+const savedTitle = (S) => (S?.promptId && SAVED.get(`${S.promptId}:${S.finalIdx || 0}`)?.title) || "";
+// forget a run's saved state so the next draw asks again (after Keep in its menu)
+const forgetSaved = (S) => { if (S?.promptId) SAVED.delete(`${S.promptId}:${S.finalIdx || 0}`); };
 function saveBadge(state) {
-  const b = el("span", `rn-run-savebadge ${state}`, state === "final" ? "Final" : "Draft");
-  b.title = state === "final" ? "Filed as a keeper. Right-click the picture to move it back."
-                              : "Filed as a draft. Right-click the picture to keep it.";
+  const b = el("span", `rn-run-savebadge ${state}`, state === "kept" ? "Kept" : "Draft");
+  b.title = state === "kept" ? "Kept. Right-click the picture to move it back to drafts."
+                             : "Filed as a draft. Right-click the picture to keep it.";
   return b;
 }
 
@@ -1607,6 +1643,7 @@ function refresh(view) {
     const what = runCaption(S, stage);
     const sv = savedState(S);
     refs.picSave.replaceChildren(...(sv ? [saveBadge(sv)] : []));
+    refs.img.classList.toggle("kept", sv === "kept" && stage === "after");
     refs.picLabel.textContent = n > 1 && stage === "after"
       ? `${what} ${S.finalIdx + 1} of ${n}` : what;
     refs.strip.replaceChildren();
@@ -1627,6 +1664,7 @@ function refresh(view) {
     refs.picEmpty.textContent = "This run left no finished picture.";
     refs.picLabel.textContent = "";
     refs.picSave.replaceChildren();
+    refs.img.classList.remove("kept");
     refs.strip.style.display = "none";
   } else if (fr?.src) {
     refs.strip.style.display = "none";
@@ -1637,6 +1675,7 @@ function refresh(view) {
     const step = fr.total ? `Step ${fr.step} of ${fr.total}` : "";
     refs.picLabel.textContent = [s?.label || fr.label, step].filter(Boolean).join(" · ");
     refs.picSave.replaceChildren();
+    refs.img.classList.remove("kept");
   } else {
     refs.img.style.display = "none";
     refs.picEmpty.style.display = "";
@@ -1750,7 +1789,10 @@ function refresh(view) {
       dragPicture(hold, file, th);   // onto the Paint pane, a node, or out to a folder
       b.appendChild(hold);
     }
-    b.append(el("span", "n", label), el("span", "m", meta));
+    const named = sheet ? savedTitle(sheet) : "";
+    const n = el("span", "n", label);
+    if (named) n.appendChild(el("span", "nm", ` · ${named}`));
+    b.append(n, el("span", "m", meta));
     if (sheet?.promptId) {
       b.addEventListener("contextmenu", (e) => {
         const hist = node.properties?.rn_run_review?.rn_review || [];
@@ -1758,7 +1800,8 @@ function refresh(view) {
         if (at < 0) return;                  // the Review no longer holds this run
         e.preventDefault();
         e.stopPropagation();
-        reviewMenu(reviewHost(node), hist[at], at, e, sheet.finalIdx || 0);
+        reviewMenu(reviewHost(node), hist[at], at, e, sheet.finalIdx || 0,
+                   { compact: true, onSaved: () => { forgetSaved(sheet); refreshAll(); } });
       });
       b.title = "Click to show this run. Right-click for open in a new tab, rerun and more.";
     }
@@ -1981,7 +2024,8 @@ export const RUN_CSS = `
 .rn-run-side{flex:0 0 208px;display:flex;flex-direction:column;gap:8px;
   position:sticky;top:0;max-height:760px;overflow-y:auto;box-sizing:border-box;
   background:#101216;border:1px solid #23262c;border-radius:10px;padding:9px}
-.rn-run-side>.ch{position:sticky;top:-9px;background:#101216;padding:2px 0;z-index:1}
+.rn-run-side>.ch{position:sticky;top:-9px;background:#101216;padding:2px 0;z-index:1;
+  font-size:11px;font-weight:700;letter-spacing:.08em;color:#8a919b}
 .rn-run-histhold{cursor:grab;line-height:0}
 .rn-run-histth{width:100%;height:138px;object-fit:contain;border-radius:5px;
   background:#0f1114;pointer-events:none}
@@ -1993,13 +2037,15 @@ export const RUN_CSS = `
 .rn-run-mem{flex:1 1 300px;min-width:0}
 .rn-run-img{width:100%;max-height:420px;object-fit:contain;border-radius:6px;background:#0f1114}
 .rn-run-picempty{padding:40px 0;text-align:center}
-.rn-run-picfoot{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.rn-run-picfoot{display:flex;flex-direction:column;align-items:center;gap:6px}
+.rn-run-caprow{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+.rn-run-img.kept{outline:3px solid #d4a72c;outline-offset:2px;border-radius:4px}
 .rn-run-seed{cursor:copy}
 .rn-run-savebadge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;border:1px solid}
-.rn-run-savebadge.final{color:#9fe0b4;border-color:#2e7d4f;background:#13261b}
+.rn-run-savebadge.kept{color:#f0d27a;border-color:#d4a72c;background:#2a2110}
 .rn-run-savebadge.draft{color:#e8c890;border-color:#7a5a20;background:#251d10}
-.rn-run-histitem.saved-final{box-shadow:inset 3px 0 0 #2e7d4f}
-.rn-run-histitem.saved-draft{box-shadow:inset 3px 0 0 #7a5a20}
+.rn-run-histitem.saved-kept{border-color:#d4a72c !important;box-shadow:0 0 0 1px #d4a72c}
+.rn-run-histitem .nm{color:#f0d27a;font-weight:600}
 .rn-run-histitem .rn-run-savebadge{align-self:flex-start}
 .rn-run-fscap{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:#cfe0f5;font-size:13px;pointer-events:none}
 .rn-run-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
@@ -2039,7 +2085,9 @@ export const RUN_CSS = `
 .rn-run-past{flex-direction:row;align-items:center;gap:10px;border-color:#8fa8c8;
   background:#1a2230}
 .rn-run-past .tx{flex:1;color:#cdd9ea}
-.rn-run-live{width:auto;padding:0 12px}
+.rn-run-live{width:auto;padding:7px 18px;font-size:13px;font-weight:700;
+  background:#b8283c;border-color:#d0283c;color:#fff}
+.rn-run-live:hover{background:#d0283c}
 .rn-run-histrow{display:flex;margin-top:8px}
 .rn-run-histbtn{width:auto;padding:0 12px}
 .rn-run-hist{display:flex;flex-direction:column;gap:6px}

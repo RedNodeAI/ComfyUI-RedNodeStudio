@@ -21,8 +21,16 @@ format matters: **version** then a date, notes below until the next bold line.
   ("Run 171 · Before Post FX"). Clicking the picture opens it full screen
 - The Run chip is gone from the top line, which now holds the seed and the run time; click the
   seed to copy it. The seed in a picture's Generation data copies on a click too
-- With drafts and keepers split on the Save tab, the Run page marks each run's picture Draft or
-  Final, on the picture and down the runs column
+- Kept pictures wear a gold border on the Run page, on the Live picture and on their run in the
+  runs column, with a Kept mark; with drafts and keepers split on the Save tab, a draft says
+  Draft. A named picture shows its name beside its run
+- Full screen on Raw and Before Post opens a Review room of that version, so it steps through
+  this session's raw renders, or Before Post pictures, the way the finished ones do
+- The Run page's right-click menu is shorter: Copy, Prompt, New tab and Full screen as one row of
+  buttons, Keep and Name under them, then Rerun with the same seed or a new one. The Review keeps
+  the full menu
+- The caption and the Raw, Before Post and After Post switch sit in the same place whichever is
+  picked. The Runs title matches the other cards, and Back to live is bigger and red
 - Right-click a run in the Run page's runs column for the same menu as the picture: open in a
   new tab, copy, rerun with the same seed or new seeds
 - The Run page's Live picture draws a 1024 px copy of each version instead of the full file,

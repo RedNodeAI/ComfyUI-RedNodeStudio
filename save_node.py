@@ -1702,8 +1702,9 @@ try:
                                   "title": TITLES.get(os.path.realpath(entry["path"]), ""),
                                   "kept": bool(entry.get("kept")),
                                   # filed under drafts/ or keepers/: the split was on
-                                  "split": bool({DRAFTS, KEEPERS} & set(
-                                      os.path.normpath(entry["path"]).split(os.sep))),
+                                  "split": bool({DRAFTS, KEEPERS} & {
+                                      p.lower() for p in
+                                      os.path.normpath(entry["path"]).split(os.sep)}),
                                   "missing": not os.path.isfile(entry["path"])})
 
     @PromptServer.instance.routes.post("/rednode/clear_saved")

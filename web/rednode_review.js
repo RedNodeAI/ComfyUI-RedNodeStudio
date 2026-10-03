@@ -135,6 +135,10 @@ css.textContent = `
 .rn-rv-menu button:disabled{opacity:.4;cursor:not-allowed}
 .rn-rv-menu .sep{height:1px;background:#33373d;margin:2px 4px}
 .rn-rv-menu .note{font-size:10px;opacity:.5;padding:2px 9px 4px}
+.rn-rv-menu .quick{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 2px 4px}
+.rn-rv-menu .quick .q{background:#24282f;border:1px solid #33373d;text-align:center;padding:6px 4px;font-size:12px}
+.rn-rv-menu .saved{display:flex;flex-direction:column;gap:3px}
+.rn-rv-menu .saved:empty{display:none}
 `;
 let styled = false;
 function injectStyle() {
@@ -422,7 +426,7 @@ async function setKept(found, kept) {
   return d;
 }
 
-export function openMenu(node, entry, index, ev, slot = 0) {
+export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
   document.querySelector(".rn-rv-menu")?.remove();
   const m = document.createElement("div");
   m.className = "rn-rv-menu";
@@ -461,7 +465,38 @@ export function openMenu(node, entry, index, ev, slot = 0) {
 
   const f = entry.files[slot] || entry.files[0];
   const noPrompt = !entry.prompt;
-  m.append(
+  // THE RUN PAGE'S FORM: the four quick actions as one row of small buttons, Keep and
+  // Name under them, then the two reruns. Node and history housekeeping stay on the
+  // Review itself, where the strip they act on is.
+  let savedBox = null;
+  if (opts.compact) {
+    m.classList.add("compact");
+    const row = document.createElement("div");
+    row.className = "quick";
+    const q = (label, tip, fn, disabled = false) => {
+      const b = mk(label, fn, { disabled, why: tip });
+      b.className = "q";
+      row.appendChild(b);
+    };
+    q("Copy", "Copy the image.", () => copyImage(f));
+    q("Prompt", noPrompt ? "this entry predates prompt tracking" : "Copy the prompt.",
+      () => copyPrompt(entry, slot, ev), noPrompt);
+    q("New tab", "Open the image in a new browser tab.", () => { window.open(fileUrl(f), "_blank"); });
+    q("Full screen", "View it full screen.", () => {
+      if (opts.fullscreen) { opts.fullscreen(); return; }
+      node._rnView = index;
+      openFullscreen(node);
+    });
+    savedBox = document.createElement("div");
+    savedBox.className = "saved";
+    m.append(note, row, savedBox, sep(),
+      mk("Rerun, same seed", async () => {
+        await queuePrompt(await fetchPrompt(entry.prompt));
+      }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "re-queues the exact prompt that made this image" }),
+      mk("Rerun, new seed", async () => {
+        await queuePrompt(reseed(await fetchPrompt(entry.prompt)));
+      }, { disabled: noPrompt, why: noPrompt ? "this entry predates prompt tracking" : "same prompt, every seed re-rolled" }));
+  } else m.append(
     note,
     mk("Copy image", () => copyImage(f)),
     mk("Copy prompt", () => copyPrompt(entry, slot, ev), {
@@ -527,7 +562,8 @@ export function openMenu(node, entry, index, ev, slot = 0) {
       }, { why: "Asks your Ollama vision model for a title of four words or fewer, and "
               + "writes it into the text record beside the image. Experimental and "
               + "model-dependent." });
-    m.insertBefore(namer, m.children[3] || null);
+    if (savedBox) savedBox.append(namer);
+    else m.insertBefore(namer, m.children[3] || null);
     const item = mk(found.kept ? `Unkeep "${found.name}"` : `Keep "${found.name}"`,
       async () => {
         await setKept(found, !found.kept);
@@ -537,7 +573,12 @@ export function openMenu(node, entry, index, ev, slot = 0) {
              ? "Move it back to the drafts folder."
              : "Move this image, and the records written beside it, into the keepers "
              + "folder. RedNode Save did the filing; this is the same button it has." });
-    item.style.color = found.kept ? "#8fd08f" : "";
+    item.style.color = found.kept ? "#e6c35c" : "";
+    if (savedBox) {
+      savedBox.prepend(item);
+      if (opts.onSaved) item.addEventListener("click", () => setTimeout(opts.onSaved, 400));
+      return;
+    }
     m.insertBefore(item, m.children[3] || null);   // just under Open in a new tab
     m.insertBefore(sep(), m.children[4] || null);
   });
