@@ -2072,6 +2072,9 @@ export function readCfg(node) {
   // second set of defaults in this file is exactly the drift KNOWN_TRAPS 13 is
   // about; the panel writes only the fields it shows, the server clamps the rest.
   // LINKED SEEDS (seeds.py parse): named seeds, what each part takes, same seed per pass
+  // a Workspace with no links saved yet (a new node) links every part to Main, so one
+  // seed reproduces the whole run; saved links are kept as they are
+  const seedsFresh = !(d.seeds && typeof d.seeds === "object" && d.seeds.links);
   d.seeds = d.seeds && typeof d.seeds === "object" ? d.seeds : {};
   d.seeds.extra = (Array.isArray(d.seeds.extra) ? d.seeds.extra : [])
     .filter((x) => x && typeof x === "object" && String(x.name || "").trim());
@@ -2082,8 +2085,8 @@ export function readCfg(node) {
   }
   d.seeds.links = d.seeds.links && typeof d.seeds.links === "object" ? d.seeds.links : {};
   for (const [a] of SEED_AREAS) {
-    const v = d.seeds.links[a];
-    if (!(v === "main" || d.seeds.extra.some((x) => x.name === v))) d.seeds.links[a] = "own";
+    const v = d.seeds.links[a] ?? (seedsFresh ? "main" : undefined);
+    d.seeds.links[a] = (v === "main" || d.seeds.extra.some((x) => x.name === v)) ? v : "own";
   }
   d.seeds.same_pass = !!d.seeds.same_pass;
   d.upscale = d.upscale && typeof d.upscale === "object" ? d.upscale : {};

@@ -3,7 +3,8 @@
 The Seed tab's number is Main, the run seed: prompts, wildcards, every render pass
 and the paint pass always take it. Other parts can be linked to Main, or to a named
 seed of your own, or left on "own", which is what each did before links existed:
-its page's own seed or its own random roll. Nothing is linked until you link it.
+its page's own seed or its own random roll. A new Workspace starts with every part on
+Main; a saved workflow keeps the links it was saved with.
 
 A named seed is a number, or a fresh roll every queue when it is random.
 
@@ -34,10 +35,12 @@ def parse(raw):
             val = 0
         extra.append({"name": name, "seed": val, "random": bool(s.get("random"))})
     names = {e["name"] for e in extra}
+    # no links saved at all (a new Workspace): every part takes Main, the panel's default
+    fresh = not isinstance(r.get("links"), dict)
     links_in = r.get("links") if isinstance(r.get("links"), dict) else {}
     links = {}
     for a in AREAS:
-        v = str(links_in.get(a) or "own")
+        v = str(links_in.get(a) or ("main" if fresh else "own"))
         links[a] = v if v in ("main", "own") or v in names else "own"
     return {"extra": extra, "links": links, "same_pass": bool(r.get("same_pass"))}
 

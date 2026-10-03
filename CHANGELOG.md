@@ -24,6 +24,9 @@ format matters: **version** then a date, notes below until the next bold line.
   ("Run 171 · Before Post FX"). Clicking the picture opens it full screen
 - The Run chip is gone from the top line, which now holds the seed and the run time; click the
   seed to copy it. The seed in a picture's Generation data copies on a click too
+- A new Workspace links every part of a run to Main on the Seed tab, and so does the shipped
+  RedNode Studio workflow, so one seed reproduces the whole picture and Rerun with the same seed
+  gives the same result through the Detailer, Upscale and Post. Saved workflows keep their links
 - Kept pictures wear a gold border on the Run page, on the Live picture and on their run in the
   runs column, with a Kept mark; with drafts and keepers split on the Save tab, a draft says
   Draft. A named picture shows its name beside its run
