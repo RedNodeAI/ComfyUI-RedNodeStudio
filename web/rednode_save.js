@@ -74,9 +74,19 @@ css.textContent = `
   background:#12140f;border:1px solid #2c3a2c;border-radius:5px;padding:7px 9px;
   word-break:break-all;line-height:1.5}
 .rn-sv-preview b{color:#d4b25f;font-weight:600}
-.rn-sv-sect{display:flex;flex-direction:column;gap:5px}
-.rn-sv-lab{font-size:10.5px;font-weight:700;letter-spacing:.4px;opacity:.55;
-  text-transform:uppercase}
+.rn-sv-sect{display:flex;flex-direction:column;gap:6px;background:#1a1d22;border:1px solid #262a31;
+  border-radius:8px;padding:9px 10px}
+.rn-sv-lab{font-size:11px;font-weight:700;letter-spacing:.08em;color:#8a919b;text-transform:uppercase}
+.rn-sv-title{display:flex;align-items:baseline;gap:10px;padding:2px 2px 0}
+.rn-sv-title b{font-size:14px;font-weight:800;letter-spacing:.08em;color:#e8ecf1}
+.rn-sv-title span{font-size:11.5px;color:#8a919b}
+.rn-sv-opt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rn-sv-opt>.k{font-size:11.5px;color:#aab1bb;min-width:150px}
+.rn-sv-seg{display:inline-flex;border:1px solid #33373d;border-radius:6px;overflow:hidden}
+.rn-sv-seg .rn-sv-btn{border:0;border-radius:0;border-right:1px solid #33373d;padding:4px 12px}
+.rn-sv-seg .rn-sv-btn:last-child{border-right:0}
+.rn-sv-seg .rn-sv-btn.on{background:#b8283c;color:#fff}
+.rn-sv-btn.rn-sv-always{cursor:default;opacity:.85}
 .rn-sv-row{display:flex;align-items:center;gap:7px}
 .rn-sv-row input[type=text]{flex:1;min-width:0;background:#1a1d22;border:1px solid #33373d;
   border-radius:5px;color:#ddd;padding:5px 8px;font-size:11.5px;
@@ -189,6 +199,7 @@ function previewPath(cfg) {
   if (cfg.root.trim()) parts.push(fill(cfg.root).replace(/^\/+|\/+$/g, ""));
   if (cfg.split_drafts) parts.push(cfg.keep ? "keepers" : "drafts");
   if (cfg.subfolder.trim()) parts.push(fill(cfg.subfolder).replace(/^\/+|\/+$/g, ""));
+  if (cfg.stage_raw || cfg.stage_prepost) parts.push("after_post");
   let stem = fill(cfg.name) || "image";
   if (cfg.numbering === "counter") stem += "_" + "1".padStart(cfg.pad, "0");
   else if (cfg.numbering === "time") stem += "_143211";
@@ -599,6 +610,28 @@ async function clearList(node) {
   refresh();
 }
 
+// "Drafts and keepers   [ Off | On ]": one choice, its options as a segmented switch
+function choiceRow(label, options, now, pick, tip = "") {
+  const row = document.createElement("div");
+  row.className = "rn-sv-opt";
+  const k = document.createElement("span");
+  k.className = "k";
+  k.textContent = label;
+  if (tip) k.title = tip;
+  const seg = document.createElement("div");
+  seg.className = "rn-sv-seg";
+  for (const [value, text, why] of options) {
+    const b = document.createElement("button");
+    b.className = "rn-sv-btn" + (value === now ? " on" : "");
+    b.textContent = text;
+    b.title = why || tip;
+    b.onclick = () => pick(value);
+    seg.appendChild(b);
+  }
+  row.append(k, seg);
+  return row;
+}
+
 function section(title) {
   const s = document.createElement("div");
   s.className = "rn-sv-sect";
@@ -697,7 +730,7 @@ function runFinished(promptId) {
 }
 
 function soundSection(node) {
-  const sect = section("When a run finishes");
+  const sect = section("Finish sound");
   const row = document.createElement("div");
   row.className = "rn-sv-row rn-sv-sound";
   const now = soundMode(node);
@@ -738,6 +771,14 @@ function render(node) {
   wrap.textContent = "";
 
   // ---- naming presets ---------------------------------------------------
+  const head = document.createElement("div");
+  head.className = "rn-sv-title";
+  const hb = document.createElement("b");
+  hb.textContent = "SAVE";
+  const hs = document.createElement("span");
+  hs.textContent = "Where each picture is filed, its name, its file and what is written beside it.";
+  head.append(hb, hs);
+  wrap.appendChild(head);
   const pres = document.createElement("div");
   pres.className = "rn-sv-row";
   const sel = document.createElement("select");
@@ -808,39 +849,47 @@ function render(node) {
   const sub = textRow(node, cfg, "subfolder", "subfolder, slashes make levels", false);
   where.appendChild(sub.row);
   where.appendChild(chips(node, cfg, "subfolder", sub.input));
-  const split = document.createElement("div");
-  split.className = "rn-sv-toggles";
-  split.append(
-    toggle(node, cfg, "split_drafts", "Drafts and keepers",
-           "Adds a drafts or keepers level to the path. Off puts everything together."),
-    toggle(node, cfg, "keep", cfg.keep ? "Saving as: keeper" : "Saving as: draft",
-           "Which side this run lands on. Drafts can be promoted later from the list "
-           + "below, so leaving this on draft costs nothing."));
-  where.appendChild(split);
-
-  // The finished picture is what Save has always written. These two add the
-  // earlier ones beside it, so a Detailer pass or a grade can be judged against
-  // what it was given rather than remembered.
-  const stages = document.createElement("div");
-  stages.className = "rn-sv-toggles";
-  stages.append(
-    toggle(node, cfg, "stage_raw", "Also: raw output",
-           "The model's own output, before the Editor's edits, the Detailer and Post FX "
-           + "touch it, into a raw level under the same folder."),
-    toggle(node, cfg, "stage_prepost", "Also: before Post FX",
-           "The picture as it goes into Post FX, into a before_post level. "
-           + "With no Detailer that is the raw picture again, so it is not "
-           + "written twice."));
-  where.appendChild(stages);
-  if (cfg.stage_raw || cfg.stage_prepost) {
-    const n = document.createElement("div");
-    n.className = "rn-sv-note";
-    n.textContent = "The finished picture still saves where it always has. These "
-      + "are extra copies, and they follow the Save switch: with Save off nothing "
-      + "is written at all.";
-    where.appendChild(n);
+  const set = (key, v) => { cfg[key] = v; writeCfg(node); render(node); };
+  where.appendChild(choiceRow("Drafts and keepers",
+    [[false, "Off", "Everything in one folder."],
+     [true, "On", "A drafts folder and a keepers folder. Keep moves a picture across."]],
+    !!cfg.split_drafts, (v) => set("split_drafts", v),
+    "Sort pictures into drafts and keepers."));
+  if (cfg.split_drafts) {
+    where.appendChild(choiceRow("New pictures go into",
+      [[false, "Drafts", "Every new picture starts as a draft; keep the good ones later."],
+       [true, "Keepers", "Every new picture is filed as a keeper."]],
+      !!cfg.keep, (v) => set("keep", v)));
   }
   wrap.appendChild(where);
+
+  // VERSIONS: the finished render is what Save has always written. Raw and Before
+  // Post add the earlier ones, so a Detailer pass or a grade can be judged against
+  // what it was given rather than remembered.
+  const versions = section("Versions saved");
+  const vrow = document.createElement("div");
+  vrow.className = "rn-sv-toggles";
+  const fin = document.createElement("button");
+  fin.className = "rn-sv-btn on rn-sv-always";
+  fin.textContent = "Finished render";
+  fin.title = "Always saved while Save is on.";
+  vrow.append(
+    toggle(node, cfg, "stage_raw", "Raw render",
+           "The model's own output, before the Tools edits, the Detailer and Post FX "
+           + "touch it."),
+    toggle(node, cfg, "stage_prepost", "Before Post FX",
+           "The picture as it goes into Post FX. With no Detailer that is the raw picture "
+           + "again, so it is not written twice."),
+    fin);
+  versions.appendChild(vrow);
+  const vn = document.createElement("div");
+  vn.className = "rn-sv-note";
+  vn.textContent = (cfg.stage_raw || cfg.stage_prepost)
+    ? "Each version gets its own folder: raw, before_post and after_post. Keep works on "
+      + "each one on its own."
+    : "Only the finished render is saved, straight into the folder above.";
+  versions.appendChild(vn);
+  wrap.appendChild(versions);
 
   const naming = section("Name");
   const name = textRow(node, cfg, "name", "filename, before the number", false);
@@ -925,7 +974,7 @@ function render(node) {
   }
   wrap.appendChild(fileSect);
 
-  const record = section("What gets written beside it");
+  const record = section("Metadata");
   const recRow = document.createElement("div");
   recRow.className = "rn-sv-toggles";
   recRow.append(
@@ -1356,7 +1405,7 @@ function wireKeys(node, wrap) {
     const entry = atCursor();
     if (!entry || entry.missing) return;
     const key = e.key.toLowerCase();
-    if (key === "k" || key === " ") {
+    if (key === "k" || key === "s" || key === " ") {
       e.preventDefault();
       e.stopPropagation();
       actOnMany(node, [entry], { keep: !entry.kept }, "keep");

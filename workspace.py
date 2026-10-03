@@ -5881,7 +5881,13 @@ class RedNodeStudioWorkspace:
                         # the Realism stage made this picture from its own Ask for
                         # text; left unsaid, Save traced the rig's prompt row instead
                         _words = _stage_words
-                    _sv = RedNodeSave().save(rig_image, config=json.dumps(cfg["save"]),
+                    # with a Raw or Before Post copy on, the finished picture gets a
+                    # folder of its own beside theirs: raw, before_post, after_post
+                    _fcfg = dict(cfg["save"])
+                    if _fcfg.get("stage_raw") or _fcfg.get("stage_prepost"):
+                        _fb = str(_fcfg.get("subfolder") or "").strip()
+                        _fcfg["subfolder"] = (_fb + "/after_post") if _fb else "after_post"
+                    _sv = RedNodeSave().save(rig_image, config=json.dumps(_fcfg),
                                              seed=run_seed, prompt=prompt,
                                              extra_pnginfo=extra_pnginfo, words=_words,
                                              carry=_carry_for_save or None)

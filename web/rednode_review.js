@@ -998,6 +998,7 @@ export function openFullscreen(node) {
   }, { passive: false });
   arrowKeys(fshost, step, (d) => stepSlot(node, d));
   panelHotkey(fshost, "s", keepKey(node));
+  panelHotkey(fshost, "k", keepKey(node));
 
   // a hosted panel not shown yet (the Run tab's picture) has no root: a spare
   // one stands in, so "open" never reads as closed and Close still works
@@ -1381,6 +1382,7 @@ function build(node) {
     render(node);
   }, (dir) => stepSlot(node, dir));
   panelHotkey(wrap, "s", keepKey(node));
+  panelHotkey(wrap, "k", keepKey(node));
 
   // The frontend assigns node.imgs from every executed event and draws them under the
   // widgets. That is the stock PreviewImage picture, which would show every image twice.

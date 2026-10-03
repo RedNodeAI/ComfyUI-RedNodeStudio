@@ -1383,14 +1383,16 @@ function runPage(node, body) {
   });
   // S keeps the run on show, or puts it back with the drafts
   node._rnKeepChanged = () => { SAVED.clear(); refreshAll(); };
-  panelHotkey(pic, "s", () => {
+  const keepPic = () => {
     const S = shownSheet(node);
     const at = entryAt();
     const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
     if (!S.final || !entry) return false;
     keepToggle(entry, S.finalIdx || 0, SAVE_STAGE[node._rnRunShownStage || "after"])
       .then(() => { forgetSaved(S); refreshAll(); });
-  });
+  };
+  panelHotkey(pic, "s", keepPic);
+  panelHotkey(pic, "k", keepPic);
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
   // a batch: every finished frame as a thumbnail under the picture; click one to
@@ -1439,7 +1441,7 @@ function runPage(node, body) {
   view.refs.log = log;
   root.appendChild(logCard);
   view.refs.histList = histList;
-  panelHotkey(histList, "s", () => {
+  const keepRun = () => {
     const b = histList.querySelector(".rn-run-histitem:hover");
     const sheet = b?._rnSheet;
     if (!sheet?.promptId) return false;
@@ -1447,7 +1449,9 @@ function runPage(node, body) {
     const at = hist.findIndex((x) => x.prompt === sheet.promptId);
     if (at < 0) return false;
     keepToggle(hist[at], sheet.finalIdx || 0).then(() => { forgetSaved(sheet); refreshAll(); });
-  });
+  };
+  panelHotkey(histList, "s", keepRun);
+  panelHotkey(histList, "k", keepRun);
   view.refs.side = side;
 
   shell.append(side, root);
@@ -1566,7 +1570,7 @@ function saveBadge(state) {
 // "Run 171 · Raw render": the caption under the picture and on its full screen
 function runCaption(S, stage) {
   const what = stage === "raw" ? "Raw render"
-             : stage === "before" ? "Before Post FX" : "Finished picture";
+             : stage === "before" ? "Before Post FX" : "Finished render";
   return S.count ? `Run ${S.count} · ${what}` : what;
 }
 
