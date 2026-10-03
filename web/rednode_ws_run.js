@@ -1256,8 +1256,7 @@ function runPage(node, body) {
   // PICTURE and MEMORY side by side
   const cols = el("div", "rn-run-cols");
   const pic = el("div", "rn-ws-card rn-run-pic");
-  const picHead = el("div", "rn-run-pichead");
-  picHead.appendChild(el("div", "ch", "LIVE PICTURE"));
+  pic.appendChild(el("div", "ch", "LIVE PICTURE"));
   // BEFORE / AFTER POST, only when Save kept the picture as it went into Post FX.
   // Same run, same frame, two versions: this is the comparison that says whether the
   // grade helped, and it was only reachable by opening the two saved files.
@@ -1276,13 +1275,7 @@ function runPage(node, body) {
     b.onclick = () => { node._rnRunShowStage = value; refreshAll(); };
     postSeg.appendChild(b);
   }
-  picHead.appendChild(postSeg);
   view.refs.postSeg = postSeg;
-  const fsBtn = el("button", "rn-ws-btn rn-run-fs", "\u26F6 Full screen");
-  fsBtn.title = "See the picture full size. Clicking the picture does the same; "
-              + "right-click it for Copy, Copy prompt, Rerun and the rest.";
-  picHead.appendChild(fsBtn);
-  pic.appendChild(picHead);
   const img = el("img", "rn-run-img");
   img.alt = "";
   // the Review entry of the run on show: the newest for the live run, the one
@@ -1296,6 +1289,20 @@ function runPage(node, body) {
   const showBig = () => {
     const S = shownSheet(node);
     const at = entryAt();
+    const stage = node._rnRunShownStage || "after";
+    if (S.final && stage !== "after") {
+      // Raw or Before Post: a full screen of that version, not the finished picture
+      const ov = el("div", "rn-run-fsov");
+      ov.style.cssText = "position:fixed;inset:0;z-index:10050;background:#0c0d10ee;"
+        + "display:flex;align-items:center;justify-content:center;cursor:zoom-out";
+      const big = el("img");
+      big.src = stage === "raw" ? S.raw : S.before;
+      big.style.cssText = "max-width:96vw;max-height:96vh;object-fit:contain";
+      ov.append(big, el("div", "rn-run-fscap", runCaption(S, stage)));
+      ov.addEventListener("pointerdown", () => ov.remove());
+      document.body.appendChild(ov);
+      return;
+    }
     if (S.final && at >= 0) {
       const host = reviewHost(node);
       host._rnView = at;
@@ -1324,7 +1331,6 @@ function runPage(node, body) {
     node._rnRunFsLive = { ov, big };
     document.body.appendChild(ov);
   };
-  fsBtn.onclick = showBig;
   img.style.cursor = "zoom-in";
   img.addEventListener("click", showBig);
   img.addEventListener("contextmenu", (e) => {
@@ -1341,7 +1347,11 @@ function runPage(node, body) {
   // a batch: every finished frame as a thumbnail under the picture; click one to
   // put it up, the Review's strip in miniature
   const strip = el("div", "rn-run-strip");
-  pic.append(img, picEmpty, picLabel, strip);
+  const picFoot = el("div", "rn-run-picfoot");
+  const picSave = el("span", "rn-run-picsave");
+  picFoot.append(picLabel, picSave, postSeg);
+  view.refs.picSave = picSave;
+  pic.append(img, picEmpty, picFoot, strip);
   view.refs.strip = strip;
   view.refs.img = img;
   view.refs.picEmpty = picEmpty;
@@ -1440,6 +1450,51 @@ function stageRows(node) {
   });
 }
 
+// DRAFT OR FINAL: what the Save filed this run's picture as, when the Save tab splits
+// drafts and keepers. null while unknown or when the split is off.
+const SAVED = new Map();
+function savedState(S) {
+  const pid = S?.promptId;
+  if (!pid || S.status !== "done") return null;
+  const key = `${pid}:${S.finalIdx || 0}`;
+  const c = SAVED.get(key);
+  const fresh = c && Date.now() - c.at < 4000;
+  if (!fresh && !c?.pending) {
+    SAVED.set(key, { ...(c || {}), pending: true, at: c?.at || 0 });
+    const q = new URLSearchParams({ prompt_id: pid, index: String(S.finalIdx || 0) });
+    api.fetchApi(`/rednode/saved_for?${q}`).then((r) => r.json()).catch(() => ({}))
+      .then((d) => {
+        const val = d?.found && !d.missing && d.split ? (d.kept ? "final" : "draft") : null;
+        const was = SAVED.get(key)?.val;
+        SAVED.set(key, { at: Date.now(), val, pending: false });
+        if (val !== was) refreshAll();
+      });
+  }
+  return c?.val || null;
+}
+function saveBadge(state) {
+  const b = el("span", `rn-run-savebadge ${state}`, state === "final" ? "Final" : "Draft");
+  b.title = state === "final" ? "Filed as a keeper. Right-click the picture to move it back."
+                              : "Filed as a draft. Right-click the picture to keep it.";
+  return b;
+}
+
+// "Run 171 · Raw render": the caption under the picture and on its full screen
+function runCaption(S, stage) {
+  const what = stage === "raw" ? "Raw render"
+             : stage === "before" ? "Before Post FX" : "Finished picture";
+  return S.count ? `Run ${S.count} · ${what}` : what;
+}
+
+// a seed chip copies its number, and says so for a moment
+export function copySeed(chipEl, seed) {
+  const was = chipEl.textContent;
+  navigator.clipboard?.writeText(String(seed)).then(() => {
+    chipEl.textContent = "Copied";
+    setTimeout(() => { chipEl.textContent = was; }, 900);
+  }).catch(() => {});
+}
+
 function refresh(view) {
   const { node, refs } = view;
   const S = shownSheet(node);
@@ -1454,8 +1509,12 @@ function refresh(view) {
   const f = refs.facts;
   f.replaceChildren();
   const chip = (text, cls = "") => f.appendChild(el("span", "rn-ws-chip " + cls, text));
-  chip(S.count ? `Run ${S.count}` : "No run yet");
-  if (S.seed != null) chip(`Seed ${S.seed}`);
+  if (!S.count) chip("No run yet");
+  if (S.seed != null) {
+    const sc = chip(`Seed ${S.seed}`, "rn-run-seed");
+    sc.title = "Click to copy the seed.";
+    sc.onclick = () => copySeed(sc, S.seed);
+  }
   if (S.batch > 1) chip(`Batch of ${S.batch}`);
   if (S.paint) chip("Paint run", "rn-run-paint");
   chip(S.status === "running" ? `Running ${clock(took)}`
@@ -1530,8 +1589,10 @@ function refresh(view) {
     refs.img.style.display = "";
     refs.picEmpty.style.display = "none";
     const n = S.finals.length;
-    const what = stage === "raw" ? "Raw render"
-               : stage === "before" ? "Before Post FX" : "Finished picture";
+    node._rnRunShownStage = stage;
+    const what = runCaption(S, stage);
+    const sv = savedState(S);
+    refs.picSave.replaceChildren(...(sv ? [saveBadge(sv)] : []));
     refs.picLabel.textContent = n > 1 && stage === "after"
       ? `${what} ${S.finalIdx + 1} of ${n}` : what;
     refs.strip.replaceChildren();
@@ -1551,6 +1612,7 @@ function refresh(view) {
     refs.picEmpty.style.display = "";
     refs.picEmpty.textContent = "This run left no finished picture.";
     refs.picLabel.textContent = "";
+    refs.picSave.replaceChildren();
     refs.strip.style.display = "none";
   } else if (fr?.src) {
     refs.strip.style.display = "none";
@@ -1560,11 +1622,13 @@ function refresh(view) {
     const s = RUN.stages.get(RUN.running);
     const step = fr.total ? `Step ${fr.step} of ${fr.total}` : "";
     refs.picLabel.textContent = [s?.label || fr.label, step].filter(Boolean).join(" · ");
+    refs.picSave.replaceChildren();
   } else {
     refs.img.style.display = "none";
     refs.picEmpty.style.display = "";
     refs.picEmpty.textContent = "The picture appears here while it renders.";
     refs.picLabel.textContent = "";
+    refs.picSave.replaceChildren();
     refs.strip.style.display = "none";
   }
 
@@ -1673,6 +1737,11 @@ function refresh(view) {
       b.appendChild(hold);
     }
     b.append(el("span", "n", label), el("span", "m", meta));
+    const sv = sheet ? savedState(sheet) : null;
+    if (sv) {
+      b.classList.add("saved-" + sv);
+      b.appendChild(saveBadge(sv));
+    }
     b.onclick = onPick;
     refs.histList.appendChild(b);
   };
@@ -1899,9 +1968,15 @@ export const RUN_CSS = `
 .rn-run-mem{flex:1 1 300px;min-width:0}
 .rn-run-img{width:100%;max-height:420px;object-fit:contain;border-radius:6px;background:#0f1114}
 .rn-run-picempty{padding:40px 0;text-align:center}
-.rn-run-pichead{display:flex;align-items:center;gap:8px}
-.rn-run-pichead .ch{flex:1}
-.rn-run-fs{width:auto;padding:0 10px;font-size:11.5px}
+.rn-run-picfoot{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.rn-run-seed{cursor:copy}
+.rn-run-savebadge{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:9px;border:1px solid}
+.rn-run-savebadge.final{color:#9fe0b4;border-color:#2e7d4f;background:#13261b}
+.rn-run-savebadge.draft{color:#e8c890;border-color:#7a5a20;background:#251d10}
+.rn-run-histitem.saved-final{box-shadow:inset 3px 0 0 #2e7d4f}
+.rn-run-histitem.saved-draft{box-shadow:inset 3px 0 0 #7a5a20}
+.rn-run-histitem .rn-run-savebadge{align-self:flex-start}
+.rn-run-fscap{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:#cfe0f5;font-size:13px;pointer-events:none}
 .rn-run-strip{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
 .rn-run-thumb{width:72px;height:72px;object-fit:cover;border-radius:5px;cursor:pointer;
   border:2px solid #2a2e35;background:#0f1114}

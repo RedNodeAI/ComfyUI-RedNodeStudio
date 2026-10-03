@@ -4,6 +4,26 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
+**1.6.5** - unreleased
+
+### Fixes
+
+- Name this image works on a picture saved into a folder linked or junctioned into ComfyUI's
+  output, and names it with the vision model picked on the AI tab rather than the first one
+  Ollama lists
+- Full screen on the Run page shows the version on show: Raw, Before Post or the finished
+  picture. It always opened the finished picture
+
+### New
+
+- The Run page's Live picture: its title matches the other cards, the Raw, Before Post and
+  After Post switch sits under the picture beside the caption, and the caption names the run
+  ("Run 171 · Before Post FX"). Clicking the picture opens it full screen
+- The Run chip is gone from the top line, which now holds the seed and the run time; click the
+  seed to copy it. The seed in a picture's Generation data copies on a click too
+- With drafts and keepers split on the Save tab, the Run page marks each run's picture Draft or
+  Final, on the picture and down the runs column
+
 **1.6.4** - 2026-10-03
 
 ### Fixes

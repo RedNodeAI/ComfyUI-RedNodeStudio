@@ -707,7 +707,31 @@ function infoCard(node, ov) {
     if (rec.seed != null) parts.push(`Seed ${rec.seed}`);
     if (s.width && s.height) parts.push(`${s.width} \u00d7 ${s.height}`);
     if (s.denoise != null) parts.push(`Denoise ${s.denoise}`);
-    if (parts.length) { body.appendChild(sec("Settings", parts.join("  \u00b7  "))); bits.push(parts.join(", ")); }
+    if (parts.length) {
+      const st = sec("Settings", parts.join("  \u00b7  "));
+      // the seed copies on a click
+      const seedTxt = rec.seed != null ? `Seed ${rec.seed}` : "";
+      const v = st.querySelector(".v");
+      if (seedTxt && v) {
+        v.replaceChildren();
+        parts.forEach((p, i) => {
+          if (i) v.append("  \u00b7  ");
+          if (p !== seedTxt) { v.append(p); return; }
+          const sp = document.createElement("span");
+          sp.className = "rn-rv-seed";
+          sp.textContent = p;
+          sp.title = "Click to copy the seed.";
+          sp.style.cssText = "cursor:copy;text-decoration:underline dotted";
+          sp.onclick = () => navigator.clipboard?.writeText(String(rec.seed)).then(() => {
+            sp.textContent = "Copied";
+            setTimeout(() => { sp.textContent = seedTxt; }, 900);
+          }).catch(() => {});
+          v.append(sp);
+        });
+      }
+      body.appendChild(st);
+      bits.push(parts.join(", "));
+    }
     if (rec.loras.length) {
       const d = document.createElement("div");
       d.className = "rn-rv-infosec";
