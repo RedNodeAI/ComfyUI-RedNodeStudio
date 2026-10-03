@@ -5,6 +5,8 @@ import { writeCfg, render, setupProblems, packInstalled,
          i2iBatchOpts } from "./rednode_workspace.js";
 import { batchState, runBatch, sourceView } from "./rednode_ws_batch.js";
 import { EXTRA_PACKS, packLink, EDITOR_SUB_IDS } from "./rednode_ws_tables.js";
+import { panelHotkey } from "./rednode_keys.js";
+import { keepToggle } from "./rednode_review.js";
 import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
          openFullscreen as reviewFullscreen } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
@@ -1378,6 +1380,15 @@ function runPage(node, body) {
     reviewMenu(reviewHost(node), entry, at, e, S.finalIdx,
                { compact: true, fullscreen: showBig, onSaved: () => { forgetSaved(S); refreshAll(); } });
   });
+  // S keeps the run on show, or puts it back with the drafts
+  node._rnKeepChanged = () => { SAVED.clear(); refreshAll(); };
+  panelHotkey(pic, "s", () => {
+    const S = shownSheet(node);
+    const at = entryAt();
+    const entry = at >= 0 ? node.properties.rn_run_review.rn_review[at] : null;
+    if (!S.final || !entry) return false;
+    keepToggle(entry, S.finalIdx || 0).then(() => { forgetSaved(S); refreshAll(); });
+  });
   const picEmpty = el("div", "rn-ws-note rn-run-picempty", "The picture appears here while it renders.");
   const picLabel = el("div", "rn-run-piclabel");
   // a batch: every finished frame as a thumbnail under the picture; click one to
@@ -1426,6 +1437,15 @@ function runPage(node, body) {
   view.refs.log = log;
   root.appendChild(logCard);
   view.refs.histList = histList;
+  panelHotkey(histList, "s", () => {
+    const b = histList.querySelector(".rn-run-histitem:hover");
+    const sheet = b?._rnSheet;
+    if (!sheet?.promptId) return false;
+    const hist = node.properties?.rn_run_review?.rn_review || [];
+    const at = hist.findIndex((x) => x.prompt === sheet.promptId);
+    if (at < 0) return false;
+    keepToggle(hist[at], sheet.finalIdx || 0).then(() => { forgetSaved(sheet); refreshAll(); });
+  });
   view.refs.side = side;
 
   shell.append(side, root);
@@ -1803,7 +1823,9 @@ function refresh(view) {
         reviewMenu(reviewHost(node), hist[at], at, e, sheet.finalIdx || 0,
                    { compact: true, onSaved: () => { forgetSaved(sheet); refreshAll(); } });
       });
-      b.title = "Click to show this run. Right-click for open in a new tab, rerun and more.";
+      b.title = "Click to show this run. Right-click for open in a new tab, rerun and more. "
+              + "S keeps it.";
+      b._rnSheet = sheet;
     }
     const sv = sheet ? savedState(sheet) : null;
     if (sv) {

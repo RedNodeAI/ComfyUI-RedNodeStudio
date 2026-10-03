@@ -35,7 +35,8 @@ const VERTICAL = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown"]);
 // Registered per element and matched by walking UP from whatever the pointer is really
 // over, so a hotkey on the panel works over every control inside it. The arrows use
 // exact-match hover instead, because there the target IS the panel.
-const hotkeys = new Map();          // element -> Map(combo -> handler)
+// weak: a panel rebuilt on every render drops its old element's keys with it
+const hotkeys = new WeakMap();      // element -> Map(combo -> handler)
 let lastOver = null;
 
 // ---------------------------------------------------------------- panel paste

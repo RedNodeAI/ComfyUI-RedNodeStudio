@@ -27,6 +27,9 @@ format matters: **version** then a date, notes below until the next bold line.
 - A new Workspace links every part of a run to Main on the Seed tab, and so does the shipped
   RedNode Studio workflow, so one seed reproduces the whole picture and Rerun with the same seed
   gives the same result through the Detailer, Upscale and Post. Saved workflows keep their links
+- S keeps the picture you are looking at, or puts it back with the drafts: over an Image Review
+  panel, in its full screen, over the Run page's picture or a run in its runs column. A note
+  at the bottom of the screen says what happened, or why a picture cannot be kept
 - Kept pictures wear a gold border on the Run page, on the Live picture and on their run in the
   runs column, with a Kept mark; with drafts and keepers split on the Save tab, a draft says
   Draft. A named picture shows its name beside its run

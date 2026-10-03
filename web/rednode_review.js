@@ -1,7 +1,7 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { setting } from "./rednode_settings.js";
-import { arrowKeys, forgetArrowKeys } from "./rednode_keys.js";
+import { arrowKeys, forgetArrowKeys, panelHotkey, forgetHotkeys } from "./rednode_keys.js";
 import { pngTextChunks, parseParameters, parseResources, workspaceConfigInPrompt,
          summariseConfig } from "./rednode_png_meta.js";
 
@@ -138,6 +138,10 @@ css.textContent = `
 .rn-rv-menu .quick{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 2px 4px}
 .rn-rv-menu .quick .q{background:#24282f;border:1px solid #33373d;text-align:center;padding:6px 4px;font-size:12px}
 .rn-rv-menu .saved{display:flex;flex-direction:column;gap:3px}
+.rn-rv-flash{position:fixed;left:50%;bottom:40px;transform:translateX(-50%);z-index:10100;
+  background:#2a2110;border:1px solid #d4a72c;color:#f0d27a;border-radius:8px;padding:8px 16px;
+  font:600 13px system-ui,sans-serif;box-shadow:0 8px 24px #000a;pointer-events:none}
+.rn-rv-flash.bad{background:#2a1215;border-color:#b8283c;color:#f3b0ba}
 .rn-rv-menu button.keep{border:1px solid #d4a72c;color:#f0d27a;background:#2a2110;text-align:center;
   font-weight:700;margin:0 2px 2px}
 .rn-rv-menu button.keep.on{background:#d4a72c;color:#1b1e23}
@@ -461,6 +465,49 @@ async function setKept(found, kept) {
   const d = await res.json();
   if (d.error) throw new Error(d.error);
   return d;
+}
+
+// a word on screen for a moment, for a key that does something with no menu open
+function flash(text, bad = false) {
+  document.querySelector(".rn-rv-flash")?.remove();
+  const d = document.createElement("div");
+  d.className = "rn-rv-flash" + (bad ? " bad" : "");
+  d.textContent = text;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 1400);
+}
+
+// S: Keep, or Unkeep, the picture on show. Only a picture a Save filed can be kept.
+export async function keepToggle(entry, slot = 0) {
+  if (!entry) return null;
+  const found = await savedFor(entry, slot);
+  if (!found) { flash("Not saved, so it cannot be kept. Switch Save on to keep pictures.", true); return null; }
+  if (found.missing) { flash("The saved file is gone.", true); return null; }
+  try {
+    await setKept(found, !found.kept);
+  } catch (e) {
+    flash(`Keep failed: ${e.message}`, true);
+    return null;
+  }
+  api.dispatchEvent?.(new CustomEvent("rednode.saved_changed"));
+  flash(found.kept ? `\u2606 Back to drafts: ${found.name}` : `\u2605 Kept: ${found.name}`);
+  return !found.kept;
+}
+
+// the S key on a Review panel or room: the entry and frame in view. Raw and Before Post
+// rooms show versions that are not the saved picture, so they let S pass.
+function keepKey(node) {
+  return () => {
+    if (/:run-(raw|before)$/.test(String(node.id))) return false;
+    const h = hist(node);
+    const at = node._rnView || 0;
+    if (!h[at]) return false;
+    keepToggle(h[at], node._rnSlotFor === at ? (node._rnSlot || 0) : 0).then(() => {
+      node.graph?.change?.();
+      render(node);
+      node._rnOwner?._rnKeepChanged?.();
+    });
+  };
 }
 
 export function openMenu(node, entry, index, ev, slot = 0, opts = {}) {
@@ -915,6 +962,7 @@ export function openFullscreen(node) {
     if (strip && over) strip.scrollLeft = (strip.scrollLeft || 0) + e.deltaY;
   }, { passive: false });
   arrowKeys(fshost, step, (d) => stepSlot(node, d));
+  panelHotkey(fshost, "s", keepKey(node));
 
   // a hosted panel not shown yet (the Run tab's picture) has no root: a spare
   // one stands in, so "open" never reads as closed and Close still works
@@ -928,6 +976,7 @@ export function openFullscreen(node) {
     node._rnFsCard?.dispose?.();
     node._rnFsCard = null;
     forgetArrowKeys(fshost);
+    forgetHotkeys(fshost);
     ov.remove();
     document.removeEventListener("keydown", onKey, true);
     render(node);
@@ -1296,6 +1345,7 @@ function build(node) {
                  : Math.max(0, Math.min(h.length - 1, at + dir));
     render(node);
   }, (dir) => stepSlot(node, dir));
+  panelHotkey(wrap, "s", keepKey(node));
 
   // The frontend assigns node.imgs from every executed event and draws them under the
   // widgets. That is the stock PreviewImage picture, which would show every image twice.
