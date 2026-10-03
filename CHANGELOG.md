@@ -8,6 +8,9 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- With Auto name on, the Raw Render and Before Post FX copies were never written: they wait for
+  the finished render's title, and by then the run counted as filed, so the Save passed them by.
+  The menu then said Keep (not saved) on those versions
 - After Keep, a past run on the Run page showed an empty picture: Keep moves the file into
   keepers and the run still pointed at drafts. The run follows the file now
 - A named picture lost its name when it was kept or put back with the drafts

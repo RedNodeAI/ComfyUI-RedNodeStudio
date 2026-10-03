@@ -1404,7 +1404,9 @@ class RedNodeSave:
     def _save(self, images, config="{}", seed=None, prompt=None, extra_pnginfo=None,
               words=None, carry=None, stage=""):
         from . import builtin_chain as _chain
-        if _chain.done("save"):
+        # a version copy (Raw, Before Post) is part of the Workspace's own filing: with
+        # Auto name it is written after the finished render, which marks the run filed
+        if _chain.done("save") and not stage:
             from . import run_events as _re
             _re.skip("save", "Save", "filed by the Workspace")
             print("[RedNode Save] the Workspace already filed this run; passed through",
