@@ -8,6 +8,8 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- After Keep, a past run on the Run page showed an empty picture: Keep moves the file into
+  keepers and the run still pointed at drafts. The run follows the file now
 - A named picture lost its name when it was kept or put back with the drafts
 - Keep on the finished picture kept the Raw copy instead when Also: raw output was on: the
   Save files the Raw copy first, and the lookup took the run's first saved file. Each saved file

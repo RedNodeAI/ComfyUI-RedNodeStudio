@@ -1536,11 +1536,39 @@ function savedState(S, stage = "") {
         const title = ok ? String(d.title || "") : "";
         const was = SAVED.get(key);
         SAVED.set(key, { at: Date.now(), val, title, pending: false });
-        if (val !== was?.val || title !== (was?.title || "")) refreshAll();
+        const moved = ok && repointSheet(S, stage, d);
+        if (moved || val !== was?.val || title !== (was?.title || "")) refreshAll();
       });
   }
   return c?.val || null;
 }
+// KEEP MOVES THE FILE. A run remembers where its saved picture was; once Keep or
+// Unkeep moves it between drafts and keepers that place is empty and the picture
+// cannot load. The Save's answer says where it is now, and the run follows it.
+function repointSheet(S, stage, d) {
+  const file = { filename: String(d.name || ""), subfolder: String(d.subfolder || ""), type: "output" };
+  if (!file.filename) return false;
+  const same = (f) => f && f.type === "output" && f.filename === file.filename
+                      && (f.subfolder || "") === file.subfolder;
+  if (stage === "raw") {
+    if (!S.rawFile || S.rawFile.type !== "output" || same(S.rawFile)) return false;
+    S.rawFile = file; S.raw = viewUrl(file);
+    return true;
+  }
+  if (stage === "before_post") {
+    if (!S.beforeFile || S.beforeFile.type !== "output" || same(S.beforeFile)) return false;
+    S.beforeFile = file; S.before = viewUrl(file);
+    return true;
+  }
+  const i = S.finalIdx || 0;
+  const cur = S.finalFiles?.[i];
+  if (!cur || cur.type !== "output" || same(cur)) return false;
+  S.finalFiles[i] = file;
+  if (S.finals) S.finals[i] = viewUrl(file);
+  S.final = viewUrl(file);
+  return true;
+}
+
 const savedTitle = (S) => (S?.promptId && SAVED.get(`${S.promptId}:${S.finalIdx || 0}:`)?.title) || "";
 // forget a run's saved state, every version, so the next draw asks again
 const forgetSaved = (S) => {
