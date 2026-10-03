@@ -1079,10 +1079,45 @@ def remember(entry):
 COMPANIONS = (".txt", ".rn.json")
 
 
+def _under(p, base):
+    p, base = os.path.normcase(p), os.path.normcase(base)
+    return p == base or p.startswith(base.rstrip(os.sep) + os.sep)
+
+
+def _link_targets(root, depth=3):
+    """Where the links and junctions inside root point (a few levels down)."""
+    out, level = [], [root]
+    for _ in range(depth):
+        nxt = []
+        for d in level:
+            try:
+                entries = list(os.scandir(d))
+            except OSError:
+                continue
+            for e in entries:
+                try:
+                    if not e.is_dir():
+                        continue
+                    linked = e.is_symlink() or (hasattr(os.path, "isjunction")
+                                                and os.path.isjunction(e.path))
+                except OSError:
+                    continue
+                if linked:
+                    out.append(os.path.realpath(e.path))
+                else:
+                    nxt.append(e.path)
+        level = nxt
+    return out
+
+
 def _inside(path, root):
-    """True when path really sits inside root. Everything here is HTTP-reachable."""
-    real, base = os.path.realpath(path), os.path.realpath(root)
-    return real == base or real.startswith(base + os.sep)
+    """True when path sits inside root. Everything here is HTTP-reachable, so a climb
+    out with .. is refused; a folder linked or junctioned into root counts as inside."""
+    if _under(os.path.abspath(path), os.path.abspath(root)):
+        return True
+    real = os.path.realpath(path)
+    return any(_under(real, base)
+               for base in [os.path.realpath(root)] + _link_targets(os.path.abspath(root)))
 
 
 def rebuild_index(root=None, cap=None):

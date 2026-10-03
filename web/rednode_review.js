@@ -5,6 +5,17 @@ import { arrowKeys, forgetArrowKeys } from "./rednode_keys.js";
 import { pngTextChunks, parseParameters, parseResources, workspaceConfigInPrompt,
          summariseConfig } from "./rednode_png_meta.js";
 
+// The vision model picked on a Workspace's AI tab, for naming a picture: the host's own
+// config when it is a Workspace, else the first Workspace on the canvas. Empty lets the
+// server pick.
+function aiTabModel(node) {
+  const own = node?._rnCfg?.auto?.model;
+  if (own) return String(own);
+  const ws = (app.graph?._nodes || []).find((n) => n.type === "RedNodeStudioWorkspace"
+                                                    && n._rnCfg?.auto?.model);
+  return String(ws?._rnCfg?.auto?.model || "");
+}
+
 // RedNode Image Review — the panel over review.py.
 //
 // The server side is a stock PreviewImage; everything interesting is here. Each
@@ -506,7 +517,7 @@ export function openMenu(node, entry, index, ev, slot = 0) {
       async () => {
         const res = await api.fetchApi("/rednode/title", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: found.path }),
+          body: JSON.stringify({ path: found.path, model: aiTabModel(node) }),
         });
         const d = await res.json();
         if (d.error) throw new Error(d.error);
