@@ -34,7 +34,8 @@ format matters: **version** then a date, notes below until the next bold line.
   only the Raw copy. A run's marks in the runs column say which are kept: Kept Raw, Kept BP
   (Before Post), Kept AP (After Post)
 - In the Image Review's full screen, a kept picture's Generation data card has a gold border
-  and a Kept mark beside its title, and both follow Keep and S as you go
+  and a Kept mark beside its title, and both follow Keep and S as you go. Kept pictures also
+  wear a gold frame and a star on the Image Review's strip, on the node and in full screen
 - With a Raw or Before Post copy on, the finished picture saves into an after_post folder beside
   raw and before_post, so each version has a folder of its own. With neither on it saves
   straight into the folder as before

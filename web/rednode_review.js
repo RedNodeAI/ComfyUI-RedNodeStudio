@@ -126,6 +126,9 @@ css.textContent = `
 .rn-rv-th.cur{border-color:#b8283c;box-shadow:0 0 7px #b8283c66}
 .rn-rv-th.newest{border-color:#22c55e}
 .rn-rv-th.newest.cur{border-color:#b8283c}
+.rn-rv-th.kept{box-shadow:inset 0 0 0 3px #d4a72c}
+.rn-rv-th.kept::after{content:"\u2605";position:absolute;top:2px;right:4px;color:#f0d27a;
+  font-size:13px;text-shadow:0 0 3px #000}
 .rn-rv-th .gone{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:9px;color:#ff7b86;background:#0009}
 .rn-rv-empty{opacity:.45;font-size:11.5px;text-align:center;line-height:1.5;padding:10px}
@@ -463,6 +466,9 @@ async function copyPrompt(entry, slot = 0, ev = null) {
 }
 
 async function setKept(found, kept) {
+  // stale, not forgotten: the strip keeps its marks until the next draw asks again,
+  // so a Keep does not flash every gold border off and on
+  for (const v of KEPT.values()) v.at = 0;
   const res = await api.fetchApi("/rednode/promote", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path: found.path, keep: kept }),
@@ -470,6 +476,28 @@ async function setKept(found, kept) {
   const d = await res.json();
   if (d.error) throw new Error(d.error);
   return d;
+}
+
+// KEPT ON THE STRIP: which pictures are kept, asked once per picture and remembered a
+// little while, so redrawing a long strip does not ask the server for every one again
+const KEPT = new Map();                 // `${prompt}:${slot}:${stage}` -> {kept, at, pending}
+const KEPT_TTL = 20000;
+function stageOf(node) {
+  const m = /:run-(raw|before)$/.exec(String(node?.id || ""));
+  return m ? (m[1] === "raw" ? "raw" : "before_post") : "";
+}
+function markKept(entry, slot, stage, el) {
+  if (!entry?.prompt) return;
+  const key = `${entry.prompt}:${slot}:${stage}`;
+  const c = KEPT.get(key);
+  if (c && "kept" in c) el.classList.toggle("kept", !!c.kept);
+  if ((c && Date.now() - c.at < KEPT_TTL) || c?.pending) return;
+  KEPT.set(key, { ...(c || {}), pending: true, at: c?.at || 0 });
+  savedFor(entry, slot, stage).then((found) => {
+    const kept = !!(found && !found.missing && found.kept);
+    KEPT.set(key, { kept, at: Date.now(), pending: false });
+    el.classList.toggle("kept", kept);
+  });
 }
 
 // a word on screen for a moment, for a key that does something with no menu open
@@ -1262,6 +1290,7 @@ function render(node) {
   h.forEach((entry, i) => {
     const th = document.createElement("div");
     th.className = "rn-rv-th" + (i === view ? " cur" : "") + (i === 0 ? " newest" : "");
+    markKept(entry, 0, stageOf(node), th);
     const img = document.createElement("img");
     // Fetched as the strip reaches them, and decoded off the main thread. This used to
     // pull and decode every entry in the history the moment the node drew, which across
