@@ -14822,6 +14822,13 @@ function powerSwitchFor(node) {
   const cfg = node._rnCfg;
   const cur = node._rnTab;
   if (!cfg || !cur) return null;
+  // the Run tab's Save page answers for Save itself; its other pages have no switch
+  if (cur === "run") {
+    const sub = node._rnRunSub || node.properties?.rn_run_sub || "run";
+    return sub === "save"
+      ? { name: "Save", on: !!cfg.save_on, set: (v) => { cfg.save_on = !!v; } }
+      : null;
+  }
   let list;
   try { list = railSwitches(node, cfg, cur) || []; } catch (e) { return null; }
   if (cur === "identity") {

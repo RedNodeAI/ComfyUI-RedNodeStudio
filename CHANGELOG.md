@@ -43,6 +43,8 @@ format matters: **version** then a date, notes below until the next bold line.
   saved card (Raw render, Before Post FX, Finished render), What gets written beside it is
   Metadata, and When a run finishes is Finish sound
 - The Run page's caption says Finished render
+- The Run tab's Save page has the power button in its corner, like every page with a switch: it
+  turns Save on and off, and Space over the panel does the same
 - S, or K, keeps the picture you are looking at, or puts it back with the drafts: over an Image Review
   panel, in its full screen, over the Run page's picture or a run in its runs column. A note
   at the bottom of the screen says what happened, or why a picture cannot be kept
