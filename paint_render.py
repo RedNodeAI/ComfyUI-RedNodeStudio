@@ -678,6 +678,10 @@ class RedNodePaintRender:
         # not: the wired image in every real route IS the tab's source (the door,
         # the upscale round trip), and the mask already follows the same rule
         base = _ws.composite_colour(base, pc.get("colour"), "RedNode Paint Render")
+        # THE SOURCE'S RECORD RIDES THE RESULT: a painted picture keeps the prompt,
+        # settings, model and LoRA hashes of the picture it was painted on, so Save,
+        # Post + Save and Civitai still know how it was made (as the Upscale tab does)
+        _carry = _ws.png_carry(pc["source"]) if pc.get("source") else {}
         full_h, full_w = base.shape[1], base.shape[2]
         mask = None
         if pc.get("mask"):
@@ -701,7 +705,7 @@ class RedNodePaintRender:
                 _run.skip("paint", "Paint", "nothing is painted yet")
                 _say("nothing is painted yet, so there is nothing to "
                       "render")
-                return _out(base)
+                return _out(base, _carry)
             # the shape step: grow the box toward an aspect the model knows, adding
             # context rather than trimming paint. Defaults to auto, so a config saved
             # before the Paint tab had the control gets the sensible behaviour.
@@ -795,7 +799,7 @@ class RedNodePaintRender:
             _say(f"whole frame at denoise 0: scaled to "
                   f"{work.shape[2]} x {work.shape[1]} and handed straight back, with no "
                   "sampling and no VAE round trip")
-            return _out(work)
+            return _out(work, _carry)
 
         # THE RIG FILLS WHAT IS NOT WIRED, through the paint LoRA routing, the same
         # loader Paint Out uses, so the two paint doors can never disagree about
@@ -872,11 +876,8 @@ class RedNodePaintRender:
             anypaint_alpha = _ap_alpha
         else:
             model, clip = self._apply_loras(model, clip, pc, prompt)
-            if positive is None:
+            if positive is None and clip is not None and pc.get("anypaint"):
                 # an AnyPaint run that fell back: the Workspace skipped its encode
-                if clip is None:
-                    raise ValueError("AnyPaint fell back to ordinary painting, which needs "
-                                     "a text encoder, and the rig has none")
                 positive = _encode_text(clip, self._anypaint_words(pc, prompt))
                 negative = _encode_text(clip, "")
             pos, neg = self._conditioning(clip, positive, negative, pc,
@@ -977,7 +978,7 @@ class RedNodePaintRender:
                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
             if mask is None:
                 _say(f"done; the frame comes back at {big_w} x {big_h}")
-                return _out(painted)
+                return _out(painted, _carry)
             m = F.interpolate(mask.unsqueeze(1), size=(big_h, big_w),
                               mode="bilinear", align_corners=False).squeeze(1)
             if anypaint_alpha is not None:
@@ -987,7 +988,7 @@ class RedNodePaintRender:
             result = up * (1 - m) + painted[..., :up.shape[-1]] * m
             _say(f"done; the frame comes back at {big_w} x {big_h}, "
                   "with only the painted area re-rendered")
-            return _out(result)
+            return _out(result, _carry)
 
         # back to the crop's own size, then into the picture through the mask so only
         # what was painted actually changes
@@ -1010,7 +1011,7 @@ class RedNodePaintRender:
         else:
             result[:, y0:y1, x0:x1, :] = back
         _say("done; the rest of the picture was never re-rendered")
-        return _out(result)
+        return _out(result, _carry)
 
 
 def blend_mask(m, pc):

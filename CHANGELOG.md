@@ -8,6 +8,11 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- A picture painted on the Paint tab lost its record: the prompt, settings, model and LoRA
+  hashes of the picture it was painted on. It keeps them now, through Save, Post + Save and the
+  next paint, so Civitai still reads how it was made
+- The paint pass stopped with "AnyPaint fell back to ordinary painting, which needs a text
+  encoder" when no conditioning reached it on a rig with no text encoder, even with AnyPaint off
 - With Auto name on, the Raw Render and Before Post FX copies were never written: they wait for
   the finished render's title, and by then the run counted as filed, so the Save passed them by.
   The menu then said Keep (not saved) on those versions
