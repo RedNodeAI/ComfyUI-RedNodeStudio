@@ -161,6 +161,7 @@ export const EDITOR_SUBS = [
   { id: "reangle", label: "RE-ANGLE", tip: "Re-shoot the source or the render from a new camera angle." },
   { id: "swap", label: "SWAP", tip: "Swap a character into the source or the render." },
   { id: "converter", label: "CONVERTER", tip: "Rework the final prompt and the Img2Img auto prompt." },
+  { id: "picinfo", label: "PICTURE INFO", tip: "Drop a picture to read how it was made, copy any part, send it to the Workspace, or save it for A1111, Neo or Civitai." },
 ];
 export const EDITOR_SUB_IDS = EDITOR_SUBS.map((s) => s.id);
 

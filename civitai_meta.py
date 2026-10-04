@@ -249,3 +249,60 @@ def exif_bytes(text):
     ex = Image.Exif()
     ex.get_ifd(0x8769)[0x9286] = b"UNICODE\x00" + str(text).encode("utf-16-be")
     return ex.tobytes()
+
+
+# ---- a picture's record rewritten for Civitai (the Tools tab's Picture Info) -------
+
+_FOLDERS_FOR = {"checkpoint": ("checkpoints", "diffusion_models", "unet"), "lora": ("loras",)}
+
+
+def installed_name(kind, name):
+    """The installed file a name from a picture's record means: the name itself when it
+    is one, else the file whose name without folder or extension matches; ""."""
+    name = str(name or "").strip()
+    if not name:
+        return ""
+    if _full_path(kind, name) or (kind == "checkpoint" and _full_path("unet", name)):
+        return name
+    want = _stem(name).lower()
+    for folder in _FOLDERS_FOR.get(kind, ()):
+        try:
+            listed = folder_paths.get_filename_list(folder)
+        except Exception:
+            listed = []
+        for f in listed:
+            if _stem(f).lower() == want:
+                return f
+    return ""
+
+
+def civitai_text(data):
+    """The A1111 parameters text with hashes, and the Civitai resources list, for a
+    record read off a picture: the same text RedNode Save writes. A model or LoRA not
+    installed here is named without a hash."""
+    d = data if isinstance(data, dict) else {}
+    st = d.get("settings") if isinstance(d.get("settings"), dict) else {}
+    model_in = str(d.get("model") or "")
+    model = installed_name("checkpoint", model_in)
+    kind = "checkpoint"
+    if model and not _full_path("checkpoint", model):
+        kind = "unet"
+    loras, missing = [], []
+    for item in d.get("loras") or []:
+        if not isinstance(item, dict):
+            continue
+        found = installed_name("lora", item.get("name"))
+        if not found:
+            missing.append(str(item.get("name") or ""))
+        loras.append({"name": found or str(item.get("name") or ""),
+                      "strength": item.get("weight", 1.0)})
+    if model_in and not model:
+        missing.insert(0, model_in)
+    res = resources(model or model_in, kind, loras)
+    ctx = {"seed": st.get("seed"), "width": st.get("width"), "height": st.get("height")}
+    sampler = {k: st.get(k) for k in ("steps", "sampler", "scheduler", "cfg", "denoise")}
+    meta = {"positive": d.get("positive") or "", "negative": d.get("negative") or ""}
+    return {"parameters": parameters(meta, ctx, res, sampler),
+            "resources": json.dumps(civitai_resources(res)),
+            "missing": [m for m in missing if m]}
+

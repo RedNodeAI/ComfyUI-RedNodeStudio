@@ -33,6 +33,12 @@ format matters: **version** then a date, notes below until the next bold line.
   ("Run 171 · Before Post FX"). Clicking the picture opens it full screen
 - The Run chip is gone from the top line, which now holds the seed and the run time; click the
   seed to copy it. The seed in a picture's Generation data copies on a click too
+- Picture Info, a page on the Tools tab: drop, paste or drag in a picture and read how it was
+  made, from A1111, Forge, Neo, ComfyUI or RedNode Studio, PNG or a JPEG / WebP with an A1111
+  comment. The prompt, negative, each setting and each LoRA copy on a click; LoRAs are marked
+  installed or not; Copy all gives the A1111 text; Send to Workspace and Send to Paint hand it
+  on. Save a copy writes a new PNG for A1111 / Neo, for Civitai with the model and LoRA hashes,
+  or with no metadata. Nothing is uploaded and the dropped picture is never changed
 - A new Workspace links every part of a run to Main on the Seed tab, and so does the shipped
   RedNode Studio workflow, so one seed reproduces the whole picture and Rerun with the same seed
   gives the same result through the Detailer, Upscale and Post. Saved workflows keep their links

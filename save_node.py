@@ -1735,6 +1735,23 @@ try:
             return web.json_response({"error": f"could not write it: {e}"}, status=500)
         return web.json_response({"builtin": BUILTIN_PRESETS, "presets": load_presets()})
 
+    @PromptServer.instance.routes.post("/rednode/civitai_text")
+    async def _rednode_civitai_text(request):
+        """A picture's record as Civitai reads it, for the Picture Info page. Hashing a
+        model the first time reads the whole file, so it runs off the event loop."""
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        import asyncio
+        from . import civitai_meta
+        try:
+            out = await asyncio.get_event_loop().run_in_executor(
+                None, civitai_meta.civitai_text, data)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=400)
+        return web.json_response(out)
+
     @PromptServer.instance.routes.post("/rednode/title")
     async def _rednode_title(request):
         """Name one picture. On demand only: it loads a model and takes a moment."""

@@ -16,6 +16,7 @@ import { runTabBody, RUN_CSS, runLit, railRunState, listenRun, configHost, queue
          RUN_SUBS } from "./rednode_ws_run.js";
 import { overviewBody, OVERVIEW_CSS, boxSwitches } from "./rednode_ws_overview.js";
 import { upscaleBody } from "./rednode_ws_upscale.js";
+import { picInfoBody } from "./rednode_ws_picinfo.js";
 import { batchStrip, sourceSwitch, sourceView,
          batchState } from "./rednode_ws_batch.js";
 import { mountDetailerPanel } from "./rednode_advanced.js";
@@ -1221,6 +1222,7 @@ css.textContent = `
 .s-converter{--rn-s:#22a39f}
 .s-upscale{--rn-s:#b58ae0}
 .s-esource{--rn-s:#22c55e}
+.s-picinfo{--rn-s:#e06cd9}
 .rn-ws-subt.tint{position:relative;overflow:hidden}
 .rn-ws-subt.tint::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
   border-radius:2px 2px 0 0;background:var(--rn-s,#4a5058);opacity:.75}
@@ -16710,6 +16712,7 @@ function editorTabs(node, body) {
     }
     converterSection(node, body, "i2i", { flat: true, title: "IMG2IMG AUTO PROMPT CONVERTER" });
   } else if (sub === "upscale") upscaleBody(node, body);
+  else if (sub === "picinfo") picInfoBody(node, body);
 }
 
 // THE RE-RENDER TAB: the picture rendered again from itself as the reference. It
@@ -21711,6 +21714,13 @@ async function droppedPackPicture(e) {
   const entry = packDragEntry(e);
   return entry ? fileForEntry(entry) : null;
 }
+
+// the Picture Info page's Send to Workspace and its drops from the Shelf or a Review
+export function importPictureFile(node, file) {
+  const cfg = node._rnCfg;
+  return importPromptFromPng(node, cfg, cfg.prompts.rows, file);
+}
+export { droppedPackPicture };
 
 async function importPromptFromPng(node, cfg, rows, file, opts = {}) {
   let chunks = {};

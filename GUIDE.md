@@ -372,6 +372,7 @@ Swap, so the medium is converted after the viewpoint is settled and before a fac
 the new render, a polish pass by the rig follows the edit. The edit models run on PyTorch
 attention, so SageAttention does not break them, and each shows its steps on the Run tab.
 **Converter** reworks the final prompt, with an optional rewrite by a local Ollama model.
+**Picture Info** reads how a picture was made, the way A1111's PNG Info does: drop, paste or drag in a picture from A1111, Forge, Neo, ComfyUI or this pack (PNG, or a JPEG or WebP with an A1111 comment) and its prompt, negative, settings and LoRAs show, each copying on a click, with the LoRAs marked installed or not. Send to Workspace brings them in the way Import does. Save a copy writes a new PNG for A1111 / Neo (the prompt with its LoRA tags and A1111 sampler names), for Civitai (with the model and LoRA hashes Civitai links by, the same record RedNode Save writes), or with no metadata at all. The picture you dropped is never changed.
 
 **Re-render.** Turns an
 illustration into a photograph, from the Tools tab's source picture or from the new render,
