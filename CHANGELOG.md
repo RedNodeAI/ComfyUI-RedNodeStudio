@@ -8,6 +8,13 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Fixes
 
+- The RedNode Studio workflow shipped with my own Ollama model saved as the auto prompt model
+  (huihui_ai/Qwen3.8-abliterated:27b-q2_K), so Auto Prompt, Sort and Rewrite asked Ollama for a
+  model nobody else has and came back empty. It ships with huihui_ai/qwen3-vl-abliterated:8b-instruct,
+  the one RedNode_Download_Models.bat installs
+- A Model dropdown whose saved model is not installed showed the first installed model as chosen
+  while runs still asked for the missing one, and with a single model there was no way to change it.
+  The missing one is now listed first as Not Installed, so picking yours takes
 - A picture painted on the Paint tab lost its record: the prompt, settings, model and LoRA
   hashes of the picture it was painted on. It keeps them now, through Save, Post + Save and the
   next paint, so Civitai still reads how it was made

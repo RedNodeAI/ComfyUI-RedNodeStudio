@@ -5333,14 +5333,25 @@ function autoSection(node, body, tabName, { flat = false } = {}) {
       t.title = hint;
       const sel = document.createElement("select");
       sel.className = "rn-ws-res";
+      // a saved value this machine lacks (a workflow from someone else's install) shows as such,
+      // so the browser does not show the first option as chosen while runs still ask for the missing one
+      const cur = cfg.auto[key] ?? "";
+      const missing = cur && !options.some(([v]) => v === cur);
+      if (missing) {
+        const o = document.createElement("option");
+        o.value = cur;
+        o.textContent = `${cur} (${/model$/.test(key) ? "Not Installed" : "Not Available"})`;
+        o.selected = true;
+        sel.appendChild(o);
+      }
       for (const [v, lab2] of options) {
         const o = document.createElement("option");
         o.value = v;
         o.textContent = lab2;
-        o.selected = (cfg.auto[key] ?? "") === v;
+        o.selected = cur === v;
         sel.appendChild(o);
       }
-      sel.title = hint;
+      sel.title = missing ? `${hint} The saved choice is not on this machine: pick one of yours.` : hint;
       sel.onchange = () => { cfg.auto[key] = sel.value; writeCfg(node); };
       w.append(t, sel);
       return w;
