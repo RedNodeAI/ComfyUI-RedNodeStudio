@@ -1,4 +1,5 @@
-"""RedNode Studio's API for other packs: the calls RedNode Video Studio builds its cast sheets from.
+"""RedNode Studio's API for other packs: the calls RedNode Video Studio builds its cast sheets from, and the Post FX
+chain for a clip (grade_video, API_VERSION 2).
 
 Frozen signatures under API_VERSION; a change that breaks a caller bumps it. Everything here wraps code the
 Hero Creator already runs: the segmenter cut to white, VOSR2, and the Krea 2 Identity render. The one new
@@ -14,7 +15,7 @@ from PIL import Image
 from . import hero as _hero
 from .automask import INSTALL_HINT, _prepared_segmenters, _subject_mask_prepared
 
-API_VERSION = 1
+API_VERSION = 2          # 2: grade_video
 
 PANEL = (768, 1152)            # one standing figure, 2:3, multiples of 16
 MARGIN = 0.05                  # white above the head and below the feet, as a share of the panel height
@@ -205,3 +206,47 @@ def compose(panels, closeup=None, panel=PANEL):
             im.thumbnail((pw, ph), Image.LANCZOS)
         sheet.paste(im, (i * pw + (pw - im.width) // 2, (ph - im.height) // 2))
     return torch.from_numpy(np.asarray(sheet).astype(np.float32) / 255.0)[None]
+
+
+
+def grade_video(images, config, seed=0, chunk=16, on_chunk=None):
+    """The Post FX chain over a clip: images [N,H,W,3] float 0..1 in, the same shape out.
+
+    config is a Post FX panel config (the dict or its JSON). Run in chunks on the card so memory stays bounded.
+    Random dials are drawn once from seed for the whole clip, so the grade holds still from frame to frame; the
+    grain alone gets a new seed per chunk so its pattern never repeats. A chunk that needs a subject mask or a
+    depth map makes its own. on_chunk(done, total) is told after each chunk."""
+    import random
+
+    import comfy.model_management as mm
+
+    from . import postprocess as P
+    cfg = P.parse_post(config if isinstance(config, dict) else P.own_post(config))
+    if not any(cfg[n].get("on") for n in P.ORDER):
+        return images
+    old = P._SEEDED["rng"]
+    P._SEEDED["rng"] = random.Random(int(seed))
+    try:
+        for item in cfg.get("chain") or []:
+            if item.get("on") and item.get("rand"):
+                item.update(P.roll_block(item["fx"], item))
+                item["rand"] = {}
+    finally:
+        P._SEEDED["rng"] = old
+    grain = [i for i in cfg.get("chain") or [] if i["fx"] == "grain" and i.get("on")]
+    depthy = any(cfg[n].get("on") for n in P.DEPTH_EFFECTS)
+    resolver = P.match_resolver(ws_raw=None, wired=None) if "match" in P.active_fx(cfg) else None
+    dev = mm.get_torch_device()
+    n, out = int(images.shape[0]), []
+    for k, i in enumerate(range(0, n, max(1, int(chunk)))):
+        mm.throw_exception_if_processing_interrupted()
+        part = images[i:i + chunk].to(dev, torch.float32)
+        for g in grain:
+            g["seed"] = (int(seed) + 7919 * k) & 0x7fffffff
+        depth = P.auto_depth(part, settings=cfg.get("depth")) if depthy else None
+        mask = P.auto_mask(part) if P.needs_mask(cfg) else None
+        out.append(P.apply_post(part, cfg, depth=depth, mask=mask, reference=resolver).clamp(0, 1).cpu())
+        del part
+        if on_chunk:
+            on_chunk(min(n, i + chunk), n)
+    return torch.cat(out, 0)
