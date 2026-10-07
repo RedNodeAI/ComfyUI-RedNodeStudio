@@ -442,8 +442,9 @@ def ollama_model_sizes(url=OLLAMA_URL, transport=_http_json):
     """{model name: file size in bytes} from Ollama's list; {} when it is not running."""
     try:
         data = transport(f"{url.rstrip('/')}/api/tags", None, 10)
+        # Ollama 0.40 adds llamacpp:<digest> aliases of models already listed by name
         return {m["name"]: int(m.get("size") or 0)
-                for m in data.get("models", []) if m.get("name")}
+                for m in data.get("models", []) if m.get("name") and not m["name"].startswith("llamacpp:")}
     except Exception:
         return {}
 
