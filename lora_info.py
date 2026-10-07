@@ -357,6 +357,8 @@ def _pick_file(version):
 # back to the tensor key layout — verified against this machine's library.
 
 _ARCH_BY_META = [
+    # the lightx2v H3 Turbo files say "Comfy-Org/MiniMax-H3 ..." in base_model
+    ("minimax", "MiniMax H3"),
     ("krea", "Krea 2"), ("zimage", "Z-Image"), ("z-image", "Z-Image"),
     ("flux", "Flux"), ("qwen", "Qwen"), ("wan", "WAN"), ("anima", "Anima"),
     ("sdxl", "SDXL"), ("xl_base", "SDXL"), ("sd_v1", "SD 1.5"), ("sd15", "SD 1.5"),
@@ -369,6 +371,11 @@ _ARCH_BY_KEYS = [
     ("attn1.to_gate", "LTX Video"),
     ("lora_transformer_context_embedder", "Chroma"),
     ("add_k_proj", "Qwen Image"),
+    # MiniMax H3 video LoRAs share Krea 2's "diffusion_model.blocks." prefix too; H3 fuses
+    # attention as qkv_proj/out_proj (Krea 2 has wq/wk/wv/wo) and has a token_refiner
+    ("token_refiner.blocks", "MiniMax H3"),
+    ("attn.qkv_proj", "MiniMax H3"),
+    ("_attn_qkv_proj", "MiniMax H3"),
     # WAN video LoRAs share Krea 2's "diffusion_model.blocks." prefix, but WAN is a
     # dual-stream model with cross-attention; Krea 2's SingleStreamDiT has none.
     ("cross_attn", "WAN"),
@@ -383,6 +390,9 @@ _ARCH_BY_KEYS = [
     ("lora_unet_blocks_", "Anima"),
 ]
 
+
+
+_ARCH_VERSION = 2      # 2: MiniMax H3 told apart from Krea 2 (2026-10-07)
 
 
 def _safetensors_header(path, max_header=32 << 20):
@@ -439,7 +449,8 @@ def list_lora_types(refresh=False, with_times=False):
         except OSError:
             continue
         times[name] = max(st.st_mtime, getattr(st, "st_ctime", 0))
-        sig = f"{st.st_size}:{int(st.st_mtime)}"
+        # the detector's version rides the signature, so a rule change relabels cached files
+        sig = f"{st.st_size}:{int(st.st_mtime)}:{_ARCH_VERSION}"
         hit = cache.get(path)
         if isinstance(hit, dict) and hit.get("sig") == sig:
             out[name] = hit.get("arch", "Unknown")
