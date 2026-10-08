@@ -6,6 +6,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.6.5** - unreleased
 
+### Fixed
+
+- Assistant: a model whose reply is not JSON under the schema (some quantised models loop one phrase to the length limit
+  on Ollama 0.40) is asked again in plain JSON mode, then in free text with the allowed shapes named, before a try counts as
+  failed
+
 ### Added
 
 - api.refresh_frame (API_VERSION 3): a frame through Krea 2 image-to-image at a low denoise with a

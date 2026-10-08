@@ -441,6 +441,41 @@ def build_context(snapshot, section=None):
             "count_method": "Ceiling of Unicode characters / 4; budget units, not tokenizer tokens"}
 
 
+def ask_json(chat, model, messages, url, keep_alive):
+    """The model's reply as text, asked up to three ways: the reply schema (Ollama's constrained decoding), then plain
+    JSON mode, then free text with the allowed shapes named. A model that loops under one mode (seen with Ollama 0.40
+    and a 2-bit 27B: one phrase repeated to the length limit) usually answers under another. The first reply that
+    parses as JSON is returned; else the last one, for the caller's own message."""
+    raw = ""
+    for fmt in (REPLY_SCHEMA, "json", None):
+        msgs = messages
+        if fmt is None:
+            last = dict(messages[-1])
+            last["content"] = (last.get("content") or "") + ("\nAnswer with one JSON object only, in one of these shapes: "
+                                                            "{\"answer\": \"...\"}, {\"look_at\": \"section\"}, or "
+                                                            "{\"answer\": \"...\", \"commands\": [...]}. No other text.")
+            msgs = messages[:-1] + [last]
+        raw = chat(model, msgs, url=url,
+                   options={"temperature": 0.2, "num_predict": 1400, "repeat_penalty": 1.1 if fmt is REPLY_SCHEMA else 1.2},
+                   format=fmt, keep_alive=keep_alive)
+        if not raw:
+            return raw
+        try:
+            json.loads(raw)
+            return raw
+        except (ValueError, TypeError):
+            m = re.search(r"\{.*\}", str(raw), re.S)
+            if m:
+                try:
+                    json.loads(m.group(0))
+                    return m.group(0)
+                except ValueError:
+                    pass
+            print("[RedNode Studio] assistant: %s did not answer in JSON with format %s; asking another way"
+                  % (model, "schema" if fmt is REPLY_SCHEMA else fmt), flush=True)
+    return raw
+
+
 def trim_history(history):
     history = [{"role": x["role"], "content": x["content"]} for x in rows(history)
                if x.get("role") in ("user", "assistant") and isinstance(x.get("content"), str)]
@@ -502,9 +537,7 @@ def chat(data, chat_fn=None):
     changes = []
     refused = 0
     for attempt in range(3):
-        raw = (chat_fn or autoprompt.ollama_chat)(model, messages, url=url,
-            options={"temperature": 0.2, "num_predict": 1400}, format=REPLY_SCHEMA,
-            keep_alive=keep_alive)
+        raw = ask_json(chat_fn or autoprompt.ollama_chat, model, messages, url, keep_alive)
         if not raw:
             notices.append("Ollama could not return a reply. The context is available below.")
             break
