@@ -6,6 +6,11 @@ format matters: **version** then a date, notes below until the next bold line.
 
 **1.6.5** - unreleased
 
+### Added
+
+- api.refresh_frame (API_VERSION 3): a frame through Krea 2 image-to-image at a low denoise with a
+  Moodboard reference, a LoRA stack and the caller's seed, for RedNode Video Studio's Refresh Between Segments
+
 ### Fixes
 
 - The RedNode Studio workflow shipped with my own Ollama model saved as the auto prompt model

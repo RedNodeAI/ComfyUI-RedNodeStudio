@@ -15,7 +15,7 @@ from PIL import Image
 from . import hero as _hero
 from .automask import INSTALL_HINT, _prepared_segmenters, _subject_mask_prepared
 
-API_VERSION = 2          # 2: grade_video
+API_VERSION = 3          # 2: grade_video; 3: refresh_frame
 
 PANEL = (768, 1152)            # one standing figure, 2:3, multiples of 16
 MARGIN = 0.05                  # white above the head and below the feet, as a share of the panel height
@@ -121,6 +121,49 @@ def _render(reference, want, files, seed, size=PANEL, outfit=None, start=None, d
     out = run("KSampler", model=model, seed=int(seed) or 7000, steps=STEPS, cfg=1.0, sampler_name="euler",
               scheduler="simple", positive=pos, negative=neg, latent_image=latent, denoise=float(denoise))[0]
     return _hero._plain(run("VAEDecode", samples=out, vae=va)[0])
+
+
+def _refresh(frame, reference, want, files, seed, denoise, steps, stack_json, moodboard, strength, extract):
+    from .moodboard import Krea2Moodboard
+    run = _hero._run
+    _hero.say("Loading the model")
+    model = run("UNETLoader", unet_name=files["unet"], weight_dtype="default")[0]
+    cl = run("CLIPLoader", clip_name=files["clip"], type="krea2")[0]
+    va = run("VAELoader", vae_name=files["vae"])[0]
+    if stack_json:
+        from .lora_stack import apply_stack
+        model, cl = apply_stack(model, cl, stack_json=stack_json, seed=int(seed), tag="Refresh")[:2]
+    latent = run("VAEEncode", pixels=frame, vae=va)[0]
+    if moodboard and reference is not None:
+        # the first picture as the Moodboard reference: the frame is pulled back to its subject and look
+        pos = Krea2Moodboard().encode(clip=cl, prompt=want, strength=float(strength), image=reference, extract=extract)[0]
+    else:
+        pos = run("CLIPTextEncode", clip=cl, text=want)[0]
+    neg = run("CLIPTextEncode", clip=cl, text="")[0]
+    _hero.say("Refreshing the frame")
+    out = run("KSampler", model=model, seed=int(seed) or 7000, steps=int(steps), cfg=1.0, sampler_name="euler",
+              scheduler="simple", positive=pos, negative=neg, latent_image=latent, denoise=float(denoise))[0]
+    return _hero._plain(run("VAEDecode", samples=out, vae=va)[0])
+
+
+def refresh_frame(frame, want, files, seed=0, denoise=0.45, steps=20, reference=None, stack_json=None, moodboard=True,
+                  strength=0.5, extract="subject"):
+    """A frame through Krea 2 image-to-image at a low denoise: the same seed and prompt, the first picture as the
+    Moodboard reference, a LoRA stack of the caller's. For a video's last frame between Segments, so a long scene
+    keeps the first picture's quality instead of drifting. files: unet, clip, vae (Krea 2). Models are released after."""
+    for key in ("unet", "clip", "vae"):
+        if not (files or {}).get(key):
+            raise ValueError("refresh_frame needs the Krea 2 %s file" % key)
+    if frame is None or frame.ndim != 4:
+        raise ValueError("refresh_frame needs one frame as an IMAGE [1, H, W, 3]")
+    try:
+        with _hero.progress_safe():
+            return _refresh(frame, reference, want, files, seed, denoise, steps, stack_json, moodboard, strength,
+                            extract if extract in ("subject", "style") else "subject")
+    except Exception as exc:
+        raise ValueError(str(exc) or exc.__class__.__name__) from None
+    finally:
+        _hero._settle()
 
 
 def render(reference, want, files, seed=0, size=PANEL, outfit=None, start=None, denoise=1.0):
