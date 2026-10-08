@@ -134,7 +134,15 @@ def _refresh(frame, reference, want, files, seed, denoise, steps, stack_json, mo
         model = _load_unet(files["unet"], rig.get("unet_loader") or "", rig.get("int8_type") or "")
     else:
         model = run("UNETLoader", unet_name=files["unet"], weight_dtype="default")[0]
-    cl = run("CLIPLoader", clip_name=files["clip"], type=rig.get("clip_type") or "krea2")[0]
+    # the refresh is Krea 2 by definition: its encoder loads as Krea 2 whatever the rig says (a Workspace keeps
+    # another type there), and a file that is not the Krea 2 encoder is named instead of failing inside the encode
+    cl = run("CLIPLoader", clip_name=files["clip"], type="krea2")[0]
+    try:
+        ok = "qwen3vl_4b" in cl.tokenize("a")
+    except Exception:
+        ok = False
+    if not ok:
+        raise ValueError("'%s' is not the Krea 2 text encoder (qwen3vl_4b): pick that encoder in the rig" % files["clip"])
     va = run("VAELoader", vae_name=files["vae"])[0]
     sampler, scheduler = rig.get("sampler") or "euler", rig.get("scheduler") or "simple"
     cfg_scale = float(rig.get("cfg") or 1.0)
