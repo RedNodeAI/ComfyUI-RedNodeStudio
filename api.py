@@ -127,9 +127,17 @@ def _refresh(frame, reference, want, files, seed, denoise, steps, stack_json, mo
     from .moodboard import Krea2Moodboard
     run = _hero._run
     _hero.say("Loading the model")
-    model = run("UNETLoader", unet_name=files["unet"], weight_dtype="default")[0]
-    cl = run("CLIPLoader", clip_name=files["clip"], type="krea2")[0]
+    rig = files.get("rig") or {}
+    if rig.get("unet_loader") or rig.get("int8_type"):
+        # a Workspace rig: through the loader it needs (GGUF, INT8), as the Workspace loads it
+        from .workspace import _load_unet
+        model = _load_unet(files["unet"], rig.get("unet_loader") or "", rig.get("int8_type") or "")
+    else:
+        model = run("UNETLoader", unet_name=files["unet"], weight_dtype="default")[0]
+    cl = run("CLIPLoader", clip_name=files["clip"], type=rig.get("clip_type") or "krea2")[0]
     va = run("VAELoader", vae_name=files["vae"])[0]
+    sampler, scheduler = rig.get("sampler") or "euler", rig.get("scheduler") or "simple"
+    cfg_scale = float(rig.get("cfg") or 1.0)
     if stack_json:
         from .lora_stack import apply_stack
         model, cl = apply_stack(model, cl, stack_json=stack_json, seed=int(seed), tag="Refresh")[:2]
@@ -141,8 +149,8 @@ def _refresh(frame, reference, want, files, seed, denoise, steps, stack_json, mo
         pos = run("CLIPTextEncode", clip=cl, text=want)[0]
     neg = run("CLIPTextEncode", clip=cl, text="")[0]
     _hero.say("Refreshing the frame")
-    out = run("KSampler", model=model, seed=int(seed) or 7000, steps=int(steps), cfg=1.0, sampler_name="euler",
-              scheduler="simple", positive=pos, negative=neg, latent_image=latent, denoise=float(denoise))[0]
+    out = run("KSampler", model=model, seed=int(seed) or 7000, steps=int(steps), cfg=cfg_scale, sampler_name=sampler,
+              scheduler=scheduler, positive=pos, negative=neg, latent_image=latent, denoise=float(denoise))[0]
     return _hero._plain(run("VAEDecode", samples=out, vae=va)[0])
 
 
@@ -150,7 +158,9 @@ def refresh_frame(frame, want, files, seed=0, denoise=0.45, steps=20, reference=
                   strength=0.5, extract="subject"):
     """A frame through Krea 2 image-to-image at a low denoise: the same seed and prompt, the first picture as the
     Moodboard reference, a LoRA stack of the caller's. For a video's last frame between Segments, so a long scene
-    keeps the first picture's quality instead of drifting. files: unet, clip, vae (Krea 2). Models are released after."""
+    keeps the first picture's quality instead of drifting. files: unet, clip, vae (Krea 2), and optionally "rig": a
+    Workspace rig record (unet_loader, int8_type, clip_type, sampler, scheduler, cfg) to load and sample as the
+    Workspace does. Models are released after."""
     for key in ("unet", "clip", "vae"):
         if not (files or {}).get(key):
             raise ValueError("refresh_frame needs the Krea 2 %s file" % key)
