@@ -1141,6 +1141,7 @@ function buildPanel(node, hostEl = null) {
         has("Overlap", (s.vosr2_tile_overlap ?? 32) !== 32);
         has("VAE tile", (s.vosr2_vae_tile ?? 1024) !== 1024);
         has("VAE overlap", (s.vosr2_vae_overlap ?? 32) !== 32);
+        has("Cache model", !!s.vosr2_cache);
         has("Tone lock", !!s.tone_lock);
         return out;
       }
@@ -1826,7 +1827,11 @@ function buildPanel(node, hostEl = null) {
               (v) => { s.vosr2_vae_tile = Math.max(0, Math.round(v)); writeCfg(node, d); }),
           lab("VAE overlap"),
           num(s.vosr2_vae_overlap ?? 32, 8, "Pixels of overlap between VAE tiles.",
-              (v) => { s.vosr2_vae_overlap = Math.max(0, Math.round(v)); writeCfg(node, d); }));
+              (v) => { s.vosr2_vae_overlap = Math.max(0, Math.round(v)); writeCfg(node, d); }),
+          tog("Cache model", "vosr2_cache", false,
+              "Keep the VOSR2 bundle loaded between queues. Off, every run reloads "
+              + "6.5 GB from disk (about a third of a x2 pass); on, 6.5 GB of RAM is "
+              + "held between them."));
         A(tl.box);
         card.appendChild(tl.box);
         if (LISTS && !L.vosr2) {
@@ -2277,7 +2282,7 @@ function buildPanel(node, hostEl = null) {
                                        vosr2_dtype: "", vosr2_scale: 2,
                                        vosr2_color: "wavelet", vosr2_tile: 512,
                                        vosr2_tile_overlap: 32, vosr2_vae_tile: 1024,
-                                       vosr2_vae_overlap: 32 }), "upscale");
+                                       vosr2_vae_overlap: 32, vosr2_cache: false }), "upscale");
     // Ultimate SD Upscale as a pass, opened on settings that hold detail: 6 steps of
     // deis/simple at 0.25, x2, 1024 tiles padded 128, no seam fix
     mk("＋ Tiled upscale", () => ({ on: true, type: "usdu", rig: "", steps: 6,

@@ -265,6 +265,10 @@ def parse_pipeline(config_json):
             "vosr2_tile_overlap": _num("vosr2_tile_overlap", 0, 512, 32, int),
             "vosr2_vae_tile": _num("vosr2_vae_tile", 0, 8192, 1024, int),
             "vosr2_vae_overlap": _num("vosr2_vae_overlap", 0, 512, 32, int),
+            # keep the loaded bundle between runs (the upstream loader has no
+            # cache of its own, so every run reloads 6.5 GB: 3.3 s on a 5090,
+            # measured 2026-10-09). Off by default, like SeedVR2's cache_model.
+            "vosr2_cache": bool(s.get("vosr2_cache")),
         })
         if stages[-1]["size"] not in UPSCALE_SIZES:
             stages[-1]["size"] = "1080p"
@@ -508,6 +512,26 @@ def _fmt_scale(scale):
     return "%d" % scale if scale == int(scale) else "%.2f" % scale
 
 
+# THE VOSR2 BUNDLE, held between runs when a pass asks for it. The upstream
+# loader node has no cache, and the pass calls it directly rather than through
+# the graph, so ComfyUI's own node cache never applies: without this every run
+# reloads 6.5 GB from disk (3.3 s of a 10 s x2 pass on a 5090, 2026-10-09).
+# One entry only, keyed by (model, dtype); a different key or a pass with the
+# cache off drops it, so turning the dial off releases the RAM on the next run.
+_VOSR2_CACHE = {"key": None, "bundle": None}
+
+
+def _vosr2_bundle(ld_cls, fill, s):
+    key = (str(s.get("vosr2_model") or ""), str(s.get("vosr2_dtype") or ""))
+    if s.get("vosr2_cache") and _VOSR2_CACHE["key"] == key and _VOSR2_CACHE["bundle"] is not None:
+        return _VOSR2_CACHE["bundle"]
+    _VOSR2_CACHE["key"], _VOSR2_CACHE["bundle"] = None, None
+    bundle = _call_node(ld_cls, fill(ld_cls, {"model": s["vosr2_model"], "dtype": s["vosr2_dtype"]}))[0]
+    if s.get("vosr2_cache"):
+        _VOSR2_CACHE["key"], _VOSR2_CACHE["bundle"] = key, bundle
+    return bundle
+
+
 def _vosr2(image, s, seed):
     """The picture through VOSR 2.0 at the pass's multiplier, or None with a reason.
 
@@ -544,8 +568,7 @@ def _vosr2(image, s, seed):
                 if k in have and v is not None and v != "":
                     kw[k] = v
             return kw
-        bundle = _call_node(ld_cls, fill(ld_cls, {
-            "model": s["vosr2_model"], "dtype": s["vosr2_dtype"]}))[0]
+        bundle = _vosr2_bundle(ld_cls, fill, s)
 
         def once(img, mult):
             # THE TILE LADDER, as the SeedVR2 pass has: an out-of-memory halves
