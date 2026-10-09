@@ -12405,7 +12405,7 @@ const SEED_AREAS = [
 // THE MODELS PAGE'S TABS: Setup (one-click families and what a rig needs), then the
 // three cards that were stacked on one page, one each. A rig with no files opens on
 // Setup; after that the page remembers where it was left.
-const MODELS_SUBS = [["files", "Model, CLIP, VAE"], ["sampling", "Sampling"], ["seed", "Seed"],
+const MODELS_SUBS = [["files", "Model Groups"], ["sampling", "Sampling"], ["seed", "Seed"],
                      ["setup", "Setup"]];
 const MODELS_BOX_TAB = { Model: "files", "Text encoder": "files", Decoder: "files",
                          "Identity rescue": "files", Sampling: "sampling", Seed: "seed",
@@ -12526,7 +12526,7 @@ function modelsBody(node, page) {
         go.className = "rn-ws-nextstep";
         go.dataset.next = nx[0];
         go.textContent = `Next: ${nx[1]} \u2192`;
-        go.title = "Open the box for it on the Model, CLIP, VAE tab.";
+        go.title = "Open the box for it on the Model Groups tab.";
         go.onclick = () => {
           node._rnModelsSub = "files";
           (node.properties ||= {}).rn_models_sub = "files";

@@ -247,7 +247,7 @@ render made elsewhere can be matched seed for seed. The Studio preset and the Su
 Scene references sit out while it is on.
 
 The rigs sit in a column of cards on the left, each with its model family and a tick per file, and
-the pages beside them are Model, CLIP, VAE, then Sampling, Seed and Setup. **Setup** makes a rig in
+the pages beside them are Model Groups, then Sampling, Seed and Setup. **Setup** makes a rig in
 one click for Krea 2 Turbo, Z-Image Turbo, Qwen Image 2.1, Anima or SDXL / Illustrious / Pony: it finds the
 files in your model folders by name, newest first, and sets that model's steps, cfg, sampler and
 CLIP type, all of it editable afterwards. It reads file names and dates and nothing else, and
