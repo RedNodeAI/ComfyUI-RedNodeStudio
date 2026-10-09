@@ -757,7 +757,7 @@ const FX_GROUPS = [
   ["LIGHT", ["relight"]],
   ["AIR", ["haze"]],
   ["LENS", ["distortion", "dof", "aberration", "bloom", "light_wrap", "diffusion", "vignette"]],
-  ["FILM", ["halation", "film", "rolloff", "grain"]],
+  ["FILM", ["halation", "film", "rolloff", "unvarnish", "grain"]],
   ["SETTINGS", ["depth", "mask"]],
 ];
 

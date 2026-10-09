@@ -935,6 +935,19 @@ export const POST_FX = [
       { key: "strength", label: "Strength", min: 0, max: 1, step: 0.01, def: 0.6,
         hint: "How hard the top end is compressed into the space that remains." },
     ] },
+  { id: "unvarnish", label: "Unvarnish",
+    blurb: "Takes the generated look down a notch without the picture going dull: "
+         + "only the loudest colours are pulled back, skin comes off orange, the top "
+         + "end shoulders instead of clipping, the glossy glow is calmed while fine "
+         + "texture is lifted, then the picture's own black point, contrast and "
+         + "brightness are put back. Runs late, just before Grain.",
+    controls: [
+      { key: "amount", label: "Amount", min: 0, max: 1, step: 0.01, def: 0.5,
+        hint: "How much comes off. 0.3 to 0.6 suits most renders; 1 is the whole treatment." },
+      { key: "skin", label: "Skin", min: 0, max: 2, step: 0.05, def: 1.0,
+        hint: "How much orange and plastic skin is calmed, on top of Amount. 0 leaves "
+            + "skin alone." },
+    ] },
   { id: "grain", label: "Grain",
     blurb: "Film grain, generated at a size rather than per pixel, and weighted "
          + "towards the midtones the way real emulsion behaves.",

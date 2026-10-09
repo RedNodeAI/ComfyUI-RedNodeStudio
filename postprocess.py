@@ -149,6 +149,9 @@ DEFAULTS = {
                    "lens": "custom", "scale_by_size": False},
     "aberration": {"on": False, "amount": 0.47, "red_shift": 1.0, "green_shift": -1.0,
                    "blue_shift": -3.0, "direction": "horizontal", "scale_by_size": False},
+    # UNVARNISH: the generated look taken down a notch without the picture going
+    # dull. One amount, plus how much of it lands on skin. Runs late, before Grain.
+    "unvarnish": {"on": False, "amount": 0.5, "skin": 1.0},
     "grain": {"on": False, "power": 0.09, "scale": 1.0, "saturation": 1.0, "seed": 0,
               "softness": 0.0},
     # VIGNETTE: two falloff laws. "smooth" is the shipped one, a flat centre and a
@@ -281,7 +284,7 @@ ORDER = ("denoise", "color", "match", "lut", "skin", "clarity", "sharpen",   # r
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
          "light_wrap", "diffusion", "vignette",              # ...and its glare
-         "halation", "film", "rolloff", "grain")             # the film
+         "halation", "film", "rolloff", "unvarnish", "grain")  # the film
 
 # effects that cannot run without a depth map wired into the node
 DEPTH_EFFECTS = ("dof", "haze", "relight")
@@ -1182,6 +1185,72 @@ def rolloff(img, knee=0.75, strength=0.6):
     return _clamp01(_nhwc(t - over * s + compressed * s))
 
 
+def _quantile(t, q):
+    """A per-picture quantile of an N1HW map, sampled when the map is big."""
+    flat = t.reshape(t.shape[0], -1)
+    if flat.shape[1] > 250_000:
+        flat = flat[:, :: flat.shape[1] // 250_000 + 1]
+    return torch.quantile(flat, q, dim=1).view(-1, 1, 1, 1)
+
+
+def unvarnish(img, amount=0.5, skin=1.0):
+    """The generated look taken down without the picture going dull.
+
+    Five moves, each small, in this order: only the loudest colours are pulled
+    toward grey (a quiet colour is left alone); skin comes off orange, by the
+    chain's own Lab skin mask, with a touch less chroma; the top end shoulders
+    above a knee instead of clipping; the glossy large-scale glow is calmed while
+    the finest texture is lifted; then the picture's own black point, contrast and
+    brightness are put back, measured against where it started, so none of the
+    above reads as a fade. Grain is the Grain card's job, and it runs after this.
+    """
+    k = max(0.0, min(1.0, float(amount)))
+    if k <= 0.0:
+        return img
+    src = _nchw(img)[:, :3].float()
+    t = src
+    short = min(t.shape[2], t.shape[3])
+    l0 = _luma(src)
+
+    # 1. the loudest colours only: chroma relative to the brightest channel, and a
+    #    soft gate that opens past 0.45, so a quiet grade keeps its colour
+    mx = t.max(dim=1, keepdim=True).values
+    mn = t.min(dim=1, keepdim=True).values
+    loud = _smoothstep((mx - mn) / mx.clamp_min(1e-3), 0.45, 0.95)
+    t = t + (_luma(t) - t) * loud * 0.3 * k
+
+    # 2. skin: red over green is what reads as orange and plastic; part of it goes,
+    #    green and blue come up a little, and the chroma under the mask drops a touch
+    s = max(0.0, float(skin)) * k
+    if s > 0:
+        L, a, b = _rgb_to_lab(t)
+        w = _skin_mask(t, L, a, b, 1.0, 0.6, 3.0, None)
+        warm = (t[:, 0:1] - t[:, 1:2]).clamp_min(0.0)
+        t = t + torch.cat([-0.16 * warm, 0.03 * warm, 0.07 * warm], dim=1) * w * s
+        t = t + (_luma(t) - t) * w * s * 0.08
+
+    # 3. the top end shoulders above the knee (rolloff's curve, a fixed knee)
+    knee, head = 0.84, 0.16
+    over = (t - knee).clamp_min(0.0)
+    t = t + (head * torch.tanh(over / head) - over) * 0.85 * k
+
+    # 4. the glossy glow is a large-scale local contrast: a little of it comes off;
+    #    the finest band goes back up so the picture does not read softer
+    t = t - (t - _box(t, max(2, int(round(short / 110.0))))) * 0.07 * k
+    t = t + (t - gaussian_blur(t, 0.8)) * 0.3 * k
+
+    # 5. the source's own black point, contrast and brightness, put back
+    l = _luma(t)
+    lift = (_quantile(l, 0.01) - _quantile(l0, 0.01)).clamp_min(0.0)
+    t = t - lift * (1.0 - l)
+    l = _luma(t)
+    m0, m1 = l0.mean(dim=(1, 2, 3), keepdim=True), l.mean(dim=(1, 2, 3), keepdim=True)
+    s0, s1 = l0.std(dim=(1, 2, 3), keepdim=True), l.std(dim=(1, 2, 3), keepdim=True)
+    gain = (s0 / s1.clamp_min(1e-4)).clamp(1.0, 1.2)
+    t = t + (l - m1) * (gain - 1.0) + (m0 - m1) * 0.75
+    return _clamp01(_nhwc(t)).to(img.dtype)
+
+
 def film(img, stock="none", wratten="none", strength=1.0, fade=0.0):
     """A named stock's characteristic curve. Stops from mid grey go through the
     stock's slope, then d / (1 + k|d|) flattens the toe and the shoulder (strictly
@@ -1393,6 +1462,7 @@ EFFECTS = {
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
     "match": match, "lut": lut, "relight": relight, "skin": skin, "film": film,
+    "unvarnish": unvarnish,
 }
 
 
@@ -1413,6 +1483,9 @@ def _guard(name, cur):
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")
+    elif name == "unvarnish":
+        cur["amount"] = max(0.0, min(1.0, cur["amount"]))
+        cur["skin"] = max(0.0, min(2.0, cur["skin"]))
     elif name == "distortion":
         cur["lens"] = cur["lens"] if cur["lens"] in LENS_NAMES else "custom"
     elif name == "film":
