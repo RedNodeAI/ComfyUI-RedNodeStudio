@@ -16,11 +16,17 @@
   densify    the tail of the schedule resampled to more steps, so the detail band
              gets the extra steps and the rest of the run stays as it was.
   focus      the same steps bent toward high noise (structure) or low noise (detail).
+  quick      Quick start: the steps before the grow point run on a half-size latent
+             (the layout is decided there, as well as at full size), then the state
+             is grown back and the run carries on. About half the sampling time on
+             a flow model's first pass. After the SPEED idea (Xiao, Chao, Yariv and
+             Wetzstein, 2026); the maths is written here from the paper.
 
 Everything here works on the sigma schedule and a clone of the model, through the
-model function wrapper, so the wired originals are never touched. sample_with_dials is
-the one entry the Workspace's built-in sampler and the Detailer call; with nothing on
-and no custom schedule it is exactly core's common_ksampler.
+model function wrapper (Quick start through a sampler wrapper), so the wired originals
+are never touched. sample_with_dials is the one entry the Workspace's built-in sampler
+and the Detailer call; with nothing on and no custom schedule it is exactly core's
+common_ksampler.
 """
 import json
 import math
@@ -39,6 +45,7 @@ DD_DEFAULTS = {"on": False, "amount": 0.1, "start": 0.2, "end": 0.8, "bias": 0.5
                "smooth": True, "cfg_scale": 1.0}
 VAR_DEFAULTS = {"on": False, "percent": 0.3, "strength": 0.05, "window": 0.3}
 DENS_DEFAULTS = {"on": False, "last": 0.3, "extra": 4}
+QUICK_DEFAULTS = {"on": False, "grow_at": 0}
 
 
 def _num(d, key, lo, hi, dv):
@@ -57,6 +64,7 @@ def parse_dials(r):
     dd = r.get("dd") if isinstance(r.get("dd"), dict) else {}
     va = r.get("variance") if isinstance(r.get("variance"), dict) else {}
     de = r.get("densify") if isinstance(r.get("densify"), dict) else {}
+    qk = r.get("quick") if isinstance(r.get("quick"), dict) else {}
     return {
         "shift": _num(r, "shift", 0.0, 100.0, 0.0),
         # Qwen Image 2.1's own size-aware shift (qwen21_mu below), off by default
@@ -93,6 +101,11 @@ def parse_dials(r):
         },
         # the schedule bent toward structure (below 0) or detail (above 0); 0 = as it is
         "focus": _num(r, "focus", -1.0, 1.0, 0.0),
+        # Quick start: grow_at 0 picks the step itself (the one nearest noise 0.7)
+        "quick": {
+            "on": bool(qk.get("on")),
+            "grow_at": int(round(_num(qk, "grow_at", 0, 200, 0))),
+        },
         # a sampler node from another pack in place of ComfyUI's KSampler
         # (sampler_nodes.py); rides the dials so every call that samples on the rig
         # carries it
@@ -161,8 +174,207 @@ def extra_sigmas(model, name, steps):
 def any_on(dials):
     d = dials or {}
     return bool((d.get("dd") or {}).get("on") or (d.get("variance") or {}).get("on")
-                or (d.get("densify") or {}).get("on")
+                or (d.get("densify") or {}).get("on") or (d.get("quick") or {}).get("on")
                 or abs(float(d.get("focus") or 0.0)) >= 1e-6)
+
+
+# ------------------------------------------------------------------ quick start
+# The first steps of a render decide the layout, and they decide it as well on a
+# half-size latent. So the run starts small: the starting noise is shrunk by keeping
+# the low quarter of its cosine spectrum (orthonormal, so white noise stays white at
+# the same strength), the steps up to the grow point run there, then the state is
+# grown back in the same spectrum with fresh noise in the empty high band and the
+# run carries on at full size. Every step before the grow costs a quarter.
+#
+# The maths of the grow, for a flow model (x = (1 - t) picture + t noise): padding the
+# small state's spectrum into a full-size one leaves its picture part 1/r as strong
+# as a full-size picture (r = full / small per side) while its noise part stays at
+# level t, so the padded state is scaled by k = r / (1 + (r - 1) t) to be a proper
+# full-size state again, at noise level k t. For the SDXL family (x = picture +
+# sigma noise) the scale is r and the run carries on at r sigma; its auto grow point
+# is read on the same 0..1 scale, t = sigma / (1 + sigma).
+#
+# After SPEED (Xiao, Chao, Yariv and Wetzstein, 2026, spectral progressive
+# diffusion). Written here from the paper; nothing of any implementation imported.
+QUICK_NOISE_FLOW = 0.7     # auto: grow at the step nearest this noise level (flow models)
+QUICK_NOISE_SIGMA = 0.6    # the same on t = sigma / (1 + sigma) for the SDXL family
+QUICK_MIN_START = 0.9      # a pass starting with less noise keeps the layout it was given
+_DCT = {}
+
+
+def _dct_matrix(n, device):
+    """The orthonormal DCT-II matrix for n points: coefficients = D @ signal."""
+    key = (int(n), str(device))
+    m = _DCT.get(key)
+    if m is None:
+        k = torch.arange(n, dtype=torch.float64).unsqueeze(1)
+        i = torch.arange(n, dtype=torch.float64).unsqueeze(0)
+        m = torch.cos(math.pi * (2 * i + 1) * k / (2 * n)) * math.sqrt(2.0 / n)
+        m[0] /= math.sqrt(2.0)
+        m = m.to(device=device, dtype=torch.float32)
+        _DCT[key] = m
+    return m
+
+
+def spectrum(x):
+    """The cosine spectrum of the last two (height, width) dims."""
+    h, w = x.shape[-2:]
+    return _dct_matrix(h, x.device) @ x.float() @ _dct_matrix(w, x.device).T
+
+
+def unspectrum(c):
+    h, w = c.shape[-2:]
+    return _dct_matrix(h, c.device).T @ c @ _dct_matrix(w, c.device)
+
+
+def shrink_noise(x, h, w):
+    """x at full size -> h x w, keeping the low part of its spectrum."""
+    return unspectrum(spectrum(x)[..., :h, :w].contiguous()).to(x.dtype)
+
+
+def grow_state(y, H, W, level, seed, kind="flow"):
+    """The small state at noise `level` -> a full-size state, and the level it
+    carries on at (see the notes above)."""
+    h, w = y.shape[-2:]
+    c = torch.zeros(*y.shape[:-2], H, W, device=y.device, dtype=torch.float32)
+    c[..., :h, :w] = spectrum(y)
+    g = torch.Generator(device="cpu").manual_seed(int(seed) & 0xFFFFFFFF)
+    fresh = torch.randn(*y.shape[:-2], H, W, generator=g).to(y.device)
+    fresh[..., :h, :w] = 0.0            # fresh noise only where the small state had nothing
+    c = c + float(level) * fresh
+    r = math.sqrt((H * W) / float(h * w))
+    k = r if kind == "sigma" else r / (1.0 + (r - 1.0) * float(level))
+    return (unspectrum(c) * k).to(y.dtype), k * float(level)
+
+
+def noise_kind(model_sampling, sigmas=None):
+    """'flow' (Krea 2, Z-Image, Flux, Qwen Image, Wan), 'sigma' (SDXL, SD 1.5 and the
+    other eps / v models), or None for a sampling this does not know."""
+    try:
+        import comfy.model_sampling as ms
+        if model_sampling is not None:
+            if isinstance(model_sampling, ms.CONST):
+                return "flow"
+            if (isinstance(model_sampling, (ms.EPS, ms.V_PREDICTION))
+                    and not isinstance(model_sampling, getattr(ms, "EDM", ()))):
+                return "sigma"
+            return None
+    except Exception:
+        pass
+    if sigmas is not None:
+        try:
+            return "flow" if float(sigmas.max()) <= 1.001 else None
+        except Exception:
+            return None
+    return None
+
+
+def _unit_level(s, kind):
+    """A noise level on the 0..1 scale: t for flow, sigma / (1 + sigma) otherwise."""
+    return float(s) if kind == "flow" else float(s) / (1.0 + float(s))
+
+
+def quick_plan(sigmas, grow_at, kind="flow"):
+    """The step the picture grows at, counted from the pass's first step, or None to
+    stay at full size. grow_at 0 picks the step nearest the auto noise level. The
+    last step always runs at full size, the last two when the pass ends at 0 and
+    has four or more steps: that is where the detail is made."""
+    n = len(sigmas) - 1
+    if n < 2:
+        return None
+    lv = [_unit_level(float(v), kind) for v in sigmas]
+    keep = 2 if (lv[-1] <= 0.0 and n >= 4) else 1
+    target = QUICK_NOISE_FLOW if kind == "flow" else QUICK_NOISE_SIGMA
+    if int(grow_at) > 0:
+        j = int(grow_at)
+    else:
+        j = min(range(1, n), key=lambda i: (abs(lv[i] - target), i))
+    return max(1, min(j, n - keep))
+
+
+def _model_sampling_of(model_k):
+    """The live model_sampling behind a sampler's model callable, or None."""
+    m = model_k
+    for _ in range(6):
+        p = getattr(m, "model_patcher", None)
+        if p is not None:
+            try:
+                return p.get_model_object("model_sampling")
+            except Exception:
+                return None
+        m = getattr(m, "inner_model", None)
+        if m is None:
+            break
+    return None
+
+
+def _half_start(model_k, x, s0, h, w, kind):
+    """The starting state at half size: the noise shrinks as noise, the picture as a
+    picture (its spectrum is r times its half-size version's). An empty latent is
+    pure noise. None when the two cannot be told apart."""
+    lat, nz = getattr(model_k, "latent_image", None), getattr(model_k, "noise", None)
+    if torch.is_tensor(lat) and torch.is_tensor(nz) and lat.shape == x.shape:
+        if not torch.count_nonzero(lat):
+            return shrink_noise(x, h, w)
+        r = math.sqrt((x.shape[-2] * x.shape[-1]) / float(h * w))
+        lat = lat.to(x.device, x.dtype)
+        if kind == "sigma":
+            return (shrink_noise(lat, h, w) / r + shrink_noise(x - lat, h, w)).to(x.dtype)
+        nz = nz.to(x.device, x.dtype)
+        return ((1.0 - s0) * shrink_noise(lat, h, w) / r + s0 * shrink_noise(nz, h, w)).to(x.dtype)
+    return shrink_noise(x, h, w) if s0 >= 0.99 else None
+
+
+def quick_sampler(inner, grow_at=0, tag="RedNode sampler dials"):
+    """A sampler around `inner` (a KSAMPLER) that runs the steps before the grow
+    point at half size. It stands aside, saying why, on a masked run, a pass that
+    starts below QUICK_MIN_START, a model sampling it does not know or too few steps."""
+    inner_fn, inner_opts = inner.sampler_function, dict(getattr(inner, "extra_options", {}) or {})
+
+    def run(model_k, x, sigmas, extra_args=None, callback=None, disable=None, **_kw):
+        extra_args = dict(extra_args or {})
+
+        def go(xx, ss, offset):
+            cb = None
+            if callback is not None:
+                cb = lambda d, _o=offset: callback({**d, "i": d["i"] + _o})
+            return inner_fn(model_k, xx, ss, extra_args=extra_args, callback=cb,
+                            disable=disable, **inner_opts)
+
+        why = None
+        if extra_args.get("denoise_mask") is not None:
+            why = "a mask is on, and it works on the whole picture only"
+        kind = None if why else noise_kind(_model_sampling_of(model_k), sigmas)
+        if why is None and kind is None:
+            why = "this model's noise type is not one it knows (flow and SDXL families are)"
+        if why is None and _unit_level(float(sigmas[0]), kind) < QUICK_MIN_START:
+            why = ("the pass starts at noise %.2f, so the layout is already set"
+                   % _unit_level(float(sigmas[0]), kind))
+        j = None if why else quick_plan(sigmas, grow_at, kind)
+        if j is None and why is None:
+            why = "too few steps"
+        if j is None:
+            print("[%s] quick start sits out: %s" % (tag, why), flush=True)
+            return go(x, sigmas, 0)
+        H, W = int(x.shape[-2]), int(x.shape[-1])
+        h, w = max(2, int(round(H / 2))), max(2, int(round(W / 2)))
+        xs = _half_start(model_k, x, float(sigmas[0]), h, w, kind)
+        if xs is None:
+            print("[%s] quick start sits out: the starting picture and its noise cannot be "
+                  "told apart" % tag, flush=True)
+            return go(x, sigmas, 0)
+        y = go(xs, sigmas[:j + 1], 0)
+        X, lvl = grow_state(y, H, W, float(sigmas[j]), int(extra_args.get("seed") or 0) + 7, kind)
+        rest = torch.cat([torch.tensor([lvl], dtype=sigmas.dtype, device=sigmas.device),
+                          sigmas[j + 1:]])
+        n = len(sigmas) - 1
+        print("[%s] quick start: %d of %d steps at half size (latent %d x %d of %d x %d), "
+              "grown at noise %.3f and carried on at %.3f, %d at full size"
+              % (tag, j, n, w, h, W, H, float(sigmas[j]), lvl, n - j), flush=True)
+        return go(X, rest, j)
+
+    return comfy.samplers.KSAMPLER(run, extra_options={},
+                                   inpaint_options=dict(getattr(inner, "inpaint_options", {}) or {}))
 
 
 # ------------------------------------------------------------------ the curve
@@ -520,10 +732,12 @@ def dial_model(model, sigmas, dials, seed, cfg_scale):
 
 # ------------------------------------------------------------------ the sampler
 def ksample(model, seed, steps, cfg, sampler, scheduler, positive, negative, latent,
-            sigmas=None, disable_noise=False):
+            sigmas=None, disable_noise=False, quick=None):
     """core's common_ksampler with an explicit schedule and a no-new-noise switch.
     The live-frame stream wraps latent_preview.prepare_callback, so it works here
-    exactly as it does on the core call."""
+    exactly as it does on the core call. With `quick` on, the named sampler is
+    wrapped by quick_sampler and the run goes through core's custom-sampler path,
+    which takes a sampler object; everything else about the call is the same."""
     latent_image = latent["samples"]
     latent_image = comfy.sample.fix_empty_latent_channels(
         model, latent_image, latent.get("downscale_ratio_spacial", None),
@@ -535,11 +749,18 @@ def ksample(model, seed, steps, cfg, sampler, scheduler, positive, negative, lat
         noise = comfy.sample.prepare_noise(latent_image, seed, latent.get("batch_index"))
     n_steps = (len(sigmas) - 1) if sigmas is not None else int(steps)
     callback = latent_preview.prepare_callback(model, max(1, n_steps))
-    samples = comfy.sample.sample(
-        model, noise, max(1, n_steps), cfg, sampler, scheduler, positive, negative,
-        latent_image, denoise=1.0, disable_noise=disable_noise,
-        noise_mask=latent.get("noise_mask"), sigmas=sigmas, callback=callback,
-        disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed)
+    if (quick or {}).get("on") and sigmas is not None:
+        sobj = quick_sampler(comfy.samplers.sampler_object(sampler), int(quick.get("grow_at") or 0))
+        samples = comfy.sample.sample_custom(
+            model, noise, cfg, sobj, sigmas, positive, negative, latent_image,
+            noise_mask=latent.get("noise_mask"), callback=callback,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed)
+    else:
+        samples = comfy.sample.sample(
+            model, noise, max(1, n_steps), cfg, sampler, scheduler, positive, negative,
+            latent_image, denoise=1.0, disable_noise=disable_noise,
+            noise_mask=latent.get("noise_mask"), sigmas=sigmas, callback=callback,
+            disable_pbar=not comfy.utils.PROGRESS_BAR_ENABLED, seed=seed)
     out = dict(latent)
     out.pop("downscale_ratio_spacial", None)
     out.pop("downscale_ratio_temporal", None)
@@ -630,4 +851,5 @@ def sample_with_dials(model, seed, steps, cfg, sampler, scheduler, positive, neg
     # core's KSampler only needs the name for a schedule it is not building
     core_sched = scheduler if scheduler in comfy.samplers.KSampler.SCHEDULERS else "simple"
     return ksample(m, seed, len(sigmas) - 1, cfg, sampler, core_sched, positive, negative,
-                   latent, sigmas=sigmas, disable_noise=disable_noise)
+                   latent, sigmas=sigmas, disable_noise=disable_noise,
+                   quick=dials.get("quick"))

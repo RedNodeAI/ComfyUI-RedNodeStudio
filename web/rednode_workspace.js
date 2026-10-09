@@ -2030,7 +2030,7 @@ export function readCfg(node) {
     if (typeof r.q21_shift !== "boolean") r.q21_shift = false;
     if (typeof r.focus !== "number") r.focus = 0;
     if (typeof r.clip_skip !== "number") r.clip_skip = 1;
-    for (const k of ["dd", "variance", "densify"]) {
+    for (const k of ["dd", "variance", "densify", "quick"]) {
       if (!r[k] || typeof r[k] !== "object") r[k] = {};
     }
     if (typeof r.sampler !== "string") r.sampler = "euler";
@@ -13267,7 +13267,7 @@ function modelsBody(node, page) {
         rig.shift = Number(D.shift) || 0;
         rig.q21_shift = !!D.q21_shift;
         rig.focus = Number(D.focus) || 0;
-        for (const k of ["dd", "variance", "densify"]) rig[k] = (D[k] && typeof D[k] === "object") ? D[k] : {};
+        for (const k of ["dd", "variance", "densify", "quick"]) rig[k] = (D[k] && typeof D[k] === "object") ? D[k] : {};
       }
       rig.sampler_preset = psel.value;
       writeCfg(node); render(node);
@@ -13304,7 +13304,8 @@ function modelsBody(node, page) {
       const values = Object.fromEntries(keys.map((k) => [k, rig[k]]));
       values.dials = JSON.parse(JSON.stringify({
         shift: rig.shift || 0, q21_shift: !!rig.q21_shift, focus: rig.focus || 0,
-        dd: rig.dd || {}, variance: rig.variance || {}, densify: rig.densify || {} }));
+        dd: rig.dd || {}, variance: rig.variance || {}, densify: rig.densify || {},
+        quick: rig.quick || {} }));
       (node._rnSamplerProfiles ||= {})[name] = values;
       rig.sampler_preset = name;
       writeCfg(node);
@@ -15721,7 +15722,7 @@ function passValueList(t, key, base, min, max, first, fillNew = false) {
 function dialsCard(node, rig, body) {
   // a rig made before the dials existed, or one the test harness hands over raw
   if (typeof rig.shift !== "number") rig.shift = 0;
-  for (const k of ["dd", "variance", "densify"]) {
+  for (const k of ["dd", "variance", "densify", "quick"]) {
     if (!rig[k] || typeof rig[k] !== "object") rig[k] = {};
   }
   const folds = (node._rnCardFolds ||= {});
@@ -15739,7 +15740,7 @@ function dialsCard(node, rig, body) {
               rig.q21_shift ? "Qwen 2.1 size shift" : "",
               Math.abs(Number(rig.focus) || 0) >= 0.005 ? "focus " + (Number(rig.focus) > 0 ? "+" : "") + Number(rig.focus).toFixed(2) : "",
               rig.dd.on ? "detail daemon" : "", rig.variance.on ? "seed variance" : "",
-              rig.densify.on ? "densify" : ""].filter(Boolean);
+              rig.densify.on ? "densify" : "", rig.quick.on ? "quick start" : ""].filter(Boolean);
   lab.textContent = "Sampler dials" + (on.length ? ": " + on.join(", ") : "");
   lab.title = "Extra sampler controls for this rig, all off by default. They ride the "
             + "built-in sampler and every Detailer pass on this rig.";
@@ -15819,6 +15820,19 @@ function dialsCard(node, rig, body) {
   snote.textContent = rig.shift > 0 ? "" : "0 = model default";
   srow.append(slab, sinp, snote);
   box.appendChild(srow);
+  // THE SHIFT AND THE SCHEDULER DISAGREE: the beta curves pair with a flow model's
+  // own shift (Krea 2's is 1.15). Pushed to 3 or more they bunch the steps at high
+  // noise twice over, and the skin comes out crunchy with inked eyes (measured side
+  // by side on Krea 2, same seed; simple is the pick up there).
+  if (Number(rig.shift) >= 2.5 && /^beta/.test(String(rig.scheduler || ""))) {
+    const warn = document.createElement("div");
+    warn.className = "rn-ws-note rn-ws-dials-warn";
+    warn.style.cssText = "color:#e0a84a;padding-left:84px";
+    warn.textContent = "Shift " + Number(rig.shift).toFixed(2) + " with " + rig.scheduler
+      + ": the beta curves pair with the model's own shift. Up here they give grain and "
+      + "crunchy skin; simple is the pick at this shift.";
+    box.appendChild(warn);
+  }
 
   // QWEN 2.1 SIZE SHIFT
   const q21 = sw(box, "Qwen 2.1 size shift", () => !!rig.q21_shift, (v) => { rig.q21_shift = v; },
@@ -15934,6 +15948,24 @@ function dialsCard(node, rig, body) {
         "The share of the schedule that counts as the tail.");
     bar(box, "Extra steps", () => de.extra ?? 4, (v) => { de.extra = v; }, 0, 30, 1, (x) => Math.round(Number(x)) + "",
         "How many steps the tail gains.");
+  }
+
+  // QUICK START
+  const qk = rig.quick;
+  const qrow = sw(box, "Quick start", () => !!qk.on, (v) => { qk.on = v; },
+     "The steps before the grow point run on a half-size latent, where the layout is "
+     + "decided just as well, then the picture is grown to full size and the run carries "
+     + "on: about half the sampling time on a Krea 2, Z-Image or Flux first pass, a "
+     + "third off SDXL. A seed frames a little tighter with it on. It sits out by itself "
+     + "on image to image, Detailer and Paint passes (their layout comes from the "
+     + "picture) and on masked runs. Off by default.");
+  qrow.querySelector("button").dataset.choice = "quick";
+  if (qk.on) {
+    bar(box, "Grow at step", () => qk.grow_at ?? 0, (v) => { qk.grow_at = v; }, 0, 30, 1,
+        (x) => (Math.round(Number(x)) > 0 ? Math.round(Number(x)) + "" : "auto"),
+        "The step the picture grows to full size, counted from the pass's first step. "
+        + "0 is auto: the step nearest noise 0.7, where the layout is settled. The last "
+        + "steps always run at full size.");
   }
   body.appendChild(box);
 }

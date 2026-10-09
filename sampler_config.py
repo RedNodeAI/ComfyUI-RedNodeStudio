@@ -76,11 +76,12 @@ def is_turbo_name(filename):
 PROFILE_KEYS = ("steps", "cfg", "sampler", "scheduler", "detailer_steps")
 # A Workspace rig's sampler dials ride a preset too, under "dials"; the Sampler Config
 # node reads only the five numbers above, so its presets mean what they always meant
-DIAL_KEYS = ("shift", "q21_shift", "focus", "dd", "variance", "densify")
+DIAL_KEYS = ("shift", "q21_shift", "focus", "dd", "variance", "densify", "quick")
 
 # PRESETS THAT SHIP WITH THE PACK, picked from fixed-seed renders (hub sampling_test).
 # Read-only: listed beside your own, never written to your file, never deleted.
-_OFF = {"shift": 0, "q21_shift": False, "focus": 0, "dd": {}, "variance": {}, "densify": {}}
+_OFF = {"shift": 0, "q21_shift": False, "focus": 0, "dd": {}, "variance": {}, "densify": {},
+        "quick": {}}
 BUILTIN_PROFILES = {
     # crisper than euler/simple with no speckle, the best of six pairs on three prompts
     "Krea 2 Crisp": {"steps": 8, "cfg": 1.0, "sampler": "dpmpp_2m", "scheduler": "beta",
