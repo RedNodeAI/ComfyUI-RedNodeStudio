@@ -333,11 +333,30 @@ def quick_sampler(inner, grow_at=0, tag="RedNode sampler dials"):
 
     def run(model_k, x, sigmas, extra_args=None, callback=None, disable=None, **_kw):
         extra_args = dict(extra_args or {})
+        # THE PREVIEW ACROSS THE GROW: the first full-size estimate, made from the
+        # padded state with fresh noise in its high band, is the noisiest frame of
+        # the run and reads as a different picture for one tick on the live card.
+        # So the step that grows hands the preview the last half-size estimate,
+        # upsampled, and the next step's real one carries on from it. The progress
+        # count is untouched.
+        seen = {"x0": None, "full": None}
 
         def go(xx, ss, offset):
             cb = None
             if callback is not None:
-                cb = lambda d, _o=offset: callback({**d, "i": d["i"] + _o})
+                def cb(d, _o=offset):
+                    x0 = d.get("denoised")
+                    if _o and d.get("i") == 0 and torch.is_tensor(x0) and torch.is_tensor(seen["x0"]) \
+                            and seen["full"] is not None:
+                        prev = seen["x0"]
+                        up = torch.nn.functional.interpolate(
+                            prev.float().reshape(-1, *prev.shape[-3:]), size=seen["full"],
+                            mode="bilinear", align_corners=False)
+                        x0 = up.reshape(*prev.shape[:-2], *seen["full"]).to(x0.dtype)
+                        d = {**d, "denoised": x0}
+                    elif torch.is_tensor(x0):
+                        seen["x0"] = x0
+                    callback({**d, "i": d["i"] + _o})
             return inner_fn(model_k, xx, ss, extra_args=extra_args, callback=cb,
                             disable=disable, **inner_opts)
 
@@ -363,6 +382,7 @@ def quick_sampler(inner, grow_at=0, tag="RedNode sampler dials"):
             print("[%s] quick start sits out: the starting picture and its noise cannot be "
                   "told apart" % tag, flush=True)
             return go(x, sigmas, 0)
+        seen["full"] = (H, W)
         y = go(xs, sigmas[:j + 1], 0)
         X, lvl = grow_state(y, H, W, float(sigmas[j]), int(extra_args.get("seed") or 0) + 7, kind)
         rest = torch.cat([torch.tensor([lvl], dtype=sigmas.dtype, device=sigmas.device),
