@@ -921,6 +921,20 @@ css.textContent = `
   border:2px solid #2a2e35;cursor:pointer;flex:none;background:#111316}
 .rn-ws-cell img{width:100%;height:100%;object-fit:cover;display:block}
 .rn-ws-cell.sel{border-color:#b8283c;box-shadow:0 0 8px #b8283c66}
+/* PEOPLE: each person wears a colour of their own, on the border and the badge, so the
+   main one and the second read at a glance (they were a 9px tag in one green) */
+.rn-ws-cell.p1{border-color:#e0a84a;box-shadow:0 0 10px #e0a84a88}
+.rn-ws-cell.p2{border-color:#4a8fe0;box-shadow:0 0 10px #4a8fe088}
+.rn-ws-cell.p3{border-color:#3f9e63;box-shadow:0 0 10px #3f9e6388}
+.rn-ws-cell.p4{border-color:#9b59b6;box-shadow:0 0 10px #9b59b688}
+.rn-ws-cell.p5{border-color:#8fa8c8;box-shadow:0 0 10px #8fa8c888}
+.rn-ws-cell.p1 .rn-ws-n{background:#e0a84a;color:#1a1200}
+.rn-ws-cell.p2 .rn-ws-n{background:#4a8fe0;color:#fff}
+.rn-ws-cell.p3 .rn-ws-n{background:#3f9e63;color:#fff}
+.rn-ws-cell.p4 .rn-ws-n{background:#9b59b6;color:#fff}
+.rn-ws-cell.p5 .rn-ws-n{background:#8fa8c8;color:#111}
+.rn-ws-cell.p1 .rn-ws-n,.rn-ws-cell.p2 .rn-ws-n,.rn-ws-cell.p3 .rn-ws-n,.rn-ws-cell.p4 .rn-ws-n,
+.rn-ws-cell.p5 .rn-ws-n{font-size:12px;font-weight:700;padding:2px 7px;bottom:3px;left:3px}
 .rn-ws-cell.missing{border-style:dashed;border-color:#7f1d1d}
 .rn-ws-cell.missing::after{content:"missing";position:absolute;inset:0;display:flex;align-items:center;
   justify-content:center;font-size:9px;color:#ff7b86;background:#0009}
@@ -3537,17 +3551,50 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
     gcard.appendChild(coll);
   }
 
+  // PEOPLE: the Subject gallery picks several people in order, the first the main one
+  const peopleMode = tabName === "subject";
+  // HOW MANY PEOPLE the gallery takes: a cap, so a click past it swaps the last person
+  // out instead of piling a fourth and fifth on that then have to be clicked off
+  // again. 0 is no cap. A workflow saved before the cap keeps every person it had.
+  const peopleCap = () => (Number.isInteger(t.people_max)
+    ? Math.max(0, t.people_max) : Math.max(2, 1 + (t.extra_sel || []).length));
+  if (peopleMode) {
+    const prow = document.createElement("div");
+    prow.className = "rn-ws-row rn-ws-peoplecap";
+    const pl = document.createElement("span");
+    pl.className = "rn-ws-note";
+    pl.textContent = "People";
+    const seg = segSwitch([
+      ["1", "1", "One person: a click picks the main subject and replaces the old one."],
+      ["2", "2", "Two people: the main one and one more. A third click swaps the second out."],
+      ["3", "3", "Three people."],
+      ["4", "4", "Four people. Krea 2 holds four reference people at most."],
+      ["0", "Any", "No cap: every click adds a person, as before."],
+    ], String(peopleCap()), (v) => {
+      t.people_max = Number(v) || 0;
+      if (t.people_max > 0 && t.images.length) {
+        // over the new cap: the people past it go, the main one stays
+        t.extra_sel = (t.extra_sel || []).slice(0, Math.max(0, t.people_max - 1));
+        activeGroup(t, tabName).extra_sel = t.extra_sel;
+      }
+      writeCfg(node); render(node);
+    }, "How many people this gallery picks. The number on each picture is the order: "
+       + "#1 Main is the subject the dials and the boost mask aim at.");
+    seg.dataset.choice = "people_max";
+    prow.append(pl, seg);
+    gcard.appendChild(prow);
+  }
+
   grid = document.createElement("div");        // the slider above closes over this
   grid.className = "rn-ws-grid";
   const cellPx = thumbOf(cfg, tabName);
-  // PEOPLE: the Subject gallery picks several people in order, the first the main one
-  const peopleMode = tabName === "subject";
   const order = peopleMode && t.images.length ? [t.sel, ...(t.extra_sel || [])] : [];
   t.images.forEach((entry, i) => {
     const cell = document.createElement("div");
     const selected = peopleMode ? order.includes(i) : multi ? t.sel.includes(i) : t.sel === i;
     const rolled = t.random && node._rnPicks?.[tabName] === entry;
-    cell.className = "rn-ws-cell" + (selected && !t.random ? " sel" : "") + (rolled ? " rolled" : "");
+    cell.className = "rn-ws-cell" + (selected && !t.random ? " sel" : "") + (rolled ? " rolled" : "")
+      + (peopleMode && selected && !t.random ? " p" + Math.min(5, order.indexOf(i) + 1) : "");
     cell.style.width = cell.style.height = cellPx + "px";
     if (rolled) {
       const rb = document.createElement("span");
@@ -3610,9 +3657,14 @@ function galleryBody(node, body, tabName, meta, { multi = false, layout = "" } =
         t.sel = t.sel.includes(i) ? t.sel.filter((k) => k !== i) : [...t.sel, i];
       } else if (peopleMode) {
         // click adds the next person or takes one out; the main one can only go when
-        // someone else is picked, and the next in line becomes the main one
-        if (!order.includes(i)) t.extra_sel = [...(t.extra_sel || []), i];
-        else if (order.length > 1) {
+        // someone else is picked, and the next in line becomes the main one. At the
+        // cap a new click swaps the last person out (the main one at a cap of 1).
+        const cap = peopleCap();
+        if (!order.includes(i)) {
+          if (cap === 1) { t.sel = i; t.extra_sel = []; }
+          else if (cap > 0 && order.length >= cap) t.extra_sel = [...(t.extra_sel || []).slice(0, cap - 2), i];
+          else t.extra_sel = [...(t.extra_sel || []), i];
+        } else if (order.length > 1) {
           const left = order.filter((k) => k !== i);
           t.sel = left[0];
           t.extra_sel = left.slice(1);
