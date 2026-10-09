@@ -14,6 +14,7 @@ remain available as advanced/legacy nodes.
 import json
 from .overrides import env as _env
 import os
+from .paths import PACK_ROOT
 
 SETTINGS_TYPE = "KREA2_SETTINGS"
 
@@ -33,7 +34,7 @@ def _presets_path(make=False):
         import folder_paths
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "presets.json")

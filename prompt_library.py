@@ -12,6 +12,7 @@ manager node and the box highlighter stay in sync with the file.
 import json
 import os
 import re
+from .paths import PACK_ROOT
 
 _VALID_NAME = re.compile(r"^[A-Za-z0-9_]+$")
 # @name, but only at a word start (so "me@site" / emails never expand)
@@ -25,7 +26,7 @@ def _library_path(make=False):
         import folder_paths
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "prompt_library.json")

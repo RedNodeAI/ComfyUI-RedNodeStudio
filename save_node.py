@@ -30,6 +30,7 @@ from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
 import folder_paths
+from .paths import PACK_ROOT
 
 DRAFTS = "drafts"
 KEEPERS = "keepers"
@@ -100,7 +101,7 @@ def _presets_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "save_presets.json")
@@ -1101,7 +1102,7 @@ def _index_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "saved_index.json")

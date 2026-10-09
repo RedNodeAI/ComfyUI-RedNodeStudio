@@ -21,6 +21,7 @@ import math
 import os
 
 from . import camera_translate as _ct
+from .paths import PACK_ROOT
 
 
 def _ws_blocked():
@@ -409,7 +410,7 @@ class RedNodeCameraStudio:
 # window and no light on it is half a set, and the lighting is the part people
 # least want to place twice. The panel keeps the LoRA picks and output
 # settings, because a file name is a machine's business, not a scene's.
-_SETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_sets")
+_SETS_DIR = os.path.join(PACK_ROOT, "camera_sets")
 _SET_KEYS = ("camera", "subjects", "path", "stage_zoom", "lights")
 
 
@@ -421,7 +422,7 @@ def _user_sets_path(make=False):
         import folder_paths
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "camera_sets.json")

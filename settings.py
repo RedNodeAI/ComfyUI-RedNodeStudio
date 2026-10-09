@@ -15,6 +15,7 @@ imports it, and a cycle here would break the whole import.
 import json
 from .overrides import env as _env
 import os
+from .paths import PACK_ROOT
 
 DEFAULTS = {
     "caption_cache": True,     # reuse a caption already made for an image
@@ -43,7 +44,7 @@ def _dir(make=False):
             base = os.path.join(folder_paths.get_user_directory(), "default",
                                 "rednode-krea2")
         except Exception:
-            base = os.path.join(os.path.dirname(__file__), "user_data")
+            base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return base

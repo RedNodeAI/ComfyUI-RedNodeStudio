@@ -27,6 +27,7 @@ import json
 import re
 import sys
 from .overrides import env as _env
+from .paths import PACK_ROOT
 
 # Where Ollama is: OLLAMA_HOST (Ollama's own variable) when set, else this PC.
 # The address is the server's setting alone; a workflow or a request never picks it.
@@ -1337,7 +1338,7 @@ def _cache_path(make=False):
         import folder_paths
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "prompt_cache.json")

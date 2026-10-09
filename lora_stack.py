@@ -42,6 +42,7 @@ import random
 import comfy.sd
 import comfy.utils
 import folder_paths
+from .paths import PACK_ROOT
 
 NO_LORA = "None"
 _EPS = 1e-6
@@ -58,7 +59,7 @@ def _presets_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "lora_presets.json")

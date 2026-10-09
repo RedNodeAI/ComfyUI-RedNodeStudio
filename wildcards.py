@@ -19,6 +19,7 @@ import glob
 import os
 import random
 import re
+from .paths import PACK_ROOT
 
 _INDEX = None          # {name(lower, '/'): [file paths]}
 _FILE_CACHE = {}       # path -> [lines]
@@ -176,7 +177,7 @@ def _write_root(make=False):
         import folder_paths
         base = os.path.join(folder_paths.base_path, "wildcards")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "wildcards")
+        base = os.path.join(PACK_ROOT, "wildcards")
     if make:
         os.makedirs(base, exist_ok=True)
     return base

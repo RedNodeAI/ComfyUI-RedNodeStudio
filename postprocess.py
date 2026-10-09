@@ -68,6 +68,7 @@ import time
 
 import torch
 import torch.nn.functional as F
+from .paths import PACK_ROOT
 
 POST_TYPE = "KREA2_POST"
 
@@ -1806,7 +1807,7 @@ def _presets_path(make=False):
         import folder_paths
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "post_presets.json")
@@ -2135,7 +2136,7 @@ BUILTIN_LOOKS = {
 }
 
 
-LOOKS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "looks")
+LOOKS_DIR = os.path.join(PACK_ROOT, "looks")
 _LOOK_THUMBS = {}
 
 

@@ -45,6 +45,7 @@ from . import postprocess
 from . import lora_stack as _lora
 from . import sampler_dials as _dials
 from .prompt_tools import SWAP_MODES, STYLE_MODES, ACT_MODES, convert_text
+from .paths import PACK_ROOT
 
 WORKSPACE_TYPE = "KREA2_WORKSPACE"
 RIG_TYPE = "RN_RIG"                 # a RedNode Rig Model's record (custom_rig.py)
@@ -335,7 +336,7 @@ def _instructions_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "caption_instructions.json")
@@ -403,7 +404,7 @@ def _vision_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "vision_prompts.json")
@@ -497,7 +498,7 @@ def _presets_path(make=False):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     if make:
         os.makedirs(base, exist_ok=True)
     return os.path.join(base, "workspace_presets.json")

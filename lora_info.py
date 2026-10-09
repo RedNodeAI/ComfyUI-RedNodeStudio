@@ -23,6 +23,7 @@ import os
 import time
 
 import folder_paths
+from .paths import PACK_ROOT
 
 CIVITAI_BY_HASH = "https://civitai.com/api/v1/model-versions/by-hash/{}"
 CIVITAI_VERSION = "https://civitai.com/api/v1/model-versions/{}"
@@ -41,7 +42,7 @@ def _cache_path(kind):
     try:
         base = os.path.join(folder_paths.get_user_directory(), "default", "rednode-krea2")
     except Exception:
-        base = os.path.join(os.path.dirname(__file__), "user_data")
+        base = os.path.join(PACK_ROOT, "user_data")
     os.makedirs(base, exist_ok=True)
     return os.path.join(base, f"lora_{kind}_cache.json")
 
@@ -286,7 +287,7 @@ def set_download_dir(path):
 # Civitai download take .ckpt and .pt files as well, the 1.3.0 behaviour. It is off
 # for everyone else because those formats are pickles and the route is reachable
 # over HTTP; the 1.3.1 fix made safetensors the only format the pack will fetch.
-LOCAL_SETTINGS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "local", "settings.json")
+LOCAL_SETTINGS = os.path.join(PACK_ROOT, "local", "settings.json")
 PICKLE_EXTS = (".ckpt", ".pt")
 
 
