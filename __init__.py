@@ -18,7 +18,7 @@ away and keeps the token structure. Ported from the authors' Forge Neo implement
 """
 
 import math
-from .overrides import env as _env
+from .rednode_studio.core.overrides import env as _env
 import os
 
 import torch
@@ -34,9 +34,9 @@ try:
     import comfy.text_encoders.qwen3vl
     from comfy.text_encoders.krea2 import KREA2_TEMPLATE, Krea2TEModel
 
-    from .identity import Krea2IdentityEdit, fit_image_to_latent, krea2_template
-    from .moodboard import Krea2Moodboard
-    from .rebalance import Krea2Rebalance
+    from .rednode_studio.krea2.identity import Krea2IdentityEdit, fit_image_to_latent, krea2_template
+    from .rednode_studio.krea2.moodboard import Krea2Moodboard
+    from .rednode_studio.krea2.rebalance import Krea2Rebalance
     KREA2_AVAILABLE = True
     _KREA2_WHY = ""
 except ImportError as _e:
@@ -248,7 +248,7 @@ def _moodboard_encode_token_weights(self, token_weight_pairs, template_end=-1):
 
 # Guarded install (roadmap phase E): idempotent, reload-safe, ABI-preflighted,
 # all-or-nothing for the moodboard feature's two TE patch sites.
-from ._patchguard import VERSION as _PG_VERSION, install_all as _pg_install  # noqa: E402
+from .rednode_studio.core._patchguard import VERSION as _PG_VERSION, install_all as _pg_install  # noqa: E402
 
 # Nothing to patch when the text encoder is not there to patch
 _TE_PATCH_OK = _pg_install([
@@ -609,7 +609,7 @@ class Krea2MoodboardIdentityFusion:
                       "the refs would NEVER be active. Ignoring the window (refs stay on every step).")
             elif ref_start > 0.0 or ref_end < 1.0:
                 conditioning = node_helpers.conditioning_set_values(conditioning, {"reference_timing": [float(ref_start), float(ref_end)]})
-            from .identity import scene_window
+            from .rednode_studio.krea2.identity import scene_window
             conditioning = scene_window(conditioning, edit_source2 is not None
                                         and edit_source is not None and len(ref_latents) > 1,
                                         scene_start, scene_end, "Krea2 Fusion")
@@ -635,61 +635,61 @@ class Krea2MoodboardIdentityFusion:
         return (conditioning,)
 
 
-from .rednode import (Krea2RedNode, Krea2RedNodeSettings,  # noqa: E402  (needs the fusion class above)
+from .rednode_studio.krea2.rednode import (Krea2RedNode, Krea2RedNodeSettings,  # noqa: E402  (needs the fusion class above)
                       Krea2RedNodePresetSave, Krea2RedNodePresetLoad)
-from .prompt_tools import RedNodePromptCombine, RedNodePromptSwap  # noqa: E402
-from .text_combine import RedNodeTextCombine  # noqa: E402
-from .prompt_box import RedNodePromptBox  # noqa: E402
-from .prompt_frame import RedNodePromptFrame  # noqa: E402
-from . import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers the sort route)
-from . import model_families as _rednode_model_families  # noqa: E402,F401  (the Setup page's route)
-from .camera_studio import RedNodeCameraStudio, RedNodeCameraLoRAs, RedNodeCameraMultiAngle  # noqa: E402
-from .prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
-from .refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
-from .rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
-from .selector import RedNodeSelector  # noqa: E402
-from .combo_control import RedNodeComboControl  # noqa: E402
-from .control_panel import RedNodeControlPanel  # noqa: E402
-from .note import RedNodeNote  # noqa: E402
-from .note_panel import RedNodeNotePanel  # noqa: E402
-from .report import RedNodeReport  # noqa: E402
-from .group_modes import RedNodeGroupModes  # noqa: E402
-from .prompt_library import RedNodePromptKeywords  # noqa: E402  (also registers the HTTP API)
-from .wildcards import RedNodeWildcards  # noqa: E402  (also registers the wildcard HTTP API)
-from .refiner import RedNodeRefineCrop, RedNodeRefinePaste  # noqa: E402
-from .lora_stack import RedNodeLoraStack, RedNodeLoraStackSave  # noqa: E402
-from .group_control import RedNodeGroupControl  # noqa: E402
-from .switch import RedNodeSwitch  # noqa: E402
-from .router import RedNodeRouter  # noqa: E402
-from .router_control import RedNodeRouterControl  # noqa: E402
-from .palette import RedNodePalette  # noqa: E402
-from .pass_through import RedNodePass  # noqa: E402
-from .workspace import RedNodeStudioWorkspace  # noqa: E402
-from .review import RedNodeImageReview  # noqa: E402
-from .live_preview import RedNodeLivePreview  # noqa: E402
-from .sampler_config import RedNodeSamplerConfig  # noqa: E402
-from .postprocess import RedNodePostProcess, RedNodePostFX  # noqa: E402
-from .stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
-from .custom_rig import RedNodeRigModel, RedNodeRigInputs, RedNodeRigResult  # noqa: E402
-from .shelf import RedNodeShelf  # noqa: E402
-from .paint_render import RedNodePaintRender  # noqa: E402
-from .paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
-from .save_node import RedNodeSave  # noqa: E402
-from . import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
-from .vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
-from . import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
-from . import thumbs as _rednode_thumbs  # noqa: F401,E402  (grid thumbnail route)
-from .group_rules import RedNodeGroupRules  # noqa: E402  (also registers its routes)
-from .subgraph_bridge import (RedNodeSubgraphSend,  # noqa: E402
+from .rednode_studio.prompts.prompt_tools import RedNodePromptCombine, RedNodePromptSwap  # noqa: E402
+from .rednode_studio.prompts.text_combine import RedNodeTextCombine  # noqa: E402
+from .rednode_studio.prompts.prompt_box import RedNodePromptBox  # noqa: E402
+from .rednode_studio.prompts.prompt_frame import RedNodePromptFrame  # noqa: E402
+from .rednode_studio.prompts import prompt_sort as _rednode_prompt_sort  # noqa: E402,F401  (registers the sort route)
+from .rednode_studio.rigs import model_families as _rednode_model_families  # noqa: E402,F401  (the Setup page's route)
+from .rednode_studio.camera.camera_studio import RedNodeCameraStudio, RedNodeCameraLoRAs, RedNodeCameraMultiAngle  # noqa: E402
+from .rednode_studio.prompts.prompt_from_image import RedNodeDescribeToBoxes  # noqa: E402
+from .rednode_studio.detailer.refine_pipeline import RedNodeStudioAdvanced  # noqa: E402
+from .rednode_studio.rigs.rig_bridge import RedNodeRigOut, RedNodeRigIn  # noqa: E402
+from .rednode_studio.control.selector import RedNodeSelector  # noqa: E402
+from .rednode_studio.control.combo_control import RedNodeComboControl  # noqa: E402
+from .rednode_studio.control.control_panel import RedNodeControlPanel  # noqa: E402
+from .rednode_studio.control.note import RedNodeNote  # noqa: E402
+from .rednode_studio.control.note_panel import RedNodeNotePanel  # noqa: E402
+from .rednode_studio.control.report import RedNodeReport  # noqa: E402
+from .rednode_studio.control.group_modes import RedNodeGroupModes  # noqa: E402
+from .rednode_studio.prompts.prompt_library import RedNodePromptKeywords  # noqa: E402  (also registers the HTTP API)
+from .rednode_studio.prompts.wildcards import RedNodeWildcards  # noqa: E402  (also registers the wildcard HTTP API)
+from .rednode_studio.detailer.refiner import RedNodeRefineCrop, RedNodeRefinePaste  # noqa: E402
+from .rednode_studio.lora.lora_stack import RedNodeLoraStack, RedNodeLoraStackSave  # noqa: E402
+from .rednode_studio.control.group_control import RedNodeGroupControl  # noqa: E402
+from .rednode_studio.control.switch import RedNodeSwitch  # noqa: E402
+from .rednode_studio.control.router import RedNodeRouter  # noqa: E402
+from .rednode_studio.control.router_control import RedNodeRouterControl  # noqa: E402
+from .rednode_studio.control.palette import RedNodePalette  # noqa: E402
+from .rednode_studio.control.pass_through import RedNodePass  # noqa: E402
+from .rednode_studio.workspace.workspace import RedNodeStudioWorkspace  # noqa: E402
+from .rednode_studio.save.review import RedNodeImageReview  # noqa: E402
+from .rednode_studio.rigs.live_preview import RedNodeLivePreview  # noqa: E402
+from .rednode_studio.rigs.sampler_config import RedNodeSamplerConfig  # noqa: E402
+from .rednode_studio.post.postprocess import RedNodePostProcess, RedNodePostFX  # noqa: E402
+from .rednode_studio.workspace.stages import RedNodeStageTap, RedNodeStageView  # noqa: E402
+from .rednode_studio.rigs.custom_rig import RedNodeRigModel, RedNodeRigInputs, RedNodeRigResult  # noqa: E402
+from .rednode_studio.workspace.shelf import RedNodeShelf  # noqa: E402
+from .rednode_studio.edit.paint_render import RedNodePaintRender  # noqa: E402
+from .rednode_studio.edit.paint_bridge import RedNodePaintOut, RedNodePaintIn  # noqa: E402
+from .rednode_studio.save.save_node import RedNodeSave  # noqa: E402
+from .rednode_studio.core import settings as _rednode_settings  # noqa: F401,E402  (settings routes)
+from .rednode_studio.rigs.vram import RedNodeFreeVRAM  # noqa: E402  (also registers the renderer-switch route)
+from .rednode_studio.edit import automask as _rednode_automask  # noqa: F401,E402  (auto-mask route)
+from .rednode_studio.core import thumbs as _rednode_thumbs  # noqa: F401,E402  (grid thumbnail route)
+from .rednode_studio.control.group_rules import RedNodeGroupRules  # noqa: E402  (also registers its routes)
+from .rednode_studio.control.subgraph_bridge import (RedNodeSubgraphSend,  # noqa: E402
                               RedNodeSubgraphReceive, RedNodeChannelConvert)
-from . import lora_info  # noqa: F401,E402  (registers the Civitai lookup route)
+from .rednode_studio.lora import lora_info  # noqa: F401,E402  (registers the Civitai lookup route)
 # LAST, and that matters. hero.py pulls in workspace, automask and
 # refine_pipeline at import, so importing it partway down this list made the
 # whole workspace chain load earlier than it used to. Every module here is
 # already loaded by this point, so hero cannot move anyone's turn.
-from . import hero as _rednode_hero  # noqa: F401,E402  (registers the hero routes)
-from .assistant import RedNodeStudioAssistant  # noqa: E402 (registers the assistant routes)
-from . import realism as _rednode_realism  # noqa: F401,E402  (registers the realism routes)
+from .rednode_studio.krea2 import hero as _rednode_hero  # noqa: F401,E402  (registers the hero routes)
+from .rednode_studio.workspace.assistant import RedNodeStudioAssistant  # noqa: E402 (registers the assistant routes)
+from .rednode_studio.edit import realism as _rednode_realism  # noqa: F401,E402  (registers the realism routes)
 
 WEB_DIRECTORY = "./web"
 
@@ -847,7 +847,7 @@ if KREA2_AVAILABLE:
 
 # One-line startup diagnostic (phase E): which guarded patch sets are live.
 if KREA2_AVAILABLE:
-    from .identity import _PATCH_OK as _ID_PATCH_OK  # noqa: E402
+    from .rednode_studio.krea2.identity import _PATCH_OK as _ID_PATCH_OK  # noqa: E402
 
     print(f"[RedNode Krea2] patch guard v{_PG_VERSION}: "
           f"identity={'ok' if _ID_PATCH_OK else 'DISABLED'}, "

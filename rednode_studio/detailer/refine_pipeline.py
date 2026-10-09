@@ -1,0 +1,2378 @@
+"""RedNode Studio Detailer: the post-render passes as a list, not a wire maze.
+
+Start, then the passes in order, then End. Each pass names a RIG from the Models tab,
+so a face can be detailed by a different model from the one that rendered the frame.
+Two pass kinds, both taken from the shapes you already runs as subgraphs:
+
+  sampler   whole-frame refine at a denoise, an img2img over the incoming picture
+  detailer  SAM3 segments a target (face, hair, hands...), a low-denoise pass over
+            the crop, composited back through a feathered mask
+  upscale   SeedVR2 at a named size (720p to 4K), the workflow's upscale group as
+            one card: its two loaders, its dials, and its short-edge maths
+
+Every pass carries the full sampler vocabulary: steps, CFG, sampler, scheduler, a
+denoise, and a start/end step window for the partial-schedule tricks detailer chains
+are built from. Anything left at its "rig" default inherits the rig's own settings
+(every pass takes the rig's detailer_steps, its count for working over a picture
+that already exists rather than drawing from noise), so the
+Models tab stays the one place a model's numbers live.
+
+The prompt is the workspace's own when the box is empty: the pass looks up the
+Prompts-tab row for ITS rig, exactly the text the main render used, wildcards rolled
+on this run's seed. Typed text in the pass wins, the standing rule.
+
+SAM3 arrives through ComfyUI-Easy-Sam3 when it is installed, the same pack the
+release workflow already carries, and the SAM model is a visible choice per pass
+rather than a silent default. Without the pack the detailer stage says so plainly
+and passes the image through, because a silent no-op teaches the wrong lesson and a
+hard error kills a queue over an optional dependency.
+"""
+
+import json
+import re
+
+import torch
+import torch.nn.functional as F
+
+import comfy.samplers
+import nodes as _core
+
+from ..workspace import workspace as _ws
+from ..rigs import live_preview as _live
+from ..rigs import sampler_dials as _dials
+from ..edit.paint_render import _bbox, _encode_text, _workspace_cfg, grow_to_aspect, \
+    region_aspect
+
+
+def parse_pipeline(config_json):
+    """The stage list, normalised. Unknown kinds are dropped, values clamped.
+
+    Zero means "the rig's": steps, cfg, sampler and scheduler left at their zero
+    values inherit from the stage's rig, so the parse cannot fill real defaults in
+    without erasing that meaning.
+    """
+    try:
+        data = json.loads(config_json or "{}")
+    except (ValueError, TypeError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    stages = []
+    for s in (data.get("stages") if isinstance(data.get("stages"), list) else []):
+        if not isinstance(s, dict):
+            continue
+        if s.get("type") == "title":
+            # a group header: pure panel furniture that divides the list. The
+            # run skips it; it parses so the round trip never loses a group.
+            stages.append({"type": "title", "on": bool(s.get("on", True)),
+                           "name": str(s.get("name") or ""),
+                           "color": str(s.get("color") or "")})
+            continue
+        if s.get("type") not in ("sampler", "detailer", "upscale", "usdu", "vosr2",
+                                 "reader", "realism") and s.get("type") not in PASS_HANDLERS:
+            continue
+
+        def _num(key, lo, hi, dv, cast=float):
+            try:
+                v = cast(s.get(key, dv))
+            except (TypeError, ValueError):
+                v = dv
+            return max(lo, min(hi, v))
+        stages.append({
+            "on": bool(s.get("on", True)),
+            "type": s["type"],
+            "rig": str(s.get("rig") or ""),
+            "prompt": str(s.get("prompt") or ""),
+            "negative": str(s.get("negative") or ""),
+            "denoise": _num("denoise", 0.0, 1.0,
+                            0.15 if s["type"] == "detailer" else
+                            0.25 if s["type"] == "usdu" else
+                            1.0 if s["type"] == "realism" else 0.3),
+            "steps": _num("steps", 0, 200, 0, int),          # 0 = the rig's
+            "cfg": _num("cfg", 0.0, 30.0, 0.0),              # 0 = the rig's
+            "sampler": str(s.get("sampler") or ""),          # "" = the rig's
+            "scheduler": str(s.get("scheduler") or ""),      # "" = the rig's
+            "start_step": _num("start_step", 0, 200, 0, int),
+            "end_step": _num("end_step", 0, 200, 0, int),    # 0 = to the end
+            "target": str(s.get("target") or "face"),
+            # IMAGE TO TEXT: this pass renders nothing. It reads the picture as it
+            # stands and writes the words the passes AFTER it render with, so a
+            # chain can describe what it actually has rather than what the run
+            # started from (you, 2026-09-23). The typed box here is combined with
+            # what it reads; reader_first says which of the two leads.
+            # WHICH PICTURE it reads: the one in the chain at this point, which is
+            # the whole idea of the pass, or the picture picked on the AI tab, for a
+            # chain that should describe a reference instead (you, 2026-09-23)
+            "reader_source": ("ai_tab" if str(s.get("reader_source") or "") == "ai_tab"
+                              else "chain"),
+            "reader_mode": str(s.get("reader_mode") or ""),     # "" = the AI tab's
+            "reader_first": bool(s.get("reader_first", False)),
+            # None = read with whatever the AI tab is set to; a dict is this pass's
+            # own choice of engines, and its own Ollama model when it names one
+            "reader_engines": (dict(s["reader_engines"])
+                               if isinstance(s.get("reader_engines"), dict)
+                               and s["reader_engines"] else None),
+            "reader_keep": bool(s.get("reader_keep", True)),
+            # REALISM AS A PASS: the Editor's Realism page holds the recipe (the
+            # encoder, the sizes, the sampler, the system instruction), and a pass
+            # takes it whole and overrides the few things worth changing per pass.
+            # "" and 0 mean "the page's", the same as "" means "the rig's" above,
+            # so a page edited later still reaches every pass that did not disagree.
+            "realism_engine": (s["realism_engine"]
+                               if s.get("realism_engine") in ("exact", "alternative")
+                               else ""),
+            "realism_lora": str(s.get("realism_lora") or ""),
+            "realism_strength": _num("realism_strength", 0.0, 2.0, 0.0),
+            # tri-state on purpose: "" follows the page, so switching the page's
+            # photo finish on moves every pass that never said otherwise
+            "realism_photo": (s["realism_photo"] if s.get("realism_photo") in ("on", "off")
+                              else ""),
+            "realism_prompt": str(s.get("realism_prompt") or "")[:500],
+            # a registered kind's own settings, kept as the panel wrote them; the
+            # handler reads them, this parse does not
+            "local": s.get("local") if isinstance(s.get("local"), dict) else {},
+            # TILES: the conversion a tile at a time, each tile its own reference,
+            # so an upscale gets the engine's faithfulness instead of a sampler's
+            # habit of drawing the whole prompt into a patch of sky (you,
+            # 2026-09-25). Scale resizes first; 1 re-details at the frame's size.
+            "realism_tiles": bool(s.get("realism_tiles", False)),
+            "realism_scale": _num("realism_scale", 1.0, 4.0, 1.0),
+            "realism_tile": _num("realism_tile", 256, 2048, 1024, int),
+            "realism_overlap": _num("realism_overlap", 0, 512, 128, int),
+            "sam_model": str(s.get("sam_model") or ""),      # "" = the loader default
+            # 1.0 is the picture as it arrives. A sampler pass at 0.5 then another
+            # at 2.0 is the shrink-and-regrow chain that invents detail, which is
+            # the whole point of this node being a list.
+            "scale": _num("scale", 0.25, 4.0, 1.0),
+            # ON by default, because everywhere else in the pack a rig arrives
+            # carrying its stack; raw is the explicit choice, not the accident
+            "loras": bool(s.get("loras", True)),
+            # which LoRAs-tab SET this pass runs with: "" = the rig's own
+            # choice (Models tab), and that "" too = Main
+            "lora_set": str(s.get("lora_set") or "")[:48],
+            # Krea 2 references for this pass, the same three toggles the Paint
+            # tab offers, off by default for the same reason they are there
+            "use_subject": bool(s.get("use_subject")),
+            "use_scene": bool(s.get("use_scene")),
+            "use_moodboard": bool(s.get("use_moodboard")),
+            # PICTURE: the picture as it arrives (a detailer's crop) rides the
+            # pass as the FIRST reference, the Scene slot - the base image of
+            # a two-reference edit LoRA (BFS head/body swap on Krea 2: base
+            # first, the Subject second, the order the Studio already keeps).
+            # Wins over the Scene tab when both are on. Off by default.
+            "use_picture": bool(s.get("use_picture")),
+            # A LoRA only THIS pass loads, model side, on top of the stack (or
+            # of the raw rig): the swap file lives here, never on the main
+            # render. "" / "None" = nothing.
+            "lora": str(s.get("lora") or ""),
+            "lora_strength": _num("lora_strength", 0.0, 2.0, 1.0),
+            "threshold": _num("threshold", 0.05, 0.95, 0.5),
+            # INVERT: work everything but the target. The mask is turned inside
+            # out and the box is the whole frame, so the pass renders the frame
+            # at its scale and the paste keeps the target as it was (you,
+            # 2026-09-25): a background around a face, clothes around a head.
+            "invert": bool(s.get("invert")),
+            # ENGINE: what redraws the crop. "rig" is the pass rig's sampler;
+            # "rerender" hands the crop to the Re-render tab's recipe at this
+            # pass's denoise and pastes it back under the same mask (you,
+            # 2026-09-25), so a face gets the conversion and the frame keeps.
+            "engine": "rerender" if s.get("engine") == "rerender" else "rig",
+            "feather": _num("feather", 0, 64, 8, int),
+            # BLEND: how much of the rendered crop goes back. 1 is the render
+            # under the mask as before; 0.5 halves it against the crop as it
+            # was, the dial tuned against denoise (0.3 to 0.5 with blend under
+            # 1 keeps a face's own skin under a stronger repaint).
+            "blend": _num("blend", 0.0, 1.0, 1.0),
+            "padding": _num("padding", 0.0, 2.0, 0.35),
+            # FREE VRAM before this pass: every model ComfyUI holds unloaded at
+            # the moment nothing is mid-allocation, so a big rig or the SeedVR2
+            # loaders never overlap the pass before. Runs every queue.
+            "free_vram": bool(s.get("free_vram")),
+            # TONE LOCK: the result keeps its own detail and takes the pass
+            # input's tone (its low frequencies at a radius) by strength, skin
+            # hue held. The drift fix for a long chain. Off by default.
+            "tone_lock": bool(s.get("tone_lock")),
+            "tone_radius": _num("tone_radius", 4, 256, 32, int),
+            "tone_strength": _num("tone_strength", 0.0, 1.0, 1.0),
+            # an upscale pass on a region only: SAM3's target, the crop through
+            # the upscaler and back under the feathered matte. "" is the frame.
+            "region": str(s.get("region") or "")[:48],
+            # A TILED UPSCALE (Ultimate SD Upscale): the rig's model and prompt
+            # over tiles, an upscale model first ("" is a plain resize), the
+            # tile, its padding and mask blur, the seam fix. Denoise above 0.4
+            # invents subjects in tiles, so the defaults sit at 0.25.
+            "usdu_model": str(s.get("usdu_model") or ""),
+            "upscale_by": _num("upscale_by", 0.25, 4.0, 2.0),
+            "usdu_tile": _num("usdu_tile", 256, 2048, 1024, int),
+            "usdu_padding": _num("usdu_padding", 0, 512, 128, int),
+            "usdu_blur": _num("usdu_blur", 0, 64, 8, int),
+            "usdu_mode": str(s.get("usdu_mode") or "Linear"),
+            "seam_mode": str(s.get("seam_mode") or "None"),
+            "seam_denoise": _num("seam_denoise", 0.0, 1.0, 0.35),
+            "seam_width": _num("seam_width", 0, 512, 64, int),
+            "seam_padding": _num("seam_padding", 0, 512, 16, int),
+            "tiled_decode": bool(s.get("tiled_decode")),
+            # the crop's working resolution: its long edge is resized to this
+            # before rendering, then the result goes back at the crop's own
+            # size. 0 keeps the old behaviour, the crop as it comes (x Scale).
+            # A small face stops meaning a quality-starved render.
+            "crop_res": _num("crop_res", 0, 4096, 0, int),
+            # iteration, the Paint tab's Passes on a single pass: run this pass
+            # over its own result N times, fresh seed each round
+            "repeat": _num("repeat", 1, 10, 1, int),
+            "color": str(s.get("color") or ""),      # panel cosmetics, kept
+            # the name typed on the card; "" is the card's automatic one
+            "name": str(s.get("name") or "").strip()[:48],
+            # WHICH PROMPT this pass reads when its box is empty: "" is the row
+            # linked to its rig, else a Prompts-tab row by name, or "#N" for
+            # the Nth row when it has no name
+            "prompt_row": str(s.get("prompt_row") or "")[:64],
+            # A FACE PASS usually runs to change what the face is doing, so the
+            # expression rides in front of whatever prompt the pass ends up with.
+            "expression": str(s.get("expression") or "").strip()[:64],
+            # "row" is the Prompts-tab row this pass reads; "subject" takes the
+            # Subject tab's caption instead, which describes the person rather
+            # than the whole scene
+            "words": ("subject" if str(s.get("words") or "") == "subject" else "row"),
+            # A SEEDVR2 UPSCALE PASS: its size and the loader dials the workflow
+            # sets by hand. "" on a combo is the loader's own default.
+            "size": str(s.get("size") or "1080p"),
+            "dit_model": str(s.get("dit_model") or ""),
+            "vae_model": str(s.get("vae_model") or ""),
+            "attention": str(s.get("attention") or ""),
+            "blocks_to_swap": _num("blocks_to_swap", 0, 36, 36, int),
+            "offload": str(s.get("offload") or "cpu"),
+            "cache_model": bool(s.get("cache_model")),
+            "tiled": (True if s.get("tiled") is None else bool(s.get("tiled"))),
+            "tile": _num("tile", 64, 4096, 1024, int),
+            "tile_overlap": _num("tile_overlap", 0, 1024, 128, int),
+            "color_fix": str(s.get("color_fix") or "lab"),
+            "max_edge": _num("max_edge", 0, 16384, 0, int),
+            "input_noise": _num("input_noise", 0.0, 1.0, 0.0),
+            "latent_noise": _num("latent_noise", 0.0, 1.0, 0.0),
+            # A VOSR2 UPSCALE PASS. Deliberately NOT the size combo above:
+            # VOSR 2.0 takes a multiplier, and forcing a pixel budget on to it
+            # would mean resizing its output, which is the one thing this
+            # upscaler is picked for not doing. The multiplier may be a
+            # fraction (x1.5) and goes to x8; vosr2_stages says how it is run.
+            # Defaults are the author's own recommendation, which is also what
+            # measured best here: tile 512, VAE tile 1024, wavelet.
+            "vosr2_model": str(s.get("vosr2_model") or ""),
+            "vosr2_dtype": str(s.get("vosr2_dtype") or ""),
+            "vosr2_scale": _num("vosr2_scale", 1.0, 8.0, 2.0),
+            "vosr2_color": str(s.get("vosr2_color") or "wavelet"),
+            "vosr2_tile": _num("vosr2_tile", 0, 4096, 512, int),
+            "vosr2_tile_overlap": _num("vosr2_tile_overlap", 0, 512, 32, int),
+            "vosr2_vae_tile": _num("vosr2_vae_tile", 0, 8192, 1024, int),
+            "vosr2_vae_overlap": _num("vosr2_vae_overlap", 0, 512, 32, int),
+            # keep the loaded bundle between runs (the upstream loader has no
+            # cache of its own, so every run reloads 6.5 GB: 3.3 s on a 5090,
+            # measured 2026-10-09). Off by default, like SeedVR2's cache_model.
+            "vosr2_cache": bool(s.get("vosr2_cache")),
+        })
+        if stages[-1]["size"] not in UPSCALE_SIZES:
+            stages[-1]["size"] = "1080p"
+        st = stages[-1]
+        # A DENOISE PER ROUND and A SCALE PER ROUND, the Img2Img PASS rule on a
+        # repeat. Off, each list is the single dial repeated, so the loop reads
+        # one field either way; on, a short list repeats its last value, so a
+        # raised count never moves a number already chosen. round_stage says
+        # what the scale list means on each kind of pass.
+        st["pass_custom"], st["pass_denoise"] = _ws._pass_list(
+            s.get("pass_denoise"), s.get("pass_custom"), st["denoise"],
+            0.0, 1.0, st["repeat"])
+        st["scale_custom"], st["pass_scale"] = _ws._pass_list(
+            s.get("pass_scale"), s.get("scale_custom"), st["scale"],
+            0.25, 4.0, st["repeat"])
+        if st["scale_custom"]:
+            st["scale"] = st["pass_scale"][0]
+    try:
+        seed = int(data.get("seed", 0))
+    except (TypeError, ValueError):
+        seed = 0
+    return {"stages": stages, "seed": max(0, seed), "same_seed": bool(data.get("same_seed")),
+            "seed_random": (True if data.get("seed_random") is None
+                            else bool(data.get("seed_random"))),
+            # record the input, every pass and the output into the RedNode
+            # Stage View strip, so a chain can be read step by step without
+            # wiring taps. Off by default, per the house rule.
+            "taps": bool(data.get("taps")),
+            # the long edge the strip keeps each frame at; 0 is the frame as it is
+            "tap_px": (int(data["tap_px"])
+                       if isinstance(data.get("tap_px"), (int, float))
+                       and not isinstance(data.get("tap_px"), bool)
+                       and int(data["tap_px"]) >= 0 else 768),
+            # the node's own SAM: the checkpoint every detailer pass segments
+            # with unless it names its own, and the precision it loads at. ""
+            # is the loader's first file and the loader's own precision.
+            "sam_model": str(data.get("sam_model") or ""),
+            "sam_precision": str(data.get("sam_precision") or "")}
+
+
+def round_stage(s, r):
+    """The stage as round `r` of its repeat runs it.
+
+    Denoise comes off the per-round list when that is on. Scale is the subtle
+    one. A sampler pass's scale STICKS (whatever runs next sees the new size),
+    so with the list on each round is a size against the picture as it arrived
+    and the resize applied is the ratio to the round before; with it off the
+    first round scales and the rest refine at the size it landed on, so 1.5x
+    three times can never quietly become 3.4x. A detailer's scale only renders
+    the crop bigger and never sticks, so each round simply takes its own.
+    """
+    out = dict(s)
+    if s.get("pass_custom") and s.get("pass_denoise"):
+        lst = s["pass_denoise"]
+        out["denoise"] = float(lst[min(r, len(lst) - 1)])
+    if s.get("scale_custom") and s.get("pass_scale"):
+        lst = s["pass_scale"]
+        cur = float(lst[min(r, len(lst) - 1)])
+        if s["type"] == "sampler" and r > 0:
+            prev = float(lst[min(r - 1, len(lst) - 1)])
+            out["scale"] = cur / prev if prev > 1e-6 else 1.0
+        else:
+            out["scale"] = cur
+    elif s["type"] == "sampler" and r > 0:
+        out["scale"] = 1.0
+    return out
+
+
+# The upscale sizes as a PIXEL BUDGET, the way the workflow's combo carried
+# them (921600, 2073600, ...): 1080p means 1920 x 1080's pixels whatever the
+# frame's shape, and the short edge is worked out from its own aspect.
+UPSCALE_SIZES = {"720p": 1280 * 720, "1080p": 1920 * 1080, "2K": 2048 * 1080,
+                 "1440p": 2560 * 1440, "4K": 3840 * 2160}
+
+
+def upscale_short_edge(w, h, target_px):
+    """The workflow's own maths, min(sqrt(a/(b*c))*b, sqrt(a/(b*c))*c): the
+    short edge that puts target_px pixels in a w x h frame at its aspect. Even,
+    which the upscaler asks for."""
+    f = (float(target_px) / max(1, int(w) * int(h))) ** 0.5
+    return max(16, int(round(f * min(int(w), int(h)) / 2.0)) * 2)
+
+
+def _box_blur(t, radius):
+    """A separable box blur run twice on [B,H,W,C]: a cheap near-gaussian,
+    edges weighted by what is there rather than by padding."""
+    k = int(radius) * 2 + 1
+    x = t.permute(0, 3, 1, 2)
+    for _ in range(2):
+        x = F.avg_pool2d(x, (k, 1), stride=1, padding=(k // 2, 0),
+                         count_include_pad=False)
+        x = F.avg_pool2d(x, (1, k), stride=1, padding=(0, k // 2),
+                         count_include_pad=False)
+    return x.permute(0, 2, 3, 1)
+
+
+def tone_lock(before, after, radius=32, strength=1.0, skin=0.5):
+    """The pass result with the pass input's tone. The result keeps its high
+    frequencies (the detail the pass made); the input's low frequencies at the
+    radius replace its own, by strength; skin hue is held to the input's. Colour
+    and exposure stop wandering pass to pass down a long chain."""
+    strength = max(0.0, min(1.0, float(strength)))
+    if strength <= 0:
+        return after
+    a = after[:, :, :, :3]
+    b = before[:, :, :, :3].to(a.device, a.dtype)
+    if b.shape[1:3] != a.shape[1:3]:
+        b = F.interpolate(b.permute(0, 3, 1, 2), size=a.shape[1:3], mode="bilinear",
+                          align_corners=False).permute(0, 2, 3, 1)
+    if b.shape[0] != a.shape[0]:
+        b = b[:1].expand(a.shape[0], -1, -1, -1)
+    r = max(1, min(int(radius), min(a.shape[1], a.shape[2]) // 2))
+    locked = (a - _box_blur(a, r) + _box_blur(b, r)).clamp(0, 1)
+    if skin > 0:
+        try:
+            from ..post import postprocess as _pp     # its helpers are NCHW
+            locked = _pp._skin_hold(b.permute(0, 3, 1, 2), locked.permute(0, 3, 1, 2),
+                                    skin).permute(0, 2, 3, 1)
+        except Exception:
+            pass
+    return (a + (locked - a) * strength).clamp(0, 1)
+
+
+def _is_oom(exc):
+    oom = getattr(torch.cuda, "OutOfMemoryError", None)
+    if oom is not None and isinstance(exc, oom):
+        return True
+    return "out of memory" in str(exc).lower()
+
+
+def _call_node(cls, kw):
+    """A node called the way the graph calls it, its outputs as a list. A V3
+    node (comfy_api io.ComfyNode) hands back a NodeOutput with the values in
+    .args rather than a tuple."""
+    out = getattr(cls(), cls.FUNCTION)(**kw)
+    vals = getattr(out, "args", None)
+    if vals is None:
+        vals = out if isinstance(out, (tuple, list)) else [out]
+    return list(vals)
+
+
+def _seedvr2(image, s, seed):
+    """The picture through SeedVR2 at the pass's size, or None with a reason.
+
+    The workflow's upscale group, mechanised: the DiT loader, the VAE loader
+    and the upscaler, called through their own classes out of
+    NODE_CLASS_MAPPINGS so this follows the pack instead of reimplementing it.
+    The resolution is the workflow's maths, the short edge that puts the size's
+    pixels in the frame. Nothing is cached here: the loaders own that (their
+    cache_model dial), and a 7B checkpoint held twice is a RAM surprise.
+    Everything inside one try for the reason SAM3 is: an optional pack must
+    fail as words, never as a dead queue.
+    """
+    try:
+        maps = _core.NODE_CLASS_MAPPINGS
+        dit_cls = maps.get("SeedVR2LoadDiTModel")
+        vae_cls = maps.get("SeedVR2LoadVAEModel")
+        up_cls = maps.get("SeedVR2VideoUpscaler")
+        if dit_cls is None or vae_cls is None or up_cls is None:
+            return None, ("ComfyUI-SeedVR2_VideoUpscaler is not installed, and it "
+                          "is what upscales. Install it in Manager.")
+
+        def fill(cls, values):
+            # the loader's own defaults, then the pass's choices over them;
+            # "" on a combo keeps the default, a dial the node lacks is dropped
+            kw = _defaults_for(cls)
+            have = _all_inputs(cls)
+            for k, v in values.items():
+                if k in have and v is not None and v != "":
+                    kw[k] = v
+            return kw
+        dit = _call_node(dit_cls, fill(dit_cls, {
+            "model": s["dit_model"], "blocks_to_swap": s["blocks_to_swap"],
+            "swap_io_components": False, "offload_device": s["offload"],
+            "cache_model": s["cache_model"], "attention_mode": s["attention"]}))[0]
+        h, w = int(image.shape[1]), int(image.shape[2])
+        res = upscale_short_edge(
+            w, h, UPSCALE_SIZES.get(s["size"], UPSCALE_SIZES["1080p"]))
+        # THE TILE LADDER: an out-of-memory with the tiled VAE on halves the
+        # tile (overlap kept to a quarter of it) down to 64 before giving up,
+        # so a card that cannot fit 1024 still finishes at 512 or 256
+        tile = int(s["tile"])
+        while True:
+            overlap = min(int(s["tile_overlap"]), tile // 4)
+            vae = _call_node(vae_cls, fill(vae_cls, {
+                "model": s["vae_model"], "encode_tiled": s["tiled"],
+                "encode_tile_size": tile, "encode_tile_overlap": overlap,
+                "decode_tiled": s["tiled"], "decode_tile_size": tile,
+                "decode_tile_overlap": overlap,
+                "offload_device": s["offload"], "cache_model": s["cache_model"]}))[0]
+            try:
+                outs = _call_node(up_cls, fill(up_cls, {
+                    "image": image, "dit": dit, "vae": vae,
+                    "seed": int(seed) & 0xffffffff, "resolution": res,
+                    "max_resolution": s["max_edge"], "batch_size": 1,
+                    "uniform_batch_size": False, "temporal_overlap": 0,
+                    "prepend_frames": 0, "color_correction": s["color_fix"],
+                    "input_noise_scale": s["input_noise"],
+                    "latent_noise_scale": s["latent_noise"],
+                    "offload_device": s["offload"], "enable_debug": False}))
+                break
+            except Exception as exc:
+                if not (s["tiled"] and tile > 64 and _is_oom(exc)):
+                    raise
+                tile = max(64, tile // 2)
+                _say("SeedVR2 ran out of memory; the tile is "
+                     "halved to %d and the pass tried again" % tile)
+                try:
+                    import comfy.model_management as _mm
+                    _mm.soft_empty_cache()
+                except Exception:
+                    pass
+        for v in outs:
+            if torch.is_tensor(v) and v.ndim == 4:
+                return v, None
+        return None, "SeedVR2 returned no image"
+    except Exception as exc:
+        return None, "SeedVR2 failed: %s" % exc
+
+
+def vosr2_stages(scale):
+    """The VOSR2 runs that make one multiplier, in order.
+
+    One run up to x4. Past that a single run breaks skin into square, scaly
+    patches (the model was trained at 512 px tiles), while two runs stay clean,
+    so x6 is x3 then x2 and x8 is x4 then x2. The same split covers x5 and x7.
+    The panel's size chain (sizeThrough in web/rednode_advanced.js) mirrors
+    this rule and must keep mirroring it.
+    """
+    try:
+        scale = float(scale)
+    except (TypeError, ValueError):
+        scale = 2.0
+    scale = max(1.0, min(8.0, scale))
+    return [scale] if scale <= 4.0 else [scale / 2.0, 2.0]
+
+
+def _fmt_scale(scale):
+    """x2, x1.5: a multiplier as the panel and the log write it."""
+    scale = float(scale)
+    return "%d" % scale if scale == int(scale) else "%.2f" % scale
+
+
+# THE VOSR2 BUNDLE, held between runs when a pass asks for it. The upstream
+# loader node has no cache, and the pass calls it directly rather than through
+# the graph, so ComfyUI's own node cache never applies: without this every run
+# reloads 6.5 GB from disk (3.3 s of a 10 s x2 pass on a 5090, 2026-10-09).
+# One entry only, keyed by (model, dtype); a different key or a pass with the
+# cache off drops it, so turning the dial off releases the RAM on the next run.
+_VOSR2_CACHE = {"key": None, "bundle": None}
+
+
+def _vosr2_bundle(ld_cls, fill, s):
+    key = (str(s.get("vosr2_model") or ""), str(s.get("vosr2_dtype") or ""))
+    if s.get("vosr2_cache") and _VOSR2_CACHE["key"] == key and _VOSR2_CACHE["bundle"] is not None:
+        return _VOSR2_CACHE["bundle"]
+    _VOSR2_CACHE["key"], _VOSR2_CACHE["bundle"] = None, None
+    bundle = _call_node(ld_cls, fill(ld_cls, {"model": s["vosr2_model"], "dtype": s["vosr2_dtype"]}))[0]
+    if s.get("vosr2_cache"):
+        _VOSR2_CACHE["key"], _VOSR2_CACHE["bundle"] = key, bundle
+    return bundle
+
+
+def _vosr2(image, s, seed):
+    """The picture through VOSR 2.0 at the pass's multiplier, or None with a reason.
+
+    Same shape as _seedvr2 and for the same reasons: the pack's own two nodes
+    called out of NODE_CLASS_MAPPINGS rather than reimplemented, everything in
+    one try so an optional pack fails as words and never as a dead queue.
+
+    What differs is the maths. VOSR 2.0 takes a MULTIPLIER, not a pixel
+    budget, and it is picked precisely because it does not invent, so
+    resizing its output to hit a budget would undo the reason for using it.
+    The DiT tile and the VAE tile are separate dials here: the model was
+    trained at 512, so the DiT tile carries quality while the VAE tile is
+    only about fitting the decode on the card.
+
+    The node's own dial is a whole number, and that number does exactly one
+    thing inside it: a bicubic resize to the target size before the model
+    runs (at x1 that resize moves no pixel, checked). So a fraction such as
+    x1.5 is made here, by resizing to the fraction and running the node at
+    x1: the same picture the node would make if it took 1.5. Multipliers
+    past x4 run as two passes, see vosr2_stages.
+    """
+    try:
+        maps = _core.NODE_CLASS_MAPPINGS
+        ld_cls = maps.get("VOSR2ModelLoader")
+        up_cls = maps.get("VOSR2Upscale")
+        if ld_cls is None or up_cls is None:
+            return None, ("ComfyUI-VOSR2 is not installed, and it is what upscales. "
+                          "Install it in Manager: it is on the Registry as VOSR 2.0.")
+
+        def fill(cls, values):
+            kw = _defaults_for(cls)
+            have = _all_inputs(cls)
+            for k, v in values.items():
+                if k in have and v is not None and v != "":
+                    kw[k] = v
+            return kw
+        bundle = _vosr2_bundle(ld_cls, fill, s)
+
+        def once(img, mult):
+            # THE TILE LADDER, as the SeedVR2 pass has: an out-of-memory halves
+            # the DiT tile and the VAE tile together, overlap kept under a
+            # quarter of the tile, down to 128 before giving up. A tile of 0
+            # means "no tiling" to the node, so it is never halved into one.
+            tile = int(s["vosr2_tile"])
+            vtile = int(s["vosr2_vae_tile"])
+            while True:
+                over = min(int(s["vosr2_tile_overlap"]), tile // 4) if tile else 0
+                vover = min(int(s["vosr2_vae_overlap"]), vtile // 4) if vtile else 0
+                try:
+                    outs = _call_node(up_cls, fill(up_cls, {
+                        "model": bundle, "image": img,
+                        "upscale": int(mult),
+                        "seed": int(seed) & 0x7fffffff,
+                        "color_alignment": s["vosr2_color"],
+                        "tile_size": tile, "tile_overlap": over,
+                        "vae_tile_size": vtile, "vae_tile_overlap": vover}))
+                    break
+                except Exception as exc:
+                    if not (_is_oom(exc) and (tile > 128 or vtile > 128)):
+                        raise
+                    tile = max(128, tile // 2) if tile else tile
+                    vtile = max(128, vtile // 2) if vtile else vtile
+                    _say("VOSR2 ran out of memory; the tiles are halved to %d / %d "
+                         "and the pass tried again" % (tile, vtile))
+                    try:
+                        import comfy.model_management as _mm
+                        _mm.soft_empty_cache()
+                    except Exception:
+                        pass
+            for v in outs:
+                if torch.is_tensor(v) and v.ndim == 4:
+                    return v
+            raise RuntimeError("VOSR2 returned no image")
+
+        out = image
+        stages = vosr2_stages(s["vosr2_scale"])
+        for n, factor in enumerate(stages, 1):
+            mult = int(round(factor))
+            if abs(factor - mult) > 1e-6:
+                # a fraction: the resize the node would do, to the fraction,
+                # then the node at x1 (its own resize is then a no-op)
+                h, w = int(out.shape[1]), int(out.shape[2])
+                th, tw = max(8, int(round(h * factor))), max(8, int(round(w * factor)))
+                out = torch.nn.functional.interpolate(
+                    out.movedim(-1, 1).float(), size=(th, tw), mode="bicubic"
+                ).clamp(0.0, 1.0).movedim(1, -1)
+                mult = 1
+            if len(stages) > 1:
+                _say("VOSR2 x%s: pass %d of %d, x%s" % (
+                    _fmt_scale(s["vosr2_scale"]), n, len(stages), _fmt_scale(factor)))
+            out = once(out, mult)
+        return out, None
+    except Exception as exc:
+        return None, "VOSR2 failed: %s" % exc
+
+
+# WHICH UPSCALER a pass kind runs, BY NAME. Both have the same shape, (image,
+# stage, seed) -> (tensor or None, reason or None), so the region and batch
+# helpers take either without knowing which.
+#
+# By name, and looked up when the pass runs, NOT the function object: holding
+# the object freezes whatever was bound at import, so a test that swaps
+# rp._seedvr2 for a fake, or any later wrapper around one of these, would be
+# quietly bypassed. test_run_events.py patches exactly that way.
+UPSCALERS = {"upscale": "_seedvr2", "vosr2": "_vosr2"}
+
+
+def _upscaler(kind):
+    """The upscaler function for a pass kind, resolved at call time."""
+    return globals()[UPSCALERS[kind]]
+
+
+# EXPRESSIONS a detailer pass can put in front of its prompt. Short phrases, not
+# a style vocabulary: a face pass is usually run to change what the face is doing,
+# and typing the same six words each time is the thing this saves. Anything else
+# still goes in the pass's own prompt box.
+EXPRESSIONS = [
+    "neutral expression", "soft smile", "warm smile", "broad smile", "laughing",
+    "grinning", "smirking", "serious expression", "thoughtful expression",
+    "sad expression", "crying", "angry expression", "scowling",
+    "surprised expression", "wide eyed", "frightened expression",
+    "worried expression", "tired expression", "sleepy, half closed eyes",
+    "determined expression", "confident expression", "shy expression",
+    "blushing", "pouting", "disgusted expression", "shouting",
+    "eyes closed", "looking away", "looking at the viewer",
+]
+
+
+def reader_image(ws_cfg, s, image):
+    """The picture an Image to Text pass reads: the chain's, or the AI tab's.
+
+    The chain's is the default and the point of the pass: it reads what the passes
+    before it produced. The AI tab's picked picture is the other choice, for a chain
+    that should describe a reference rather than its own work.
+    """
+    if str(s.get("reader_source") or "chain") != "ai_tab":
+        return image, "the picture here"
+    tab = (ws_cfg.get("tabs") or {}).get("ai") or {}
+    images = [str(x) for x in (tab.get("images") or []) if str(x).strip()]
+    if not images:
+        _say("Image to Text: the AI tab has no picture, so it reads the one here")
+        return image, "the picture here"
+    try:
+        sel = int(tab.get("sel") or 0)
+    except (TypeError, ValueError):
+        sel = 0
+    entry = images[max(0, min(sel, len(images) - 1))]
+    try:
+        return _ws.load_image(entry, 0), "the AI tab's %s" % entry
+    except Exception as exc:
+        _say("Image to Text: the AI tab's %r could not be read (%s); reading the "
+             "picture here instead" % (entry, exc))
+        return image, "the picture here"
+
+
+def read_picture(ws_cfg, s, image):
+    """The words an Image to Text pass takes off the picture in front of it.
+
+    The engines are the AI tab's, so there is one place to choose them and one
+    place to see what they cost; the pass carries only what is peculiar to it,
+    which is the mode and the typed words it is combined with. A reader that
+    cannot caption says so and leaves the chain alone rather than failing it.
+    """
+    from ..prompts import autoprompt
+    tabs = ws_cfg.get("tabs") or {}
+    a = dict((tabs.get("ai") or {}).get("auto") or {})
+    ga = ws_cfg.get("auto") or {}
+    # THE PASS'S OWN ENGINES, when it was given some: one chain can then read
+    # cheaply with tags early and properly with a vision model later
+    own = s.get("reader_engines")
+    if isinstance(own, dict) and own:
+        for k in ("ollama", "wd14", "joy", "qwen", "florence"):
+            a[k] = bool(own.get(k))
+        if str(own.get("model") or "").strip():
+            ga = dict(ga, model=str(own["model"]).strip())
+    mode = str(s.get("reader_mode") or "") or str(a.get("mode") or "i2i")
+    on = [k for k in ("ollama", "wd14", "joy", "qwen", "florence") if a.get(k)]
+    if not on:
+        raise ValueError("no caption engine is on for the AI tab, so the reader has "
+                         "nothing to read with")
+    img_bytes = None
+    if a.get("ollama"):
+        try:
+            img_bytes = autoprompt.tensor_payload(image)
+        except Exception as exc:
+            _say("reader: the picture could not be encoded for Ollama: %s" % exc)
+    return autoprompt.build_prompt(
+        mode, image_bytes=img_bytes, image_tensor=image, wired=(),
+        use_ollama=bool(a.get("ollama")), use_wd14=bool(a.get("wd14")),
+        use_joy=bool(a.get("joy")), use_qwen=bool(a.get("qwen")),
+        use_clip=False, clip=None, use_florence=bool(a.get("florence")),
+        florence_opts={"model": ga.get("florence_model", ""),
+                       "task": ga.get("florence_task", "")},
+        unload_heavy=bool(ga.get("wd14_unload") or ga.get("low_vram")),
+        combine=str(a.get("combine") or "append"), max_words=int(a.get("length") or 0),
+        model=str(ga.get("model") or ""), url=str(ga.get("url") or ""),
+        wd14_model=str(ga.get("wd14_model") or ""),
+        threshold=float(ga.get("threshold", 0.35)),
+        character_threshold=float(ga.get("character_threshold", 0.85)),
+        replace_underscore=bool(ga.get("replace_underscore")),
+        exclude_tags=str(ga.get("exclude_tags") or ""),
+        instruction=str(a.get("instruction") or ""),
+        question=str(a.get("question") or ""),
+        cache_base=None, use_cache=False)
+
+
+def reader_words(s, read, seed=0):
+    """What a reader pass hands on: what it read, and the words typed on it.
+
+    Typed text leads by default, because it is the thing being asked for; the
+    switch puts the reading first for a pass whose typing is a footnote.
+    """
+    typed = str(s.get("prompt") or "").strip()
+    if typed:
+        try:
+            from ..prompts.prompt_frame import expand as _pf_expand
+            typed = _pf_expand(typed, seed, True)
+        except Exception:
+            pass
+    read = str(read or "").strip()
+    if not typed:
+        return read
+    if not read:
+        return typed
+    return "%s, %s" % (read, typed) if s.get("reader_first") else "%s, %s" % (typed, read)
+
+
+READER_PICK = "@reader"
+
+
+def pass_words(ws_cfg, s, seed, subject_words="", read_words="", read_by_name=None):
+    """The words a pass renders with: its own box, else the source it names,
+    with its expression in front.
+
+    The expression goes FIRST because it is the thing being asked for; a model
+    reads the head of a prompt hardest, and a face pass that says "soft smile"
+    after forty words of scene has said it too late.
+
+    `words` = "subject" takes the Subject tab's caption, which is what the face
+    in the picture is, rather than the whole scene. It is a runtime caption, so it
+    arrives from the Workspace; a Detailer node wired up on its own has none and
+    falls back to the row, which is the old behaviour.
+    """
+    text = str(s.get("prompt") or "")
+    if text.strip():
+        # TYPED TEXT WINS, and until now winning meant losing the expansion: the
+        # borrowed row resolved its wildcards and the box right next to it did
+        # not. Each pass is offset by its own place in the chain so two passes
+        # drawing on one file do not get the same line.
+        try:
+            from ..prompts.prompt_frame import expand as _pf_expand
+            text = _pf_expand(text, seed, True)
+        except Exception:
+            pass
+    if not text.strip() and str(s.get("words") or "") == "subject":
+        text = str(subject_words or "")
+    # AN IMAGE TO TEXT EARLIER IN THE CHAIN speaks for the passes after it: it read
+    # the picture they are about to work on, which the run's original row cannot
+    # describe once two passes have changed it. A pass can also NAME the reader it
+    # wants, the same way it names a Prompts row, which is what the Prompt picker
+    # on the card offers (you, 2026-09-23).
+    picked = str(s.get("prompt_row") or "").strip()
+    if not text.strip() and picked.startswith(READER_PICK):
+        want = picked[len(READER_PICK):].lstrip(":").strip()
+        by_name = read_by_name or {}
+        if want and want in by_name:
+            text = str(by_name[want] or "").strip()
+        elif want:
+            _say("no Image to Text called %r has run in this chain yet; "
+                 "using the words of the last one that did" % want)
+            text = str(read_words or "").strip()
+        else:
+            text = str(read_words or "").strip()
+    if not text.strip() and str(read_words or "").strip():
+        text = str(read_words).strip()
+    if not text.strip() and not picked.startswith(READER_PICK):
+        row = _pass_prompt_row(ws_cfg, s)
+        if row is not None:
+            try:
+                from ..prompts.prompt_frame import expand as _pf_expand
+                text = _pf_expand(row["text"], seed, True)
+            except Exception:
+                text = row["text"]
+    ex = str(s.get("expression") or "").strip()
+    if not ex:
+        return text
+    return ("%s, %s" % (ex, text.strip())) if text.strip() else ex
+
+
+def _pass_prompt_row(ws_cfg, s):
+    """The Prompts-tab row a pass reads: the one it names, else its rig's.
+
+    A name that no longer exists falls back to the rig's row and says so,
+    because a pass that silently went mute would be blamed on the model.
+    """
+    want = str(s.get("prompt_row") or "").strip()
+    rows = (ws_cfg.get("prompts") or {}).get("rows") or []
+    if want:
+        for row in rows:
+            if row.get("name") and row["name"] == want:
+                return row
+        if want.startswith("#"):
+            try:
+                idx = int(want[1:]) - 1
+                if 0 <= idx < len(rows):
+                    return rows[idx]
+            except ValueError:
+                pass
+        _say("prompt row %r is not on the Prompts tab; "
+             "using the rig's" % want)
+    return _ws.prompt_row_for(ws_cfg["models"], ws_cfg["prompts"], s["rig"])
+
+
+def _rig_settings(ws_cfg, name):
+    """The named rig's dict, or the active one's, or bare defaults."""
+    rigs = ws_cfg.get("models", {}).get("rigs") or []
+    want = str(name or "").strip()
+    for r in rigs:
+        if want and r.get("name") == want:
+            return r
+    if rigs:
+        return rigs[max(0, min(int(ws_cfg["models"].get("active", 0)),
+                               len(rigs) - 1))]
+    return {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "simple",
+            "detailer_steps": 8}
+
+
+def resolve_sampling(stage, rig):
+    """The numbers this pass actually runs with: its own, else the rig's.
+
+    EVERY pass here inherits the rig's detailer_steps, not its main steps. All of
+    them work on a picture that already exists: a sampler pass repaints the frame,
+    a tiled pass repaints it a tile at a time, a detailer pass repaints a crop.
+    The main step count is for drawing from noise, and a model that wants 30 steps
+    from nothing often wants 8 over a picture, which is the whole reason the rig
+    carries a second number at all. The rig's i2i sampler and scheduler already
+    take over on the same principle (workspace.py, "THE I2I PAIR takes over").
+
+    Until 2026-09-20 only a detailer pass took it and the others fell back to the
+    main steps, so a sampler pass or a tiled upscale left on "the rig's" ran at the
+    from-noise count.
+
+    An unknown sampler or scheduler degrades to the rig's, then to euler/simple,
+    because an unknown combo value fails queue validation blaming the wrong node.
+    """
+    steps = stage["steps"] or rig.get("detailer_steps") or rig.get("steps", 8)
+    cfg = stage["cfg"] or rig.get("cfg", 1.0)
+    sampler = stage["sampler"] or rig.get("sampler", "euler")
+    if sampler not in comfy.samplers.KSampler.SAMPLERS:
+        sampler = "euler"
+    scheduler = stage["scheduler"] or rig.get("scheduler", "simple")
+    if not _dials.scheduler_ok(scheduler):
+        scheduler = "simple"
+    start = min(stage["start_step"], max(0, int(steps) - 1))
+    end = stage["end_step"] or None
+    if end is not None:
+        end = max(start + 1, min(int(end), int(steps)))
+    return int(steps), float(cfg), sampler, scheduler, int(start), end
+
+
+def _fill(cls, values):
+    """The node's own defaults, then these choices over them: "" on a combo
+    keeps the default, and a dial the node lacks is dropped, so a version that
+    grew or lost a widget still calls."""
+    kw = _defaults_for(cls)
+    have = _all_inputs(cls)
+    for k, v in values.items():
+        if k in have and v is not None and v != "":
+            kw[k] = v
+    return kw
+
+
+def _all_inputs(cls):
+    it = cls.INPUT_TYPES()
+    merged = {}
+    merged.update(it.get("required") or {})
+    merged.update(it.get("optional") or {})
+    return merged
+
+
+def _defaults_for(cls):
+    """Every input's declared default, so a version that grew a widget still calls."""
+    out = {}
+    for name, spec in _all_inputs(cls).items():
+        if isinstance(spec, (tuple, list)) and spec:
+            opts = spec[1] if len(spec) > 1 and isinstance(spec[1], dict) else {}
+            if "default" in opts:
+                out[name] = opts["default"]
+            elif isinstance(spec[0], list) and spec[0]:
+                out[name] = spec[0][0]
+    return out
+
+
+_SAM3_CACHE = {"key": None, "model": None}
+
+# ComfyUI's own SAM3 (0.37+): a checkpoint in models/checkpoints carrying its text
+# encoder, run by SAM3_Detect. No Triton and no third-party pack. The SAM file picker
+# lists these files with this prefix; anything else is an Easy-Sam3 file.
+CORE_SAM_PREFIX = "core:"
+
+
+def core_sam3_files():
+    """The SAM3 checkpoints core can run, or [] when this ComfyUI has no SAM3_Detect."""
+    if _core.NODE_CLASS_MAPPINGS.get("SAM3_Detect") is None:
+        return []
+    try:
+        import folder_paths
+        return [f for f in folder_paths.get_filename_list("checkpoints")
+                if "sam3" in f.lower().replace("\\", "/").rsplit("/", 1)[-1]]
+    except Exception:
+        return []
+
+
+def _core_call(name, **kw):
+    """A core node by name, V1 or V3, its outputs as a tuple."""
+    cls = _core.NODE_CLASS_MAPPINGS[name]
+    if hasattr(cls, "execute") and not hasattr(cls, "FUNCTION"):
+        out = cls.execute(**kw)
+        out = getattr(out, "args", out)
+    else:
+        out = getattr(cls(), cls.FUNCTION)(**kw)
+        out = getattr(out, "args", out)
+    return tuple(out) if isinstance(out, (tuple, list)) else (out,)
+
+
+def _core_sam3_present(model, clip, image, parts):
+    """The targets SAM3's presence head says are in the picture.
+
+    Core's SAM3_Detect ignores that head, so a target that is not there still came
+    back as its best guess: "a dragon" masked 80% of a portrait at score 0.68, where
+    Easy-Sam3 returns nothing. Presence splits cleanly (in the picture 0.9+, absent
+    under 0.03). It reads core internals, so when they move the check steps aside.
+    """
+    try:
+        import comfy.model_management as mm
+        import comfy.utils
+        from comfy_extras.nodes_sam3 import _extract_text_prompts
+        mm.load_model_gpu(model)
+        dev, dt = mm.get_torch_device(), model.model.get_dtype()
+        sm = model.model.diffusion_model
+        h, w = int(image.shape[1]), int(image.shape[2])
+        frame = comfy.utils.common_upscale(image[:1, :, :, :3].movedim(-1, 1), 1008, 1008,
+                                           "bilinear", crop="disabled").to(dev, dt)
+        keep = []
+        for p in parts:
+            word = re.sub(r":\s*[\d.]+\s*$", "", p).strip()
+            cond = _core_call("CLIPTextEncode", clip=clip, text=word)[0]
+            emb, msk, _n = _extract_text_prompts(cond, dev, dt)[0]
+            with torch.no_grad():
+                res = sm(frame, text_embeddings=emb, text_mask=msk, threshold=0.5,
+                         orig_size=(h, w))
+            if float(torch.sigmoid(res["presence"].float()).max()) >= 0.5:
+                keep.append(p)
+            else:
+                print("[RedNode Detailer] built-in SAM3: no %r in the picture" % word, flush=True)
+        return keep
+    except Exception as exc:
+        print("[RedNode Detailer] built-in SAM3: the presence check is unavailable (%s); "
+              "a target that is not in the picture may still come back as a mask" % exc,
+              flush=True)
+        return parts
+
+
+def _core_sam3_mask(image, target, threshold, ckpt):
+    """_sam3_mask through core's Load Checkpoint, CLIP Text Encode and SAM3_Detect."""
+    if _core.NODE_CLASS_MAPPINGS.get("SAM3_Detect") is None:
+        return None, ("this ComfyUI has no built-in SAM3 (it came in 0.37). Update "
+                      "ComfyUI, or pick an Easy-Sam3 file as the SAM file")
+    ckey = json.dumps(["core", ckpt])
+    if _SAM3_CACHE["key"] == ckey and _SAM3_CACHE["model"] is not None:
+        model, clip = _SAM3_CACHE["model"]
+    else:
+        model, clip = _core_call("CheckpointLoaderSimple", ckpt_name=ckpt)[:2]
+        if clip is None:
+            return None, "%s holds no text encoder, so it cannot find %r" % (ckpt, target)
+        _SAM3_CACHE["key"] = ckey
+        _SAM3_CACHE["model"] = (model, clip)
+    # core keeps one detection per category unless told more ("face:4"); the
+    # Detailer wants every face or hand in the picture, as Easy-Sam3 returns them
+    parts = [p.strip() for p in str(target).split(",") if p.strip()]
+    parts = _core_sam3_present(model, clip, image, parts)
+    if not parts:
+        return None, "the built-in SAM3 found no %r in the picture" % target
+    words = ", ".join(p if re.search(r":\s*[\d.]+\s*$", p) else p + ":16" for p in parts)
+    cond = _core_call("CLIPTextEncode", clip=clip, text=words)[0]
+    out = _core_call("SAM3_Detect", model=model, image=image[..., :3], conditioning=cond,
+                     threshold=float(threshold))
+    mask = out[0]
+    if not torch.is_tensor(mask) or mask.ndim != 3:
+        return None, "the built-in SAM3 returned no mask for %r" % target
+    if mask.shape[0] > 1:
+        mask = mask.amax(0, keepdim=True)
+    if float(mask.max()) <= 0:
+        return None, "the built-in SAM3 found no %r in the picture" % target
+    return mask, None
+
+
+def _sam3_mask(image, target, threshold, sam_model="", precision=""):
+    """A [1,H,W] mask for `target`, through ComfyUI-Easy-Sam3, or None with a reason.
+
+    The Easy-Sam3 nodes are called the way the graph calls them, through their own
+    classes out of NODE_CLASS_MAPPINGS, so this follows that pack instead of
+    reimplementing it. `sam_model` overrides the loader's checkpoint choice when
+    set. Everything is inside one try because an optional dependency may be absent,
+    half-installed or reshaped, and every one of those must come back as words
+    rather than a dead queue. `precision` is the loader's own choice (fp16,
+    bf16, fp32) when set; its default is fp32, which is twice the memory.
+    """
+    try:
+        if str(sam_model).startswith(CORE_SAM_PREFIX):
+            return _core_sam3_mask(image, target, threshold, sam_model[len(CORE_SAM_PREFIX):])
+        loader_cls = _core.NODE_CLASS_MAPPINGS.get("easy sam3ModelLoader")
+        seg_cls = _core.NODE_CLASS_MAPPINGS.get("easy sam3ImageSegmentation")
+        if (loader_cls is None or seg_cls is None) and not sam_model:
+            # (first file) with no Easy-Sam3: the picker's first file is a built-in one
+            _files = core_sam3_files()
+            if _files:
+                print("[RedNode Detailer] SAM file (first file): Easy-Sam3 is not installed, "
+                      "so ComfyUI's built-in SAM3 with %s" % _files[0], flush=True)
+                return _core_sam3_mask(image, target, threshold, _files[0])
+        if loader_cls is None or seg_cls is None:
+            return None, ("ComfyUI-Easy-Sam3 is not installed, and it is what "
+                          "segments %r. Install it in Manager, or put ComfyUI's own "
+                          "sam3.1_multiplex_fp16.safetensors in models/checkpoints and "
+                          "pick it as the SAM file." % target)
+        loader = loader_cls()
+        lkw = _defaults_for(loader_cls)
+        if sam_model:
+            for key in ("model_name", "model", "ckpt_name", "sam_model"):
+                if key in _all_inputs(loader_cls):
+                    lkw[key] = sam_model
+                    break
+        if precision and "precision" in _all_inputs(loader_cls):
+            lkw["precision"] = precision
+        # a default checkpoint name that is not actually in the loader's list
+        # (folder renamed, file updated) raises before anything segments; the
+        # first real choice beats a stale default
+        for key in ("model_name", "model", "ckpt_name"):
+            spec = _all_inputs(loader_cls).get(key)
+            if (spec and isinstance(spec[0], list) and spec[0]
+                    and lkw.get(key) not in spec[0]):
+                lkw[key] = spec[0][0]
+        # ONE load per model choice, not one per pass: SAM3 is a full checkpoint
+        # off disk, and three face passes were three multi-second reloads
+        ckey = json.dumps(lkw, sort_keys=True, default=str)
+        if _SAM3_CACHE["key"] == ckey and _SAM3_CACHE["model"] is not None:
+            model = _SAM3_CACHE["model"]
+        else:
+            model = getattr(loader, loader_cls.FUNCTION)(**lkw)[0]
+            _SAM3_CACHE["key"] = ckey
+            _SAM3_CACHE["model"] = model
+        seg = seg_cls()
+        kwargs = _defaults_for(seg_cls)
+        for key in ("sam3_model", "model"):
+            if key in _all_inputs(seg_cls):
+                kwargs[key] = model
+        for key in ("image", "images"):
+            if key in _all_inputs(seg_cls):
+                kwargs[key] = image
+        for key in ("prompt", "text", "text_prompt"):
+            if key in _all_inputs(seg_cls):
+                kwargs[key] = target
+        for key in ("threshold", "confidence", "confidence_threshold"):
+            if key in _all_inputs(seg_cls):
+                kwargs[key] = threshold
+        out = getattr(seg, seg_cls.FUNCTION)(**kwargs)
+        # the mask is whichever output is mask-shaped; packs disagree about order.
+        # A V3 node (comfy_api io.ComfyNode, which Easy-Sam3 is) hands back a
+        # NodeOutput whose values live in .args, not a tuple: the old scan looked
+        # AT the NodeOutput instead of inside it, found no tensor, and every
+        # detailer pass "passed through" while claiming there was no mask.
+        vals = getattr(out, "args", None)
+        if vals is None:
+            vals = out if isinstance(out, (tuple, list)) else [out]
+        for v in vals:
+            if torch.is_tensor(v) and v.ndim == 3:
+                if v.shape[0] > 1:
+                    # several detections (two faces, both hands): one coverage
+                    # mask, so the pass redraws them all rather than erroring
+                    v = v.amax(0, keepdim=True)
+                return v, None
+        return None, "the segmenter returned no mask for %r" % target
+    except Exception as exc:
+        return None, "SAM3 failed on %r: %s" % (target, exc)
+
+
+from ..workspace import run_events as _run_events
+
+PASS_NAMES = {"sampler": "Sampler pass", "upscale": "SeedVR2 upscale",
+              "usdu": "Tiled upscale", "vosr2": "VOSR2 upscale",
+              "reader": "Image to Text", "realism": "Re-render"}
+# PASS KINDS A PERSONAL-ONLY EXTENSION REGISTERS: kind -> {"name", "run"}, where
+# run(detailer, image, stage, ws_cfg, seed, tag, node_id) hands back (image, lines).
+# The shipped pack registers none; the panel learns the kind from the same
+# extension's web file. A registered kind renders nothing here itself.
+PASS_HANDLERS = {}
+WARN_WORDS = ("failed", "missing", "passed through", "not installed",
+              "out of memory", "could not", "skipped")
+
+
+def rerender_frame(img, ws_cfg, denoise, seed, tag, node_id=None, passes=1):
+    """The Re-render tab's recipe on a picture, for the Paint tab: the same
+    conversion the Re-render pass runs, at `denoise`, `passes` rounds over its
+    own result with a fresh seed each round. (IMAGE, [line]); the picture as it
+    came when the engine made nothing."""
+    s = {"denoise": float(denoise), "blend": 1.0, "realism_engine": "",
+         "realism_lora": "", "realism_strength": 0.0, "realism_photo": "",
+         "realism_prompt": "", "loras": True, "lora_set": "", "realism_tiles": False}
+    det = RedNodeStudioDetailer()
+    out, lines = img, []
+    for i in range(max(1, int(passes))):
+        nxt, ln = det._realism_pass(out, s, ws_cfg, int(seed) + i, tag, node_id)
+        lines.extend(ln)
+        if nxt is None or nxt is out:
+            break
+        out = nxt
+    return out, lines
+
+
+def pass_name(s):
+    """A pass as its card names it: the name typed there, else Sampler pass,
+    Mask detailer (face), ..."""
+    typed = str(s.get("name") or "").strip()
+    if typed:
+        return typed
+    if s.get("type") == "detailer":
+        t = str(s.get("target") or "face").strip() or "face"
+        return "Mask detailer (%s%s)" % ("all but " if s.get("invert") else "", t)
+    if s.get("type") in PASS_HANDLERS:
+        return str(PASS_HANDLERS[s["type"]].get("name") or s["type"])
+    return PASS_NAMES.get(s.get("type"), str(s.get("type") or "pass").capitalize())
+
+
+def _say(line, level=None, data=None):
+    """A Detailer line on the console and in the Run tab's log.
+
+    `data` is for a line with something behind it worth opening; see
+    `run_events.note`.
+    """
+    print("[RedNode Detailer] " + line, flush=True)
+    if level is None:
+        low = line.lower()
+        level = "warn" if any(w in low for w in WARN_WORDS) else "info"
+    lead = "Detailer " if re.match(r"pass \d+ of \d+", line) else "Detailer: "
+    _run_events.note(lead + line, level, data)
+
+class RedNodeStudioDetailer:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE", {"tooltip": "the rendered frame, usually the "
+                                    "workspace's image output"}),
+                "config": ("STRING", {"default": "{}", "multiline": True,
+                                      "tooltip": "the pass list; the panel edits "
+                                                 "this"}),
+            },
+            "hidden": {"prompt": "PROMPT", "unique_id": "UNIQUE_ID"},
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("image", "report")
+    FUNCTION = "run"
+    CATEGORY = "RedNode/Studio"
+    DESCRIPTION = ("The post-render passes as a visual list: sampler refines and "
+                   "SAM3 face detailers in order, each through a rig picked from "
+                   "the Models tab, each with its own steps, CFG, sampler, "
+                   "scheduler and start/end step window, no wires between them. An "
+                   "empty prompt box uses the rig's own Prompts-tab row. Feed the "
+                   "workspace's image output in, take the finished picture out, "
+                   "and put the post process after it.")
+
+    @staticmethod
+    def _tab_tensor(ws_cfg, name, multi=False):
+        """The tab's selected image(s) as a tensor, or None, never an error."""
+        try:
+            t = ws_cfg.get("tabs", {}).get(name) or {}
+            if not t.get("on") or not t.get("images"):
+                return None
+            target = ws_cfg.get("resize", 1024) or 1024
+            if multi and isinstance(t.get("sel"), list):
+                picks = [t["images"][j] for j in t["sel"]
+                         if 0 <= j < len(t["images"])]
+                if not picks:
+                    return None
+                return _ws.batch_images(
+                    [_ws.load_image(pk, target) for pk in picks])
+            j = t.get("sel") or 0
+            if isinstance(j, list):
+                j = j[0] if j else 0
+            j = max(0, min(int(j), len(t["images"]) - 1))
+            return _ws.load_image(t["images"][j], target)
+        except Exception as exc:
+            _say("could not load the %s reference: %s"
+                 % (name, exc))
+            return None
+
+    @staticmethod
+    def _notify(unique_id, stage, total, state):
+        """Tell the panel which card is running, so the list lights up live.
+
+        Config indices, not enabled-only ones: a skipped pass must not shift the
+        highlight onto its neighbour. Fails silent, because the progress light is
+        a nicety and the render is the job.
+        """
+        try:
+            from server import PromptServer
+            PromptServer.instance.send_sync(
+                "rednode-detailer-step",
+                {"node": str(unique_id), "stage": stage, "total": total,
+                 "state": state})
+        except Exception:
+            pass
+
+    def _hold_before_sampling(self):
+        """The Workspace's Hold under it, here too: text encoders off the card."""
+        from ..rigs import vram_hold as _hold
+        if _hold.before_sampling(getattr(self, "_rn_ws_cfg", None) or {}):
+            _run_events.note_once(("detailer-hold", id(self)),
+                                  "Detailer: text encoder unloaded before sampling "
+                                  "(holding the limit)", "unload")
+
+    _rn_subject_words = ""          # set per run; a bare node never has them
+
+    @_run_events.tracked("detailer", "Detailer")
+    @_live.quiet_core_preview
+    def run(self, image, config="{}", prompt=None, unique_id=None,
+            chain_step="detailer", subject_words="", **_custom_rigs):
+        # _custom_rigs: queue-time links from RedNode Rig Model nodes; order only
+        #
+        # chain_step: which builtin-chain step this counts as. The Workspace marks
+        # "detailer" when it runs these passes itself, and this node then stands
+        # aside rather than running them twice. The Upscale tab borrows this same
+        # method for its one pass and passes None, because it is a door of its own
+        # and must still run on a queue where the Workspace already did its passes.
+        self._rn_prompt = prompt              # a rig's own sampler chain reads it
+        # the Subject tab's caption is worked out while the Workspace renders, so
+        # it is handed over rather than read from the config, where it does not
+        # exist. Without it a "subject" pass falls back to its row and says so.
+        self._rn_subject_words = str(subject_words or "")
+        from ..workspace import builtin_chain as _chain
+        if chain_step and _chain.done(chain_step):
+            _run_events.skip("detailer", "Detailer", "done inside the Workspace")
+            return (image, "the Workspace already ran the Detailer passes; passed through")
+        # A paint-door run or an external-sampler workspace hands over no image
+        # at all; pass the nothing along like Review and Save do, don't crash
+        if image is None:
+            print("[RedNode Detailer] no image arrived (paint run or external "
+                  "sampler), passes skipped", flush=True)
+            _run_events.skip("detailer", "Detailer", "no image arrived")
+            return (_ws.blocked(), "no image arrived, passes skipped")
+        cfg = parse_pipeline(config)
+        self._rn_uid = unique_id          # the Live Preview stream's tag for this node
+        stages = [(k, s) for k, s in enumerate(cfg["stages"])
+                  if s["on"] and s["type"] != "title"]
+        report = []
+        if not stages:
+            _run_events.skip("detailer", "Detailer", "no passes switched on")
+            return (image, "no passes configured")
+        try:
+            ws_cfg = _ws.parse_config(json.dumps(_workspace_cfg(prompt)))
+        except Exception:
+            ws_cfg = _ws.parse_config("{}")
+        self._rn_ws_cfg = ws_cfg              # the VRAM hold reads it before each pass
+        if ws_cfg.get("draft"):
+            # the Workspace's Draft switch: every pass skipped, the frame through,
+            # so a seed can be judged on the base render before it costs anything
+            line = ("draft: the Workspace's Draft switch is on, every pass skipped and "
+                    "the frame passed through")
+            print("[RedNode Detailer] " + line, flush=True)
+            _run_events.skip("detailer", "Detailer", "Draft is on")
+            self._notify(unique_id, -1, len(cfg["stages"]), "end")
+            return (image, line)
+        import random as _random
+        seed = (_random.getrandbits(48) if cfg["seed_random"] else cfg["seed"])
+        # THE TAPS: with the toggle on, the strip gets the input as it arrived,
+        # a frame after every pass (every repeat round too), and the output.
+        # Recording is never fatal: a thumbnail that fails to build is one
+        # missing frame in the strip, not a dead queue.
+        tap = None
+        if cfg.get("taps"):
+            try:
+                from ..workspace import stages as _stages
+                tap = lambda img, label: _stages.record(
+                    img, label, prompt=prompt, source="detailer", px=cfg["tap_px"])
+            except Exception as exc:
+                _say("taps unavailable: %s" % exc)
+        if tap:
+            tap(image, "Detailer in")
+
+        out = image
+        # WHAT THE READER READ, for this run only. It is not saved, not sent to
+        # the panel and not written into any picture's metadata: the saved
+        # prompt stays the one the run was asked for (you, 2026-09-23).
+        read_words = ""
+        read_by_name = {}
+        for i, (card_idx, s) in enumerate(stages, 1):
+            self._notify(unique_id, card_idx, len(cfg["stages"]), "run")
+            name = pass_name(s)
+            _run_events.progress("detailer", "Detailer", current=i, of=len(stages),
+                                 what=name)
+            tag = "pass %d of %d, %s" % (i, len(stages), name)
+            # Said once per PASS, not per repeat: three copies of the same warning
+            # is how a warning becomes noise. Under a tenth still runs, because a
+            # whisper of a pass is a real choice; it just says so, since the
+            # difference between 0.05 and 0 is invisible in the result.
+            _bl = float(s.get("blend", 1.0))
+            if s["type"] == "detailer" and _bl < 0.10:
+                _say("%s: blend is %s, so %s" % (
+                    tag, "0" if _bl <= 0 else "%.2f" % _bl,
+                    "this pass cannot change the picture at all and is skipped"
+                    if _bl <= 0 else
+                    "almost none of what it renders will show. Raise blend if that "
+                    "is not deliberate."))
+            nimg = int(out.shape[0])
+            _say("%s started%s" % (tag, " on %d images" % nimg if nimg > 1 else ""))
+            if s["type"] == "reader":
+                # RENDERS NOTHING. It reads the picture as it stands and hands the
+                # words to every pass after it that has none of its own.
+                try:
+                    src_img, src_what = reader_image(ws_cfg, s, out)
+                    read = read_picture(ws_cfg, s, src_img)
+                    words = reader_words(s, read, seed + i)
+                    if words.strip():
+                        read_words = words.strip()
+                        read_by_name[name] = read_words
+                        # The words are the point of the pass, so they go to the
+                        # console whole and ride to the Run tab's log as something
+                        # to open, rather than 300 characters cut off mid-sentence.
+                        print("[RedNode Detailer] %s read: %s" % (tag, read_words),
+                              flush=True)
+                        _say("%s read %s · Prompt completed" % (tag, src_what),
+                             data={"prompt": read_words, "title": name,
+                                   "what": src_what, "pass": i})
+                    else:
+                        _say("%s read nothing; the passes after it keep their own words"
+                             % tag)
+                except Exception as exc:
+                    _say("%s failed: %s; the passes after it keep their own words"
+                         % (tag, exc))
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d read" % i)
+                continue
+            s = dict(s, sam_model=s["sam_model"] or cfg["sam_model"],
+                     sam_precision=cfg["sam_precision"])
+            pass_in = out
+            if s["free_vram"]:
+                # every model ComfyUI holds unloaded before this pass, while
+                # nothing is mid-allocation; the next sampler pays one load
+                try:
+                    from ..rigs import vram as _vram
+                    count, freed = _vram.free_models()
+                    line = "%s: freed %d model(s), about %d MB, before the pass" % (
+                        tag, count, freed // (1024 * 1024))
+                except Exception as exc:
+                    line = "%s: free VRAM failed: %s" % (tag, exc)
+                _say(line)
+                report.append(line)
+            if s["type"] in PASS_HANDLERS:
+                # A REGISTERED KIND: the extension's own run, on the picture as it
+                # stands; nothing here loads a rig for it
+                try:
+                    out2, lines = PASS_HANDLERS[s["type"]]["run"](
+                        self, out, s, ws_cfg, seed + i, tag, unique_id)
+                    if out2 is not None:
+                        out = out2
+                except Exception as exc:
+                    lines = ["%s failed: %s; the picture is passed through" % (tag, exc)]
+                for line in lines or []:
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d %s" % (i, s["type"]))
+                continue
+            if s["type"] == "realism":
+                # RENDERS ON ITS OWN ENGINE, not the pass rig: the conversion loads
+                # the files the Editor's page names (or the active rig's), the way
+                # that page does, so nothing here needs a rig resolved first. It
+                # sits after Free VRAM on purpose: it is the heaviest thing a chain
+                # can ask for, and that switch is there for exactly this.
+                out, lines = self._realism_pass(out, s, ws_cfg, seed + i, tag,
+                                                unique_id)
+                for line in lines:
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap:
+                    tap(out, "%d realism" % i)
+                continue
+            # A SEEDVR2 UPSCALE loads no rig: the pack's own loaders do the
+            # loading, and a pass that could not run passes the picture on.
+            # With a region it works the target's crop only, and the frame
+            # keeps its size: the region gains the detail, the way a detailer's
+            # scale spends pixels on a face.
+            if s["type"] in UPSCALERS:
+                # what this pass is working to, in its own terms: SeedVR2 a
+                # pixel budget, VOSR2 a multiplier
+                want = (s["size"] if s["type"] == "upscale"
+                        else "x%s" % _fmt_scale(s["vosr2_scale"]))
+                self._rn_live_label = "upscale %d of %d" % (i, len(stages))
+                if s["region"]:
+                    up, why = self._each_frame(
+                        out, lambda frame, _s=s, _seed=seed + i:
+                        self._upscale_region(frame, _s, _seed))
+                    if why is not None:
+                        up = None
+                else:
+                    up, why = self._upscale_each(out, s, seed + i)
+                if up is not None:
+                    line = ("%s: %s on the %s, %d x %d kept" % (
+                                tag, want, s["region"], out.shape[2], out.shape[1])
+                            if s["region"] else
+                            "%s: %s, %d x %d to %d x %d" % (
+                                tag, want, out.shape[2], out.shape[1],
+                                up.shape[2], up.shape[1]))
+                    out = self._tone(up, pass_in, s, tag, report)
+                else:
+                    line = "%s: %s; passed through" % (tag, why)
+                _say(line)
+                report.append(line)
+                if tap and up is not None:
+                    tap(out, "%d upscale %s" % (i, want))
+                continue
+            # AN ENGINE RIG (a handled kind, the personal NovelAI rig) takes
+            # its own road: the handler renders, nothing loads
+            rigd = _rig_settings(ws_cfg, s["rig"])
+            if rigd.get("kind") in _ws.RIG_KIND_HANDLERS:
+                if s["type"] == "usdu":
+                    line = ("%s: a tiled upscale needs a model rig and %r is an "
+                            "engine rig; passed through" % (tag, rigd.get("name") or s["rig"]))
+                    _say(line)
+                    report.append(line)
+                    continue
+                out, lines = self._handler_pass(out, rigd, s, ws_cfg,
+                                                seed + i, tag, tap)
+                for line in lines:
+                    _say(line)
+                    report.append(line)
+                out = self._tone(out, pass_in, s, tag, report)
+                continue
+            if s["type"] == "detailer" and s.get("engine") == "rerender":
+                # THE MASK DETAILER ON RE-RENDER: SAM3 finds the target, the crop
+                # is converted by the Re-render tab's recipe at this pass's
+                # denoise, and the paste puts it back under the feathered mask at
+                # this pass's blend. No rig loads for it; the conversion loads
+                # its own files, the way the Re-render pass does.
+                rr_lines = []
+                def _one_rr(frame, _s=s, _seed=seed + i, _lines=rr_lines):
+                    return self._detail_rerender(frame, _s, ws_cfg, _seed, tag,
+                                                 unique_id, _lines)
+                out, why = self._each_frame(out, _one_rr)
+                for line in rr_lines:
+                    _say(line)
+                    report.append(line)
+                if why:
+                    line = "%s: %s" % (tag, why)
+                    _say(line)
+                    report.append(line)
+                self._notify(unique_id, card_idx, len(cfg["stages"]), "end")
+                if tap and not why:
+                    tap(out, "%d %s (Re-render)" % (i, s["target"]))
+                continue
+            rig_name, model, clip, vae = _ws.load_active_rig(ws_cfg, name=s["rig"],
+                                                             prompt=prompt)
+            self._rn_clip, self._rn_vae = clip, vae
+            if model is None or clip is None or vae is None:
+                line = "%s: rig %r is missing a %s, pass skipped" % (
+                    tag, s["rig"] or rig_name or "(active)",
+                    "model" if model is None else
+                    "clip" if clip is None else "vae")
+                _say(line)
+                report.append(line)
+                continue
+            rig = _rig_settings(ws_cfg, s["rig"])
+            steps, cfg_v, sampler, scheduler, start, end = resolve_sampling(s, rig)
+            # the rig's sampler dials ride every pass on it: its shift on the model
+            # now, Detail Daemon, Seed Variance and densify at the sampler call
+            self._rn_dials = rig.get("dials") or {}
+            from ..rigs import rig_chain as _rigc
+            self._rn_chain = _rigc.rig_for(rig)
+            if self._rn_dials.get("shift"):
+                model = _dials.apply_shift(model, self._rn_dials["shift"])
+            model = _dials.mark_qwen21(model, self._rn_dials.get("q21_shift"))
+            # THE STACK, unless this pass says raw: the main LoRAs tab applied to
+            # model AND clip, the same halves the rest of the pack learned to keep
+            # together the hard way
+            lc = _ws.lora_set_cfg(
+                ws_cfg, s["lora_set"] or _ws.rig_lora_set(ws_cfg, s["rig"]), "Detailer")
+            if s["loras"] and lc.get("on", True) and lc.get("slots"):
+                try:
+                    from ..lora import lora_stack as _lora
+                    model, _c2, _w, _applied = _lora.apply_stack(
+                        model, clip, _lora.CUSTOM_SENTINEL,
+                        json.dumps({"ui": lc.get("ui") or {},
+                                    "slots": lc.get("slots") or []}),
+                        int(lc.get("seed", 0) or 0), unique_id,
+                        tag="Detailer LoRAs (%s)" % lc["name"])
+                    clip = _c2 if _c2 is not None else clip
+                except Exception as exc:
+                    _say("LoRAs failed on this pass: %s" % exc)
+            if s["lora"] and s["lora"] != "None" and s["lora_strength"] > 0:
+                try:
+                    model = _pass_lora(model, s["lora"], s["lora_strength"])
+                    _say("pass LoRA %s at %.2f" % (s["lora"], s["lora_strength"]))
+                except Exception as exc:
+                    _say("pass LoRA %s failed: %s" % (
+                        s["lora"], exc))
+            # THE WORKSPACE'S PROMPT IS THE DEFAULT: the row for this pass's rig,
+            # the same text the main render used, wildcards rolled on this seed.
+            # Typed text in the pass wins, the standing rule.
+            text = pass_words(ws_cfg, s, seed + i, self._rn_subject_words, read_words,
+                              read_by_name)
+            # THE REFERENCES, for a Krea 2 rig: any of the three toggles routes
+            # this pass through the Studio encode with the tab images loaded, the
+            # identity system instead of plain text. On any other rig they are
+            # politely ignored, the same rule the Paint tab follows.
+            refs_wanted = (s["use_subject"] or s["use_scene"]
+                           or s["use_moodboard"] or s["use_picture"])
+            rig_is_krea2 = rig.get("clip_type") == "krea2" and not rig.get("plain_encode")
+            if refs_wanted and not rig_is_krea2:
+                _say("references are Krea 2 conditioning and "
+                     "rig %r is not a Krea 2 rig; encoding plain text"
+                     % (rig_name or "(active)"))
+            # PICTURE makes the encode depend on what the pass is looking at
+            # (the frame for a sampler pass, the crop for a detailer), so the
+            # encode is a function and runs where the picture is known.
+            use_picture = s["use_picture"] and rig_is_krea2
+
+            def _encode(picture=None):
+                if refs_wanted and rig_is_krea2:
+                    try:
+                        from ..krea2.rednode import Krea2RedNode, PRESETS as _PRESETS, \
+                            CUSTOM_SENTINEL as _CUSTOM
+                        preset = ws_cfg.get("studio_preset") or "Balanced"
+                        settings = None
+                        target = None
+                        if use_picture:
+                            scene = picture[:, :, :, :3] if picture is not None else None
+                            # A base-conditioned edit (the swap LoRAs) is the
+                            # author's geometry: refs FITTED to the sampled size
+                            # (v1.2 fit path, needs the target latent) and no
+                            # attention boost on either reference - his workflow
+                            # runs ref_boost 1 / 1. The Studio's Balanced 2.5x on
+                            # the subject over-drives a swap LoRA into noise.
+                            if scene is not None:
+                                target = {"samples": torch.zeros(
+                                    (1, 4, scene.shape[1] // 8, scene.shape[2] // 8)),
+                                    "downscale_ratio_spacial": 8}
+                            base = dict(_PRESETS.get(preset) or _PRESETS["Balanced"])
+                            base.update(reference_fidelity=1.0, scene_fidelity=1.0,
+                                        fit_mode="fit")
+                            settings, preset = base, _CUSTOM
+                        else:
+                            scene = (self._tab_tensor(ws_cfg, "scene")
+                                     if s["use_scene"] else None)
+                        return Krea2RedNode().encode(
+                            clip, text, preset,
+                            0.5, negative_prompt=s["negative"], vae=vae,
+                            subject_image=(self._tab_tensor(ws_cfg, "subject")
+                                           if s["use_subject"] else None),
+                            scene_image=scene,
+                            moodboard_style=(self._tab_tensor(ws_cfg, "moodboard",
+                                                              multi=True)
+                                             if s["use_moodboard"] else None),
+                            output_latent=target, settings=settings)
+                    except Exception as exc:
+                        _say("reference encode failed, plain "
+                             "text instead: %s" % exc)
+                return _encode_text(clip, text), _encode_text(clip, s["negative"])
+
+            pos = neg = None
+            if not use_picture:
+                pos, neg = _encode()
+            window = ("" if start == 0 and end is None
+                      else ", steps %d..%s" % (start, end if end is not None
+                                               else "end"))
+            # REPEAT, the Paint tab's iteration on one pass: the pass runs over
+            # its own result N times, a fresh seed each round, and only the last
+            # picture moves on. A detailer that passed through (no mask, no SAM)
+            # stops repeating: the same miss N times is noise in the console.
+            reps = int(s.get("repeat", 1))
+            why = None
+            for r in range(max(1, reps)):
+                # "same seed every pass" on the Seed tab: every stage and round
+                # takes the one seed instead of the seed plus its place
+                rseed = seed if cfg.get("same_seed") else seed + i + r * 131
+                sr = round_stage(s, r)          # this round's denoise and scale
+                # what the streamed frames say they are (live_preview.py)
+                self._rn_live_label = "%s %d of %d" % (
+                    "detailer" if s["type"] == "detailer" else "pass", i, len(stages)) \
+                    + (" · round %d of %d" % (r + 1, reps) if reps > 1 else "")
+                if s["type"] == "sampler":
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        p, n = pos, neg
+                        if use_picture:
+                            pic = self._resize(frame, _sr["scale"])
+                            if s.get("crop_res"):
+                                pic = self._resize(pic, s["crop_res"] / max(pic.shape[1], pic.shape[2]))
+                            p, n = _encode(pic)
+                        return self._sample(frame, model, p, n, vae, _sr, _seed,
+                                            steps, cfg_v, sampler, scheduler,
+                                            start, end), None
+                    out, _ = self._each_frame(out, _one)
+                    line = ("%s: rig %r, %d steps%s, cfg %.1f, %s/%s, denoise "
+                            "%.2f" % (tag, rig_name, steps, window, cfg_v,
+                                      sampler, scheduler, sr["denoise"]))
+                    if abs(sr["scale"] - 1.0) >= 1e-3:
+                        line += ", scale %.2f to %d x %d" % (
+                            sr["scale"], out.shape[2], out.shape[1])
+                elif s["type"] == "usdu":
+                    before = (out.shape[2], out.shape[1])
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        return self._usdu(frame, model, pos, neg, vae, _sr, _seed,
+                                          steps, cfg_v, sampler, scheduler)
+                    out, why = self._each_frame(out, _one)
+                    line = "%s: on rig %r, %s" % (
+                        tag, rig_name,
+                        why or ("x%.2f %s, %d steps, %s/%s, denoise %.2f, tile %d, "
+                                "%d x %d to %d x %d"
+                                % (sr["upscale_by"], sr["usdu_model"] or "resize",
+                                   steps, sampler, scheduler, sr["denoise"],
+                                   sr["usdu_tile"], before[0], before[1],
+                                   out.shape[2], out.shape[1])))
+                else:
+                    def _one(frame, _sr=sr, _seed=rseed):
+                        return self._detail(frame, model, pos, neg, vae, _sr, _seed,
+                                            steps, cfg_v, sampler, scheduler,
+                                            start, end,
+                                            encode_for=_encode if use_picture else None)
+                    out, why = self._each_frame(out, _one)
+                    line = "%s: on rig %r, %s" % (
+                        tag, rig_name,
+                        why or ("%d steps%s, %s/%s, denoise %.2f"
+                                % (steps, window, sampler, scheduler,
+                                   sr["denoise"])))
+                if reps > 1:
+                    line += ", repeat %d of %d" % (r + 1, reps)
+                _say(line)
+                report.append(line)
+                if tap and not why:
+                    tap(out, "%d %s%s" % (i, s["target"] if s["type"] == "detailer"
+                                          else "usdu" if s["type"] == "usdu"
+                                          else "sampler",
+                                          " x%d" % (r + 1) if reps > 1 else ""))
+                if why:
+                    break
+            if not why:
+                out = self._tone(out, pass_in, s, tag, report)
+        if tap:
+            tap(out, "Detailer out")
+        self._notify(unique_id, -1, len(cfg["stages"]), "end")
+        return (out, "\n".join(report))
+
+    def _usdu(self, frame, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
+              scheduler):
+        """Ultimate SD Upscale as a pass: the rig's model and this pass's prompt
+        over tiles, through the pack's own node out of NODE_CLASS_MAPPINGS. An
+        upscale model runs first; "" is a plain resize by the factor and the
+        NoUpscale node. Returns (image, None) or (frame, why)."""
+        maps = _core.NODE_CLASS_MAPPINGS
+        cls, cls_no = maps.get("UltimateSDUpscale"), maps.get("UltimateSDUpscaleNoUpscale")
+        if cls is None or cls_no is None:
+            return frame, ("ComfyUI_UltimateSDUpscale is not installed, and it is what "
+                           "tiles. Install it in Manager; passed through")
+        if scheduler not in comfy.samplers.KSampler.SCHEDULERS:
+            # the pack's own schedules are built for the built-in sampler; the
+            # tiler takes core's names only
+            _say("scheduler %r is the pack's own; the tiled "
+                 "upscale runs simple" % scheduler)
+            scheduler = "simple"
+        img = frame[:, :, :, :3]
+        kw = {"model": model, "positive": pos, "negative": neg, "vae": vae,
+              "seed": int(seed) & 0xffffffffffffffff, "steps": int(steps),
+              "cfg": float(cfg_v), "sampler_name": sampler, "scheduler": scheduler,
+              "denoise": float(s["denoise"]), "mode_type": s["usdu_mode"],
+              "tile_width": int(s["usdu_tile"]), "tile_height": int(s["usdu_tile"]),
+              "mask_blur": int(s["usdu_blur"]), "tile_padding": int(s["usdu_padding"]),
+              "seam_fix_mode": s["seam_mode"], "seam_fix_denoise": float(s["seam_denoise"]),
+              "seam_fix_width": int(s["seam_width"]), "seam_fix_mask_blur": int(s["usdu_blur"]),
+              "seam_fix_padding": int(s["seam_padding"]), "force_uniform_tiles": True,
+              "tiled_decode": bool(s["tiled_decode"]), "batch_size": 1}
+        try:
+            if s["usdu_model"]:
+                loader = maps.get("UpscaleModelLoader")
+                if loader is None:
+                    return frame, "core's UpscaleModelLoader is missing; passed through"
+                um = _call_node(loader, _fill(loader, {"model_name": s["usdu_model"]}))[0]
+                fn = lambda: _call_node(cls, _fill(cls, dict(
+                    kw, image=img, upscale_by=float(s["upscale_by"]), upscale_model=um)))
+            else:
+                big = self._resize(img, float(s["upscale_by"]))
+                fn = lambda: _call_node(cls_no, _fill(cls_no, dict(kw, upscaled_image=big)))
+            # the tiler samples through core's common_ksampler, so every tile's
+            # steps stream to the Live Preview like any pass
+            self._hold_before_sampling()
+            outs = _live.sampled(self._rn_uid, fn,
+                                 label=getattr(self, "_rn_live_label", ""))()
+        except Exception as exc:
+            return frame, "the tiled upscale failed: %s; passed through" % exc
+        for v in outs:
+            if torch.is_tensor(v) and v.ndim == 4:
+                return v, None
+        return frame, "the tiled upscale returned no image; passed through"
+
+    def _realism_pass(self, img, s, ws_cfg, seed, tag, node_id=None):
+        """The Editor's Realism conversion, run here as a pass. (IMAGE, [line]).
+
+        THE RECIPE IS THE EDITOR'S. Everything that took a sandbox week to settle -
+        the encoder, the sizes, the sampler pair, the system instruction - is read
+        off that page, so there is one place to tune it and a pass carries only the
+        handful of things worth changing per pass. Nothing of the Editor's own
+        stage runs: this reads its settings, not its switch.
+
+        THE FRAME KEEPS ITS SIZE. Realism renders at its own longest side, and a
+        pass in the middle of a chain that silently changed the frame would move
+        every pass after it; the conversion comes back at the size it arrived
+        (you, 2026-09-24, on not wanting a scale here).
+        """
+        from ..edit import realism as _rl
+        lines = []
+        base = ((ws_cfg.get("tabs") or {}).get("i2i") or {}).get("realism") or {}
+        rc = dict(_rl.parse(base))
+        rc["on"] = True                  # the pass's own switch is the one that counts
+        rc["skip_pass"] = False
+        if s["realism_engine"]:
+            rc["engine"] = s["realism_engine"]
+        if s["realism_lora"] and s["realism_lora"] != "None":
+            # chosen here, so the page's recorded hash is not this file's
+            rc["lora"], rc["lora_sha256"] = s["realism_lora"], ""
+        if s["realism_strength"] > 0:
+            rc["strength"] = s["realism_strength"]
+        if s["realism_photo"]:
+            rc["photo"] = s["realism_photo"] == "on"
+        if s["realism_prompt"].strip():
+            rc["prompt"] = s["realism_prompt"].strip()
+        rc["denoise"] = float(s["denoise"])
+        rc["loras"] = bool(s["loras"])
+        rc["lora_set"] = s["lora_set"]
+        # THE FRAME'S OWN SIZE, not the workflow's. The recipe resizes to a longest
+        # side and snaps every dimension to a multiple of 512 with a crop, which is
+        # the workflow as written and reframes the picture; on the Editor page that
+        # was the whole job, in a chain it reads as the pass resizing the picture
+        # (you, 2026-09-24). Here it converts at the size it was handed, never
+        # bigger than the page allows, snapped to 16 so nothing is cropped away.
+        h, w = int(img.shape[1]), int(img.shape[2])
+        rc["longest"] = max(256, min(int(rc["longest"]), max(h, w)))
+        rc["round_to"] = "16"
+        rc["fit"] = "letterbox"
+        bits = ["%s engine" % rc["engine"],
+                "photo finish" if rc["photo"] else "one pass",
+                "denoise %.2f" % rc["denoise"]]
+        if float(s["blend"]) < 1.0:
+            bits.append("blend %.2f" % float(s["blend"]))
+        if s.get("realism_tiles"):
+            bits.append("tiles of %d, overlap %d, x%g" % (
+                int(s["realism_tile"]), int(s["realism_overlap"]), float(s["realism_scale"])))
+        lines.append("%s: %s" % (tag, ", ".join(bits)))
+        if s.get("realism_tiles"):
+            return self._realism_tiles(img, s, rc, ws_cfg, seed, tag, node_id, lines)
+        try:
+            done = _rl.render(rc, img, ws_cfg, int(seed), node_id=node_id)
+        except Exception as exc:
+            lines.append("%s failed: %s; the picture is passed through" % (tag, exc))
+            return img, lines
+        if done is None:
+            return img, lines
+        done = done.to(img.device, img.dtype)
+        if done.shape[1:3] != img.shape[1:3]:
+            lines.append("%s: converted at %d x %d, back to the frame's %d x %d" % (
+                tag, done.shape[2], done.shape[1], img.shape[2], img.shape[1]))
+            done = F.interpolate(done[:, :, :, :3].permute(0, 3, 1, 2),
+                                 size=img.shape[1:3], mode="bilinear",
+                                 align_corners=False).permute(0, 2, 3, 1)
+        blend = max(0.0, min(1.0, float(s["blend"])))
+        if blend < 1.0:
+            # the whole frame, not a crop: a plain mix of the conversion over the
+            # picture it came from, which is what a half-converted picture means
+            if done.shape[0] != img.shape[0]:
+                done = done[:1].expand(img.shape[0], -1, -1, -1)
+            done = (img[:, :, :, :3] * (1.0 - blend) + done * blend).clamp(0, 1)
+        return done, lines
+
+    @staticmethod
+    def _tile_starts(length, tile, overlap):
+        """Where the tiles begin along one axis: every `tile - overlap`, and the
+        last one flush with the far edge so nothing is left uncovered."""
+        if length <= tile:
+            return [0]
+        step = max(1, tile - overlap)
+        starts = list(range(0, length - tile, step)) + [length - tile]
+        return sorted(set(starts))
+
+    @staticmethod
+    def _tile_weight(n, overlap, device, dtype):
+        """A ramp in from each end over `overlap` pixels, 1 between: two tiles
+        that share an overlap cross-fade instead of meeting at a line."""
+        w = torch.ones(n, device=device, dtype=dtype)
+        ov = max(0, min(int(overlap), n // 2))
+        if ov > 0:
+            ramp = (torch.arange(1, ov + 1, device=device, dtype=dtype) / float(ov))
+            w[:ov] = torch.minimum(w[:ov], ramp)
+            w[n - ov:] = torch.minimum(w[n - ov:], ramp.flip(0))
+        return w
+
+    def _realism_tiles(self, img, s, rc, ws_cfg, seed, tag, node_id, lines):
+        """The conversion a tile at a time. (IMAGE, lines).
+
+        Resize first by the pass's scale, snapped to 16, then convert every
+        tile with itself as the reference and lay them back under cross-faded
+        weights. Each tile is its own render, one at a time (a batch of tiles
+        through Krea 2's VAE is a clip), at the pass's denoise: the picture is
+        the starting point of every tile, which is what keeps a tile of sky
+        a tile of sky.
+        """
+        from ..edit import realism as _rl
+        scale = max(1.0, float(s["realism_scale"]))
+        tile = int(s["realism_tile"])
+        overlap = int(s["realism_overlap"])
+        h0, w0 = int(img.shape[1]), int(img.shape[2])
+        h1 = max(16, int(round(h0 * scale / 16)) * 16)
+        w1 = max(16, int(round(w0 * scale / 16)) * 16)
+        base = img[:, :, :, :3]
+        if (h1, w1) != (h0, w0):
+            base = F.interpolate(base.permute(0, 3, 1, 2), size=(h1, w1), mode="bicubic",
+                                 align_corners=False, antialias=True).permute(0, 2, 3, 1).clamp(0, 1)
+        th, tw = min(tile, h1), min(tile, w1)
+        ys, xs = self._tile_starts(h1, th, overlap), self._tile_starts(w1, tw, overlap)
+        wy = self._tile_weight(th, overlap, base.device, base.dtype)
+        wx = self._tile_weight(tw, overlap, base.device, base.dtype)
+        w2 = (wy[:, None] * wx[None, :])[None, :, :, None]
+        rc_t = dict(rc, longest=max(th, tw), round_to="16", fit="letterbox")
+        out = torch.zeros_like(base)
+        acc = torch.zeros((1, h1, w1, 1), device=base.device, dtype=base.dtype)
+        n_tiles = len(ys) * len(xs)
+        lines.append("%s: %d x %d -> %d x %d, %d tile%s" % (
+            tag, w0, h0, w1, h1, n_tiles, "" if n_tiles == 1 else "s"))
+        k = 0
+        import time as _time
+        _t_tiles, _slowest = _time.perf_counter(), 0.0
+        for b in range(int(base.shape[0])):
+            for y in ys:
+                for x in xs:
+                    k += 1
+                    sub = base[b:b + 1, y:y + th, x:x + tw, :]
+                    _t1 = _time.perf_counter()
+                    try:
+                        done = _rl.render(rc_t, sub, ws_cfg, int(seed) + k, node_id=node_id)
+                    except Exception as exc:
+                        lines.append("%s: tile %d of %d failed: %s; that tile is kept as it was"
+                                     % (tag, k, n_tiles * int(base.shape[0]), exc))
+                        done = sub
+                    if done is None:
+                        done = sub
+                    done = done.to(base.device, base.dtype)[:, :, :, :3]
+                    if done.shape[1:3] != sub.shape[1:3]:
+                        done = F.interpolate(done.permute(0, 3, 1, 2), size=sub.shape[1:3],
+                                             mode="bilinear", align_corners=False
+                                             ).permute(0, 2, 3, 1)
+                    out[b:b + 1, y:y + th, x:x + tw, :] += done * w2
+                    if b == 0:
+                        acc[:, y:y + th, x:x + tw, :] += w2
+                    _slowest = max(_slowest, _time.perf_counter() - _t1)
+        _spent = _time.perf_counter() - _t_tiles
+        if k:
+            lines.append("%s: %d tiles in %.1f s, %.1f s each, the slowest %.1f s"
+                         % (tag, k, _spent, _spent / k, _slowest))
+        out = (out / acc.clamp(min=1e-6)).clamp(0, 1)
+        blend = max(0.0, min(1.0, float(s["blend"])))
+        if blend < 1.0:
+            out = (base * (1.0 - blend) + out * blend).clamp(0, 1)
+        if scale == 1.0 and (h1, w1) != (h0, w0):
+            # re-detailed at its own size: the 16-snap comes off again
+            out = F.interpolate(out.permute(0, 3, 1, 2), size=(h0, w0), mode="bilinear",
+                                align_corners=False).permute(0, 2, 3, 1)
+        return out, lines
+
+    def _tone(self, img, src, s, tag, report):
+        """Tone lock on a pass that asked for it: the result's detail, the
+        pass input's tone. A failure is a line, never a dead queue."""
+        if not s.get("tone_lock") or img is src or img is None:
+            return img
+        try:
+            res = tone_lock(src, img, s["tone_radius"], s["tone_strength"])
+            line = "%s: tone lock, radius %d, strength %.2f" % (
+                tag, s["tone_radius"], s["tone_strength"])
+        except Exception as exc:
+            res = img
+            line = "%s: tone lock failed: %s" % (tag, exc)
+        _say(line)
+        report.append(line)
+        return res
+
+    def _upscale_region(self, frame, s, seed):
+        """The pass's upscaler on the region only: the target's box padded 16 and rounded
+        to 8, the crop through the upscaler at the pass's size, back at the
+        crop's own size under the feathered matte at the blend."""
+        mask, box, why = self._locate(frame, dict(s, target=s["region"]))
+        if why is not None:
+            return frame, why
+        H, W = frame.shape[1], frame.shape[2]
+        y0, y1, x0, x1 = box
+        y0, x0 = max(0, (y0 - 16) // 8 * 8), max(0, (x0 - 16) // 8 * 8)
+        y1, x1 = min(H, -(-(y1 + 16) // 8) * 8), min(W, -(-(x1 + 16) // 8) * 8)
+        crop = frame[:, y0:y1, x0:x1, :3]
+        up, why = _upscaler(s["type"])(crop, s, seed)
+        if up is None:
+            return frame, why
+        if up.shape[1:3] != crop.shape[1:3]:
+            up = F.interpolate(up.permute(0, 3, 1, 2), size=crop.shape[1:3],
+                               mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
+        return self._paste(frame, crop, up.to(crop.dtype), mask, (y0, y1, x0, x1),
+                           s["feather"], s["blend"]), None
+
+    def _upscale_each(self, image, s, seed):
+        """The pass's upscaler on every picture of a batch, one call each.
+
+        SeedVR2 is a video upscaler: a batch in one call is a clip, and a clip
+        of two came back as one picture. VOSR2 would take a batch whole, but it
+        goes the same way here on purpose, because one path that is right for
+        both beats two paths where only one is ever exercised. Any picture
+        failing passes the whole batch through.
+        """
+        fn = _upscaler(s["type"])
+        n = int(image.shape[0])
+        if n <= 1:
+            return fn(image, s, seed)
+        base = getattr(self, "_rn_live_label", "")
+        outs = []
+        try:
+            for k in range(n):
+                self._rn_live_label = base + " \u00b7 image %d of %d" % (k + 1, n)
+                up, why = fn(image[k:k + 1], s, seed + k)
+                if up is None:
+                    return None, "image %d of %d: %s" % (k + 1, n, why)
+                outs.append(up)
+        finally:
+            self._rn_live_label = base
+        h, w = outs[0].shape[1], outs[0].shape[2]
+        outs = [o if o.shape[1:3] == (h, w)
+                else F.interpolate(o.permute(0, 3, 1, 2), size=(h, w), mode="bilinear",
+                                   align_corners=False).permute(0, 2, 3, 1)
+                for o in outs]
+        return torch.cat(outs, 0), None
+
+    def _each_frame(self, image, fn):
+        """A batch goes through a pass one frame at a time.
+
+        Krea 2's VAE is the Wan video VAE: a batch of N images encoded in one
+        call is read as one clip of N frames and squeezed to (N-1)//4+1 latent
+        frames, so a 5-shot camera path became a 2-frame latent against
+        conditioning for one and the sampler died on the mismatch. Each frame
+        also wants its own detection: one SAM mask over five faces is a union
+        box, not a face. Returns the re-batched frames and the why of a pass
+        that missed on EVERY frame; a miss on some keeps those as they were.
+        """
+        n = image.shape[0]
+        if n <= 1:
+            return fn(image)
+        base = getattr(self, "_rn_live_label", "")
+        outs, whys = [], []
+        try:
+            for k in range(n):
+                self._rn_live_label = base + " \u00b7 image %d of %d" % (k + 1, n)
+                o, w = fn(image[k:k + 1])
+                outs.append(o)
+                whys.append(w)
+        finally:
+            self._rn_live_label = base
+        h, w = outs[0].shape[1], outs[0].shape[2]
+        outs = [o if o.shape[1:3] == (h, w)
+                else F.interpolate(o.permute(0, 3, 1, 2), size=(h, w), mode="bilinear",
+                                   align_corners=False).permute(0, 2, 3, 1)
+                for o in outs]
+        missed = [k + 1 for k, w in enumerate(whys) if w]
+        why = whys[0] if len(missed) == n else None
+        if why is None and missed:
+            _say("passed through on image %s of %d: %s"
+                 % (", ".join(map(str, missed)), n, whys[missed[0] - 1]))
+        return torch.cat(outs, 0), why
+
+    def _ksample(self, model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
+                 denoise, start, end):
+        from ..rigs import rig_chain as _rigc
+        with _rigc.using(getattr(self, "_rn_chain", ""), getattr(self, "_rn_prompt", None),
+                         clip=getattr(self, "_rn_clip", None), vae=getattr(self, "_rn_vae", None)):
+            return _dials.sample_with_dials(
+                model, seed, steps, cfg_v, sampler, scheduler, pos, neg, lat,
+                denoise=max(0.01, denoise), dials=getattr(self, "_rn_dials", None),
+                start_step=start if start > 0 else None,
+                last_step=end,
+                force_full_denoise=end is not None)
+
+    @staticmethod
+    def _resize(img, scale):
+        if abs(scale - 1.0) < 1e-3:
+            return img
+        h = max(64, int(round(img.shape[1] * scale)) // 8 * 8)
+        w = max(64, int(round(img.shape[2] * scale)) // 8 * 8)
+        return F.interpolate(img.permute(0, 3, 1, 2), size=(h, w),
+                             mode="bilinear",
+                             align_corners=False).permute(0, 2, 3, 1)
+
+    def _sample(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
+                scheduler, start, end):
+        # the scale sticks on a sampler pass: a 0.5 pass hands the next pass a
+        # smaller frame, a 2.0 pass a bigger one, which is how the chain grows
+        image = self._resize(image, s["scale"])
+        # RES on a sampler pass: the frame renders at that long edge and comes
+        # back at its own size, so a big frame never sends Krea 2 past its
+        # comfort zone (a 4K frame at denoise 1 is fuzz). The scale above still
+        # sticks; this is a working size, not a new size.
+        work = image
+        if s.get("crop_res"):
+            f = s["crop_res"] / max(image.shape[1], image.shape[2])
+            work = self._resize(image, f)
+            _say("frame %d x %d, working at %d x %d"
+                 % (image.shape[2], image.shape[1], work.shape[2], work.shape[1]))
+        lat = {"samples": vae.encode(work[:, :, :, :3])}
+        self._hold_before_sampling()
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
+                            label=getattr(self, "_rn_live_label", ""))(
+            model, seed, steps, cfg_v, sampler, scheduler, pos,
+            neg, lat, s["denoise"], start, end)
+        img = vae.decode(out["samples"])
+        while img.ndim > 4:
+            img = img[0]
+        img = img[:, :, :, :3]                    # an RGBA VAE (Qwen Image 2.1)
+        if img.shape[1:3] != image.shape[1:3]:
+            img = F.interpolate(img.permute(0, 3, 1, 2), size=image.shape[1:3],
+                                mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
+        return img
+
+    def _locate(self, image, s):
+        """The target's mask and padded box, or a why-string: shared by the
+        model path and the engine-rig path, so both aim identically."""
+        mask, why = _sam3_mask(image, s["target"], s["threshold"], s["sam_model"],
+                               s.get("sam_precision", ""))
+        if mask is None:
+            return None, None, why + "; passed through"
+        h, w = image.shape[1], image.shape[2]
+        if mask.shape[1] != h or mask.shape[2] != w:
+            mask = F.interpolate(mask.unsqueeze(1), size=(h, w),
+                                 mode="bilinear", align_corners=False)[:, 0]
+        if s.get("invert"):
+            # everything but the target: the frame is the box, the target is
+            # what the paste keeps
+            mask = (1.0 - mask.clamp(0, 1))
+            _say("found the %s; working everything but it" % s["target"])
+            return mask, (0, h, 0, w), None
+        box = _bbox(mask, pad=s["padding"])
+        if box is None:
+            return None, None, "nothing matched %r; passed through" % s["target"]
+        box = grow_to_aspect(box, h, w, region_aspect(box[3] - box[2],
+                                                      box[1] - box[0], "auto"))
+        _say("found the %s, a %d x %d area" % (s["target"], box[3] - box[2],
+                                               box[1] - box[0]))
+        return mask, box, None
+
+    @staticmethod
+    def _paste(image, crop, rendered, mask, box, feather, blend=1.0):
+        """The rendered crop back into the frame under the feathered mask, at
+        a blend: the matte scaled, so 0.5 leaves half the crop as it was."""
+        y0, y1, x0, x1 = box
+        m = mask[:, y0:y1, x0:x1].unsqueeze(-1).clamp(0, 1)
+        if feather > 0:
+            k = int(feather) * 2 + 1
+            m = F.avg_pool2d(m.permute(0, 3, 1, 2), k, stride=1,
+                             padding=k // 2).permute(0, 2, 3, 1).clamp(0, 1)
+        m = m * max(0.0, min(1.0, float(blend)))
+        merged = image.clone()
+        merged[:, y0:y1, x0:x1, :3] = crop * (1 - m) + rendered * m
+        return merged
+
+    def _detail_rerender(self, image, s, ws_cfg, seed, tag, node_id, lines):
+        """The mask detailer with Re-render as its engine: the target's crop,
+        raised to the pass's Res when it asks, converted by the Re-render tab's
+        recipe at the pass's denoise, and pasted back under the mask at the
+        pass's blend. (image, None) or (image, why)."""
+        if float(s.get("blend", 1.0)) <= 0.0:
+            return image, ("blend is 0, so nothing this pass rendered could be "
+                           "applied; raise it above 0 for the pass to do anything")
+        mask, box, why = self._locate(image, s)
+        if why is not None:
+            return image, why
+        y0, y1, x0, x1 = box
+        crop = image[:, y0:y1, x0:x1, :3]
+        work = crop
+        if s.get("crop_res"):
+            # a floor, never a cap, the same rule the rig path keeps
+            f = float(s["crop_res"]) / max(crop.shape[1], crop.shape[2])
+            if f > 1.0:
+                work = F.interpolate(crop.permute(0, 3, 1, 2), scale_factor=f,
+                                     mode="bilinear", align_corners=False
+                                     ).permute(0, 2, 3, 1)
+        # the paste blends, so the conversion itself does not; a tiled
+        # conversion is the Re-render tiles pass's job, not a crop's
+        s2 = dict(s, blend=1.0, realism_tiles=False)
+        rendered, rl = self._realism_pass(work, s2, ws_cfg, seed, tag, node_id)
+        lines.extend(rl)
+        if rendered is None or rendered is work:
+            return image, "Re-render made no picture; passed through"
+        rendered = rendered.to(image.device, image.dtype)
+        if rendered.shape[1:3] != crop.shape[1:3]:
+            rendered = F.interpolate(rendered[:, :, :, :3].permute(0, 3, 1, 2),
+                                     size=crop.shape[1:3], mode="bilinear",
+                                     align_corners=False).permute(0, 2, 3, 1)
+        return self._paste(image, crop, rendered, mask, box, s["feather"], s["blend"]), None
+
+    def _detail(self, image, model, pos, neg, vae, s, seed, steps, cfg_v, sampler,
+                scheduler, start, end, encode_for=None):
+        # BLEND 0 MEANS NOTHING LANDS. _paste scales the matte by it, so at zero
+        # the merge is the crop exactly as it arrived. The pass still found the
+        # face, still sampled it, still showed it in the live preview, and then
+        # multiplied the whole result by nothing: sixty eight seconds of work and
+        # an unchanged picture, with not a word about why (the user, 2026-09-20).
+        # Said out loud and skipped, because rendering it first changes nothing
+        # except how long it takes to find out.
+        if float(s.get("blend", 1.0)) <= 0.0:
+            return image, ("blend is 0, so nothing this pass rendered could be "
+                           "applied; raise it above 0 for the pass to do anything")
+        mask, box, why = self._locate(image, s)
+        if why is not None:
+            return image, why
+        y0, y1, x0, x1 = box
+        crop = image[:, y0:y1, x0:x1, :3]
+        # a detailer's scale renders the crop BIGGER, then puts it back at its own
+        # size: more pixels spent on the face, no change to the frame. A crop_res
+        # goes further and pins the working size outright, so the render quality
+        # stops depending on how large the face happened to be in frame.
+        if s.get("crop_res"):
+            f = s["crop_res"] / max(crop.shape[1], crop.shape[2])
+            # A FLOOR, NEVER A CAP. Res used to pin the working size both ways, so
+            # a face crop already larger than it was shrunk, redrawn and stretched
+            # back, and the pass came out softer than the picture it started from
+            # (the user, 2026-09-20). Spending FEWER pixels on a face is never what
+            # a detail pass is for; the whole-frame Res above still shrinks on
+            # purpose, because a 4K frame at denoise 1 really is fuzz.
+            if f <= 1.0:
+                _say("%s crop %d x %d is already past the %d working size, so it is "
+                     "left at its own size" % (s["target"], crop.shape[2],
+                                               crop.shape[1], int(s["crop_res"])))
+                work = crop
+            else:
+                work = self._resize(crop, f)
+                _say("%s crop %d x %d, working at %d x %d"
+                     % (s["target"], crop.shape[2], crop.shape[1],
+                        work.shape[2], work.shape[1]))
+        else:
+            work = self._resize(crop, s["scale"]) if s["scale"] > 1.0 else crop
+        if encode_for is not None:
+            # PICTURE on a detailer: the crop is the base reference, so the
+            # swap lands on the face it is looking at, not on the whole frame
+            pos, neg = encode_for(work)
+        lat = {"samples": vae.encode(work)}
+        self._hold_before_sampling()
+        out = _live.sampled(getattr(self, "_rn_uid", None), self._ksample,
+                            label=getattr(self, "_rn_live_label", ""))(
+            model, seed, steps, cfg_v, sampler, scheduler, pos,
+            neg, lat, s["denoise"], start, end)
+        rendered = vae.decode(out["samples"])
+        while rendered.ndim > 4:
+            rendered = rendered[0]
+        rendered = rendered[:, :, :, :3]          # an RGBA VAE (Qwen Image 2.1)
+        if rendered.shape[1:3] != crop.shape[1:3]:
+            rendered = F.interpolate(rendered.permute(0, 3, 1, 2),
+                                     size=crop.shape[1:3], mode="bilinear",
+                                     align_corners=False).permute(0, 2, 3, 1)
+        return self._paste(image, crop, rendered, mask, box,
+                           s["feather"], s["blend"]), None
+
+    def _handler_pass(self, image, rigd, s, ws_cfg, seed, tag, tap=None):
+        """A pass on an engine rig (a RIG_KIND_HANDLERS kind, the personal
+        NovelAI rig): a sampler pass is whole-frame i2i through the handler,
+        a detailer pass crops the target, sends the crop, and pastes the
+        result back under the feathered mask. No model, clip or vae loads;
+        LoRA and reference toggles do not apply to an outside engine.
+        """
+        handler = _ws.RIG_KIND_HANDLERS[rigd["kind"]]
+        eff = dict(rigd)
+        for key in ("steps", "cfg", "sampler", "scheduler"):
+            if s[key]:
+                eff[key] = s[key]
+        text = pass_words(ws_cfg, s, seed, self._rn_subject_words)
+        lines = []
+        out = image
+        reps = int(s.get("repeat", 1))
+        for r in range(max(1, reps)):
+            rseed = seed + r * 131
+            sr = round_stage(s, r)
+            why = None
+            try:
+                if s["type"] == "sampler":
+                    src = self._resize(out, sr["scale"])
+                    img = handler("render", rig=eff, cfg=ws_cfg,
+                                  prompt_text=text,
+                                  negative_text=s["negative"], seed=rseed,
+                                  source_image=src, denoise=sr["denoise"])
+                    if img is None:
+                        why = "the engine returned nothing"
+                    else:
+                        out = img[:, :, :, :3]
+                else:
+                    mask, box, why = self._locate(out, s)
+                    if why is None:
+                        y0, y1, x0, x1 = box
+                        crop = out[:, y0:y1, x0:x1, :3]
+                        img = handler("render", rig=eff, cfg=ws_cfg,
+                                      prompt_text=text,
+                                      negative_text=s["negative"],
+                                      seed=rseed, source_image=crop,
+                                      denoise=sr["denoise"])
+                        if img is None:
+                            why = "the engine returned nothing"
+                        else:
+                            img = img[:, :, :, :3]
+                            if img.shape[1:3] != crop.shape[1:3]:
+                                img = F.interpolate(
+                                    img.permute(0, 3, 1, 2),
+                                    size=crop.shape[1:3], mode="bilinear",
+                                    align_corners=False).permute(0, 2, 3, 1)
+                            out = self._paste(out, crop, img, mask, box,
+                                              s["feather"], s["blend"])
+            except Exception as exc:
+                why = "the engine failed: %s" % exc
+            line = "%s: %s rig %r, %s" % (
+                tag, rigd["kind"], rigd.get("name") or s["rig"],
+                why or ("%s, denoise %.2f"
+                        % (s["target"] if s["type"] == "detailer"
+                           else "whole frame", sr["denoise"])))
+            if reps > 1:
+                line += ", repeat %d of %d" % (r + 1, reps)
+            lines.append(line)
+            if tap and not why:
+                tap(out, "%s %s%s" % (tag.split(" ")[0], rigd.get("kind"),
+                                      " x%d" % (r + 1) if reps > 1 else ""))
+            if why:
+                break
+        return out, lines
+
+
+# ---- named pass-list presets: your layouts, one JSON in you dir ------
+# The panel ships premade layouts client-side (the proven face-identity chain among
+# them); this store holds your OWN saved lists, server-side so they survive
+# browsers and reinstalls the way sampler profiles do.
+
+_PASS_LORA_CACHE = {}       # name -> loaded state dict, the last two files
+_PASS_LORA_KEEP = 2
+
+
+def _pass_lora(model, name, strength):
+    """The pass's own LoRA on a clone of the model (model side only, the way
+    LoraLoaderModelOnly does it). The file is kept loaded across queues."""
+    import comfy.sd
+    import comfy.utils
+    import folder_paths
+    lora = _PASS_LORA_CACHE.get(name)
+    if lora is None:
+        path = folder_paths.get_full_path("loras", name)
+        if not path:
+            raise FileNotFoundError("%s is not in the loras folder" % name)
+        lora = comfy.utils.load_torch_file(path, safe_load=True)
+        _PASS_LORA_CACHE[name] = lora
+        while len(_PASS_LORA_CACHE) > _PASS_LORA_KEEP:
+            del _PASS_LORA_CACHE[next(iter(_PASS_LORA_CACHE))]
+    new_model, _ = comfy.sd.load_lora_for_models(model, None, lora,
+                                                 float(strength), 0.0)
+    return new_model
+
+
+def _presets_path(make=False):
+    import os
+    import folder_paths
+    base = os.path.join(folder_paths.get_user_directory(), "default", "rednode")
+    if make:
+        os.makedirs(base, exist_ok=True)
+    return os.path.join(base, "detailer_presets.json")
+
+
+def load_presets():
+    try:
+        with open(_presets_path(), "r", encoding="utf-8") as f:
+            raw = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if isinstance(raw, dict):
+        for name, stages in raw.items():
+            if not str(name).strip() or not isinstance(stages, list):
+                continue
+            # the parse is the gatekeeper: junk never gets stored or served
+            out[str(name).strip()[:48]] = parse_pipeline(
+                json.dumps({"stages": stages}))["stages"]
+    return out
+
+
+try:
+    from server import PromptServer
+    from aiohttp import web
+
+    @PromptServer.instance.routes.get("/rednode/detailer_presets")
+    async def _rn_detailer_presets_get(request):
+        return web.json_response({"presets": load_presets()})
+
+    @PromptServer.instance.routes.post("/rednode/detailer_presets")
+    async def _rn_detailer_presets_post(request):
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad request"}, status=400)
+        name = str(body.get("name") or "").strip()[:48]
+        if not name:
+            return web.json_response({"error": "a preset needs a name"},
+                                     status=400)
+        presets = load_presets()
+        if body.get("delete"):
+            presets.pop(name, None)
+        else:
+            stages = body.get("stages")
+            if not isinstance(stages, list) or not stages:
+                return web.json_response({"error": "no passes to save"},
+                                         status=400)
+            presets[name] = parse_pipeline(
+                json.dumps({"stages": stages}))["stages"]
+        try:
+            with open(_presets_path(make=True), "w", encoding="utf-8") as f:
+                json.dump(presets, f, indent=1)
+        except OSError as e:
+            return web.json_response({"error": str(e)}, status=500)
+        return web.json_response({"presets": presets})
+except Exception as _e:
+    print(f"[RedNode Detailer] preset routes not registered: {_e}", flush=True)
+
+
+# The class carried "Advanced" for a few hours before you named it properly.
+# The alias keeps any node placed in that window loading; the display name is one.
+RedNodeStudioAdvanced = RedNodeStudioDetailer
+
+NODE_CLASS_MAPPINGS = {"RedNodeStudioDetailer": RedNodeStudioDetailer,
+                       "RedNodeStudioAdvanced": RedNodeStudioAdvanced}
+NODE_DISPLAY_NAME_MAPPINGS = {"RedNodeStudioDetailer": "RedNode Studio Detailer",
+                              "RedNodeStudioAdvanced": "RedNode Studio Detailer "
+                                                       "(renamed)"}
