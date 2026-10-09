@@ -596,8 +596,13 @@ function sizeThrough(w, h, stages) {
       for (let r = 0; r < reps; r++) { w = snap8(w * by); h = snap8(h * by); }
     } else if (s.type === "vosr2") {
       if (s.region) continue;
-      const m = Math.max(1, Math.round(Number(s.vosr2_scale ?? 2) || 2));
-      for (let r = 0; r < reps; r++) { w *= m; h *= m; }
+      // mirrors refine_pipeline.vosr2_stages: one run to x4, past that two
+      // runs (x6 = x3 then x2, x8 = x4 then x2), each rounded like the server
+      const m = Math.max(1, Math.min(8, Number(s.vosr2_scale ?? 2) || 2));
+      const stages = m > 4 ? [m / 2, 2] : [m];
+      for (let r = 0; r < reps; r++) {
+        for (const f of stages) { w = Math.round(w * f); h = Math.round(h * f); }
+      }
     } else if (s.type === "upscale") {
       if (s.region) continue;
       const budget = SIZE_BUDGET[s.size] || SIZE_BUDGET["1080p"];
@@ -1550,15 +1555,16 @@ function buildPanel(node, hostEl = null) {
         lead.onclick = () => { s.reader_first = !s.reader_first; writeCfg(node, d); render(); };
         top.append(lead);
       } else if (s.type === "vosr2") {
-        // no rig and no pixel budget: VOSR 2.0 takes an INTEGER multiplier, and
-        // the reason to reach for it is that it does not invent, so a budget
+        // no rig and no pixel budget: VOSR 2.0 takes a multiplier, and the
+        // reason to reach for it is that it does not invent, so a budget
         // that resized its output would defeat the pass.
         top.append(lab("Scale"),
-                   sel(["1", "2", "3", "4", "6", "8"], String(s.vosr2_scale ?? 2),
-                       "Exact output multiplier. x2 and x4 are the tested ones; "
-                       + "the model was trained on degradations to 16x but quality "
-                       + "is not promised much past x4.",
-                       (v) => { s.vosr2_scale = parseInt(v, 10) || 2; writeCfg(node, d); }));
+                   sel(["1", "1.5", "2", "3", "4", "6", "8"], String(s.vosr2_scale ?? 2),
+                       "Exact output multiplier. x1.5 to x4 run in one pass "
+                       + "(x1.5 is about a third faster than x2). x6 and x8 run "
+                       + "as two passes, x3 then x2 and x4 then x2: one big pass "
+                       + "breaks skin into patches.",
+                       (v) => { s.vosr2_scale = parseFloat(v) || 2; writeCfg(node, d); }));
         top.append(lab("Region"),
                    sel(TARGETS, s.region || "",
                        "Upscale only this target: SAM3 finds it, the crop goes "

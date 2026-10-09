@@ -462,12 +462,14 @@ def _enlarge(flat):
     side = min(int(flat.shape[0]), int(flat.shape[1]))
     if side >= WORKING:
         return flat, side, ""
-    mult = min(8, max(2, -(-WORKING // max(1, side))))
-    say("Enlarging", "%d px, VOSR2 x%d" % (side, mult))
+    # in half steps, since the pass takes fractions: a 600 px crop gets x1.5
+    # to 900 rather than x2 to 1200 and a bigger render than it needs
+    mult = min(8.0, max(1.5, -(-(2 * WORKING) // max(1, side)) / 2.0))
+    say("Enlarging", "%d px, VOSR2 x%g" % (side, mult))
     up, why_up = _vosr2(flat.unsqueeze(0), dict(VOSR2_PASS, vosr2_scale=mult), 0)
     if up is None:
         return flat, side, "not enlarged: %s" % why_up
-    return up[0], side, "VOSR2 x%d" % mult
+    return up[0], side, "VOSR2 x%g" % mult
 
 
 def _make_hero(source, sam_model, enlarge):

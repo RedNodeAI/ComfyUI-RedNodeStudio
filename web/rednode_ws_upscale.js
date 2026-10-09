@@ -471,7 +471,7 @@ export function upscaleBody(node, body) {
         }
         if (S.type === "vosr2") {
           const mul = Math.max(1, Number(S.vosr2_scale) || 2);
-          line += ` → out ${w * mul} × ${h * mul}`;
+          line += ` → out ${Math.round(w * mul)} × ${Math.round(h * mul)}`;
         } else if (S.type === "usdu") {
           const by = Number(S.upscale_by) || 2;
           line += ` → out about ${Math.round(w * by)} × ${Math.round(h * by)}`;
@@ -647,10 +647,12 @@ export function upscaleBody(node, body) {
   if ((S.type || "vosr2") === "vosr2") {
     dLine.append(
       lab("Scale"),
-      sel([["1", "x1"], ["2", "x2"], ["3", "x3"], ["4", "x4"], ["6", "x6"], ["8", "x8"]],
+      sel([["1", "x1"], ["1.5", "x1.5"], ["2", "x2"], ["3", "x3"], ["4", "x4"], ["6", "x6"], ["8", "x8"]],
           String(S.vosr2_scale ?? 2),
-          "Exact output multiplier. x2 and x4 are the tested ones.",
-          (v) => { S.vosr2_scale = parseInt(v, 10) || 2; w(); }),
+          "Exact output multiplier. x1.5 to x4 run in one pass (x1.5 is about a "
+          + "third faster than x2). x6 and x8 run as two passes, x3 then x2 and "
+          + "x4 then x2: one big pass breaks skin into patches.",
+          (v) => { S.vosr2_scale = parseFloat(v) || 2; w(); }),
       lab("Colour"),
       sel(["wavelet", "adain", "none"], S.vosr2_color || "wavelet",
           "Matches the result's colour back to the picture that went in.",

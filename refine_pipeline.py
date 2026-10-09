@@ -251,14 +251,15 @@ def parse_pipeline(config_json):
             "input_noise": _num("input_noise", 0.0, 1.0, 0.0),
             "latent_noise": _num("latent_noise", 0.0, 1.0, 0.0),
             # A VOSR2 UPSCALE PASS. Deliberately NOT the size combo above:
-            # VOSR 2.0 takes an integer multiplier, and forcing a pixel budget
-            # on to it would mean resizing its output, which is the one thing
-            # this upscaler is picked for not doing. Defaults are the author's
-            # own recommendation, which is also what measured best here:
-            # tile 512, VAE tile 1024, wavelet.
+            # VOSR 2.0 takes a multiplier, and forcing a pixel budget on to it
+            # would mean resizing its output, which is the one thing this
+            # upscaler is picked for not doing. The multiplier may be a
+            # fraction (x1.5) and goes to x8; vosr2_stages says how it is run.
+            # Defaults are the author's own recommendation, which is also what
+            # measured best here: tile 512, VAE tile 1024, wavelet.
             "vosr2_model": str(s.get("vosr2_model") or ""),
             "vosr2_dtype": str(s.get("vosr2_dtype") or ""),
-            "vosr2_scale": _num("vosr2_scale", 1, 8, 2, int),
+            "vosr2_scale": _num("vosr2_scale", 1.0, 8.0, 2.0),
             "vosr2_color": str(s.get("vosr2_color") or "wavelet"),
             "vosr2_tile": _num("vosr2_tile", 0, 4096, 512, int),
             "vosr2_tile_overlap": _num("vosr2_tile_overlap", 0, 512, 32, int),
@@ -484,6 +485,29 @@ def _seedvr2(image, s, seed):
         return None, "SeedVR2 failed: %s" % exc
 
 
+def vosr2_stages(scale):
+    """The VOSR2 runs that make one multiplier, in order.
+
+    One run up to x4. Past that a single run breaks skin into square, scaly
+    patches (the model was trained at 512 px tiles), while two runs stay clean,
+    so x6 is x3 then x2 and x8 is x4 then x2. The same split covers x5 and x7.
+    The panel's size chain (sizeThrough in web/rednode_advanced.js) mirrors
+    this rule and must keep mirroring it.
+    """
+    try:
+        scale = float(scale)
+    except (TypeError, ValueError):
+        scale = 2.0
+    scale = max(1.0, min(8.0, scale))
+    return [scale] if scale <= 4.0 else [scale / 2.0, 2.0]
+
+
+def _fmt_scale(scale):
+    """x2, x1.5: a multiplier as the panel and the log write it."""
+    scale = float(scale)
+    return "%d" % scale if scale == int(scale) else "%.2f" % scale
+
+
 def _vosr2(image, s, seed):
     """The picture through VOSR 2.0 at the pass's multiplier, or None with a reason.
 
@@ -491,12 +515,19 @@ def _vosr2(image, s, seed):
     called out of NODE_CLASS_MAPPINGS rather than reimplemented, everything in
     one try so an optional pack fails as words and never as a dead queue.
 
-    What differs is the maths. VOSR 2.0 takes an INTEGER MULTIPLIER, not a
-    pixel budget, and it is picked precisely because it does not invent, so
+    What differs is the maths. VOSR 2.0 takes a MULTIPLIER, not a pixel
+    budget, and it is picked precisely because it does not invent, so
     resizing its output to hit a budget would undo the reason for using it.
     The DiT tile and the VAE tile are separate dials here: the model was
     trained at 512, so the DiT tile carries quality while the VAE tile is
     only about fitting the decode on the card.
+
+    The node's own dial is a whole number, and that number does exactly one
+    thing inside it: a bicubic resize to the target size before the model
+    runs (at x1 that resize moves no pixel, checked). So a fraction such as
+    x1.5 is made here, by resizing to the fraction and running the node at
+    x1: the same picture the node would make if it took 1.5. Multipliers
+    past x4 run as two passes, see vosr2_stages.
     """
     try:
         maps = _core.NODE_CLASS_MAPPINGS
@@ -515,40 +546,61 @@ def _vosr2(image, s, seed):
             return kw
         bundle = _call_node(ld_cls, fill(ld_cls, {
             "model": s["vosr2_model"], "dtype": s["vosr2_dtype"]}))[0]
-        # THE TILE LADDER, as the SeedVR2 pass has: an out-of-memory halves the
-        # DiT tile and the VAE tile together, overlap kept under a quarter of
-        # the tile, down to 128 before giving up. A tile of 0 means "no tiling"
-        # to the node, so it is never halved into one.
-        tile = int(s["vosr2_tile"])
-        vtile = int(s["vosr2_vae_tile"])
-        while True:
-            over = min(int(s["vosr2_tile_overlap"]), tile // 4) if tile else 0
-            vover = min(int(s["vosr2_vae_overlap"]), vtile // 4) if vtile else 0
-            try:
-                outs = _call_node(up_cls, fill(up_cls, {
-                    "model": bundle, "image": image,
-                    "upscale": int(s["vosr2_scale"]),
-                    "seed": int(seed) & 0x7fffffff,
-                    "color_alignment": s["vosr2_color"],
-                    "tile_size": tile, "tile_overlap": over,
-                    "vae_tile_size": vtile, "vae_tile_overlap": vover}))
-                break
-            except Exception as exc:
-                if not (_is_oom(exc) and (tile > 128 or vtile > 128)):
-                    raise
-                tile = max(128, tile // 2) if tile else tile
-                vtile = max(128, vtile // 2) if vtile else vtile
-                _say("VOSR2 ran out of memory; the tiles are halved to %d / %d "
-                     "and the pass tried again" % (tile, vtile))
+
+        def once(img, mult):
+            # THE TILE LADDER, as the SeedVR2 pass has: an out-of-memory halves
+            # the DiT tile and the VAE tile together, overlap kept under a
+            # quarter of the tile, down to 128 before giving up. A tile of 0
+            # means "no tiling" to the node, so it is never halved into one.
+            tile = int(s["vosr2_tile"])
+            vtile = int(s["vosr2_vae_tile"])
+            while True:
+                over = min(int(s["vosr2_tile_overlap"]), tile // 4) if tile else 0
+                vover = min(int(s["vosr2_vae_overlap"]), vtile // 4) if vtile else 0
                 try:
-                    import comfy.model_management as _mm
-                    _mm.soft_empty_cache()
-                except Exception:
-                    pass
-        for v in outs:
-            if torch.is_tensor(v) and v.ndim == 4:
-                return v, None
-        return None, "VOSR2 returned no image"
+                    outs = _call_node(up_cls, fill(up_cls, {
+                        "model": bundle, "image": img,
+                        "upscale": int(mult),
+                        "seed": int(seed) & 0x7fffffff,
+                        "color_alignment": s["vosr2_color"],
+                        "tile_size": tile, "tile_overlap": over,
+                        "vae_tile_size": vtile, "vae_tile_overlap": vover}))
+                    break
+                except Exception as exc:
+                    if not (_is_oom(exc) and (tile > 128 or vtile > 128)):
+                        raise
+                    tile = max(128, tile // 2) if tile else tile
+                    vtile = max(128, vtile // 2) if vtile else vtile
+                    _say("VOSR2 ran out of memory; the tiles are halved to %d / %d "
+                         "and the pass tried again" % (tile, vtile))
+                    try:
+                        import comfy.model_management as _mm
+                        _mm.soft_empty_cache()
+                    except Exception:
+                        pass
+            for v in outs:
+                if torch.is_tensor(v) and v.ndim == 4:
+                    return v
+            raise RuntimeError("VOSR2 returned no image")
+
+        out = image
+        stages = vosr2_stages(s["vosr2_scale"])
+        for n, factor in enumerate(stages, 1):
+            mult = int(round(factor))
+            if abs(factor - mult) > 1e-6:
+                # a fraction: the resize the node would do, to the fraction,
+                # then the node at x1 (its own resize is then a no-op)
+                h, w = int(out.shape[1]), int(out.shape[2])
+                th, tw = max(8, int(round(h * factor))), max(8, int(round(w * factor)))
+                out = torch.nn.functional.interpolate(
+                    out.movedim(-1, 1).float(), size=(th, tw), mode="bicubic"
+                ).clamp(0.0, 1.0).movedim(1, -1)
+                mult = 1
+            if len(stages) > 1:
+                _say("VOSR2 x%s: pass %d of %d, x%s" % (
+                    _fmt_scale(s["vosr2_scale"]), n, len(stages), _fmt_scale(factor)))
+            out = once(out, mult)
+        return out, None
     except Exception as exc:
         return None, "VOSR2 failed: %s" % exc
 
@@ -1355,9 +1407,9 @@ class RedNodeStudioDetailer:
             # scale spends pixels on a face.
             if s["type"] in UPSCALERS:
                 # what this pass is working to, in its own terms: SeedVR2 a
-                # pixel budget, VOSR2 an integer multiplier
+                # pixel budget, VOSR2 a multiplier
                 want = (s["size"] if s["type"] == "upscale"
-                        else "x%d" % int(s["vosr2_scale"]))
+                        else "x%s" % _fmt_scale(s["vosr2_scale"]))
                 self._rn_live_label = "upscale %d of %d" % (i, len(stages))
                 if s["region"]:
                     up, why = self._each_frame(

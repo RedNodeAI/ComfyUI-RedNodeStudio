@@ -61,8 +61,8 @@ def figure_mask(image):
 
 def enlarge(image, mult):
     """[1,H,W,3] through VOSR2 at x mult, or the picture unchanged with the reason."""
-    up, why = _hero._vosr2(image, dict(_hero.VOSR2_PASS, vosr2_scale=int(mult)), 0)
-    return (image, "not enlarged: %s" % why) if up is None else (up, "VOSR2 x%d" % int(mult))
+    up, why = _hero._vosr2(image, dict(_hero.VOSR2_PASS, vosr2_scale=float(mult)), 0)
+    return (image, "not enlarged: %s" % why) if up is None else (up, "VOSR2 x%g" % float(mult))
 
 
 def body_cut(image, panel=PANEL):
