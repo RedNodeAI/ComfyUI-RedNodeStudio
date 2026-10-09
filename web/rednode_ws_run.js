@@ -8,7 +8,7 @@ import { EXTRA_PACKS, packLink, EDITOR_SUB_IDS } from "./rednode_ws_tables.js";
 import { panelHotkey } from "./rednode_keys.js";
 import { keepToggle } from "./rednode_review.js";
 import { mountReviewPanel, pushReviewEntry, openMenu as reviewMenu,
-         openFullscreen as reviewFullscreen } from "./rednode_review.js";
+         openFullscreen as reviewFullscreen, prefetchFullscreen } from "./rednode_review.js";
 import { mountStagePanel } from "./rednode_stages.js";
 import { mountSavePanel } from "./rednode_save.js";
 import { allNodes } from "./rednode_graph.js";
@@ -1706,6 +1706,9 @@ function refresh(view) {
       refs.img.dataset.want = src;
       refs.img.dataset.full = full;
       refs.img.src = src;
+      // the file the room will open: fetched and decoded now, in the background,
+      // so the first click is as quick as the second
+      if (file) prefetchFullscreen(reviewHost(node), file);
     }
     dragPicture(refs.img, stage === "raw" ? S.rawFile
                 : stage === "before" ? S.beforeFile : S.finalFiles[S.finalIdx]);

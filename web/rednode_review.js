@@ -184,6 +184,46 @@ const thumbUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=320`);
 // the browser would keep re-scaling on every pan. Full screen loads the original.
 const nodePx = () => Math.max(256, Math.min(1024, parseInt(setting("RedNode.Review.NodePictureSize", "768")) || 768));
 const nodeUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=${nodePx()}`);
+// the 1024 px copy the Run page's Live picture already holds: the room opens on it at
+// once and swaps the file itself in when that has arrived and decoded
+const roomCopyUrl = (f) => api.apiURL(`/rednode/thumb?${fileArgs(f)}&px=1024`);
+
+// THE FIRST OPEN OF A NEW PICTURE used to wait on the file: the room asks for the
+// original, a multi-megabyte PNG the browser had never fetched or decoded, and that
+// one cold fetch was the pause on the first click (the second was instant, from the
+// cache). So a finished picture is fetched and decoded in the background as soon as
+// it lands, and the room shows the copy it already has until the file is in.
+const _prefetched = new Set();
+export function prefetchFullscreen(node, file) {
+  if (!file?.filename) return;
+  for (const url of [roomCopyUrl(file), fileUrl(file)]) {
+    if (_prefetched.has(url)) continue;
+    _prefetched.add(url);
+    if (_prefetched.size > 64) _prefetched.delete(_prefetched.values().next().value);
+    try {
+      const pre = new Image();
+      pre.decoding = "async";
+      pre.src = url;
+      pre.decode?.().catch(() => {});
+    } catch (e) { /* no Image here: the test harness */ }
+  }
+}
+
+function swapInWhenReady(img, url) {
+  // the copy stays up until the file has loaded AND decoded, so the swap is one
+  // paint; a picture navigated away from meanwhile does not swap a stale one in
+  const token = (img.dataset.rnSwap = String((Number(img.dataset.rnSwap) || 0) + 1));
+  const done = () => { if (img.isConnected !== false && img.dataset.rnSwap === token) img.src = url; };
+  try {
+    const pre = new Image();
+    pre.decoding = "async";
+    pre.src = url;
+    if (pre.decode) pre.decode().then(done, done);
+    else Promise.resolve().then(done);
+  } catch (e) {
+    done();
+  }
+}
 // per node, from its right-click menu: the big picture on the node at full size
 const fullOnNode = (node) => !!node.properties?.rn_full_preview;
 function toggleFullOnNode(node) {
@@ -1166,8 +1206,22 @@ function render(node) {
     const img = document.createElement("img");
     const fullPic = !!node._rnFsPrev || fullOnNode(node);
     img.decoding = "async";
-    img.src = fullPic ? fileUrl(entry.files[slot]) : nodeUrl(entry.files[slot]);
+    const target = fullPic ? fileUrl(entry.files[slot]) : nodeUrl(entry.files[slot]);
+    if (node._rnFsPrev) {
+      // the room: the copy at once, the file when it is in
+      img.dataset.rnCopy = "1";
+      img.src = roomCopyUrl(entry.files[slot]);
+      swapInWhenReady(img, target);
+    } else {
+      img.src = target;
+    }
     img.onerror = () => {
+      // the copy the room opened on is missing: straight to the file, no verdict yet
+      if (img.dataset.rnCopy) {
+        delete img.dataset.rnCopy;
+        img.src = target;
+        return;
+      }
       // the resize route first failing (an older install, no webp encoder) costs
       // sharpness, never the picture: try the original before calling it gone
       if (!fullPic && !img.dataset.rnFullTried) {
