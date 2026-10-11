@@ -97,6 +97,15 @@ BUILTIN_PROFILES = {
     # adds noise every step leaves pepper specks once Detail Daemon is on
     "Krea 2 Soft": {"steps": 8, "cfg": 1.0, "sampler": "euler", "scheduler": "beta57",
                     "detailer_steps": 8, "dials": dict(_OFF)},
+    # the photographic recipe from the 2026-10-11 study (hub LONECAT_STUDY_2026-10-11.md): shift 4 with
+    # simple (beta under a high shift gives grain and inked eyes), 12 steps, euler, Detail Daemon look
+    # only at 0.25, the quick start on. cfg stays 1 on the one-pass sampler.
+    "Krea 2 Photographic": {"steps": 12, "cfg": 1.0, "sampler": "euler", "scheduler": "simple",
+                            "detailer_steps": 8,
+                            "dials": dict(_OFF, shift=4,
+                                          dd={"on": True, "amount": 0.25, "start": 0.15, "end": 0.85,
+                                              "method": "look", "window": "steps", "cfg_scale": 1.0},
+                                          quick={"on": True, "grow_at": 0})},
 }
 
 

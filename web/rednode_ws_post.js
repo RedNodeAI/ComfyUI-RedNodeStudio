@@ -753,7 +753,7 @@ export function looksSection(node, body) {
 // read. One effect open at a time is the point: the old grid of every card at
 // once was a wall of sliders. The two settings cards sit at the foot of the list.
 const FX_GROUPS = [
-  ["GRADE", ["denoise", "color", "match", "lut", "skin", "clarity", "sharpen"]],
+  ["GRADE", ["denoise", "color", "match", "lut", "skin", "pores", "clarity", "sharpen"]],
   ["LIGHT", ["relight"]],
   ["AIR", ["haze"]],
   ["LENS", ["distortion", "dof", "aberration", "bloom", "light_wrap", "diffusion", "vignette"]],
@@ -771,9 +771,10 @@ function fxGroups() {
 
 // one control of the selected effect: a choice, a random range, or a slider;
 // right-click on a slider flips it to a range and back
-// A lens pick fills the distortion instance it was made on and the base Chromatic
-// aberration instance, switches both on and sizes them to the frame. Any later dial
-// edit on either card puts the name back to Custom, so it never claims a stale pick.
+// A lens pick fills the distortion instance it was made on, the base Chromatic
+// aberration instance and the base Vignette instance (natural falloff), switches the
+// three on and sizes the first two to the frame. Any later dial edit on any of them
+// puts the name back to Custom, so it never claims a stale pick.
 function applyLens(cfg, b, name) {
   const p = LENS_PRESETS[name];
   if (!p) return;
@@ -790,6 +791,12 @@ function applyLens(cfg, b, name) {
   a.direction = p.direction;
   a.scale_by_size = 1;
   a.on = true;
+  const v = (cfg.post.chain || []).find((x) => x.id === "vignette");
+  if (!v || p.vig_amount === undefined) return;
+  v.amount = p.vig_amount;
+  v.feather = p.vig_feather;
+  v.law = "cos4";
+  v.on = true;
 }
 
 function clearLens(cfg, fx, b) {
