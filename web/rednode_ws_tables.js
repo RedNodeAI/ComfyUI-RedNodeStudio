@@ -529,6 +529,33 @@ export const POST_FX = [
             + "smoothing does nothing; 0 keeps none. Around 0.5 takes out blotches and "
             + "leaves skin reading as skin." },
     ] },
+  { id: "pores", label: "Pores", cost: "scales with the frame",
+    blurb: "Fine skin relief put back where a render came out waxy. A band of noise at "
+         + "pore size is added to lightness only, under the same skin mask as the Skin "
+         + "card (eyes, teeth, lips and busy pattern stay out), and held back where the "
+         + "skin already has detail of its own. Colour is never touched. Sized to the "
+         + "frame, so it reads the same at any resolution.",
+    controls: [
+      { key: "strength", label: "Strength", min: 0, max: 1, step: 0.01, def: 0.45,
+        hint: "How much relief goes in. 0.3 to 0.5 for most faces; past 0.6 it starts to "
+            + "read as a filter." },
+      { key: "size", label: "Pore size", min: 0.5, max: 3, step: 0.05, def: 1.0,
+        hint: "1 is fine pores. Raise it for close-ups, where pores and creases are larger "
+            + "on the frame." },
+      { key: "softness", label: "Softness", min: 0, max: 1, step: 0.01, def: 0.5,
+        hint: "Higher is gentler relief, lower is crisper." },
+      { key: "keep", label: "Keep own detail", min: 0, max: 1, step: 0.01, def: 0.7,
+        hint: "How much the card holds back where the skin already has texture, so a "
+            + "detailed face is not textured twice. 0 adds everywhere on skin." },
+      { key: "subject", label: "Subject mask", def: "auto", step: 1,
+        choice: ["off", "auto", "always"],
+        labels: { off: "Off (colour alone)", auto: "Auto (use one if the chain has it)",
+                  always: "Always (make one)" },
+        hint: "Cuts the skin mask to the subject, so skin-coloured things in the background "
+            + "stay smooth. Always runs the pack's own subject mask for this card." },
+      { key: "seed", label: "Seed", min: 0, max: 999999, step: 1, def: 0,
+        hint: "Only changes the finest grain of the relief." },
+    ] },
   { id: "clarity", label: "Clarity",
     blurb: "Local contrast: it thickens midtone detail without touching overall "
          + "brightness. This is the punch, not the sharpness.",
@@ -708,8 +735,8 @@ export const POST_FX = [
     clears: { card: "distortion", key: "lens", to: "custom" },
     blurb: "Real glass never maps the world to a perfect rectangle. A little barrel "
          + "reads as a wide lens, a little pincushion as a long one. The frame is "
-         + "resampled, so no black corners appear. Pick a lens to fill these dials and "
-         + "the fringing on the Chromatic aberration card in one go.",
+         + "resampled, so no black corners appear. Pick a lens to fill these dials, the "
+         + "fringing on the Chromatic aberration card and the Vignette card's falloff in one go.",
     controls: [
       { key: "lens", label: "Lens", def: "custom", step: 1, fills: "lens",
         choice: ["custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
@@ -721,10 +748,11 @@ export const POST_FX = [
                   long_135: "135 mm long", vintage_55: "55 mm vintage",
                   anamorphic_40: "40 mm anamorphic", phone_main: "Phone, main camera",
                   phone_ultrawide: "Phone, ultra wide" },
-        hint: "Fills this card's dials and the Chromatic aberration card's with the way "
-            + "that kind of glass bends and splits light: barrel on the wide lenses, a "
-            + "touch of pincushion on the long ones, soft corners on the cheap and the "
-            + "old ones. Picking one switches both cards on. Every dial stays yours "
+        hint: "Fills this card's dials, the Chromatic aberration card's and the Vignette "
+            + "card's with the way that kind of glass bends, splits and loses light: barrel "
+            + "on the wide lenses, a touch of pincushion on the long ones, soft corners on "
+            + "the cheap and the old ones, darker corners on the wide and the fast. Picking "
+            + "one switches the three cards on. Every dial stays yours "
             + "afterwards, and moving one puts this back to Custom. The amounts are "
             + "sized to the frame, so a lens looks the same at any resolution. These are "
             + "characterful values for that kind of glass, not measured profiles." },
@@ -831,9 +859,11 @@ export const POST_FX = [
             + "little; that is what stops the image looking digitally clean." },
     ] },
   { id: "vignette", label: "Vignette",
+    clears: { card: "distortion", key: "lens", to: "custom" },
     blurb: "Darkens towards the corners to pull the eye inward. Two falloff laws, a "
          + "shape that runs from the frame's own oval to a true circle, and a colour "
-         + "that lands in the darkened band and nowhere else.",
+         + "that lands in the darkened band and nowhere else. A lens picked on the Lens "
+         + "distortion card fills this card too, with the natural falloff.",
     controls: [
       { key: "amount", label: "Amount", min: 0, max: 1, step: 0.01, def: 0.10,
         hint: "How dark the corners go. Small values read as a lens, large as a mood." },
@@ -1118,24 +1148,24 @@ export function snapStep(v, min, max, step) {
 // edge (both cards size them to the frame). Characterful values for that kind of
 // glass, not measured profiles of any one lens.
 export const LENS_PRESETS = {
-  ultrawide_14: { amount: 0.115, edge_softness: 0.22, ca_amount: 0.90,
+  ultrawide_14: { vig_amount: 0.22, vig_feather: 0.5, amount: 0.115, edge_softness: 0.22, ca_amount: 0.90,
                   red_shift: 1.5, green_shift: 0, blue_shift: -2.5, direction: "radial" },
-  wide_24: { amount: 0.06, edge_softness: 0.12, ca_amount: 0.55,
+  wide_24: { vig_amount: 0.16, vig_feather: 0.55, amount: 0.06, edge_softness: 0.12, ca_amount: 0.55,
              red_shift: 1, green_shift: -0.5, blue_shift: -2, direction: "radial" },
-  reportage_35: { amount: 0.028, edge_softness: 0.08, ca_amount: 0.4,
+  reportage_35: { vig_amount: 0.12, vig_feather: 0.6, amount: 0.028, edge_softness: 0.08, ca_amount: 0.4,
                   red_shift: 0.8, green_shift: 0, blue_shift: -1.4, direction: "radial" },
-  normal_50: { amount: 0.008, edge_softness: 0.04, ca_amount: 0.22,
+  normal_50: { vig_amount: 0.08, vig_feather: 0.65, amount: 0.008, edge_softness: 0.04, ca_amount: 0.22,
                red_shift: 0.5, green_shift: 0, blue_shift: -1, direction: "radial" },
-  portrait_85: { amount: -0.012, edge_softness: 0.03, ca_amount: 0.18,
+  portrait_85: { vig_amount: 0.1, vig_feather: 0.6, amount: -0.012, edge_softness: 0.03, ca_amount: 0.18,
                  red_shift: 0.4, green_shift: 0, blue_shift: -0.8, direction: "radial" },
-  long_135: { amount: -0.03, edge_softness: 0.02, ca_amount: 0.15,
+  long_135: { vig_amount: 0.06, vig_feather: 0.7, amount: -0.03, edge_softness: 0.02, ca_amount: 0.15,
               red_shift: 0.3, green_shift: 0, blue_shift: -0.7, direction: "radial" },
-  vintage_55: { amount: 0.02, edge_softness: 0.35, ca_amount: 0.8,
+  vintage_55: { vig_amount: 0.25, vig_feather: 0.5, amount: 0.02, edge_softness: 0.35, ca_amount: 0.8,
                 red_shift: 1.2, green_shift: -0.4, blue_shift: -2.2, direction: "radial" },
-  anamorphic_40: { amount: 0.05, edge_softness: 0.18, ca_amount: 0.7,
+  anamorphic_40: { vig_amount: 0.14, vig_feather: 0.5, amount: 0.05, edge_softness: 0.18, ca_amount: 0.7,
                    red_shift: 1.6, green_shift: 0, blue_shift: -1.6, direction: "horizontal" },
-  phone_main: { amount: 0.075, edge_softness: 0.10, ca_amount: 0.35,
+  phone_main: { vig_amount: 0.1, vig_feather: 0.6, amount: 0.075, edge_softness: 0.10, ca_amount: 0.35,
                 red_shift: 0.6, green_shift: 0, blue_shift: -1.2, direction: "radial" },
-  phone_ultrawide: { amount: 0.16, edge_softness: 0.30, ca_amount: 0.9,
+  phone_ultrawide: { vig_amount: 0.2, vig_feather: 0.5, amount: 0.16, edge_softness: 0.30, ca_amount: 0.9,
                      red_shift: 1.4, green_shift: -0.3, blue_shift: -2.6, direction: "radial" },
 };

@@ -14,6 +14,12 @@ format matters: **version** then a date, notes below until the next bold line.
 
 ### Added
 
+- Post FX: a Pores card, fine skin relief in lightness only under the skin mask, held back where the skin
+  has detail of its own; a Natural Skin look (denoise, skin, pores, band sharpen, unvarnish)
+- Post FX: a lens pick on the Lens distortion card now fills the Vignette card too (natural falloff), so one
+  pick sets the glass, its fringing and its corners; a vignette edit puts the pick back to Custom
+- Sampler presets: Krea 2 Photographic (12 steps, euler + simple at shift 4, Detail Daemon look only 0.25,
+  Quick start on)
 - api.refresh_frame (API_VERSION 3): a frame through Krea 2 image-to-image at a low denoise with a
   Moodboard reference, a LoRA stack and the caller's seed, for RedNode Video Studio's Refresh Between Segments
 

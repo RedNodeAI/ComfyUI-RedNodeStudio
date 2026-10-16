@@ -94,12 +94,12 @@ made.</td>
 Only the painted part changes, and the result becomes the next thing you paint on.</td>
 </tr>
 <tr>
-<td><img src="images/post-fx.webp" alt="Post FX with seventeen shipped looks"></td>
+<td><img src="images/post-fx.webp" alt="Post FX with eighteen shipped looks"></td>
 <td><img src="images/camera.webp" alt="The Camera tab"></td>
 </tr>
 <tr>
-<td><b>Finish it like a photographer.</b> Twenty effects in camera order, from exposure and skin to
-film stocks and lens glass, and seventeen ready made looks to start from.</td>
+<td><b>Finish it like a photographer.</b> Twenty-two effects in camera order, from exposure and skin to
+film stocks and lens glass, and eighteen ready made looks to start from.</td>
 <td><b>Direct the camera.</b> Place the subject and the camera on a stage, pick the lens and the
 height, and the prompt and the camera LoRAs follow.</td>
 </tr>

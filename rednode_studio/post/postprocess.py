@@ -150,6 +150,10 @@ DEFAULTS = {
                    "lens": "custom", "scale_by_size": False},
     "aberration": {"on": False, "amount": 0.47, "red_shift": 1.0, "green_shift": -1.0,
                    "blue_shift": -3.0, "direction": "horizontal", "scale_by_size": False},
+    # PORES: fine skin relief, lightness only, under the skin mask; off, and an exact
+    # passthrough at strength 0
+    "pores": {"on": False, "subject": "auto", "strength": 0.45, "size": 1.0, "softness": 0.5,
+              "keep": 0.7, "seed": 0},
     # UNVARNISH: the generated look taken down a notch without the picture going
     # dull. One amount, plus how much of it lands on skin. Runs late, before Grain.
     "unvarnish": {"on": False, "amount": 0.5, "skin": 1.0},
@@ -191,7 +195,7 @@ VIGNETTE_LAWS = ("smooth", "cos4")
 SKIN_SUBJECT = ("off", "auto", "always")
 SKIN_SHOWS = ("off", "mask", "over")
 # cards that want the subject mask for their own working, not only for a Limit
-MASK_EFFECTS = ("relight", "skin")
+MASK_EFFECTS = ("relight", "skin", "pores")
 # keys a chain instance carries for the panel's sake that are NOT arguments to the
 # effect function: the switch, the random ranges, the Limit row, the instance's
 # identity, the Match card's dropped picture, the lens picker's memory and the
@@ -280,7 +284,7 @@ LENS_NAMES = ("custom", "ultrawide_14", "wide_24", "reportage_35", "normal_50",
               "phone_main", "phone_ultrawide")
 
 # the chain order: repair, tone, detail, light, lens
-ORDER = ("denoise", "color", "match", "lut", "skin", "clarity", "sharpen",   # repair and grade
+ORDER = ("denoise", "color", "match", "lut", "skin", "pores", "clarity", "sharpen",   # repair and grade
          "relight",                                                  # light
          "haze",                                             # the air
          "distortion", "dof", "aberration", "bloom",         # the lens...
@@ -1194,6 +1198,52 @@ def _quantile(t, q):
     return torch.quantile(flat, q, dim=1).view(-1, 1, 1, 1)
 
 
+
+# ---------------------------------------------------------------- the pores card
+def pores(img, mask=None, subject="auto", strength=0.45, size=1.0, softness=0.5, keep=0.7,
+          seed=0):
+    """Fine skin relief put back where a render came out waxy.
+
+    A band of noise at pore size (sized to the frame, so it reads the same at any
+    resolution) is added to lightness only, under the chain's own skin mask, which
+    already leaves eyes, teeth, lips and busy pattern out. Where the skin still has
+    detail of its own the relief is held back by keep, so a textured face is not
+    textured twice. Colour is never touched; nothing outside the mask changes.
+    """
+    k = max(0.0, min(1.0, float(strength)))
+    if k <= 0.0:
+        return img
+    t = _nchw(img)[:, :3].float()
+    N, _, H, W = t.shape
+    L, a, b = _rgb_to_lab(t)
+    w = _skin_mask(t, L, a, b, 1.0, 0.6, 3.0, mask if subject != "off" else None)
+    short = min(H, W)
+    # the pore period in pixels: about 3 px on a 1024 frame at size 1
+    px = max(1.0, 0.0028 * short * max(0.5, min(3.0, float(size))))
+    gen = torch.Generator(device="cpu")
+    gen.manual_seed(int(seed) & 0x7FFFFFFF)
+    gh, gw = max(2, int(round(H / px))), max(2, int(round(W / px)))
+    n = torch.randn((N, 1, gh, gw), generator=gen).to(t.device, t.dtype)
+    n = F.interpolate(n, size=(H, W), mode="bicubic", align_corners=False)
+    # a band: the blob shapes minus their own blur, so there is no large-scale mottle
+    n = n - gaussian_blur(n, px * 1.5)
+    soft = max(0.0, min(1.0, float(softness)))
+    if soft > 0:
+        n = gaussian_blur(n, max(0.3, soft * px * 0.6))
+    n = n / max(1e-6, float(n.std()))
+    # where the skin already carries fine detail, add less
+    r_hf = max(1, int(round(0.004 * short)))
+    r_win = max(2, int(round(0.02 * short)))
+    hf = (L - _box(L, r_hf)).abs()
+    det = _smoothstep(_box(hf, r_win), 1.0, 4.0)
+    gate = w * (1.0 - max(0.0, min(1.0, float(keep))) * det)
+    # strongest in the midtones, where pores show on a real face
+    mid = 1.0 - ((L / 50.0) - 1.0).abs().clamp(0, 1)
+    L2 = L + n * (2.6 * k) * gate * (0.4 + 0.6 * mid)
+    out = _lab_to_rgb(L2, a, b)
+    return _clamp01(_nhwc(out)).to(img.dtype)
+
+
 def unvarnish(img, amount=0.5, skin=1.0):
     """The generated look taken down without the picture going dull.
 
@@ -1463,7 +1513,7 @@ EFFECTS = {
     "diffusion": diffusion, "rolloff": rolloff, "distortion": distortion,
     "aberration": aberration, "grain": grain, "vignette": vignette,
     "match": match, "lut": lut, "relight": relight, "skin": skin, "film": film,
-    "unvarnish": unvarnish,
+    "unvarnish": unvarnish, "pores": pores,
 }
 
 
@@ -1484,6 +1534,12 @@ def _guard(name, cur):
     elif name == "aberration":
         cur["direction"] = (cur["direction"] if cur["direction"] in CA_DIRECTIONS
                             else "horizontal")
+    elif name == "pores":
+        cur["subject"] = cur["subject"] if cur["subject"] in SKIN_SUBJECT else "auto"
+        cur["strength"] = max(0.0, min(1.0, cur["strength"]))
+        cur["size"] = max(0.5, min(3.0, cur["size"]))
+        cur["softness"] = max(0.0, min(1.0, cur["softness"]))
+        cur["keep"] = max(0.0, min(1.0, cur["keep"]))
     elif name == "unvarnish":
         cur["amount"] = max(0.0, min(1.0, cur["amount"]))
         cur["skin"] = max(0.0, min(2.0, cur["skin"]))
@@ -1706,7 +1762,7 @@ def needs_mask(cfg):
     """True when any instance that is on is limited to the subject or the background,
     or is a Skin card set to always make a subject mask."""
     return any(c.get("on") and (c.get("limit") in ("subject", "background")
-                                or (c.get("fx") == "skin" and c.get("subject") == "always"))
+                                or (c.get("fx") in ("skin", "pores") and c.get("subject") == "always"))
                for c in (cfg.get("chain") or []))
 
 
@@ -1916,6 +1972,22 @@ BUILTIN_LOOKS = {
             "sharpen": {"on": True, "mode": "band", "amount": 0.3, "skin_protect": 0.6},
             "color": {"on": True, "temperature": -0.02, "highlights": -0.15,
                      "split_shadow": -0.12},
+        },
+    },
+    "Natural Skin": {
+        "swatch": ("#4a3328", "#f0d2bc"),
+        "blurb": "Skin as a camera sees it: decode grit cleaned first, a light skin grade, "
+                "fine pores put back where the render went waxy, a band sharpen with skin "
+                "held, and the varnish taken down a notch.",
+        "config": {
+            "denoise": {"on": True, "sigma": 1.0, "threshold": 0.05,
+                       "radius_multiplier": 1.0, "strength": 0.65},
+            "skin": {"on": True, "subject": "auto", "de_yellow": 1.6, "rosy": 0.6,
+                    "brighten": 0.9, "shadow_lift": 1.2, "evenness": 0.12,
+                    "smooth": 0.03, "texture_preserve": 0.9, "saturation": -0.05},
+            "pores": {"on": True, "strength": 0.45, "size": 1.0, "softness": 0.5, "keep": 0.7},
+            "sharpen": {"on": True, "mode": "band", "amount": 0.25, "skin_protect": 0.7},
+            "unvarnish": {"on": True, "amount": 0.35, "skin": 1.0},
         },
     },
     "Camera Ready Z-Image": {
