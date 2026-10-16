@@ -15,10 +15,11 @@ format matters: **version** then a date, notes below until the next bold line.
   naming them: add a RedNode Studio Inputs / Outputs node, choose the Workspace, and wire from
   there. The shipped RedNode Studio workflow is updated. The socket list is trimmed to what
   is still used: eleven inputs (model, clip, vae, latent, image_in, the two masks, the four
-  Frame wordings) and thirteen outputs (workspace, image, result_latent, model, clip, vae,
-  positive, negative, denoise, seed, prompt_text, negative_text, post_process). The four
-  external caption inputs are gone (the Auto Prompt engines caption inside the Workspace), and
-  the sampler numbers come from RedNode Rig Out as before.
+  Frame wordings) and seventeen outputs (workspace, image, result_latent, model, clip, vae,
+  positive, negative, denoise, seed, prompt_text, negative_text, post_process, and the rig's
+  steps, cfg, sampler_name and scheduler, typed so a stock KSampler on External sampler takes
+  them). The four external caption inputs are gone (the Auto Prompt engines caption inside the
+  Workspace).
 - The Python modules moved from the pack's root into one package folder, rednode_studio, grouped
   by what they do. Nothing a workflow sees changes: node names, settings and saved files are
   the same.

@@ -1,7 +1,7 @@
 """RedNode Studio Inputs / Outputs: the Workspace's sockets on their own node, wireless.
 
 The Workspace node is the panel alone. This node picks a Workspace from a list and carries
-the sockets that are still in use: eleven inputs on the left, thirteen outputs on the
+the sockets that are still in use: eleven inputs on the left, seventeen outputs on the
 right. Nothing is wired between the two nodes.
 
 How it resolves: when the prompt is queued from the canvas, the pack's queue-time splice
@@ -13,9 +13,10 @@ and the values themselves come from ComfyUI as always. The Workspace keeps its f
 contract on the server for exactly that reason; the frontend just does not show it.
 
 The lists here are the cull of 2026-10-16: the four external-caption inputs went (the Auto
-Prompt engines caption inside the Workspace now), and of the Workspace's 36 outputs the 13
-that an outside graph still has a use for stay. Append to these lists, never reorder: the
-node's slots are positional in saved workflows.
+Prompt engines caption inside the Workspace now), and of the Workspace's 36 outputs the 17
+that an outside graph still has a use for stay (the sampler settings came back the same day:
+External sampler needs them typed). Append to these lists, never reorder: the node's slots
+are positional in saved workflows.
 """
 
 from . import workspace as _ws
@@ -26,7 +27,11 @@ INPUTS = ("model", "clip", "vae", "latent", "image_in", "boost_mask_in", "edit_m
           "style_in", "subject_in", "surroundings_in", "light_and_colour_in")
 
 OUTPUTS = ("workspace", "image", "result_latent", "model", "clip", "vae", "positive",
-           "negative", "denoise", "seed", "prompt_text", "negative_text", "post_process")
+           "negative", "denoise", "seed", "prompt_text", "negative_text", "post_process",
+           # the active rig's sampler settings, typed as the sampler and scheduler choice
+           # lists, so a stock KSampler on External sampler takes them straight (Rig Out hands
+           # them out as text, which a KSampler's dropdowns refuse)
+           "steps", "cfg", "sampler_name", "scheduler")
 
 
 def _ws_cls():
