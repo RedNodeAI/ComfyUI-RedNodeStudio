@@ -4,7 +4,24 @@ New versions go at the top. The release action reads the section matching the
 pyproject version and puts it on the GitHub release, so the bold version line
 format matters: **version** then a date, notes below until the next bold line.
 
-**1.6.5** - unreleased
+**1.7.0** - unreleased
+
+### Changed
+
+- The Workspace node is the panel alone: it carries no input or output sockets any more. They
+  live on the new RedNode Studio Inputs / Outputs node, which picks its Workspace from a list
+  and needs no wire to it. The pack joins the two when you queue. Workflows saved before 1.7
+  that had wires on the Workspace lose those wires when they load, with a note in the console
+  naming them: add a RedNode Studio Inputs / Outputs node, choose the Workspace, and wire from
+  there. The shipped RedNode Studio workflow is updated. The socket list is trimmed to what
+  is still used: eleven inputs (model, clip, vae, latent, image_in, the two masks, the four
+  Frame wordings) and thirteen outputs (workspace, image, result_latent, model, clip, vae,
+  positive, negative, denoise, seed, prompt_text, negative_text, post_process). The four
+  external caption inputs are gone (the Auto Prompt engines caption inside the Workspace), and
+  the sampler numbers come from RedNode Rig Out as before.
+- The Python modules moved from the pack's root into one package folder, rednode_studio, grouped
+  by what they do. Nothing a workflow sees changes: node names, settings and saved files are
+  the same.
 
 ### Fixed
 

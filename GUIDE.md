@@ -129,7 +129,7 @@ Ollama is a program of its own rather than a node pack. Install it from
 ## Quick start
 
 Open the template browser and load **RedNode Studio**, or open
-`example_workflows/RedNodeStudio_V1.6.json` directly. It is the whole rig wired up, and it reads
+`example_workflows/RedNodeStudio_V1.7.json` directly. It is the whole rig wired up, and it reads
 left to right. It uses two of the packs above, Krea2-BBOX-Prompter for its Light & Color and
 Scene nodes and ComfyUI-Krea-Moodboards for its Style browser, so open the Start here workflow
 before it and let Manager install them.
@@ -143,14 +143,19 @@ If you would rather build it yourself, the graph is short:
    queues it.
 2. Write the prompt on the Prompts tab, and put a reference on the Subject tab if there is a face
    to keep.
-3. Wire the workspace's `image` output into **RedNode Studio Detailer**, then into **RedNode Post
-   FX**, then into **RedNode Save** and **RedNode Image Review**. Add a **RedNode Live Preview**
-   on the same output to watch the render form.
+3. Add **RedNode Studio Inputs / Outputs**. The Workspace node itself has no sockets; this node
+   carries them, and with one Workspace on the canvas it finds it by itself (with several, pick
+   one on its dropdown). No wire runs between the two: the pack joins them when you queue. Wire
+   its `image` output into **RedNode Studio Detailer**, then into **RedNode Post FX**, then into
+   **RedNode Save** and **RedNode Image Review**. Add a **RedNode Live Preview** on the same
+   output to watch the render form.
 
 That is one node doing the work and four watching it. The **External sampler** setting is the
-other route: the workspace then hands out the model, the conditioning and the latent as sockets,
-and your own KSampler does the sampling, which is exactly what every workflow did before the
-built-in one existed.
+other route: Inputs / Outputs then hands out the model, the conditioning and the latent as
+sockets, and your own KSampler does the sampling, which is exactly what every workflow did
+before the built-in one existed. Its inputs take an outside model, CLIP or VAE, a latent or
+image to work over, a wired mask, and the four Frame wordings (style, subject, surroundings,
+light and colour) from any text node.
 
 ## The Assistant
 
@@ -777,7 +782,8 @@ algorithms and same knobs.
 
 | Node | What it does |
 |---|---|
-| RedNode Studio Workspace | The whole input rig in one tabbed panel, wired to the studio by a single bundle. The Latent tab runs refine passes on a blank canvas, the Img2Img tab's RE-ANGLE can stop after the re-shot so the rig stays out of VRAM, a rig can name a second sampler pair for image to image runs, and a camera path renders one image per shot on the built-in sampler and on an engine rig. |
+| RedNode Studio Inputs / Outputs | The Workspace's sockets on their own node: eleven inputs (an outside model, CLIP and VAE, a latent or image to work over, two masks, the four Frame wordings) and thirteen outputs (the workspace bundle, image, result latent, model, clip, vae, positive, negative, denoise, seed, prompt text, negative text, post process). Picks its Workspace from a list; no wire between the two, the pack joins them when you queue. |
+| RedNode Studio Workspace | The whole input rig in one tabbed panel, with no sockets of its own since 1.7 (they sit on RedNode Studio Inputs / Outputs). The Latent tab runs refine passes on a blank canvas, the Img2Img tab's RE-ANGLE can stop after the re-shot so the rig stays out of VRAM, a rig can name a second sampler pair for image to image runs, and a camera path renders one image per shot on the built-in sampler and on an engine rig. |
 | RedNode Studio Detailer | The post-render passes as a visual list: sampler refines and SAM3 face detailers in order, each with its own rig, steps, CFG, sampler, step window and scale ratio, no wires between them. A pass can repeat with a denoise and a scale per round, pick which Prompts-tab row it reads, and a SeedVR2 upscale pass (720p to 4K) sits in the same list; the SAM file and precision are picked on the node. |
 | RedNode Studio (Krea 2) | Moodboard and identity edit in one node, with a matched grounded negative. The studio the Workspace folds in, for a classic graph. |
 | RedNode Studio Settings (Advanced) | Every dial in plain language, for when a preset is not enough. |
@@ -882,7 +888,7 @@ Unfinished, and marked so on the node.
 
 In `example_workflows/`, and in ComfyUI's own template browser once the pack is installed.
 
-- `RedNodeStudio_V1.6.json` is the full rig and the one to start with. One Workspace panel
+- `RedNodeStudio_V1.7.json` is the full rig and the one to start with. One Workspace panel
   drives the models, the prompts and the sampler, and runs the Detailer passes, the grading
   chain and the save itself, so none of that needs wiring any more. Six rigs sit on its
   Models tab: two Krea 2 models, Qwen Image 2.1 and an SDXL checkpoint that load their files

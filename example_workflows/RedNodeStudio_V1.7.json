@@ -1,7 +1,7 @@
 {
   "id": "016e8c7f-70fb-470d-b60a-b002d7bba014",
   "revision": 0,
-  "last_node_id": 124,
+  "last_node_id": 125,
   "last_link_id": 153,
   "nodes": [
     {
@@ -3080,331 +3080,8 @@
       "flags": {},
       "order": 30,
       "mode": 0,
-      "inputs": [
-        {
-          "localized_name": "clip",
-          "name": "clip",
-          "shape": 7,
-          "type": "CLIP",
-          "link": null
-        },
-        {
-          "localized_name": "latent",
-          "name": "latent",
-          "shape": 7,
-          "type": "LATENT",
-          "link": null
-        },
-        {
-          "localized_name": "model",
-          "name": "model",
-          "shape": 7,
-          "type": "MODEL",
-          "link": null
-        },
-        {
-          "localized_name": "vae",
-          "name": "vae",
-          "shape": 7,
-          "type": "VAE",
-          "link": null
-        },
-        {
-          "localized_name": "subject_caption_in",
-          "name": "subject_caption_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "localized_name": "scene_caption_in",
-          "name": "scene_caption_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "localized_name": "mood_caption_in",
-          "name": "mood_caption_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "localized_name": "i2i_caption_in",
-          "name": "i2i_caption_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "localized_name": "boost_mask_in",
-          "name": "boost_mask_in",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        },
-        {
-          "localized_name": "edit_mask_in",
-          "name": "edit_mask_in",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        },
-        {
-          "localized_name": "style_in",
-          "name": "style_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": 4
-        },
-        {
-          "localized_name": "subject_in",
-          "name": "subject_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": null
-        },
-        {
-          "localized_name": "surroundings_in",
-          "name": "surroundings_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": 153
-        },
-        {
-          "localized_name": "light_and_colour_in",
-          "name": "light_and_colour_in",
-          "shape": 7,
-          "type": "STRING",
-          "link": 3
-        },
-        {
-          "localized_name": "image_in",
-          "name": "image_in",
-          "shape": 7,
-          "type": "IMAGE",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "localized_name": "workspace",
-          "name": "workspace",
-          "type": "KREA2_WORKSPACE",
-          "links": []
-        },
-        {
-          "localized_name": "subject_image",
-          "name": "subject_image",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "localized_name": "scene_image",
-          "name": "scene_image",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "localized_name": "moodboard_style",
-          "name": "moodboard_style",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "localized_name": "extra_subjects",
-          "name": "extra_subjects",
-          "type": "KREA2_SOURCES",
-          "links": []
-        },
-        {
-          "localized_name": "subject_boost_mask",
-          "name": "subject_boost_mask",
-          "type": "MASK",
-          "links": []
-        },
-        {
-          "localized_name": "edit_mask",
-          "name": "edit_mask",
-          "type": "MASK",
-          "links": []
-        },
-        {
-          "localized_name": "settings",
-          "name": "settings",
-          "type": "KREA2_SETTINGS",
-          "links": []
-        },
-        {
-          "localized_name": "output_latent",
-          "name": "output_latent",
-          "type": "LATENT",
-          "links": []
-        },
-        {
-          "localized_name": "style_strength",
-          "name": "style_strength",
-          "type": "FLOAT",
-          "links": []
-        },
-        {
-          "localized_name": "studio_preset",
-          "name": "studio_preset",
-          "type": "STRING",
-          "links": null
-        },
-        {
-          "localized_name": "subject_prompt",
-          "name": "subject_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "scene_prompt",
-          "name": "scene_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "moodboard_prompt",
-          "name": "moodboard_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "i2i_image",
-          "name": "i2i_image",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "localized_name": "i2i_prompt",
-          "name": "i2i_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "denoise",
-          "name": "denoise",
-          "type": "FLOAT",
-          "links": []
-        },
-        {
-          "localized_name": "post_process",
-          "name": "post_process",
-          "type": "KREA2_POST",
-          "links": null
-        },
-        {
-          "localized_name": "model",
-          "name": "model",
-          "type": "MODEL",
-          "links": []
-        },
-        {
-          "localized_name": "lora_keywords",
-          "name": "lora_keywords",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "clip",
-          "name": "clip",
-          "type": "CLIP",
-          "links": []
-        },
-        {
-          "localized_name": "paint_prompt",
-          "name": "paint_prompt",
-          "type": "STRING",
-          "links": []
-        },
-        {
-          "localized_name": "paint_model",
-          "name": "paint_model",
-          "type": "MODEL",
-          "links": null
-        },
-        {
-          "localized_name": "vae",
-          "name": "vae",
-          "type": "VAE",
-          "links": []
-        },
-        {
-          "localized_name": "steps",
-          "name": "steps",
-          "type": "INT",
-          "links": []
-        },
-        {
-          "localized_name": "cfg",
-          "name": "cfg",
-          "type": "FLOAT",
-          "links": []
-        },
-        {
-          "localized_name": "sampler_name",
-          "name": "sampler_name",
-          "type": "COMBO",
-          "links": []
-        },
-        {
-          "localized_name": "scheduler",
-          "name": "scheduler",
-          "type": "COMBO",
-          "links": []
-        },
-        {
-          "localized_name": "detailer_steps",
-          "name": "detailer_steps",
-          "type": "INT",
-          "links": null
-        },
-        {
-          "localized_name": "positive",
-          "name": "positive",
-          "type": "CONDITIONING",
-          "links": null
-        },
-        {
-          "localized_name": "negative",
-          "name": "negative",
-          "type": "CONDITIONING",
-          "links": null
-        },
-        {
-          "localized_name": "image",
-          "name": "image",
-          "type": "IMAGE",
-          "links": []
-        },
-        {
-          "localized_name": "result_latent",
-          "name": "result_latent",
-          "type": "LATENT",
-          "links": null
-        },
-        {
-          "localized_name": "seed",
-          "name": "seed",
-          "type": "INT",
-          "links": []
-        },
-        {
-          "localized_name": "prompt_text",
-          "name": "prompt_text",
-          "type": "STRING",
-          "links": null
-        },
-        {
-          "localized_name": "negative_text",
-          "name": "negative_text",
-          "type": "STRING",
-          "links": null
-        }
-      ],
+      "inputs": [],
+      "outputs": [],
       "properties": {
         "Node name for S&R": "RedNodeStudioWorkspace",
         "rn_folds": {
@@ -3663,25 +3340,204 @@
       },
       "color": "#222",
       "bgcolor": "#000"
+    },
+    {
+      "id": 125,
+      "type": "RedNodeStudioIO",
+      "pos": [
+        -10758,
+        620
+      ],
+      "size": [
+        340,
+        300
+      ],
+      "flags": {},
+      "order": 30,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "shape": 7,
+          "type": "MODEL",
+          "link": null
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": null
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "localized_name": "latent",
+          "name": "latent",
+          "shape": 7,
+          "type": "LATENT",
+          "link": null
+        },
+        {
+          "localized_name": "image_in",
+          "name": "image_in",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "localized_name": "boost_mask_in",
+          "name": "boost_mask_in",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "localized_name": "edit_mask_in",
+          "name": "edit_mask_in",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "localized_name": "style_in",
+          "name": "style_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": 4
+        },
+        {
+          "localized_name": "subject_in",
+          "name": "subject_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "localized_name": "surroundings_in",
+          "name": "surroundings_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": 153
+        },
+        {
+          "localized_name": "light_and_colour_in",
+          "name": "light_and_colour_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": 3
+        },
+        {
+          "localized_name": "workspace",
+          "name": "workspace",
+          "type": "STRING",
+          "widget": {
+            "name": "workspace"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "workspace",
+          "name": "workspace",
+          "type": "KREA2_WORKSPACE",
+          "links": null
+        },
+        {
+          "localized_name": "image",
+          "name": "image",
+          "type": "IMAGE",
+          "links": null
+        },
+        {
+          "localized_name": "result_latent",
+          "name": "result_latent",
+          "type": "LATENT",
+          "links": null
+        },
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "links": null
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "links": null
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "links": null
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": null
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "links": null
+        },
+        {
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "prompt_text",
+          "name": "prompt_text",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "negative_text",
+          "name": "negative_text",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "post_process",
+          "name": "post_process",
+          "type": "KREA2_POST",
+          "links": null
+        }
+      ],
+      "title": "Studio I/O: RedNode Studio Workspace",
+      "properties": {
+        "Node name for S&R": "RedNodeStudioIO",
+        "cnr_id": "rednode-studio",
+        "ver": "1.0.0"
+      },
+      "widgets_values": [
+        "(the only workspace)"
+      ],
+      "widgets_values_named": {
+        "workspace": "(the only workspace)"
+      }
     }
   ],
   "links": [
-    [
-      3,
-      3,
-      0,
-      1,
-      13,
-      "STRING"
-    ],
-    [
-      4,
-      2,
-      0,
-      1,
-      10,
-      "STRING"
-    ],
     [
       66,
       63,
@@ -3955,14 +3811,6 @@
       "VAE"
     ],
     [
-      153,
-      114,
-      0,
-      1,
-      12,
-      "STRING"
-    ],
-    [
       80,
       70,
       4,
@@ -3985,6 +3833,30 @@
       69,
       2,
       "INT"
+    ],
+    [
+      4,
+      2,
+      0,
+      125,
+      7,
+      "STRING"
+    ],
+    [
+      153,
+      114,
+      0,
+      125,
+      9,
+      "STRING"
+    ],
+    [
+      3,
+      3,
+      0,
+      125,
+      10,
+      "STRING"
     ]
   ],
   "groups": [

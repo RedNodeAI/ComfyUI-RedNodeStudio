@@ -16,7 +16,7 @@ single node in ComfyUI, on Krea 2, Qwen Image 2.1, Z-Image, Anima, SDXL, Illustr
 </tr>
 </table>
 
-**63 nodes · No pip dependencies · Every model, every purpose**
+**64 nodes · No pip dependencies · Every model, every purpose**
 
 **Watch the full tutorial:** install, models and every tab you need to make, fix and save a picture.
 
@@ -36,7 +36,7 @@ set everything up, on the portable ComfyUI or the desktop app:
 4. Run **RedNode_Download_Models.bat** and type the numbers you want: the models, LoRAs and tools,
    each from its publisher into the right folder. Press Enter for the recommended start, or A for
    everything, which is well over 100 GB.
-5. Start ComfyUI, open **Templates**, then **RedNode Studio**, and load **RedNodeStudio_V1.6**.
+5. Start ComfyUI, open **Templates**, then **RedNode Studio**, and load **RedNodeStudio_V1.7**.
 
 Both files are plain text, so you can open them in Notepad and read every line before you run them.
 
