@@ -40,6 +40,25 @@ format matters: **version** then a date, notes below until the next bold line.
   Quick start on)
 - api.refresh_frame (API_VERSION 3): a frame through Krea 2 image-to-image at a low denoise with a
   Moodboard reference, a LoRA stack and the caller's seed, for RedNode Video Studio's Refresh Between Segments
+- Sampler dials: Quick start. The steps before the grow point run on a half-size latent, then the
+  picture grows and finishes at full size. Krea 2 Turbo at 1064 x 1352: 8 steps in half the time, same
+  seed. Off on image to image, the Detailer, Paint and masked runs, which keep their source's size.
+  The Live picture keeps its picture across the grow. A seed frames a little differently with it on
+- Sampler dials: a warning under Shift when it is 2.5 or more with a beta scheduler, which fights the
+  shift; use simple at that shift, or beta at the model's own
+- Post FX: an Unvarnish card in the Film band, before Grain. It takes the generated gloss down without
+  going dull: loud colours back, skin de-oranged, shoulder and gloss down, fine detail up, the source's
+  black, contrast and brightness put back. Amount 0.5, Skin 1 by default
+- Detailer: the VOSR2 pass takes x1.5 (a resize before the model), and x6 and x8 run as two passes, x4
+  then the rest, because one pass at that size breaks skin into patches. A Cache model dial keeps the
+  VOSR2 model between runs, which the upstream loader never does
+- Models tab: the Model, CLIP, VAE page is now Model Groups
+- Subject tab: a People cap on the gallery, and each person wears a colour and a number so the
+  prompt's people read against the pictures. Picking at the cap swaps the last person out
+- Run page: the first click on a new picture opens full screen without the pause
+- LoRA Stack: MiniMax H3 LoRAs are told apart from Krea 2 ones in the type column
+- api.grade_video (API_VERSION 2) and the character sheet calls (API_VERSION 1): the Post FX chain
+  over a clip, and body cut, dress, angle, head crop and compose, for RedNode Video Studio
 
 ### Fixes
 
