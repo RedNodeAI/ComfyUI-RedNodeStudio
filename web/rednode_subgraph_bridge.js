@@ -1,5 +1,6 @@
 import { app } from "../../scripts/app.js";
 import { membersOf, spliceChannels, danglingLinks } from "./rednode_channels.js";
+import { spliceStudioIO, NAMES as IO_NAMES, IO as STUDIO_IO } from "./rednode_studio_io.js";
 
 // The boundary pair, frontend half. PROTOTYPE.
 //
@@ -113,6 +114,7 @@ app.registerExtension({
           // queue: it cannot benefit and it can only break.
           const touches = Object.values(out).some(
             (n) => n?.class_type === SEND || n?.class_type === RECEIVE
+                || n?.class_type === STUDIO_IO
                 || String(n?.inputs?.channel_out ?? "").trim());
           if (!touches && !deadReaders.length) return res;
 
@@ -129,7 +131,24 @@ app.registerExtension({
           const known = new Set(before.map((d) => `${d.id}|${d.input}`));
           const draft = JSON.parse(JSON.stringify(out));
           const r = spliceChannels(draft, { deadReaders });
-          const introduced = (r.dangling || [])
+          // the Studio IO node rides the same copy and the same guard: its wires become
+          // the Workspace's wires, and the node goes
+          const io = spliceStudioIO(draft, IO_NAMES);
+          for (const u of io.unresolved) {
+            console.warn(`[RedNode Studio I/O] node ${u.id} ('${u.pick}') was not joined: `
+                       + `${u.reason}. Its own error will say so when it runs.`);
+          }
+          for (const l of io.loops) {
+            console.error(`[RedNode Studio I/O] node ${l.id} input '${l.input}' is fed from `
+                        + `node ${l.from}, which already depends on the Workspace, so that `
+                        + `wire would loop. It was left out of this run.`);
+          }
+          if (io.resolved.length) {
+            console.log(`[RedNode Studio I/O] joined: `
+                      + io.resolved.map((x) => `node ${x.id} -> Workspace ${x.workspace} `
+                                            + `(${x.moved} in, ${x.pointed} out)`).join(", "));
+          }
+          const introduced = danglingLinks(draft)
             .filter((d) => !known.has(`${d.id}|${d.input}`));
 
           if (before.length) {

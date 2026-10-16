@@ -665,6 +665,7 @@ from .rednode_studio.control.router_control import RedNodeRouterControl  # noqa:
 from .rednode_studio.control.palette import RedNodePalette  # noqa: E402
 from .rednode_studio.control.pass_through import RedNodePass  # noqa: E402
 from .rednode_studio.workspace.workspace import RedNodeStudioWorkspace  # noqa: E402
+from .rednode_studio.workspace.studio_io import RedNodeStudioIO  # noqa: E402
 from .rednode_studio.save.review import RedNodeImageReview  # noqa: E402
 from .rednode_studio.rigs.live_preview import RedNodeLivePreview  # noqa: E402
 from .rednode_studio.rigs.sampler_config import RedNodeSamplerConfig  # noqa: E402
@@ -728,6 +729,7 @@ NODE_CLASS_MAPPINGS = {
     "RedNodePass": RedNodePass,
     "RedNodeFreeVRAM": RedNodeFreeVRAM,
     "RedNodeStudioWorkspace": RedNodeStudioWorkspace,
+    "RedNodeStudioIO": RedNodeStudioIO,
     "RedNodeShelf": RedNodeShelf,
     "RedNodeImageReview": RedNodeImageReview,
     "RedNodeLivePreview": RedNodeLivePreview,
@@ -783,6 +785,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RedNodePass": "RedNode Pass (colour trigger)",
     "RedNodeFreeVRAM": "RedNode Free VRAM",
     "RedNodeStudioWorkspace": "RedNode Studio Workspace",
+    "RedNodeStudioIO": "RedNode Studio Inputs / Outputs",
     "RedNodeShelf": "RedNode Shelf",
     "RedNodeImageReview": "RedNode Image Review",
     "RedNodeLivePreview": "RedNode Live Preview",

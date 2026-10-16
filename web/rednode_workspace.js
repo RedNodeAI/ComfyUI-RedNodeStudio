@@ -28,6 +28,7 @@ import { TAB_ORDER, RAIL_GROUPS, RAIL_PRESETS, IDENTITY_SUBS, EDITOR_SUBS, EDITO
          maskValueOf, resampleTarget, autoShapeLabel, WHOLE_FRAME_CAPS,
          wholeFrameLimit, comboOptions } from "./rednode_ws_tables.js";
 import { allNodes, findNode, findNodes, nodeById } from "./rednode_graph.js";
+import { ioNodesFor } from "./rednode_studio_io_node.js";
 import { pngTextChunks, parseParameters, workspaceConfigIn, chosenRow, loraTags, matchLora,
          comfySampler, comfyScheduler } from "./rednode_png_meta.js";
 import { customRigNodes, RIG_NODES } from "./rednode_custom_rig.js";
@@ -2359,8 +2360,13 @@ export function setupProblems(node, cfg) {
   const out = [];
   const M = cfg?.models;
   if (!M) return out;
-  const wired = (name) => socketWired(node, name);
-  const imageUsed = (node?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length);
+  // since 1.7 the Workspace node carries no sockets: its wires sit on the Studio Inputs /
+  // Outputs nodes that point at it
+  const ios = node ? ioNodesFor(node) : [];
+  const wired = (name) => socketWired(node, name)
+    || ios.some((io) => (io.inputs || []).some((s) => s?.name === name && s.link != null));
+  const imageUsed = [node, ...ios].some((n) =>
+    (n?.outputs || []).some((o) => o?.name === "image" && (o.links || []).length));
   if (M.sampler_mode !== "internal") {
     // AN OWN-NODES RIG IS ONLY EVER CALLED BY THE BUILT-IN SAMPLER: the Workspace
     // drives Rig Model, Rig Inputs and Rig Result itself, inside the render it does.
