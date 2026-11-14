@@ -365,6 +365,14 @@ app.registerExtension({
         const btn = document.createElement("button");
         btn.textContent = "Clear caches";
         btn.className = "p-button p-component";
+        // Frontend 1.59 no longer styles PrimeVue .p-button. These tokens
+        // follow the current theme and still read clearly if the tokens are absent.
+        btn.style.cursor = "pointer";
+        btn.style.borderRadius = "6px";
+        btn.style.border = "1px solid var(--border, #494a50)";
+        btn.style.background = "var(--secondary, #262729)";
+        btn.style.color = "var(--foreground, #fff)";
+        btn.style.padding = "0.4rem 0.85rem";
         btn.onclick = async () => {
           if (!confirm("Clear the LoRA and caption caches?\n\nPresets, images and "
                      + "records are not touched. The caches rebuild as you work.")) {
